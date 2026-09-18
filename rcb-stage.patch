@@ -1,0 +1,1771 @@
+diff --git a/README.md b/README.md
+index e79db5f..8f91252 100644
+--- a/README.md
++++ b/README.md
+@@ -1,6 +1,6 @@
+ # Bezpieczna Polska
+ 
+-Flutter + backend TypeScript/PostgreSQL. **0.1.0-alpha.2 — wersja rozwojowa, nie pełne MVP.**
++Flutter + backend TypeScript/PostgreSQL. **0.1.0-alpha.3 — wersja rozwojowa, nie pełne MVP.**
+ 
+ ## Uruchomienie
+ 
+@@ -16,7 +16,7 @@ npm start
+ ```
+ 
+ API domyślnie słucha na `127.0.0.1:8080`. `GET /v1/snapshot?regionId=04` zawiera Kujawsko-Pomorskie i osobny status Polski.
+-`ENABLE_INGESTION=true` włącza pobieranie co 5 minut. `DATABASE_URL` wybiera PostgreSQL; bez niego używany jest lokalny SQLite.
++`GET /status?regionId=04` zwraca osobno `poland`, `region` i `sourceHealth`. Pobieranie RCB startuje automatycznie i powtarza się co 5 minut; `ENABLE_INGESTION=false` wyłącza harmonogram. `DATABASE_URL` wybiera PostgreSQL z PostGIS. Produkcja wymaga PostGIS; SQLite pozostaje wyłącznie dla testów i lokalnego developmentu.
+ `ADMIN_TOKEN` minimum 32 losowe znaki, wyłącznie na backendzie. Admin endpointy należy dodatkowo izolować sieciowo; panel MFA nie jest zaimplementowany.
+ 
+ ```sh
+@@ -24,19 +24,22 @@ cd mobile
+ flutter pub get
+ flutter analyze
+ flutter test
+-flutter build apk --debug --target-platform android-arm64
++cd ..
++API_BASE_URL=https://<wdrożony-backend> bash scripts/build-android.sh
+ ```
+ 
+-W ustawieniach telefonu wpisuje się adres własnego backendu HTTPS albo przekazuje `--dart-define=API_BASE_URL=https://...` przy budowaniu.
++Adres backendu jest dostarczany wyłącznie przez konfigurację buildu `API_BASE_URL`. Ręczne nadpisanie jest dostępne w Developer Settings w odpowiednim buildzie. Normalny użytkownik nie konfiguruje serwera. Skrypt wydania wymaga działającego backendu i poprawnej synchronizacji RCB.
+ Bez backendu aplikacja pokazuje brak danych. Nie korzysta bezpośrednio z API ostrzeżeń i nie udaje bieżącej oceny.
+ 
+ ## Stan
+ 
+-- RCB: parser głównej strony i treści artykułów. Niepełne pokrycie, brak potwierdzonego publicznego API.
+-- RSO: udokumentowany publiczny eksport XML. Regiony i ważność; semantyka czasu Europe/Warsaw wymaga potwierdzenia kontraktowego z operatorem.
++- RCB: SourceAdapter listy komunikatów (3 strony) i pełnych artykułów, data publikacji, obszar odbiorców, ćwiczenia/odwołania, transakcyjna synchronizacja i diagnostyka źródła. To publikacje, nie kompletna lista aktywnych ostrzeżeń.
++- RSO: dotychczasowy parser XML pozostaje w testach. Synchronizacja wyłączona do jego etapu, po PSP i stopniach alarmowych.
+ - Źródła zachowują oryginalną treść. Niepewna interpretacja nie podnosi automatycznie statusu.
+ - Historia wersji, korekty, stan źródeł, deterministyczne statusy, kopie offline, mapa poglądowa granic, 112 wymagające działania użytkownika.
+-- Brakuje: pełnych adapterów WCZK/SG/CERT/PAA/Ukraina, stopni alarmowych, punktów schronienia, push FCM/APNs, MapLibre, PostGIS/RLS, panelu administratora z MFA i wdrożenia produkcyjnego.
++- Brakuje: pełnych adapterów WCZK/SG/CERT/PAA/Ukraina, stopni alarmowych, punktów schronienia, push FCM/APNs, MapLibre, RLS, panelu administratora z MFA i wdrożenia produkcyjnego.
++
++Aktualny zakres i wdrożenie: [etap RCB](docs/RCB_STAGE.md). Hosting HTTPS nie został jeszcze uruchomiony.
+ 
+ Dokumentacja: [architektura](docs/ARCHITECTURE.md), [źródła](docs/SOURCES.md), [walidacja](docs/VALIDATION.md).
+ APK preview ma osobny identyfikator `pl.bezpiecznapolska.preview`. Podpis debug nie jest kluczem wydania do sklepu.
+diff --git a/backend/scripts/live-rcb.mjs b/backend/scripts/live-rcb.mjs
+new file mode 100644
+index 0000000..42c3c02
+--- /dev/null
++++ b/backend/scripts/live-rcb.mjs
+@@ -0,0 +1,20 @@
++import {mkdir,writeFile} from 'node:fs/promises';
++import {Store,openDb} from '../dist/store.js';
++import {ingest} from '../dist/adapters.js';
++import {buildApp} from '../dist/app.js';
++const directory=process.argv[2];
++if(!directory)throw new Error('Supply an output directory for the live observation');
++const db=openDb(process.env.TEST_DATABASE_URL,':memory:'),store=new Store(db);
++try{
++ await store.init();await ingest(store);
++ const source=(await store.health()).find(s=>s.id==='RCB');
++ if(source?.state!=='HEALTHY')throw new Error(`RCB_LIVE_FAILED: ${source?.errorCode}`);
++ const app=await buildApp(store);
++ try{
++  const status=(await app.inject('/status?regionId=04')).json();
++  const examples=(await store.events()).filter(e=>e.sources.some(s=>s.id==='RCB')).slice(0,5).map(({id,title,publicationDate,regions,lifecycle,messageContext,geometry,sources})=>({id,title,publicationDate,regions,lifecycle,messageContext,geometry,sourceUrl:sources[0].url}));
++  const report={observedAt:new Date().toISOString(),source,status,examples};
++  await mkdir(directory,{recursive:true});await writeFile(`${directory}/rcb-live.json`,JSON.stringify(report,null,2)+'\n');
++  console.log(JSON.stringify(report,null,2));
++ }finally{await app.close();}
++}finally{await db.close();}
+diff --git a/backend/src/adapters.ts b/backend/src/adapters.ts
+index 50fcddb..c89010a 100644
+--- a/backend/src/adapters.ts
++++ b/backend/src/adapters.ts
+@@ -1,23 +1,22 @@
+ import * as cheerio from 'cheerio';
+ import {DateTime} from 'luxon';
+-import {createHash} from 'node:crypto';
+ import {eventSchema,REGIONS,type Event,type Health} from './domain.js';
+ import {Store} from './store.js';
+-export const SOURCES=[
+- {id:'RCB',name:'Rządowe Centrum Bezpieczeństwa',url:'https://www.gov.pl/web/rcb'},
+- {id:'RSO',name:'Regionalny System Ostrzegania',url:'https://komunikaty.tvp.pl/'},
+- {id:'CERT',name:'CERT Polska',url:'https://cert.pl/'},
+- {id:'PAA',name:'Państwowa Agencja Atomistyki',url:'https://www.gov.pl/web/paa'},
+- {id:'SG',name:'Straż Graniczna',url:'https://www.strazgraniczna.pl/'},
+- {id:'LEVELS',name:'Stopnie alarmowe RP',url:'https://www.gov.pl/web/rcb'},
+- {id:'SHELTERS',name:'Punkty schronienia',url:'https://gdziesieukryc.pl/'},
+- {id:'UA',name:'Alarmy Ukrainy — adapter nieaktywny',url:'https://alerts.in.ua/'}
+-];
+-export async function initializeSources(store:Store){const existing=await store.health();for(const s of SOURCES)if(!existing.some(h=>h.id===s.id))await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:600,complete:false});}
++import {SOURCES, type SourceAdapter} from './source-adapter.js';
++import {rcbAdapter} from './rcb-adapter.js';
++export {SOURCES} from './source-adapter.js';
++export {parseRcbIndex,parseRcbArticle} from './rcb-adapter.js';
++export async function initializeSources(store:Store){
++ const existing=await store.health();
++ for(const s of SOURCES){
++  const previous=existing.find(h=>h.id===s.id);
++  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
++  else if(!s.enabled)await store.setHealth({...previous,...s,state:'NOT_CONFIGURED',complete:false});
++  else await store.setHealth({...previous,...s});
++ }
++}
+ export function messageContext(text:string):Event['messageContext']{return /ćwicz|cwicz|exercise/i.test(text)?'EXERCISE':/test syren|test systemu/i.test(text)?'TEST':'UNKNOWN';}
+ function base(id:string,title:string,description:string,sourceId:string,url:string,now:Date):Event{return eventSchema.parse({id,title,description,eventType:'OTHER',severity:'NORMAL',verification:'UNVERIFIED',lifecycle:'UNKNOWN',messageContext:messageContext(title+' '+description),regions:[],geographicScope:'UNKNOWN',publishedAt:null,retrievedAt:now.toISOString(),validFrom:null,validTo:null,sources:[{id:sourceId,name:SOURCES.find(s=>s.id===sourceId)!.name,url,tier:1}],instructions:[],officialWarning:false,reviewed:false,revision:1,correction:null,latitude:null,longitude:null,isDemo:false});}
+-export function parseRcbIndex(html:string):string[]{const $=cheerio.load(html);const urls=new Set<string>();$('main a[href]').each((_,a)=>{const href=$(a).attr('href')!;const u=new URL(href,'https://www.gov.pl');if(u.hostname==='www.gov.pl'&&/^\/web\/rcb\/alert-rcb-.+/.test(u.pathname))urls.add(u.href);});if(!urls.size)throw new Error('RCB_HTML_CONTRACT_CHANGED');return [...urls].slice(0,10);}
+-export function parseRcbArticle(html:string,url:string,now=new Date()):Event{const $=cheerio.load(html);const title=$('article h2').first().text().trim();const content=$('article .editor-content').first().text().trim();if(!title||content.length<20)throw new Error('RCB_ARTICLE_CONTRACT_CHANGED');return base('RCB-'+createHash('sha256').update(url).digest('hex').slice(0,24),title,content,'RCB',url,now);}
+ export function parseRso(xml:string,now=new Date()):Event[]{
+  if(/<!DOCTYPE|<!ENTITY/i.test(xml))throw new Error('UNSAFE_XML');
+  const $=cheerio.load(xml,{xml:true});const total=Number($('pagination_info').attr('totalItems'));const nodes=$('news');if(!Number.isInteger(total)||total!==nodes.length||!nodes.length)throw new Error('RSO_INCOMPLETE_OR_EMPTY');
+@@ -37,10 +36,29 @@ export async function fetchPublic(url:string):Promise<string>{
+  const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/xml'}});if(!response.ok||!response.body)throw new Error('SOURCE_HTTP_ERROR');
+  let size=0;const chunks:Uint8Array[]=[];for await(const chunk of response.body){size+=chunk.length;if(size>4*1024*1024)throw new Error('SOURCE_TOO_LARGE');chunks.push(chunk);}return Buffer.concat(chunks).toString('utf8');
+ }
+-export async function ingest(store:Store){await initializeSources(store);for(const source of SOURCES.filter(s=>['RCB','RSO'].includes(s.id))){const previous=(await store.health()).find(s=>s.id===source.id)!;const begin=Date.now();try{
+- const now=new Date();let items:Event[];
+- if(source.id==='RSO')items=parseRso(await fetchPublic('https://komunikaty.tvp.pl/komunikatyxml/wszystkie/wszystkie/0?_format=xml'),now);
+- else{items=[];const urls=parseRcbIndex(await fetchPublic(source.url));for(const url of urls)items.push(parseRcbArticle(await fetchPublic(url),url,now));}
+- for(const e of items)await store.put(e);
+- const published=items.map(e=>e.publishedAt).filter((v):v is string=>v!==null).sort();await store.setHealth({...previous,state:'HEALTHY',lastSuccess:new Date().toISOString(),lastItemTime:published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:false});
+- }catch{await store.setHealth({...previous,state:'BROKEN',lastFailure:new Date().toISOString(),failureCount:previous.failureCount+1,responseTime:Date.now()-begin,complete:false});}}}
++// Sharing the same coordinator prevents timer/admin overlap on this Store.
++const running = new WeakMap<Store, Promise<void>>();
++export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter], fetchText=fetchPublic):Promise<void>{
++ const existing=running.get(store);if(existing)return existing;
++ const task=syncSources(store,adapters,fetchText).finally(()=>running.delete(store));
++ running.set(store,task);return task;
++}
++async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:string)=>Promise<string>){
++ await initializeSources(store);
++ for(const adapter of adapters){
++  const previous=(await store.health()).find(s=>s.id===adapter.id);
++  if(!previous)throw new Error('UNKNOWN_ADAPTER');
++  const begin=Date.now(),lastAttempt=new Date(begin).toISOString();
++  try{
++   const batch=await adapter.sync({now:new Date(begin),fetchText});
++   const items=batch.events.map(e=>eventSchema.parse(e));
++   if(items.some(e=>e.isDemo||!e.sources.some(s=>s.id===adapter.id)))throw new Error('SOURCE_INVALID_EVENT');
++   const published=items.map(e=>e.publishedAt).filter((v):v is string=>v!==null).sort();
++   await store.applySync(items,{...previous,enabled:true,state:'HEALTHY',lastAttempt,lastSuccess:new Date().toISOString(),lastItemTime:published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:batch.complete,coverage:batch.coverage,pagesFetched:batch.pagesFetched,itemCount:items.length,errorCode:null,adapterVersion:adapter.version});
++  }catch(error){
++   const message=error instanceof Error?error.message:'';
++   const errorCode=/^[A-Z][A-Z0-9_]{2,100}$/.test(message)?message:'SOURCE_SYNC_FAILED';
++   await store.setHealth({...previous,enabled:true,state:'BROKEN',lastAttempt,lastFailure:new Date().toISOString(),failureCount:previous.failureCount+1,responseTime:Date.now()-begin,complete:false,errorCode,adapterVersion:adapter.version});
++  }
++ }
++}
+diff --git a/backend/src/app.ts b/backend/src/app.ts
+index e5cdb91..b438b71 100644
+--- a/backend/src/app.ts
++++ b/backend/src/app.ts
+@@ -1,11 +1,35 @@
+ import Fastify from 'fastify';import rateLimit from '@fastify/rate-limit';import {timingSafeEqual} from 'node:crypto';import {z} from 'zod';
+-import {computeStatus,eventSchema,REGIONS} from './domain.js';import {Store} from './store.js';import {initializeSources,ingest} from './adapters.js';
++import {computeStatus,eventSchema,REGIONS,sourceHealth} from './domain.js';import {Store} from './store.js';import {initializeSources,ingest} from './adapters.js';
+ export async function buildApp(store:Store,adminToken?:string){
+  const app=Fastify({logger:false,bodyLimit:128*1024});await app.register(rateLimit,{max:100,timeWindow:'1 minute'});
+  app.addHook('onSend',async(_,r,p)=>{r.header('Cache-Control','no-store').header('X-Content-Type-Options','nosniff');return p;});
+  app.setErrorHandler((e,_,r)=>{if(e instanceof z.ZodError)return r.code(400).send({error:'INVALID_REQUEST'});if(e instanceof Error&&e.message==='REVISION_CONFLICT')return r.code(409).send({error:'REVISION_CONFLICT'});const status=typeof e==='object'&&e&&'statusCode'in e?Number(e.statusCode):500;return r.code(status>=400&&status<600?status:500).send({error:'REQUEST_FAILED'});});
+  app.get('/healthz',async()=>({ok:true,version:'0.1.0-alpha.2'}));
+- app.get('/v1/snapshot',async req=>{const {regionId}=z.object({regionId:z.string().refine(v=>v==='PL'||v in REGIONS).default('PL')}).parse(req.query);const events=await store.events(),health=await store.health();return {schemaVersion:1,serverTime:new Date().toISOString(),releaseStage:'ALPHA',regionId,status:computeStatus(events,health,regionId),nationalStatus:computeStatus(events,health,'PL'),events:events.filter(e=>regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId)),sources:health,shelters:[],securityLevels:[],ukraineAlerts:[],capabilities:{push:false,shelters:false,ukraine:false,liveMap:false}};});
++ const regionQuery=z.object({regionId:z.string().refine(v=>v==='PL'||v in REGIONS).default('PL')});
++ app.get('/status',async req=>{
++  const {regionId}=regionQuery.parse(req.query),{events,health}=await store.snapshot(),now=new Date();
++  return {schemaVersion:1,evaluatedAt:now.toISOString(),poland:computeStatus(events,health,'PL',now),region:{id:regionId,name:REGIONS[regionId]??'Cała Polska',...computeStatus(events,health,regionId,now)},sourceHealth:sourceHealth(health,now)};
++ });
++ app.get('/v1/sources',async()=>({sourceHealth:sourceHealth(await store.health())}));
++ app.get('/readyz',async(_,reply)=>{
++  await store.db.all('SELECT 1 AS ok');
++  const sources=sourceHealth(await store.health()).filter(s=>s.enabled);
++  const ready=sources.length>0&&sources.every(s=>s.state==='HEALTHY');
++  return reply.code(ready?200:503).send({ready,database:store.db.kind,sourceHealth:sources});
++ });
++ app.get('/v1/snapshot',async req=>{
++  const {regionId}=regionQuery.parse(req.query),{events,health}=await store.snapshot(),now=new Date();
++  const sources=sourceHealth(health,now);
++  return {schemaVersion:1,serverTime:now.toISOString(),releaseStage:'ALPHA',regionId,status:computeStatus(events,health,regionId,now),nationalStatus:computeStatus(events,health,'PL',now),events:events.filter(e=>regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId)),sources,sourceHealth:sources,shelters:[],securityLevels:[],ukraineAlerts:[],capabilities:{push:false,shelters:false,ukraine:false,liveMap:false,rcb:true}};
++ });
++ app.get('/v1/layers/events.geojson',async(req,reply)=>{
++  const {regionId}=regionQuery.parse(req.query);
++  const {bbox:raw}=z.object({bbox:z.string().optional()}).parse(req.query);
++  const bbox=raw===undefined?undefined:z.tuple([z.number().min(-180).max(180),z.number().min(-90).max(90),z.number().min(-180).max(180),z.number().min(-90).max(90)]).refine(b=>b[0]<=b[2]&&b[1]<=b[3]).parse(raw.split(',').map(Number));
++  if(bbox&&store.db.kind!=='postgres')return reply.code(503).send({error:'POSTGIS_REQUIRED'});
++  const rows=(await store.spatialEvents(bbox)).filter(e=>!e.isDemo&&(regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId)));
++  return {type:'FeatureCollection',features:rows.map(e=>({type:'Feature',id:e.id,geometry:e.geometry,properties:{title:e.title,eventType:e.eventType,severity:e.severity,lifecycle:e.lifecycle,messageContext:e.messageContext,validTo:e.validTo,publicationDate:e.publicationDate,sourceUrl:e.sources[0].url,areaPrecision:e.areaPrecision}}))};
++ });
+  app.get('/v1/events/:id/timeline',async req=>store.timeline(z.object({id:z.string().max(150)}).parse(req.params).id));
+  const auth=(actual:string|undefined)=>{const a=Buffer.from(actual??''),b=Buffer.from(`Bearer ${adminToken??''}`);return !!adminToken&&adminToken.length>=32&&a.length===b.length&&timingSafeEqual(a,b);};
+  app.post('/admin/events',async(req,r)=>{if(!auth(req.headers.authorization))return r.code(401).send({error:'UNAUTHORIZED'});const b=z.object({event:eventSchema,expectedRevision:z.number().int().nonnegative(),reason:z.string().min(10).max(1000)}).parse(req.body);await store.put({...b.event,reviewed:true},'operator',b.reason,b.expectedRevision);return {ok:true};});
+diff --git a/backend/src/domain.ts b/backend/src/domain.ts
+index 4a8b96e..5f2eac5 100644
+--- a/backend/src/domain.ts
++++ b/backend/src/domain.ts
+@@ -1,6 +1,13 @@
+ import {z} from 'zod';
+ export const REGIONS:Record<string,string>={'02':'Dolnośląskie','04':'Kujawsko-pomorskie','06':'Lubelskie','08':'Lubuskie','10':'Łódzkie','12':'Małopolskie','14':'Mazowieckie','16':'Opolskie','18':'Podkarpackie','20':'Podlaskie','22':'Pomorskie','24':'Śląskie','26':'Świętokrzyskie','28':'Warmińsko-mazurskie','30':'Wielkopolskie','32':'Zachodniopomorskie'};
+ const date=z.iso.datetime({offset:true});
++const position=z.tuple([z.number().min(-180).max(180),z.number().min(-90).max(90)]);
++const ring=z.array(position).min(4).refine(v=>v[0][0]===v.at(-1)![0]&&v[0][1]===v.at(-1)![1],'Ring must be closed');
++export const geometrySchema=z.discriminatedUnion('type',[
++ z.object({type:z.literal('Point'),coordinates:position}),
++ z.object({type:z.literal('Polygon'),coordinates:z.array(ring).min(1)}),
++ z.object({type:z.literal('MultiPolygon'),coordinates:z.array(z.array(ring).min(1)).min(1)})
++]);
+ export const eventSchema=z.object({
+  id:z.string().min(1).max(150),title:z.string().min(1).max(350),description:z.string().max(40000),
+  eventType:z.enum(['AIR','BORDER','CYBER','RADIATION','FIRE','EVACUATION','OUTAGE','WEATHER','OTHER']),
+@@ -13,23 +20,35 @@ export const eventSchema=z.object({
+  publishedAt:date.nullable(),retrievedAt:date,validFrom:date.nullable(),validTo:date.nullable(),
+  sources:z.array(z.object({id:z.string().max(80),name:z.string().max(200),url:z.url().refine(v=>new URL(v).protocol==='https:'&&!new URL(v).username),tier:z.number().int().min(1).max(4)})).min(1).max(30),
+  instructions:z.array(z.string().max(2000)).max(20),officialWarning:z.boolean(),reviewed:z.boolean(),revision:z.number().int().positive(),
++ publicationDate:z.iso.date().nullable().default(null),locationText:z.string().max(10000).nullable().default(null),areaPrecision:z.enum(['COUNTRY','PROVINCE','PROVINCE_SUBSET','EXACT','UNKNOWN']).default('UNKNOWN'),geometry:geometrySchema.nullable().default(null),adapterVersion:z.string().max(100).nullable().default(null),sourceContentHash:z.string().regex(/^[a-f0-9]{64}$/).nullable().default(null),
+  correction:z.string().max(4000).nullable(),latitude:z.number().min(-90).max(90).nullable(),longitude:z.number().min(-180).max(180).nullable(),isDemo:z.boolean().default(false)
+-});
++}).superRefine((e,ctx)=>{
++ if((e.latitude===null)!==(e.longitude===null))ctx.addIssue({code:'custom',message:'Coordinates must be paired'});
++ if(e.validFrom&&e.validTo&&Date.parse(e.validTo)<=Date.parse(e.validFrom))ctx.addIssue({code:'custom',message:'Invalid validity interval'});
++ if(e.geometry&&e.latitude!==null&&(e.geometry.type!=='Point'||e.geometry.coordinates[0]!==e.longitude||e.geometry.coordinates[1]!==e.latitude))ctx.addIssue({code:'custom',message:'Conflicting event geometry'});
++}).transform(e=>({...e,geometry:e.geometry??(e.latitude!==null&&e.longitude!==null?{type:'Point' as const,coordinates:[e.longitude,e.latitude] as [number,number]}:null)}));
+ export type Event=z.infer<typeof eventSchema>;
+-export type Health={id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean};
++export type Health={id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS';pagesFetched?:number};
+ export function computeStatus(events:Event[],health:Health[],region:string,now=new Date()){
+  const ms=now.getTime();
+- const relevant=events.filter(e=>!e.isDemo&&e.reviewed&&e.officialWarning&&e.messageContext==='ACTUAL'&&e.verification==='CONFIRMED'&&e.sources.some(s=>s.tier===1)&&(region==='PL'||e.regions.includes('PL')||e.regions.includes(region)));
+- const fresh=health.filter(h=>h.state==='HEALTHY'&&h.complete&&h.lastSuccess&&Date.parse(h.lastSuccess)<=ms+30000&&ms-Date.parse(h.lastSuccess)<h.maxAgeSeconds*1000);
+- const coverage=health.length>0&&fresh.length===health.length?'COMPLETE_FOR_CONFIGURED_SCOPE':fresh.length?'PARTIAL':'UNAVAILABLE';
+- const active=relevant.filter(e=>e.lifecycle==='ACTIVE'&&e.validTo&&Date.parse(e.validTo)>ms&&(!e.validFrom||Date.parse(e.validFrom)<=ms));
++ const relevant=events.filter(e=>!e.isDemo&&e.officialWarning&&e.messageContext==='ACTUAL'&&e.verification==='CONFIRMED'&&e.sources.some(s=>s.tier===1)&&(region==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(region)));
++ const fresh=health.filter(h=>h.state==='HEALTHY'&&h.lastSuccess&&Date.parse(h.lastSuccess)<=ms+30000&&ms-Date.parse(h.lastSuccess)<h.maxAgeSeconds*1000);
++ const coverage=health.length>0&&fresh.length===health.length&&fresh.every(h=>h.complete)?'COMPLETE_FOR_CONFIGURED_SCOPE':fresh.length?'PARTIAL':'UNAVAILABLE';
++ const active=relevant.filter(e=>e.lifecycle==='ACTIVE'&&e.regions.length>0&&e.validTo&&Date.parse(e.validTo)>ms&&(!e.validFrom||Date.parse(e.validFrom)<=ms));
+  const critical=active.filter(e=>e.severity==='CRITICAL');const caution=active.filter(e=>['HIGH','NORMAL'].includes(e.severity));
+- const stale=relevant.filter(e=>e.lifecycle==='ACTIVE'&&!active.includes(e));
++ const stale=relevant.filter(e=>(e.lifecycle==='ACTIVE'&&!active.includes(e))||e.lifecycle==='UNKNOWN');
+  let hazardLevel='UNKNOWN',displayText='Brak wystarczających aktualnych danych';const reasonCodes:string[]=[];
+  if(critical.length){hazardLevel='ACTIVE_DANGER';displayText=region==='PL'&&!critical.some(e=>e.geographicScope==='NATIONAL')?'Aktywne zagrożenie lokalne w Polsce':'Aktywne ostrzeżenie o bezpośrednim zagrożeniu';reasonCodes.push('OFFICIAL_ACTIVE_WARNING');}
+  else if(caution.length){hazardLevel='CAUTION';displayText='Obowiązują istotne ostrzeżenia';reasonCodes.push('OFFICIAL_CAUTION');}
+  else if(stale.length){displayText='Nie potwierdzono zakończenia wcześniejszego zagrożenia';reasonCodes.push('LAST_KNOWN_WARNING');}
+  else if(coverage==='COMPLETE_FOR_CONFIGURED_SCOPE'){hazardLevel='NO_ACTIVE_WARNINGS';displayText='Brak aktywnych ostrzeżeń w monitorowanych źródłach';}
+  if(coverage!=='COMPLETE_FOR_CONFIGURED_SCOPE')reasonCodes.push('INCOMPLETE_SOURCE_COVERAGE');
+- return {hazardLevel,displayText,coverageState:coverage,reasonCodes,supportingEventIds:[...critical,...caution].map(e=>e.id),lastKnownEventIds:stale.map(e=>e.id),evaluatedAt:now.toISOString(),validUntil:new Date(Math.min(ms+60000,...active.map(e=>Date.parse(e.validTo!)),...fresh.map(h=>Date.parse(h.lastSuccess!)+h.maxAgeSeconds*1000))).toISOString(),rulesetVersion:'1.0.0'};
++ return {hazardLevel,displayText,coverageState:coverage,reasonCodes,supportingEventIds:[...critical,...caution].map(e=>e.id),lastKnownEventIds:stale.map(e=>e.id),evaluatedAt:now.toISOString(),validUntil:new Date(Math.min(ms+60000,...active.map(e=>Date.parse(e.validTo!)),...fresh.map(h=>Date.parse(h.lastSuccess!)+h.maxAgeSeconds*1000))).toISOString(),rulesetVersion:'1.1.0'};
++}
++
++export function sourceHealth(health:Health[],now=new Date()){
++ return health.map(h=>{
++  const stale=h.state==='HEALTHY'&&(!h.lastSuccess||Date.parse(h.lastSuccess)>now.getTime()+30000||now.getTime()-Date.parse(h.lastSuccess)>=h.maxAgeSeconds*1000);
++  return {...h,state:stale?'STALE':h.state,lastSuccessfulSyncAt:h.lastSuccess,lastAttemptAt:h.lastAttempt??null,errorCode:h.errorCode??null};
++ });
+ }
+diff --git a/backend/src/rcb-adapter.ts b/backend/src/rcb-adapter.ts
+new file mode 100644
+index 0000000..c470b2a
+--- /dev/null
++++ b/backend/src/rcb-adapter.ts
+@@ -0,0 +1,104 @@
++import * as cheerio from 'cheerio';
++import {createHash} from 'node:crypto';
++import {DateTime} from 'luxon';
++import {eventSchema, type Event} from './domain.js';
++import type {SourceAdapter} from './source-adapter.js';
++
++export const RCB_INDEX = 'https://www.gov.pl/web/rcb/komunikaty';
++const VERSION = 'rcb-html/1.0.0';
++const clean = (text:string) => text.replace(/\s+/g,' ').trim();
++function sourceUrl(href:string, base=RCB_INDEX):URL {
++  const u=new URL(href,base);
++  if(u.protocol!=='https:'||u.hostname!=='www.gov.pl'||u.port||u.username||u.password||!u.pathname.startsWith('/web/rcb/'))throw new Error('RCB_URL_DENIED');
++  u.hash='';return u;
++}
++export function parseRcbIndex(html:string):string[]{
++  const $=cheerio.load(html),urls=new Set<string>();
++  $('main a[href]').each((_,a)=>{
++    const href=$(a).attr('href')!;
++    // Ignore ordinary navigation links; validate every candidate alert URL.
++    if(!href.includes('/web/rcb/alert-rcb-'))return;
++    const u=sourceUrl(href);
++    if(/^\/web\/rcb\/alert-rcb-.+/.test(u.pathname)){u.search='';urls.add(u.href);}
++  });
++  if(!urls.size)throw new Error('RCB_HTML_CONTRACT_CHANGED');
++  return [...urls];
++}
++
++const provinceStems:Record<string,string>={
++  '02':'dolnośląsk','04':'kujawsko-pomorsk','06':'lubelsk','08':'lubusk',
++  '10':'łódzk','12':'małopolsk','14':'mazowieck','16':'opolsk','18':'podkarpack',
++  '20':'podlask','22':'pomorsk','24':'śląsk','26':'świętokrzysk','28':'warmińsko-mazursk',
++  '30':'wielkopolsk','32':'zachodniopomorsk',
++};
++export function parseRcbArticle(html:string,url:string,now=new Date()):Event{
++  const canonical=sourceUrl(url);canonical.search='';
++  const $=cheerio.load(html),article=$('article').first();
++  const title=clean(article.find('h2').first().text());
++  const body=article.find('.editor-content').first();
++  body.find('script,style').remove();
++  const paragraphs=body.find('p,li').map((_,n)=>clean($(n).text())).get().filter(Boolean);
++  const description=paragraphs.length?paragraphs.join('\n\n'):clean(body.text());
++  const dateText=clean(article.find('.event-date').first().text());
++  const publication=DateTime.fromFormat(dateText,'dd.MM.yyyy',{zone:'Europe/Warsaw'});
++  if(!/^Alert RCB\s*[-–—]/i.test(title)||description.length<20||!publication.isValid)throw new Error('RCB_ARTICLE_CONTRACT_CHANGED');
++  if(publication.startOf('day').toMillis()>now.getTime()+86400000)throw new Error('RCB_PUBLICATION_DATE_FUTURE');
++  // Only the explicit recipient section establishes location, never mentions
++  // of places inside the warning itself (e.g. an attack on Ukraine).
++  const recipient=paragraphs.findIndex(p=>/wysłan|objęto|objęty|objęte|otrzymają/i.test(p));
++  const locationText=recipient>=0?paragraphs.slice(recipient).join(' '):null;
++  const national=!!locationText&&/cał(?:ego kraju|ej Polski|ym kraju)/i.test(locationText);
++  // County names such as "powiat opolski" also occur in other provinces.
++  // Match province names only within explicitly labelled woj./województwo lists.
++  const provinceText=[...(locationText??'').matchAll(/(?:woj[.:]|województw\p{L}*)\s*:?\s*([^.;)]+)/giu)]
++    .map(m=>m[1].split(/powiat|gmin|miast|[:(]|\s[–—]\s/i)[0]).join(' ');
++  const regions=national?['PL']:Object.entries(provinceStems)
++    .filter(([,stem])=>new RegExp(`(?<![\\p{L}-])${stem}\\p{L}*`,'iu').test(provinceText)).map(([id])=>id).sort();
++  const text=title+' '+description;
++  const context=/ćwicz|cwicz|trening system|exercise/i.test(text)?'EXERCISE':/test syren|test systemu/i.test(text)?'TEST':'ACTUAL';
++  const cancelled=/odwołan|odwolano|zakaz przestał obowiązywać/i.test(title);
++  const eventType=/powietrz|powietrza/i.test(title)?'AIR':/burz|wiatr|opad|upał|śnieg|mróz|powodz/i.test(title)?'WEATHER':/ewakuac/i.test(title)?'EVACUATION':/pożar/i.test(title)?'FIRE':'OTHER';
++  return eventSchema.parse({
++    id:'RCB-'+createHash('sha256').update(canonical.href).digest('hex').slice(0,24),
++    title,description,eventType,severity:context==='ACTUAL'&&!cancelled?'NORMAL':'INFORMATIONAL',
++    verification:'CONFIRMED',lifecycle:cancelled?'CANCELLED':'UNKNOWN',messageContext:context,
++    regions,geographicScope:national?'NATIONAL':regions.length?'REGIONAL':'UNKNOWN',
++    locationText,areaPrecision:national?'COUNTRY':regions.length?( /powiat|gmin|pow\./i.test(locationText!)?'PROVINCE_SUBSET':'PROVINCE'):'UNKNOWN',
++    // The source provides a calendar date, not a time. Do not invent midnight
++    // timestamps, expiry times or active status from a publication date.
++    publicationDate:publication.toISODate(),publishedAt:null,retrievedAt:now.toISOString(),validFrom:null,validTo:null,
++    sources:[{id:'RCB',name:'Rządowe Centrum Bezpieczeństwa',url:canonical.href,tier:1}],
++    instructions:[],officialWarning:context==='ACTUAL'&&!cancelled,reviewed:false,revision:1,
++    correction:null,latitude:null,longitude:null,geometry:null,isDemo:false,
++    adapterVersion:VERSION,sourceContentHash:createHash('sha256').update(html).digest('hex'),
++  });
++}
++
++export const rcbAdapter:SourceAdapter={
++  id:'RCB',version:VERSION,
++  async sync({now,fetchText}){
++    const urls=new Set<string>(),pages=new Set<string>();
++    let next:string|null=RCB_INDEX;
++    // Bounded recent-publication window; explicitly not a complete active feed.
++    for(let page=0;next&&page<3;page++){
++      if(pages.has(next))throw new Error('RCB_PAGINATION_LOOP');
++      pages.add(next);
++      const html=await fetchText(next),$=cheerio.load(html);
++      for(const url of parseRcbIndex(html))urls.add(url);
++      const href=$('#js-pagination-page-next').attr('href');
++      if(href){
++        const u=sourceUrl(href,next);
++        if(u.pathname!=='/web/rcb/komunikaty'||!/^\d+$/.test(u.searchParams.get('page')??''))throw new Error('RCB_PAGINATION_CONTRACT_CHANGED');
++        next=u.href;
++      }else next=null;
++    }
++    if(urls.size>60)throw new Error('RCB_BATCH_TOO_LARGE');
++    const events:Event[]=[];
++    // Low bounded concurrency; one failed article rejects the whole batch.
++    const list=[...urls];
++    for(let i=0;i<list.length;i+=3){
++      events.push(...await Promise.all(list.slice(i,i+3).map(async url=>parseRcbArticle(await fetchText(url),url,now))));
++    }
++    return {events,complete:false,coverage:'RECENT_PUBLICATIONS',pagesFetched:pages.size};
++  },
++};
+diff --git a/backend/src/server.ts b/backend/src/server.ts
+index c38f8d4..1f4e5ca 100644
+--- a/backend/src/server.ts
++++ b/backend/src/server.ts
+@@ -1,6 +1,7 @@
+ import {openDb,Store} from './store.js';import {buildApp} from './app.js';import {ingest} from './adapters.js';
++if(process.env.NODE_ENV==='production'&&!process.env.DATABASE_URL)throw new Error('Production requires DATABASE_URL with PostGIS');
+ const db=openDb(process.env.DATABASE_URL,process.env.SQLITE_PATH);const store=new Store(db);await store.init();const app=await buildApp(store,process.env.ADMIN_TOKEN);
+ let running=false;async function sync(){if(running)return;running=true;try{await ingest(store);}catch{console.error('Ingestion failed; existing data retained');}finally{running=false;}}
+-const timer=process.env.ENABLE_INGESTION==='true'?setInterval(()=>void sync(),300000):null;if(timer)void sync();
++const timer=process.env.ENABLE_INGESTION!=='false'?setInterval(()=>void sync(),300000):null;if(timer)void sync();
+ await app.listen({port:Number(process.env.PORT??8080),host:process.env.HOST??'127.0.0.1'});
+ for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{void(async()=>{if(timer)clearInterval(timer);await app.close();await db.close();process.exit(0);})();});
+diff --git a/backend/src/source-adapter.ts b/backend/src/source-adapter.ts
+new file mode 100644
+index 0000000..eb447e9
+--- /dev/null
++++ b/backend/src/source-adapter.ts
+@@ -0,0 +1,27 @@
++import type {Event} from './domain.js';
++
++export type SourceContext = {now: Date; fetchText: (url: string) => Promise<string>};
++export type SourceBatch = {
++  events: Event[];
++  // A publication archive is never proof that there are no active warnings.
++  complete: boolean;
++  coverage: 'RECENT_PUBLICATIONS' | 'ACTIVE_WARNINGS';
++  pagesFetched: number;
++};
++export interface SourceAdapter {
++  readonly id: string;
++  readonly version: string;
++  sync(context: SourceContext): Promise<SourceBatch>;
++}
++
++// Enable sources one by one, in the agreed integration order.
++export const SOURCES = [
++  {id: 'RCB', name: 'Rządowe Centrum Bezpieczeństwa', url: 'https://www.gov.pl/web/rcb/komunikaty', enabled: true},
++  {id: 'SHELTERS', name: 'Punkty schronienia PSP / dane.gov.pl', url: 'https://www.gov.pl/web/kgpsp', enabled: false},
++  {id: 'LEVELS', name: 'Stopnie alarmowe RP', url: 'https://www.gov.pl/web/rcb', enabled: false},
++  {id: 'RSO', name: 'Regionalny System Ostrzegania / WCZK', url: 'https://komunikaty.tvp.pl/', enabled: false},
++  {id: 'PAA', name: 'Państwowa Agencja Atomistyki', url: 'https://www.gov.pl/web/paa', enabled: false},
++  {id: 'CERT', name: 'CERT Polska', url: 'https://cert.pl/', enabled: false},
++  {id: 'SG', name: 'Straż Graniczna', url: 'https://www.strazgraniczna.pl/', enabled: false},
++  {id: 'UA', name: 'Oficjalne alarmy Ukrainy — integracja oczekuje', url: 'https://dsns.gov.ua/', enabled: false},
++];
+diff --git a/backend/src/store.ts b/backend/src/store.ts
+index b57ec49..3b4eef1 100644
+--- a/backend/src/store.ts
++++ b/backend/src/store.ts
+@@ -3,27 +3,82 @@ import {createHash} from 'node:crypto';
+ import pg from 'pg';
+ import {eventSchema,type Event,type Health} from './domain.js';
+ type Row=Record<string,unknown>;
+-export interface Db {all(sql:string,params?:unknown[]):Promise<Row[]>;run(sql:string,params?:unknown[]):Promise<void>;close():Promise<void>;}
++export interface Db {
++ kind:'postgres'|'sqlite';
++ all(sql:string,params?:unknown[]):Promise<Row[]>;
++ run(sql:string,params?:unknown[]):Promise<void>;
++ transaction<T>(work:(db:Db)=>Promise<T>):Promise<T>;
++ close():Promise<void>;
++}
+ export function openDb(url?:string,path='bezpieczna.db'):Db{
+- if(url){const p=new pg.Pool({connectionString:url,max:5});const convert=(s:string)=>{let i=0;return s.replace(/\?/g,()=>`$${++i}`);};return {all:async(s,v=[])=>{return (await p.query(convert(s),v)).rows as Row[];},run:async(s,v=[])=>{await p.query(convert(s),v);},close:async()=>p.end()};}
+- const d=new DatabaseSync(path);d.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;');return {all:async(s,v=[])=>d.prepare(s).all(...v as (string|number|null)[]) as Row[],run:async(s,v=[])=>{d.prepare(s).run(...v as (string|number|null)[]);},close:async()=>d.close()};
++ if(url){
++  const pool=new pg.Pool({connectionString:url,max:5});
++  const convert=(s:string)=>{let i=0;return s.replace(/\?/g,()=>`$${++i}`);};
++  const handle=(client:pg.Pool|pg.PoolClient):Db=>({kind:'postgres',
++   all:async(s,v=[]) => (await client.query(convert(s),v)).rows as Row[],
++   run:async(s,v=[])=>{await client.query(convert(s),v);},
++   transaction:async work=>{
++    const c=await pool.connect();
++    try{await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ');const result=await work(handle(c));await c.query('COMMIT');return result;}
++    catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
++   },close:async()=>pool.end(),
++  });return handle(pool);
++ }
++ const d=new DatabaseSync(path);d.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;');
++ const raw:Db={kind:'sqlite',all:async(s,v=[])=>d.prepare(s).all(...v as (string|number|null)[]) as Row[],run:async(s,v=[])=>{d.prepare(s).run(...v as (string|number|null)[]);},transaction:async()=>{throw new Error('NESTED_TRANSACTION_UNSUPPORTED');},close:async()=>d.close()};
++ let tail:Promise<unknown>=Promise.resolve();
++ const queued=<T>(job:()=>Promise<T>)=>{const result=tail.then(job);tail=result.catch(()=>{});return result;};
++ return {...raw,all:(s,v)=>queued(()=>raw.all(s,v)),run:(s,v)=>queued(()=>raw.run(s,v)),close:()=>queued(()=>raw.close()),transaction:work=>queued(async()=>{
++  d.exec('BEGIN');try{const result=await work(raw);d.exec('COMMIT');return result;}catch(e){d.exec('ROLLBACK');throw e;}
++ })};
+ }
+ export class Store{
+  constructor(readonly db:Db){}
+- async init(){await this.db.run('CREATE TABLE IF NOT EXISTS event_revisions(event_id TEXT NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL, content_hash TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT NOT NULL, recorded_at TEXT NOT NULL, PRIMARY KEY(event_id,revision))');await this.db.run('CREATE TABLE IF NOT EXISTS source_health(id TEXT PRIMARY KEY,payload TEXT NOT NULL)');}
+- async events():Promise<Event[]>{const rows=await this.db.all('SELECT r.payload FROM event_revisions r JOIN (SELECT event_id,MAX(revision) AS rev FROM event_revisions GROUP BY event_id) last ON r.event_id=last.event_id AND r.revision=last.rev');return rows.map(r=>eventSchema.parse(JSON.parse(r.payload as string)));}
++ async init(){
++  if(this.db.kind==='postgres')await this.db.run('CREATE EXTENSION IF NOT EXISTS postgis');
++  await this.db.run('CREATE TABLE IF NOT EXISTS event_revisions(event_id TEXT NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL, content_hash TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT NOT NULL, recorded_at TEXT NOT NULL, PRIMARY KEY(event_id,revision))');
++  await this.db.run('CREATE TABLE IF NOT EXISTS source_health(id TEXT PRIMARY KEY,payload TEXT NOT NULL)');
++  if(this.db.kind==='postgres'){
++   // An indexed generated column keeps geometry and the audited event payload
++   // in the same atomic write, including existing events during migration.
++   await this.db.run(`ALTER TABLE event_revisions ADD COLUMN IF NOT EXISTS geom geometry(Geometry,4326) GENERATED ALWAYS AS (
++    CASE WHEN payload::jsonb->'geometry' IS NOT NULL AND payload::jsonb->'geometry' <> 'null'::jsonb
++     THEN ST_SetSRID(ST_GeomFromGeoJSON(payload::jsonb->'geometry'),4326)
++     WHEN payload::jsonb->>'longitude' IS NOT NULL AND payload::jsonb->>'latitude' IS NOT NULL
++     THEN ST_SetSRID(ST_MakePoint((payload::jsonb->>'longitude')::double precision,(payload::jsonb->>'latitude')::double precision),4326)
++     ELSE NULL END) STORED CHECK (geom IS NULL OR ST_IsValid(geom))`);
++   await this.db.run('CREATE INDEX IF NOT EXISTS event_geometry_gist ON event_revisions USING GIST (geom)');
++  }
++ }
++ async events():Promise<Event[]>{
++  const rows=await this.db.all('SELECT r.payload FROM event_revisions r JOIN (SELECT event_id,MAX(revision) AS rev FROM event_revisions GROUP BY event_id) last ON r.event_id=last.event_id AND r.revision=last.rev');
++  return rows.map(r=>eventSchema.parse(JSON.parse(r.payload as string))).sort((a,b)=>(b.publishedAt??b.publicationDate??'').localeCompare(a.publishedAt??a.publicationDate??'')||a.id.localeCompare(b.id));
++ }
++ async snapshot(){return this.db.transaction(async db=>{const s=new Store(db);return {events:await s.events(),health:await s.health()};});}
+  async get(id:string){const r=await this.db.all('SELECT payload FROM event_revisions WHERE event_id=? ORDER BY revision DESC LIMIT 1',[id]);return r.length?eventSchema.parse(JSON.parse(r[0].payload as string)):null;}
+  async put(input:Event,actor='adapter',reason='Source content updated',expectedRevision?:number){
+   const e=eventSchema.parse(input);const previous=await this.get(e.id);
+   if(expectedRevision!==undefined&&(previous?.revision??0)!==expectedRevision)throw new Error('REVISION_CONFLICT');
+   if(actor==='adapter'&&previous?.reviewed)return false;
+-  const hash=(v:Event)=>{const {retrievedAt,revision,...stable}=v;return createHash('sha256').update(JSON.stringify(stable)).digest('hex');};
++  // Formatting changes in upstream HTML must not generate user-facing alerts.
++  const hash=(v:Event)=>{const {retrievedAt,revision,sourceContentHash,...stable}=v;return createHash('sha256').update(JSON.stringify(stable)).digest('hex');};
+   if(previous&&hash(previous)===hash(e))return false;
+   const next={...e,revision:(previous?.revision??0)+1};
+-  try{await this.db.run('INSERT INTO event_revisions(event_id,revision,payload,content_hash,actor,reason,recorded_at) VALUES(?,?,?,?,?,?,?)',[next.id,next.revision,JSON.stringify(next),hash(next),actor,reason,new Date().toISOString()]);}catch(err){if(err instanceof Error&&/unique|constraint|duplicate/i.test(err.message))throw new Error('REVISION_CONFLICT');throw err;}
++  try{await this.db.run('INSERT INTO event_revisions(event_id,revision,payload,content_hash,actor,reason,recorded_at) VALUES(?,?,?,?,?,?,?)',[next.id,next.revision,JSON.stringify(next),hash(next),actor,reason,new Date().toISOString()]);}catch(err){if(err instanceof Error&&/unique|duplicate/i.test(err.message))throw new Error('REVISION_CONFLICT');throw err;}
+   return true;
+  }
++ async applySync(events:Event[],health:Health){
++  await this.db.transaction(async db=>{const s=new Store(db);for(const e of events)await s.put(e);await s.setHealth(health);});
++ }
++ async spatialEvents(bbox?:[number,number,number,number]){
++  if(this.db.kind==='postgres'){
++   const rows=await this.db.all(`SELECT r.payload FROM event_revisions r JOIN (SELECT event_id,MAX(revision) AS rev FROM event_revisions GROUP BY event_id) last ON r.event_id=last.event_id AND r.revision=last.rev WHERE r.geom IS NOT NULL${bbox?' AND ST_Intersects(r.geom,ST_MakeEnvelope(?,?,?,?,4326))':''} ORDER BY r.event_id`,bbox);
++   return rows.map(r=>eventSchema.parse(JSON.parse(r.payload as string)));
++  }
++  if(bbox)throw new Error('POSTGIS_REQUIRED');
++  return (await this.events()).filter(e=>e.geometry!==null);
++ }
+  async timeline(id:string){return (await this.db.all('SELECT payload,actor,reason,recorded_at FROM event_revisions WHERE event_id=? ORDER BY revision',[id])).map(r=>({...r,payload:JSON.parse(r.payload as string)}));}
+- async health():Promise<Health[]>{return (await this.db.all('SELECT payload FROM source_health')).map(r=>JSON.parse(r.payload as string) as Health);}
++ async health():Promise<Health[]>{return (await this.db.all('SELECT payload FROM source_health ORDER BY id')).map(r=>JSON.parse(r.payload as string) as Health);}
+  async setHealth(h:Health){await this.db.run('INSERT INTO source_health(id,payload) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',[h.id,JSON.stringify(h)]);}
+ }
+diff --git a/backend/test/core.test.ts b/backend/test/core.test.ts
+index 2311eec..428e5d6 100644
+--- a/backend/test/core.test.ts
++++ b/backend/test/core.test.ts
+@@ -11,7 +11,7 @@ test('stale source cannot turn green',()=>assert.equal(computeStatus([],[{...hea
+ test('official critical active warning raises local status',()=>assert.equal(computeStatus([event],[health],'04',now).hazardLevel,'ACTIVE_DANGER'));
+ test('country describes local danger as local',()=>assert.match(computeStatus([event],[health],'PL',now).displayText,/lokalne/));
+ test('another region is unaffected',()=>assert.equal(computeStatus([event],[health],'06',now).hazardLevel,'NO_ACTIVE_WARNINGS'));
+-for(const [key,value] of [['messageContext','EXERCISE'],['messageContext','TEST'],['verification','REFUTED'],['verification','UNVERIFIED'],['lifecycle','ENDED'],['lifecycle','CANCELLED'],['reviewed',false],['isDemo',true]] as const){test(`${key}=${value} cannot raise danger`,()=>assert.notEqual(computeStatus([{...event,[key]:value}],[health],'04',now).hazardLevel,'ACTIVE_DANGER'));}
++for(const [key,value] of [['messageContext','EXERCISE'],['messageContext','TEST'],['verification','REFUTED'],['verification','UNVERIFIED'],['lifecycle','ENDED'],['lifecycle','CANCELLED'],['isDemo',true]] as const){test(`${key}=${value} cannot raise danger`,()=>assert.notEqual(computeStatus([{...event,[key]:value}],[health],'04',now).hazardLevel,'ACTIVE_DANGER'));}
+ test('expired warning remains last known uncertainty',()=>{const s=computeStatus([{...event,validTo:'2026-09-18T09:59:00Z'}],[health],'04',now);assert.equal(s.hazardLevel,'UNKNOWN');assert.deepEqual(s.lastKnownEventIds,['test-1']);});
+ test('OSINT cannot raise official critical status',()=>assert.notEqual(computeStatus([{...event,sources:[{...event.sources[0],tier:4}]}],[health],'04',now).hazardLevel,'ACTIVE_DANGER'));
+ test('RSO fixture contract maps province and valid times',()=>{const rows=parseRso(readFileSync('test/fixtures/rso.xml','utf8'),now);assert.equal(rows.length,2);assert.ok(rows.every(e=>e.regions.length&&e.validTo));assert.ok(rows.every(e=>!e.reviewed));});
+@@ -19,7 +19,7 @@ test('RSO structural change fails closed',()=>assert.throws(()=>parseRso('<newse
+ test('RSO rejects XML entities',()=>assert.throws(()=>parseRso('<!DOCTYPE a [<!ENTITY x SYSTEM "file:///etc/passwd">]>'),/UNSAFE/));
+ test('RCB structural change fails closed',()=>assert.throws(()=>parseRcbIndex('<main/>'),/CONTRACT/));
+ test('RCB index fixture includes alert links',()=>assert.ok(parseRcbIndex(readFileSync('test/fixtures/rcb.html','utf8')).length));
+-test('RCB missing article selector fails closed',()=>assert.throws(()=>parseRcbArticle('<article>broken</article>','https://www.gov.pl/web/rcb'),/CONTRACT/));
++test('RCB missing article selector fails closed',()=>assert.throws(()=>parseRcbArticle('<article>broken</article>','https://www.gov.pl/web/rcb/alert-rcb-test'),/CONTRACT/));
+ test('exercise detector never assumes actual from unknown text',()=>{assert.equal(messageContext('Ćwiczenia syren'),'EXERCISE');assert.equal(messageContext('Zwykły komunikat'),'UNKNOWN');});
+ test('fetch rejects private and arbitrary hosts',async()=>{await assert.rejects(fetchPublic('https://127.0.0.1/'),/DENIED/);await assert.rejects(fetchPublic('http://www.gov.pl/'),/DENIED/);});
+ test('event revisions are append-only, idempotent and conflict-safe',async()=>{const db=openDb(undefined,':memory:');const store=new Store(db);try{await store.init();assert.equal(await store.put({...event,reviewed:false}),true);assert.equal(await store.put({...event,reviewed:false,retrievedAt:'2026-09-18T10:01:00Z'}),false);await store.put({...event,correction:'Oficjalne sprostowanie',verification:'REFUTED'},'operator','Sprostowanie z oficjalnego źródła',1);await assert.rejects(store.put(event,'operator','Konflikt',1),/REVISION_CONFLICT/);assert.equal(await store.put({...event,reviewed:false}),false);assert.equal((await store.timeline(event.id)).length,2);}finally{await db.close();}});
+diff --git a/backend/test/fixtures/README.md b/backend/test/fixtures/README.md
+index a6e30c0..cb9ed7a 100644
+--- a/backend/test/fixtures/README.md
++++ b/backend/test/fixtures/README.md
+@@ -1 +1,3 @@
+ Fixture'y pobrane 18.09.2026. RCB: https://www.gov.pl/web/rcb (odnośniki), artykuł https://www.gov.pl/web/rcb/alert-rcb---odwolano-zakaz-korzystania-z-wod-rzeki-bobr (bez zdjęć i skryptów). RSO: publiczny eksport udokumentowany https://komunikaty.tvp.pl/Info/Integration. Z eksportu 130 rekordów pozostawiono 2, totalItems dostosowano wyłącznie do fixture. Nie są używane jako dane produkcyjne. Zasady ponownego użycia: docs/SOURCES.md.
++
++rcb-air.html: pobrany 18.09.2026 z https://www.gov.pl/web/rcb/alert-rcb---zagrozenie-z-powietrza-1709, fragment article bez zdjęć/skryptów. Tekst RCB CC BY-SA 4.0. Modyfikacje używane przez testy istnieją tylko w pamięci testów.
+diff --git a/backend/test/fixtures/rcb-air.html b/backend/test/fixtures/rcb-air.html
+new file mode 100644
+index 0000000..5fb6675
+--- /dev/null
++++ b/backend/test/fixtures/rcb-air.html
+@@ -0,0 +1,11 @@
++<main><article class="article-area__article " id="main-content">
++<h2>Alert RCB - zagrożenie z powietrza (17.09)</h2>
++<p class="event-date">17.09.2026</p>
++<p class="intro">"UWAGA! Rosyjski atak powietrzny na terenie Ukrainy. Sytuacja jest monitorowana. W przestrzeni RP operuje polskie lotnictwo. Oczekuj dalszych komunikatów"</p>
++
++<div class="editor-content">
++<div><p>"UWAGA! Rosyjski atak powietrzny na terenie Ukrainy. Sytuacja jest monitorowana. W przestrzeni RP operuje polskie lotnictwo. Oczekuj dalszych komunikatów"</p>
++<p>Alert RCB został wysłany do odbiorców na terenie woj. podkarpackiego i lubelskiego.</p>
++</div>
++</div>
++</article></main>
+diff --git a/backend/test/postgis.test.ts b/backend/test/postgis.test.ts
+new file mode 100644
+index 0000000..50751af
+--- /dev/null
++++ b/backend/test/postgis.test.ts
+@@ -0,0 +1,40 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {Store,openDb} from '../src/store.js';
++import {parseRcbArticle} from '../src/rcb-adapter.js';
++import {readFileSync} from 'node:fs';
++import {buildApp} from '../src/app.js';
++
++// CI supplies a disposable PostGIS service. Never run against a production DB.
++test('PostGIS migration, SRID, GiST, bbox and geometry/payload atomicity', {skip:!process.env.TEST_DATABASE_URL},async()=>{
++ const db=openDb(process.env.TEST_DATABASE_URL),store=new Store(db);
++ const e=parseRcbArticle(readFileSync('test/fixtures/rcb-air.html','utf8'),'https://www.gov.pl/web/rcb/alert-rcb-test',new Date('2026-09-18T12:00:00Z'));
++ e.id='fixture-postgis-'+Date.now();e.latitude=53.12;e.longitude=18.01;e.areaPrecision='EXACT';
++ try{
++  await store.init();await store.init();
++  const version=await db.all('SELECT PostGIS_Version() AS version');assert.ok(version[0].version);
++  await store.put(e);
++  const row=(await db.all('SELECT ST_SRID(geom) AS srid, ST_X(geom) AS lon FROM event_revisions WHERE event_id=?',[e.id]))[0];
++  assert.equal(row.srid,4326);assert.equal(row.lon,18.01);
++  assert.ok((await db.all("SELECT indexdef FROM pg_indexes WHERE indexname='event_geometry_gist'"))[0].indexdef.toString().includes('gist'));
++  assert.ok((await store.spatialEvents([18,53,19,54])).some(v=>v.id===e.id));
++  assert.ok(!(await store.spatialEvents([20,50,21,51])).some(v=>v.id===e.id));
++  await store.put({...e,latitude:50.1,longitude:20.1});
++  assert.ok(!(await store.spatialEvents([18,53,19,54])).some(v=>v.id===e.id),'old revision must not leak into map');
++  const app=await buildApp(store);
++  try{
++   const layer=(await app.inject('/v1/layers/events.geojson?regionId=PL&bbox=20,50,21,51')).json();
++   assert.ok(layer.features.some((f:{id:string})=>f.id===e.id));
++  }finally{await app.close();}
++  // A self-intersecting polygon passes structural JSON validation, but PostGIS
++  // rejects it. The first valid item in the same batch must also roll back.
++  const h=(await store.health()).find(v=>v.id==='RCB')!;
++  await assert.rejects(store.applySync([
++   {...e,id:e.id+'-rollback'},
++   {...e,id:e.id+'-invalid',latitude:null,longitude:null,geometry:{type:'Polygon',coordinates:[[[0,0],[1,1],[0,1],[1,0],[0,0]]]}}
++  ],{...h,state:'HEALTHY',lastSuccess:new Date().toISOString()}));
++  assert.equal(await store.get(e.id+'-rollback'),null);
++ }finally{
++  await db.run('DELETE FROM event_revisions WHERE event_id LIKE ?',[e.id+'%']);await db.close();
++ }
++});
+diff --git a/backend/test/rcb.test.ts b/backend/test/rcb.test.ts
+new file mode 100644
+index 0000000..552420c
+--- /dev/null
++++ b/backend/test/rcb.test.ts
+@@ -0,0 +1,88 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {readFileSync} from 'node:fs';
++import {parseRcbArticle,rcbAdapter,RCB_INDEX} from '../src/rcb-adapter.js';
++import {ingest,initializeSources} from '../src/adapters.js';
++import {Store,openDb} from '../src/store.js';
++import {computeStatus,sourceHealth} from '../src/domain.js';
++import {buildApp} from '../src/app.js';
++const now=new Date('2026-09-18T12:00:00Z');
++const url='https://www.gov.pl/web/rcb/alert-rcb---zagrozenie-z-powietrza-1709';
++const html=readFileSync('test/fixtures/rcb-air.html','utf8');
++const item=()=>parseRcbArticle(html,url,now);
++const listing=(next='')=>`<main><a href="${url}">Alert RCB</a>${next?`<a id="js-pagination-page-next" href="${next}">Next</a>`:''}</main>`;
++test('real RCB article: date precision, recipient provinces, provenance; no invented expiry/geometry',()=>{
++ const e=item();assert.equal(e.publicationDate,'2026-09-17');assert.equal(e.publishedAt,null);
++ assert.deepEqual(e.regions,['06','18']);assert.equal(e.verification,'CONFIRMED');assert.equal(e.messageContext,'ACTUAL');
++ assert.equal(e.lifecycle,'UNKNOWN');assert.equal(e.validTo,null);assert.equal(e.geometry,null);assert.equal(e.reviewed,false);
++ assert.match(e.sourceContentHash!,/^[a-f0-9]{64}$/);
++ assert.deepEqual(parseRcbArticle(html.replace('woj. podkarpackiego','woj: podkarpackiego'),url,now).regions,['06','18']);
++});
++test('county opolski in Lubelskie must not become province Opolskie',()=>{
++ const text=html.replace('woj. podkarpackiego i lubelskiego','powiatów chełmskiego i opolskiego (woj. lubelskie)');
++ assert.deepEqual(parseRcbArticle(text,url,now).regions,['06']);
++ assert.equal(parseRcbArticle(text,url,now).areaPrecision,'PROVINCE_SUBSET');
++});
++test('unknown recipient area is not guessed from places in warning body',()=>{
++ const text=html.replace('Alert RCB został wysłany do odbiorców na terenie woj. podkarpackiego i lubelskiego.','');
++ assert.deepEqual(parseRcbArticle(text,url,now).regions,[]);
++});
++test('exercise and cancellation publications do not create active warnings',()=>{
++ const cancelled=parseRcbArticle('<article>'+readFileSync('test/fixtures/rcb-article.html','utf8')+'</article>',url,now);
++ assert.equal(cancelled.lifecycle,'CANCELLED');assert.equal(cancelled.officialWarning,false);
++ const exercise=parseRcbArticle(html.replace('Alert RCB - zagrożenie','Alert RCB - ćwiczenia, zagrożenie'),url,now);
++ assert.equal(exercise.messageContext,'EXERCISE');assert.equal(exercise.officialWarning,false);
++});
++test('invalid date, missing body and external pagination fail closed',async()=>{
++ assert.throws(()=>parseRcbArticle(html.replace('17.09.2026','31.02.2026'),url,now),/CONTRACT/);
++ await assert.rejects(rcbAdapter.sync({now,fetchText:async()=>listing('https://example.com/?page=2')}),/DENIED/);
++});
++test('RCB pagination bounded and deduplicated; successful archive remains incomplete',async()=>{
++ const requests:string[]=[];
++ const batch=await rcbAdapter.sync({now,fetchText:async u=>{requests.push(u);return u===url?html:listing('?page=2&size=10');}}).catch(e=>e);
++ assert.match(batch.message,/LOOP/);
++ const good=await rcbAdapter.sync({now,fetchText:async u=>u===url?html:u===RCB_INDEX?listing('?page=2&size=10'):listing()});
++ assert.equal(good.events.length,1);assert.equal(good.pagesFetched,2);assert.equal(good.complete,false);
++});
++test('sync success, deduplication, failure retention and recovery',async()=>{
++ const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();
++ try{
++  const good={...rcbAdapter,sync:async()=>({events:[item()],complete:false,coverage:'RECENT_PUBLICATIONS' as const,pagesFetched:1})};
++  await ingest(store,[good]);await ingest(store,[good]);
++  assert.equal((await store.timeline(item().id)).length,1);
++  const first=(await store.health()).find(s=>s.id==='RCB')!;
++  assert.equal(first.state,'HEALTHY');assert.ok(first.lastSuccess);assert.equal(first.itemCount,1);
++  await ingest(store,[{...good,sync:async()=>{throw new Error('RCB_ARTICLE_CONTRACT_CHANGED');}}]);
++  const broken=(await store.health()).find(s=>s.id==='RCB')!;
++  assert.equal(broken.state,'BROKEN');assert.equal(broken.lastSuccess,first.lastSuccess);assert.equal(broken.errorCode,'RCB_ARTICLE_CONTRACT_CHANGED');
++  assert.equal((await store.events()).length,1);
++  await ingest(store,[good]);assert.equal((await store.health()).find(s=>s.id==='RCB')!.failureCount,0);
++ }finally{await db.close();}
++});
++test('batch rollback never publishes half of a sync or its success health',async()=>{
++ const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();await initializeSources(store);
++ try{
++  const health=(await store.health()).find(s=>s.id==='RCB')!;
++  await assert.rejects(store.applySync([item(),{...item(),id:'invalid',title:''}],{...health,state:'HEALTHY',lastSuccess:now.toISOString()}));
++  assert.equal((await store.events()).length,0);assert.equal((await store.health()).find(s=>s.id==='RCB')!.lastSuccess,null);
++ }finally{await db.close();}
++});
++test('unknown validity prevents green even with complete transport coverage',()=>{
++ const health={id:'RCB',name:'RCB',url:RCB_INDEX,state:'HEALTHY' as const,lastSuccess:now.toISOString(),lastFailure:null,lastItemTime:null,failureCount:0,responseTime:1,maxAgeSeconds:600,complete:true};
++ assert.equal(computeStatus([item()],[health],'06',now).hazardLevel,'UNKNOWN');
++ assert.equal(sourceHealth([health],new Date(now.getTime()+601000))[0].state,'STALE');
++ // Automation does not require a person to approve each structured warning.
++ const active={...item(),lifecycle:'ACTIVE' as const,validTo:'2026-09-18T13:00:00Z',severity:'CRITICAL' as const};
++ assert.equal(computeStatus([active],[health],'06',now).hazardLevel,'ACTIVE_DANGER');
++});
++test('status separates Poland and region; RCB without geometry produces no invented map point',async()=>{
++ const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();await store.put(item());const app=await buildApp(store);
++ try{
++  const status=(await app.inject('/status?regionId=04')).json();
++  assert.equal(status.region.id,'04');assert.equal(status.poland.hazardLevel,'UNKNOWN');assert.equal(status.region.hazardLevel,'UNKNOWN');
++  assert.equal(status.sourceHealth.length,8);assert.equal((await app.inject('/status?regionId=bad')).statusCode,400);
++  assert.equal((await app.inject('/readyz')).statusCode,503);
++  assert.deepEqual((await app.inject('/v1/layers/events.geojson')).json().features,[]);
++  assert.equal((await app.inject('/v1/layers/events.geojson?bbox=bad')).statusCode,400);
++ }finally{await app.close();await db.close();}
++});
+diff --git a/compose.yaml b/compose.yaml
+index 32c13d1..817d78b 100644
+--- a/compose.yaml
++++ b/compose.yaml
+@@ -1,6 +1,6 @@
+ services:
+   database:
+-    image: postgres:17
++    image: postgis/postgis:17-3.5
+     environment:
+       POSTGRES_DB: bezpieczna
+       POSTGRES_USER: bezpieczna
+diff --git a/deploy/Caddyfile b/deploy/Caddyfile
+new file mode 100644
+index 0000000..31d7d16
+--- /dev/null
++++ b/deploy/Caddyfile
+@@ -0,0 +1,5 @@
++{$API_DOMAIN} {
++  @admin path /admin /admin/*
++  respond @admin 404
++  reverse_proxy api:8080
++}
+diff --git a/deploy/compose.https.yaml b/deploy/compose.https.yaml
+new file mode 100644
+index 0000000..dfb2f17
+--- /dev/null
++++ b/deploy/compose.https.yaml
+@@ -0,0 +1,15 @@
++services:
++  gateway:
++    image: caddy:2-alpine
++    restart: unless-stopped
++    ports: ['80:80', '443:443']
++    environment:
++      API_DOMAIN: ${API_DOMAIN:?Set the domain pointing to this host}
++    volumes:
++      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
++      - caddy-data:/data
++      - caddy-config:/config
++    depends_on: [api]
++volumes:
++  caddy-data:
++  caddy-config:
+diff --git a/docs/HANDOFF.md b/docs/HANDOFF.md
+index 796f384..f8ef1f6 100644
+--- a/docs/HANDOFF.md
++++ b/docs/HANDOFF.md
+@@ -1,31 +1,19 @@
+-# Stan kontynuacji — 18.09.2026
++# Stan kontynuacji — etap RCB
+ 
+-## GitHub
++Repozytorium prywatne: https://github.com/mmaatteusz/bezpieczna-polska.
++Alpha.2 została zbudowana: Actions run 35398119623 zakończony sukcesem.
++Użytkownik potwierdził publikację kodu i kompilację w tym repozytorium.
++Konektor GitHub zwraca 404; zalogowana przeglądarka ma dostęp.
+ 
+-Utworzono prywatne repozytorium: https://github.com/mmaatteusz/bezpieczna-polska
++Obecny etap alpha.3: RCB + PostGIS + /status + sourceHealth + konfiguracja
++buildu, bez redesignu. Szczegóły: RCB_STAGE.md. Kolejność źródeł w tym pliku.
++Nie implementować pozostałych źródeł równocześnie.
+ 
+-Repozytorium jest puste. Zalogowana przeglądarka ma dostęp do konta; konektor
+-GitHub nie udostępnia repozytoriów i zwraca 404 dla tego repozytorium.
+-Automatyczny przegląd uprawnień dwukrotnie odrzucił przesłanie
+-`Bezpieczna_Polska_kod.zip`, wskazując brak bezpośredniej zgody użytkownika
+-na konkretny plik i cel. Nie próbować alternatywnego kanału wysyłki w celu
+-obejścia tej blokady. Potrzebne potwierdzenie użytkownika obejmujące projekt
+-i prywatne repozytorium `mmaatteusz/bezpieczna-polska`.
++Nie ma wdrożonego publicznego backendu ani domeny. Nie zastępować ich
++fikcyjnym URL, GitHub Actions ani ustawieniem ręcznym u użytkownika.
++Wdrożenie wymaga wskazania docelowego hosta/domeny i dostępu.
++Stary workflow alpha.2 nie jest ścieżką wydania alpha.3.
+ 
+-## Lokalne sprawdzenia
+-
+-- Node.js 24.19.0, kompilacja TypeScript i 28 testów backendu: PASS.
+-- Flutter 3.47.4, Dart 3.13.3: ponownie 14/14 testów PASS, analiza bez błędów.
+-- Android SDK 36, Build Tools 36.0.0 i NDK 28.2.13676358 były zainstalowane; narzędzia w `/tmp` zniknęły przy przerwaniu sesji.
+-- W tym środowisku Flutter wymaga `CI=true` i `TAR_OPTIONS=--no-same-owner`.
+-- Proces CI uzupełniono o timeout, kontrolę podpisu APK, sumę SHA-256
+-  i błąd przy braku pliku wynikowego.
+-- Kompilacja APK nieukończona: proces zniknął podczas pobierania zależności Gradle. Szczegóły w `VALIDATION.md`. Nie deklarować, że kompilacja nadal działa w tle.
+-- Następna próba powinna korzystać z GitHub Actions po uzyskaniu zgody na wysłanie projektu. Nie zaczynać od kolejnej instalacji całego SDK w nietrwałym środowisku.
+-
+-## Zasada wydania
+-
+-Kod ma numer 0.1.0-alpha.2. Nie nazywać pełnym MVP ani wersją produkcyjną.
+-Lista brakujących funkcji i integracji znajduje się w README.
+-Brak dostępu do fizycznego telefonu oraz brak testów FCM/APNs.
+-Nie generować ani nie publikować klucza podpisu produkcyjnego w repozytorium.
++Nie instalować ponownie lokalnego Android SDK; CI ma potrzebne narzędzia.
++Lokalnie Node.js 24, brak Flutter i serwera PostGIS. Test PostGIS wymaga
++TEST_DATABASE_URL do bazy testowej, a nie bazy produkcyjnej.
+diff --git a/docs/RCB_STAGE.md b/docs/RCB_STAGE.md
+new file mode 100644
+index 0000000..13ea22c
+--- /dev/null
++++ b/docs/RCB_STAGE.md
+@@ -0,0 +1,96 @@
++# Etap 1: RCB i podstawa backendu
++
++Zakres: RCB, wspólny Event, PostGIS, /status, sourceHealth, konfiguracja buildu.
++Interfejs i nawigacja pozostają. Kolejne integracje nie są uruchamiane jednocześnie.
++
++## Kontrakt RCB
++
++Źródło: https://www.gov.pl/web/rcb/komunikaty, publiczne HTML, bez autoryzacji.
++SourceAdapter `rcb-html/1.0.0` odczytuje maksymalnie 3 strony listy (do 30 wpisów),
++następnie pełne artykuły. Maksymalnie 3 równoległe pobrania, timeout 20 s,
++limit dokumentu 4 MiB, HTTPS, kontrola hosta, brak przekierowań.
++Synchronizacja automatyczna po starcie serwera i co 5 minut; wspólna blokada
++chroni przed nakładaniem wywołania harmonogramu i administratora.
++
++Zapis całej paczki i sourceHealth jest transakcyjny. Błąd dowolnego dokumentu
++nie publikuje częściowego sukcesu, zachowuje ostatnią kopię i lastSuccess.
++sourceHealth zawiera lastSuccessfulSyncAt, lastAttemptAt, lastFailure,
++errorCode, failureCount, itemCount, adapterVersion, responseTime i TTL.
++Po przekroczeniu TTL API zwraca STALE, mimo że serwer HTTP nadal działa.
++
++Data dzienna jest przechowywana jako publicationDate. publishedAt pozostaje
++null, gdy urząd nie udostępnia godziny. Nie wyliczamy fikcyjnego validTo.
++Regiony pochodzą z sekcji odbiorców i jawnej listy województw. Powiat opolski
++nie oznacza woj. opolskiego. PROVINCE_SUBSET oznacza część województwa.
++Brak rozpoznanej geografii oznacza UNKNOWN. Nie wymyślamy współrzędnych.
++Ćwiczenia/testy są oddzielone od rzeczywistych komunikatów. Publikacja odwołania
++nie odwołuje automatycznie innego rekordu bez jednoznacznego powiązania.
++
++To zbiór ostatnich publikacji, a nie kompletna lista aktywnych zagrożeń.
++Dlatego complete=false i coverage=RECENT_PUBLICATIONS także po poprawnym
++pobraniu. Brak nowego wpisu nie daje zielonego statusu. Autentyczność publikacji
++CONFIRMED nie oznacza potwierdzonej bieżącej ważności.
++
++## API / dane przestrzenne
++
++- GET /status?regionId=04: niezależne poland i region oraz sourceHealth.
++- GET /v1/snapshot?regionId=04: kompatybilny kontrakt obecnego UI, te same reguły.
++- GET /v1/sources: stan wszystkich źródeł; niewłączone oznaczone NOT_CONFIGURED.
++- GET /v1/layers/events.geojson?regionId=PL&bbox=14,49,24,55: GeoJSON z geometrii
++  dostarczonych przez źródło. Brak geometrii = brak punktu na mapie, nie punkt
++  w środku województwa. RCB nadal dostępne na liście.
++- /healthz: proces HTTP; /readyz: baza i aktualna poprawna synchronizacja
++  włączonych źródeł. Gotowość techniczna nie oznacza braku zagrożeń.
++
++PostGIS: rozszerzenie, geometria EPSG:4326, indeks GiST, ST_Intersects z bbox,
++walidacja ST_IsValid i wybór wyłącznie ostatniej rewizji zdarzenia.
++SQLite służy tylko lokalnemu developmentowi/testom; produkcja wymaga DATABASE_URL.
++Migracja jest addytywna i idempotentna. Nie kasuje istniejących rewizji.
++
++## Aplikacja / wydanie
++
++API_BASE_URL pochodzi z --dart-define. Stare ustawienie `api` jest ignorowane.
++Ręczne nadpisanie jest w Developer Settings, kontrolowanych flagą
++ENABLE_DEVELOPER_SETTINGS (domyślnie tylko debug). Wyłączenie flagi ignoruje
++zapisane nadpisanie. Puste pole deweloperskie przywraca adres z buildu.
++Aplikacja pobiera dane po uruchomieniu, po powrocie i co minutę na pierwszym planie.
++Normalne ustawienia nie zawierają adresu serwera. Brak konfiguracji buildu
++jest błędem wydania, nie zadaniem dla użytkownika.
++
++`scripts/build-android.sh` sprawdza działający HTTPS /readyz, PostGIS,
++synchronizację RCB i kontrakt mobilny, następnie przekazuje adres do kompilacji.
++Nie używać starego workflow tworzącego alpha.2 bez API_BASE_URL jako wydania
++tego etapu. Nie budować użytkowego APK przed uruchomieniem backendu.
++
++## Wdrożenie — brakuje docelowego hosta
++
++Przygotowane pliki są gotowe do uruchomienia na hoście Docker z domeną:
++
++```
++export API_DOMAIN=<domena-skierowana-na-host>
++export POSTGRES_PASSWORD=<losowe-znaki-hex>
++export ADMIN_TOKEN=<co-najmniej-32-losowe-znaki>
++docker compose -f compose.yaml -f deploy/compose.https.yaml up -d --build
++export API_BASE_URL=https://$API_DOMAIN
++bash scripts/build-android.sh
++```
++
++Caddy zapewnia TLS i nie wystawia /admin przez publiczną domenę. PostgreSQL
++nie ma opublikowanego portu, dane w trwałym woluminie. Sekrety na hoście,
++poza repozytorium i APK. Operator hosta musi zapewnić kopie bazy.
++Te polecenia nie zostały wykonane na publicznym serwerze; brak domeny,
++hostingu i dostępu wdrożeniowego. Nie deklarować działania na telefonie.
++
++## Następne etapy (w tej kolejności)
++
++1. PSP/dane.gov.pl — weryfikacja kontraktu, rodzaju i aktualności punktów schronienia.
++2. Stopnie alarmowe RP.
++3. RSO/WCZK (stary parser XML jest zachowany do testów, harmonogram wyłączony).
++4. PAA.
++5. CERT Polska.
++6. Straż Graniczna.
++7. Oficjalne alarmy Ukrainy; agregator nie jest automatycznie źródłem urzędowym.
++8. MapLibre zamiast Natural Earth, z warstwami GeoJSON i licencjonowanym podkładem.
++
++Po każdym adapterze: test kontraktowy, błędy i aktualność, rzeczywisty odczyt
++z podaniem daty i URL, dopiero potem jego włączenie.
+diff --git a/docs/validation/rcb/rcb-live.json b/docs/validation/rcb/rcb-live.json
+new file mode 100644
+index 0000000..6a95189
+--- /dev/null
++++ b/docs/validation/rcb/rcb-live.json
+@@ -0,0 +1,306 @@
++{
++  "observedAt": "2026-09-18T22:53:11.029Z",
++  "source": {
++    "id": "RCB",
++    "name": "Rządowe Centrum Bezpieczeństwa",
++    "url": "https://www.gov.pl/web/rcb/komunikaty",
++    "enabled": true,
++    "state": "HEALTHY",
++    "lastSuccess": "2026-09-18T22:53:10.960Z",
++    "lastFailure": null,
++    "lastItemTime": null,
++    "failureCount": 0,
++    "responseTime": 21534,
++    "maxAgeSeconds": 900,
++    "complete": false,
++    "lastAttempt": "2026-09-18T22:52:49.426Z",
++    "errorCode": null,
++    "itemCount": 29,
++    "adapterVersion": "rcb-html/1.0.0",
++    "coverage": "RECENT_PUBLICATIONS",
++    "pagesFetched": 3
++  },
++  "status": {
++    "schemaVersion": 1,
++    "evaluatedAt": "2026-09-18T22:53:11.025Z",
++    "poland": {
++      "hazardLevel": "UNKNOWN",
++      "displayText": "Nie potwierdzono zakończenia wcześniejszego zagrożenia",
++      "coverageState": "PARTIAL",
++      "reasonCodes": [
++        "LAST_KNOWN_WARNING",
++        "INCOMPLETE_SOURCE_COVERAGE"
++      ],
++      "supportingEventIds": [],
++      "lastKnownEventIds": [
++        "RCB-1d7f09bc6e6c571819ebcfe7",
++        "RCB-aa0ac3104ef229e4503addaa",
++        "RCB-64631f3a064d7b40f1f2896d",
++        "RCB-ffb82c04beda3be5893a6cca",
++        "RCB-fafd7e1b378250ebc90e7f84",
++        "RCB-544a4be1e542fc1e7d417178",
++        "RCB-5d0c402ec82ef4df84a3a350",
++        "RCB-22dd6ae8ebad4b9b9f9b4293",
++        "RCB-63ec5695133cb914e17a3833",
++        "RCB-b7c9dec17c2c4172ccc62d3c",
++        "RCB-3162376d00746254f5ec5068",
++        "RCB-e6402917a76f11ab4a0bb0fb",
++        "RCB-6a491ba582a1a309c4ba59ac",
++        "RCB-bfcfd688a87b834e79a22813",
++        "RCB-e8c85cdceed1536194dbc3bd",
++        "RCB-71631b6a083faf62d0bbfd94",
++        "RCB-e6802f5906a1f8996c52f27a",
++        "RCB-bfd252fac7e50a0a3c63e810",
++        "RCB-e00e0756b976f9f4f07a0494"
++      ],
++      "evaluatedAt": "2026-09-18T22:53:11.025Z",
++      "validUntil": "2026-09-18T22:54:11.025Z",
++      "rulesetVersion": "1.1.0"
++    },
++    "region": {
++      "id": "04",
++      "name": "Kujawsko-pomorskie",
++      "hazardLevel": "UNKNOWN",
++      "displayText": "Nie potwierdzono zakończenia wcześniejszego zagrożenia",
++      "coverageState": "PARTIAL",
++      "reasonCodes": [
++        "LAST_KNOWN_WARNING",
++        "INCOMPLETE_SOURCE_COVERAGE"
++      ],
++      "supportingEventIds": [],
++      "lastKnownEventIds": [
++        "RCB-1d7f09bc6e6c571819ebcfe7",
++        "RCB-e8c85cdceed1536194dbc3bd",
++        "RCB-e00e0756b976f9f4f07a0494"
++      ],
++      "evaluatedAt": "2026-09-18T22:53:11.025Z",
++      "validUntil": "2026-09-18T22:54:11.025Z",
++      "rulesetVersion": "1.1.0"
++    },
++    "sourceHealth": [
++      {
++        "id": "CERT",
++        "name": "CERT Polska",
++        "url": "https://cert.pl/",
++        "enabled": false,
++        "state": "NOT_CONFIGURED",
++        "lastSuccess": null,
++        "lastFailure": null,
++        "lastItemTime": null,
++        "failureCount": 0,
++        "responseTime": null,
++        "maxAgeSeconds": 900,
++        "complete": false,
++        "lastAttempt": null,
++        "errorCode": null,
++        "itemCount": 0,
++        "adapterVersion": null,
++        "lastSuccessfulSyncAt": null,
++        "lastAttemptAt": null
++      },
++      {
++        "id": "LEVELS",
++        "name": "Stopnie alarmowe RP",
++        "url": "https://www.gov.pl/web/rcb",
++        "enabled": false,
++        "state": "NOT_CONFIGURED",
++        "lastSuccess": null,
++        "lastFailure": null,
++        "lastItemTime": null,
++        "failureCount": 0,
++        "responseTime": null,
++        "maxAgeSeconds": 900,
++        "complete": false,
++        "lastAttempt": null,
++        "errorCode": null,
++        "itemCount": 0,
++        "adapterVersion": null,
++        "lastSuccessfulSyncAt": null,
++        "lastAttemptAt": null
++      },
++      {
++        "id": "PAA",
++        "name": "Państwowa Agencja Atomistyki",
++        "url": "https://www.gov.pl/web/paa",
++        "enabled": false,
++        "state": "NOT_CONFIGURED",
++        "lastSuccess": null,
++        "lastFailure": null,
++        "lastItemTime": null,
++        "failureCount": 0,
++        "responseTime": null,
++        "maxAgeSeconds": 900,
++        "complete": false,
++        "lastAttempt": null,
++        "errorCode": null,
++        "itemCount": 0,
++        "adapterVersion": null,
++        "lastSuccessfulSyncAt": null,
++        "lastAttemptAt": null
++      },
++      {
++        "id": "RCB",
++        "name": "Rządowe Centrum Bezpieczeństwa",
++        "url": "https://www.gov.pl/web/rcb/komunikaty",
++        "enabled": true,
++        "state": "HEALTHY",
++        "lastSuccess": "2026-09-18T22:53:10.960Z",
++        "lastFailure": null,
++        "lastItemTime": null,
++        "failureCount": 0,
++        "responseTime": 21534,
++        "maxAgeSeconds": 900,
++        "complete": false,
++        "lastAttempt": "2026-09-18T22:52:49.426Z",
++        "errorCode": null,
++        "itemCount": 29,
++        "adapterVersion": "rcb-html/1.0.0",
++        "coverage": "RECENT_PUBLICATIONS",
++        "pagesFetched": 3,
++        "lastSuccessfulSyncAt": "2026-09-18T22:53:10.960Z",
++        "lastAttemptAt": "2026-09-18T22:52:49.426Z"
++      },
++      {
++        "id": "RSO",
++        "name": "Regionalny System Ostrzegania / WCZK",
++        "url": "https://komunikaty.tvp.pl/",
++        "enabled": false,
++        "state": "NOT_CONFIGURED",
++        "lastSuccess": null,
++        "lastFailure": null,
++        "lastItemTime": null,
++        "failureCount": 0,
++        "responseTime": null,
++        "maxAgeSeconds": 900,
++        "complete": false,
++        "lastAttempt": null,
++        "errorCode": null,
++        "itemCount": 0,
++        "adapterVersion": null,
++        "lastSuccessfulSyncAt": null,
++        "lastAttemptAt": null
++      },
++      {
++        "id": "SG",
++        "name": "Straż Graniczna",
++        "url": "https://www.strazgraniczna.pl/",
++        "enabled": false,
++        "state": "NOT_CONFIGURED",
++        "lastSuccess": null,
++        "lastFailure": null,
++        "lastItemTime": null,
++        "failureCount": 0,
++        "responseTime": null,
++        "maxAgeSeconds": 900,
++        "complete": false,
++        "lastAttempt": null,
++        "errorCode": null,
++        "itemCount": 0,
++        "adapterVersion": null,
++        "lastSuccessfulSyncAt": null,
++        "lastAttemptAt": null
++      },
++      {
++        "id": "SHELTERS",
++        "name": "Punkty schronienia PSP / dane.gov.pl",
++        "url": "https://www.gov.pl/web/kgpsp",
++        "enabled": false,
++        "state": "NOT_CONFIGURED",
++        "lastSuccess": null,
++        "lastFailure": null,
++        "lastItemTime": null,
++        "failureCount": 0,
++        "responseTime": null,
++        "maxAgeSeconds": 900,
++        "complete": false,
++        "lastAttempt": null,
++        "errorCode": null,
++        "itemCount": 0,
++        "adapterVersion": null,
++        "lastSuccessfulSyncAt": null,
++        "lastAttemptAt": null
++      },
++      {
++        "id": "UA",
++        "name": "Oficjalne alarmy Ukrainy — integracja oczekuje",
++        "url": "https://dsns.gov.ua/",
++        "enabled": false,
++        "state": "NOT_CONFIGURED",
++        "lastSuccess": null,
++        "lastFailure": null,
++        "lastItemTime": null,
++        "failureCount": 0,
++        "responseTime": null,
++        "maxAgeSeconds": 900,
++        "complete": false,
++        "lastAttempt": null,
++        "errorCode": null,
++        "itemCount": 0,
++        "adapterVersion": null,
++        "lastSuccessfulSyncAt": null,
++        "lastAttemptAt": null
++      }
++    ]
++  },
++  "examples": [
++    {
++      "id": "RCB-0e0f5ee4b62d7b76d49c5667",
++      "title": "Alert RCB - ćwiczenia syst. alarmowania (17.09)",
++      "publicationDate": "2026-09-17",
++      "regions": [
++        "06"
++      ],
++      "lifecycle": "UNKNOWN",
++      "messageContext": "EXERCISE",
++      "geometry": null,
++      "sourceUrl": "https://www.gov.pl/web/rcb/alert-rcb---cwiczenia-syst-alarmowania1709"
++    },
++    {
++      "id": "RCB-19c4cb511e7e7ae426b4eb6a",
++      "title": "Alert RCB - ćwiczenia systemów alarmowania (17.09)",
++      "publicationDate": "2026-09-17",
++      "regions": [
++        "06"
++      ],
++      "lifecycle": "UNKNOWN",
++      "messageContext": "EXERCISE",
++      "geometry": null,
++      "sourceUrl": "https://www.gov.pl/web/rcb/alert-rcb---cwiczenia-systemow-alarmowania-1709"
++    },
++    {
++      "id": "RCB-1d7f09bc6e6c571819ebcfe7",
++      "title": "Alert RCB - ZAGROŻENIE Z POWIETRZA (17.09)",
++      "publicationDate": "2026-09-17",
++      "regions": [],
++      "lifecycle": "UNKNOWN",
++      "messageContext": "ACTUAL",
++      "geometry": null,
++      "sourceUrl": "https://www.gov.pl/web/rcb/alert-rcb---zagrozenie-z-powietrza-17010"
++    },
++    {
++      "id": "RCB-50f9b93f6950f8c5bc36e44f",
++      "title": "Alert RCB - odwołano zakaz korzystania z wód rzeki Bóbr",
++      "publicationDate": "2026-09-17",
++      "regions": [
++        "02"
++      ],
++      "lifecycle": "CANCELLED",
++      "messageContext": "ACTUAL",
++      "geometry": null,
++      "sourceUrl": "https://www.gov.pl/web/rcb/alert-rcb---odwolano-zakaz-korzystania-z-wod-rzeki-bobr"
++    },
++    {
++      "id": "RCB-aa0ac3104ef229e4503addaa",
++      "title": "Alert RCB - zagrożenie z powietrza (17.09)",
++      "publicationDate": "2026-09-17",
++      "regions": [
++        "06",
++        "18"
++      ],
++      "lifecycle": "UNKNOWN",
++      "messageContext": "ACTUAL",
++      "geometry": null,
++      "sourceUrl": "https://www.gov.pl/web/rcb/alert-rcb---zagrozenie-z-powietrza-1709"
++    }
++  ]
++}
+diff --git a/mobile/lib/main.dart b/mobile/lib/main.dart
+index e1a9ead..5be62a8 100644
+--- a/mobile/lib/main.dart
++++ b/mobile/lib/main.dart
+@@ -60,7 +60,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
+   late String region;
+   Snapshot? snapshot;
+   String? error;
+-  Timer? timer;
++  Timer? timer, refreshTimer;
+   String filter = 'Wszystkie', query = '';
+   Map<String, int> seen = {};
+   @override
+@@ -74,6 +74,12 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
+       if (mounted) setState(() {});
+     });
+     if (widget.repository.api.isNotEmpty) unawaited(refresh());
++    refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
++      if (mounted && !loading && widget.repository.api.isNotEmpty &&
++          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
++        unawaited(refresh());
++      }
++    });
+   }
+ 
+   void loadSeen() {
+@@ -95,6 +101,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
+   @override
+   void dispose() {
+     timer?.cancel();
++    refreshTimer?.cancel();
+     WidgetsBinding.instance.removeObserver(this);
+     super.dispose();
+   }
+@@ -378,10 +385,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
+       statusCard(true),
+       statusCard(false),
+       if (widget.repository.api.isEmpty)
+-        FilledButton.icon(
+-          onPressed: settings,
+-          icon: const Icon(Icons.settings_ethernet),
+-          label: const Text('Skonfiguruj serwer danych'),
++        notice(
++          'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
++          Icons.cloud_off,
+         ),
+       const SizedBox(height: 12),
+       notice(
+@@ -432,7 +438,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
+             ),
+             title: Text(s['name'] as String),
+             subtitle: Text(
+-              '${healthy ? 'Dane pobrane' : 'Brak aktualnego połączenia'}\n${stamp(s['lastSuccess'])}',
++              '${healthy ? 'Dane pobrane' : sourceStateLabel(s['state'] as String)}\nOstatnia poprawna synchronizacja: ${stamp(s['lastSuccess'])}',
+             ),
+             onTap: () => openLink(s['url'] as String),
+           ),
+@@ -470,7 +476,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
+                   ? 'Obszar nieustalony — sprawdź treść'
+                   : e.areas.map((r) => regions[r] ?? r).join(', '),
+             ),
+-            Text('Publikacja: ${stamp(e.data['publishedAt'])}'),
++            Text('Publikacja: ${e.data['publishedAt'] == null ? (e.data['publicationDate'] ?? 'Nie podano') : stamp(e.data['publishedAt'])}'),
++              if (e.data['locationText'] != null)
++                Text('Obszar według źródła: ${e.data['locationText']}'),
+             Text('Pobrano: ${stamp(e.data['retrievedAt'])}'),
+           ],
+         ),
+@@ -699,7 +707,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
+                   e.data['correction'] as String,
+                   Icons.fact_check_outlined,
+                 ),
+-              Text('Publikacja: ${stamp(e.data['publishedAt'])}'),
++              Text('Publikacja: ${e.data['publishedAt'] == null ? (e.data['publicationDate'] ?? 'Nie podano') : stamp(e.data['publishedAt'])}'),
++              if (e.data['locationText'] != null)
++                Text('Obszar według źródła: ${e.data['locationText']}'),
+               Text('Pobrano: ${stamp(e.data['retrievedAt'])}'),
+               Text('Od: ${stamp(e.data['validFrom'])}'),
+               Text('Do: ${stamp(e.data['validTo'])}'),
+@@ -719,94 +729,128 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
+   }
+ 
+   Future<void> settings() async {
+-    final controller = TextEditingController(text: widget.repository.api);
+-    String? validation;
+     await showModalBottomSheet<void>(
+       context: context,
+       isScrollControlled: true,
+       builder: (sheet) => StatefulBuilder(
+-        builder: (sheet, update) => Padding(
+-          padding: EdgeInsets.fromLTRB(
+-            22,
+-            22,
+-            22,
+-            MediaQuery.viewInsetsOf(sheet).bottom + 22,
++        builder: (sheet, update) => SafeArea(
++          child: Padding(
++            padding: const EdgeInsets.all(22),
++            child: SingleChildScrollView(
++              child: Column(
++                mainAxisSize: MainAxisSize.min,
++                crossAxisAlignment: CrossAxisAlignment.stretch,
++                children: [
++                  Text('Ustawienia', style: Theme.of(sheet).textTheme.titleLarge),
++                  SwitchListTile(
++                    title: const Text('Tryb ciemny'),
++                    value: widget.repository.dark,
++                    onChanged: (v) async {
++                      await widget.repository.prefs.setBool('dark', v);
++                      widget.onTheme();
++                      update(() {});
++                    },
++                  ),
++                  TextButton(
++                    onPressed: () async {
++                      ++generation;
++                      await widget.repository.clearData();
++                      if (mounted) {
++                        setState(() {
++                          snapshot = null;
++                          online = false;
++                          loading = false;
++                          seen = {};
++                        });
++                      }
++                      if (sheet.mounted) Navigator.pop(sheet);
++                    },
++                    child: const Text('Usuń zapisane komunikaty'),
++                  ),
++                  if (widget.repository.developerSettingsEnabled)
++                    ListTile(
++                      title: const Text('Developer Settings'),
++                      leading: const Icon(Icons.developer_mode),
++                      onTap: () {
++                        Navigator.pop(sheet);
++                        unawaited(developerSettings());
++                      },
++                    ),
++                  const Text('0.1.0-alpha.3 • Push nieaktywny • Bez GPS'),
++                ],
++              ),
++            ),
+           ),
+-          child: SingleChildScrollView(
++        ),
++      ),
++    );
++  }
++
++  Future<void> developerSettings() async {
++    if (!widget.repository.developerSettingsEnabled) return;
++    final controller = TextEditingController(text: widget.repository.developerApi);
++    String? validation;
++    await showDialog<void>(
++      context: context,
++      builder: (dialog) => StatefulBuilder(
++        builder: (dialog, update) => AlertDialog(
++          title: const Text('Developer Settings'),
++          content: SingleChildScrollView(
+             child: Column(
+               mainAxisSize: MainAxisSize.min,
+-              crossAxisAlignment: CrossAxisAlignment.stretch,
++              crossAxisAlignment: CrossAxisAlignment.start,
+               children: [
+-                Text('Ustawienia', style: Theme.of(sheet).textTheme.titleLarge),
+-                SwitchListTile(
+-                  title: const Text('Tryb ciemny'),
+-                  value: widget.repository.dark,
+-                  onChanged: (v) async {
+-                    await widget.repository.prefs.setBool('dark', v);
+-                    widget.onTheme();
+-                    update(() {});
+-                  },
+-                ),
++                Text('Adres z buildu: ${widget.repository.buildApi.isEmpty ? "brak" : widget.repository.buildApi}'),
++                const SizedBox(height: 12),
+                 TextField(
+                   controller: controller,
+                   keyboardType: TextInputType.url,
+                   autocorrect: false,
+                   decoration: InputDecoration(
+-                    labelText: 'Adres serwera danych HTTPS',
++                    labelText: 'Backend URL (HTTPS)',
++                    helperText: 'Puste pole przywraca konfigurację buildu.',
+                     errorText: validation,
+                     border: const OutlineInputBorder(),
+                   ),
+                 ),
+-                const SizedBox(height: 12),
+-                const Text(
+-                  'Wersja rozwojowa wymaga backendu. Nie wpisuj haseł ani tokenów w adresie.',
+-                ),
+-                FilledButton(
+-                  onPressed: () async {
+-                    try {
+-                      ++generation;
+-                      await widget.repository.setApi(controller.text);
+-                      if (sheet.mounted) Navigator.pop(sheet);
+-                      if (mounted) {
+-                        setState(() {
+-                          snapshot = widget.repository.cached(region);
+-                          online = false;
+-                          loading = false;
+-                          loadSeen();
+-                        });
+-                        if (widget.repository.api.isNotEmpty) await refresh();
+-                      }
+-                    } catch (_) {
+-                      update(
+-                        () => validation = 'Wymagany poprawny adres HTTPS.',
+-                      );
+-                    }
+-                  },
+-                  child: const Text('Zapisz i połącz'),
+-                ),
+-                TextButton(
+-                  onPressed: () async {
+-                    ++generation;
+-                    await widget.repository.clearData();
+-                    if (mounted) {
+-                      setState(() {
+-                        snapshot = null;
+-                        online = false;
+-                        loading = false;
+-                        seen = {};
+-                      });
+-                    }
+-                    if (sheet.mounted) Navigator.pop(sheet);
+-                  },
+-                  child: const Text('Usuń zapisane komunikaty'),
+-                ),
+-                const Text('0.1.0-alpha.2 • Push nieaktywny • Bez GPS'),
+               ],
+             ),
+           ),
++          actions: [
++            TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('Anuluj')),
++            FilledButton(
++              onPressed: () async {
++                try {
++                  ++generation;
++                  await widget.repository.setDeveloperApi(controller.text);
++                  if (dialog.mounted) Navigator.pop(dialog);
++                  if (mounted) {
++                    setState(() {
++                      snapshot = widget.repository.cached(region);
++                      online = false;
++                      loading = false;
++                      loadSeen();
++                    });
++                    if (widget.repository.api.isNotEmpty) await refresh();
++                  }
++                } catch (_) {
++                  update(() => validation = 'Wymagany poprawny adres HTTPS.');
++                }
++              },
++              child: const Text('Zapisz i połącz'),
++            ),
++          ],
+         ),
+       ),
+     );
+     controller.dispose();
+   }
+ }
++
++String sourceStateLabel(String state) => switch (state) {
++  'NOT_CONFIGURED' => 'Integracja oczekuje',
++  'BROKEN' => 'Błąd synchronizacji',
++  'STALE' => 'Dane nieaktualne',
++  'DEGRADED' => 'Niepełne dane',
++  _ => 'Brak aktualnego połączenia',
++};
+diff --git a/mobile/lib/model.dart b/mobile/lib/model.dart
+index c5d963e..62035ba 100644
+--- a/mobile/lib/model.dart
++++ b/mobile/lib/model.dart
+@@ -1,4 +1,5 @@
+ import 'dart:convert';
++import 'package:flutter/foundation.dart';
+ import 'package:http/http.dart' as http;
+ import 'package:shared_preferences/shared_preferences.dart';
+ 
+@@ -158,10 +159,19 @@ class DataRepository {
+   final SharedPreferences prefs;
+   final http.Client client;
+   int _generation = 0;
+-  DataRepository(this.prefs, {http.Client? client})
+-    : client = client ?? http.Client();
+-  String get api =>
+-      prefs.getString('api') ?? const String.fromEnvironment('API_BASE_URL');
++  final String buildApi;
++  final bool developerSettingsEnabled;
++  DataRepository(
++    this.prefs, {
++    http.Client? client,
++    this.buildApi = const String.fromEnvironment('API_BASE_URL'),
++    this.developerSettingsEnabled = const bool.fromEnvironment(
++      'ENABLE_DEVELOPER_SETTINGS', defaultValue: kDebugMode),
++  }) : client = client ?? http.Client();
++  String get developerApi => prefs.getString('developer_api') ?? '';
++  String get api => (developerSettingsEnabled && developerApi.isNotEmpty
++      ? developerApi
++      : buildApi).trim().replaceAll(RegExp(r'/+$'), '');
+   String get region => prefs.getString('region') ?? '04';
+   bool get dark => prefs.getBool('dark') ?? true;
+   static Uri validateApi(String value) {
+@@ -179,10 +189,13 @@ class DataRepository {
+     return u;
+   }
+ 
+-  Future<void> setApi(String value) async {
++  Future<void> setDeveloperApi(String value) async {
++    if (!developerSettingsEnabled) {
++      throw StateError('Developer Settings are disabled in this build');
++    }
+     if (value.trim().isNotEmpty) validateApi(value);
+     ++_generation;
+-    await prefs.setString('api', value.trim().replaceAll(RegExp(r'/+$'), ''));
++    await prefs.setString('developer_api', value.trim().replaceAll(RegExp(r'/+$'), ''));
+   }
+ 
+   Future<void> setRegion(String value) async {
+diff --git a/mobile/pubspec.yaml b/mobile/pubspec.yaml
+index 1d16c66..9b41ea4 100644
+--- a/mobile/pubspec.yaml
++++ b/mobile/pubspec.yaml
+@@ -1,7 +1,7 @@
+ name: bezpieczna_polska
+ description: Cywilne informacje o bezpieczeństwie Polski.
+ publish_to: none
+-version: 0.1.0-alpha.2+2
++version: 0.1.0-alpha.3+3
+ environment:
+   sdk: '>=3.10.0 <4.0.0'
+ dependencies:
+diff --git a/mobile/test/model_test.dart b/mobile/test/model_test.dart
+index 89fa9cc..3c21fb9 100644
+--- a/mobile/test/model_test.dart
++++ b/mobile/test/model_test.dart
+@@ -79,7 +79,7 @@ void main() {
+           return response(data());
+         }),
+       );
+-      await r.setApi('https://api.example');
++      await r.setDeveloperApi('https://api.example');
+       await r.refresh('04');
+       expect(r.cached('04')?.region, '04');
+       expect(r.cached('06'), null);
+@@ -91,7 +91,7 @@ void main() {
+       p,
+       client: MockClient((_) async => http.Response('{}', 200)),
+     );
+-    await r.setApi('https://api.example');
++    await r.setDeveloperApi('https://api.example');
+     await p.setString(r.cacheKey('04'), jsonEncode(data()));
+     await expectLater(r.refresh('04'), throwsA(anything));
+     expect(r.cached('04'), isNotNull);
+@@ -102,16 +102,16 @@ void main() {
+       p,
+       client: MockClient((_) async => response(data(region: '06'))),
+     );
+-    await r.setApi('https://api.example');
++    await r.setDeveloperApi('https://api.example');
+     await expectLater(r.refresh('04'), throwsFormatException);
+     expect(r.cached('04'), null);
+   });
+   test('server changes do not reuse another server cache', () async {
+     final p = await SharedPreferences.getInstance();
+     final r = DataRepository(p);
+-    await r.setApi('https://one.example');
++    await r.setDeveloperApi('https://one.example');
+     await p.setString(r.cacheKey('04'), jsonEncode(data()));
+-    await r.setApi('https://two.example');
++    await r.setDeveloperApi('https://two.example');
+     expect(r.cached('04'), null);
+   });
+   test('corrupt disk cache fails closed', () async {
+@@ -134,7 +134,7 @@ void main() {
+       await SharedPreferences.getInstance(),
+       client: MockClient((_) => pending.future),
+     );
+-    await r.setApi('https://api.example');
++    await r.setDeveloperApi('https://api.example');
+     final rejected = expectLater(r.refresh('04'), throwsStateError);
+     await r.clearData();
+     pending.complete(response(data()));
+@@ -145,4 +145,33 @@ void main() {
+     final d = data()..['nationalStatus'] = {'displayText': 12};
+     expect(() => Snapshot.parse(jsonEncode(d)), throwsFormatException);
+   });
++
++  test('production uses build URL and ignores all persisted overrides', () async {
++    SharedPreferences.setMockInitialValues({
++      'api': 'https://legacy.example',
++      'developer_api': 'https://debug.example',
++    });
++    final r = DataRepository(await SharedPreferences.getInstance(),
++      buildApi: 'https://build.example/', developerSettingsEnabled: false);
++    expect(r.api, 'https://build.example');
++    await expectLater(r.setDeveloperApi('https://override.example'), throwsStateError);
++  });
++  test('developer override can be reset to build URL', () async {
++    final r = DataRepository(await SharedPreferences.getInstance(),
++      buildApi: 'https://build.example', developerSettingsEnabled: true);
++    await r.setDeveloperApi('https://override.example');
++    expect(r.api, 'https://override.example');
++    await r.setDeveloperApi('');
++    expect(r.api, 'https://build.example');
++  });
++  test('build URL retrieves real API contract without setting preferences', () async {
++    final r = DataRepository(await SharedPreferences.getInstance(),
++      buildApi: 'https://build.example', developerSettingsEnabled: false,
++      client: MockClient((request) async {
++        expect(request.url.host, 'build.example');
++        expect(request.url.path, '/v1/snapshot');
++        return response(data());
++      }));
++    expect((await r.refresh('04')).region, '04');
++  });
+ }
+diff --git a/mobile/test/widget_test.dart b/mobile/test/widget_test.dart
+index 4ac5751..f70cce7 100644
+--- a/mobile/test/widget_test.dart
++++ b/mobile/test/widget_test.dart
+@@ -1,4 +1,7 @@
+ import 'dart:io';
++import 'dart:convert';
++import 'package:http/http.dart' as http;
++import 'package:http/testing.dart';
+ import 'package:flutter/material.dart';
+ import 'package:flutter/services.dart';
+ import 'package:flutter_test/flutter_test.dart';
+@@ -33,11 +36,12 @@ void main() {
+     await tester.pumpWidget(SafetyApp(repository: r));
+     await tester.pumpAndSettle();
+     expect(find.text('Brak bieżącej oceny sytuacji'), findsNWidgets(2));
+-    expect(find.text('Skonfiguruj serwer danych'), findsOneWidget);
+-    await expectLater(
+-      find.byType(MaterialApp),
+-      matchesGoldenFile('goldens/status.png'),
+-    );
++    expect(find.text('Skonfiguruj serwer danych'), findsNothing);
++    expect(find.textContaining('Wymagana jest aktualizacja aplikacji'), findsOneWidget);
++    // The setup button was intentionally removed. Keep the unchanged map
++    // golden and verify status cards structurally until a new baseline is reviewed.
++    expect(find.text('STATUS POLSKI'), findsOneWidget);
++    expect(find.textContaining('TWOJA OKOLICA'), findsOneWidget);
+     await tester.runAsync(() async {
+       await rootBundle.loadString('assets/europe.geojson');
+       await tester.tap(find.text('Mapa').last);
+@@ -87,4 +91,45 @@ void main() {
+     expect(tester.takeException(), isNull);
+     await tester.pumpWidget(const SizedBox());
+   });
++
++  testWidgets('normal settings hide server input; Developer Settings contain the override', (tester) async {
++    SharedPreferences.setMockInitialValues({});
++    final r = DataRepository(await SharedPreferences.getInstance(), developerSettingsEnabled: true);
++    await tester.pumpWidget(SafetyApp(repository: r));
++    await tester.pumpAndSettle();
++    await tester.tap(find.byTooltip('Ustawienia'));
++    await tester.pumpAndSettle();
++    expect(find.byType(TextField), findsNothing);
++    await tester.tap(find.text('Developer Settings'));
++    await tester.pumpAndSettle();
++    expect(find.text('Backend URL (HTTPS)'), findsOneWidget);
++    await tester.pumpWidget(const SizedBox());
++  });
++
++  testWidgets('fresh installation connects automatically using build configuration', (tester) async {
++    SharedPreferences.setMockInitialValues({});
++    var requests = 0;
++    final now = DateTime.now().toUtc();
++    final status = {'displayText': 'Brak wystarczających aktualnych danych',
++      'hazardLevel': 'UNKNOWN', 'validUntil': now.add(const Duration(minutes: 1)).toIso8601String()};
++    final r = DataRepository(await SharedPreferences.getInstance(),
++      buildApi: 'https://build.example', developerSettingsEnabled: false,
++      client: MockClient((request) async {
++        requests++;
++        expect(request.url.host, 'build.example');
++        return http.Response(jsonEncode({'schemaVersion': 1,
++          'regionId': '04', 'serverTime': now.toIso8601String(),
++          'status': status, 'nationalStatus': status, 'events': [], 'sources': []}), 200,
++          headers: {'content-type': 'application/json; charset=utf-8'});
++      }));
++    await tester.pumpWidget(SafetyApp(repository: r));
++    await tester.pumpAndSettle();
++    expect(requests, 1);
++    expect(find.text('Brak wystarczających aktualnych danych'), findsNWidgets(2));
++    await tester.tap(find.byTooltip('Ustawienia'));
++    await tester.pumpAndSettle();
++    expect(find.text('Developer Settings'), findsNothing);
++    expect(find.byType(TextField), findsNothing);
++    await tester.pumpWidget(const SizedBox());
++  });
+ }
+diff --git a/scripts/build-android.sh b/scripts/build-android.sh
+new file mode 100755
+index 0000000..3934e90
+--- /dev/null
++++ b/scripts/build-android.sh
+@@ -0,0 +1,11 @@
++#!/usr/bin/env bash
++set -euo pipefail
++bp_root="$(cd "$(dirname "$0")/.." && pwd)"
++node "$bp_root/scripts/check-backend.mjs"
++cd "$bp_root/mobile"
++flutter pub get
++flutter analyze --no-pub
++flutter test --no-pub
++flutter build apk --debug --target-platform android-arm64 \
++  --dart-define="API_BASE_URL=$API_BASE_URL" \
++  --dart-define=ENABLE_DEVELOPER_SETTINGS=false
+diff --git a/scripts/check-backend.mjs b/scripts/check-backend.mjs
+new file mode 100644
+index 0000000..3bf087d
+--- /dev/null
++++ b/scripts/check-backend.mjs
+@@ -0,0 +1,15 @@
++// Release gate: a build must never silently ship with an empty/fake backend URL.
++const value=process.env.API_BASE_URL;
++if(!value)throw new Error('API_BASE_URL must be supplied by the build configuration');
++const url=new URL(value);
++if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash||url.hostname==='localhost'||url.hostname.endsWith('.example'))throw new Error('API_BASE_URL must be a deployed HTTPS backend');
++const root=url.href.replace(/\/$/,'');
++for(const path of ['/readyz','/status?regionId=04','/v1/snapshot?regionId=04']){
++ const response=await fetch(root+path,{signal:AbortSignal.timeout(20000),redirect:'error'});
++ if(!response.ok)throw new Error(`Backend gate failed: ${path} HTTP ${response.status}`);
++ const data=await response.json();
++ if(path==='/readyz'&&(!data.ready||data.database!=='postgres'))throw new Error('PostGIS backend is not ready');
++ if(path.startsWith('/status')&&(!data.poland||data.region?.id!=='04'||!data.sourceHealth?.some(s=>s.id==='RCB'&&s.state==='HEALTHY'&&s.lastSuccessfulSyncAt)))throw new Error('RCB is not synchronized');
++ if(path.startsWith('/v1/snapshot')&&(data.schemaVersion!==1||data.regionId!=='04'||data.events?.some(e=>e.isDemo)))throw new Error('Invalid mobile contract');
++}
++console.log('Backend ready: PostGIS, synchronized RCB and mobile API verified');
+diff --git a/sources/RCB/SOURCE.md b/sources/RCB/SOURCE.md
+index f37a5c5..5b3efca 100644
+--- a/sources/RCB/SOURCE.md
++++ b/sources/RCB/SOURCE.md
+@@ -1,19 +1,11 @@
+-# RCB
++# RCB — adapter HTML
+ 
+-Właściciel / operator: Rządowe Centrum Bezpieczeństwa
++Źródło: https://www.gov.pl/web/rcb/komunikaty
+ 
+-URL: https://www.gov.pl/web/rcb
++Właściciel: Rządowe Centrum Bezpieczeństwa. Publiczny HTML, bez autoryzacji.
++Wersja adaptera: rcb-html/1.0.0. Synchronizacja co 5 minut.
+ 
+-API / RSS / XML / HTML: HTML, częściowo wdrożone; pełnego API nie potwierdzono
+-
+-Częstotliwość: 5 minut w preview
+-
+-Limit: brak potwierdzonego limitu/SLA.
+-
+-Autoryzacja: brak dla aktualnego publicznego pobierania; CAP RSO osobno wymaga tokena
+-
+-Licencja i regulamin: patrz docs/SOURCES.md; publikacja produkcyjna wymaga weryfikacji warunków ponownego użycia.
+-
+-Backup source: nie skonfigurowano.
+-
+-Ryzyko zmiany formatu: wysokie, selektory HTML
++Kontrakt, ograniczenia i diagnostyka: [RCB_STAGE.md](../../docs/RCB_STAGE.md).
++Teksty: CC BY-SA 4.0 według stopki gov.pl; zachowujemy autorstwo i odnośnik.
++Nie pobieramy obrazów. Pełne API aktywnych alertów niepotwierdzone.
++Brak gwarancji SLA; kompletność bieżących zagrożeń nie jest deklarowana.
