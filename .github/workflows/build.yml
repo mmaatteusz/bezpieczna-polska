@@ -1,0 +1,86 @@
+name: Build verified Android APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Import approved source archive once
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f backend/package.json ]; then
+            echo '640d6b9def35f9a5b7c6711c8543a5c6d8912bc38ba2272921189dc5c30541cb  Bezpieczna_Polska_kod.zip' | sha256sum --check
+            unzip -q Bezpieczna_Polska_kod.zip -d "$RUNNER_TEMP/bp-source"
+            rsync -a --exclude='.github' "$RUNNER_TEMP/bp-source/bezpieczna-polska/" ./
+            chmod +x mobile/android/gradlew
+            git add backend mobile docs sources compose.yaml README.md .gitignore
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Expand approved alpha source into repository'
+            git push origin HEAD:main
+          fi
+      - id: source
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci && npm run build && npm test
+        working-directory: backend
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.source_sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        working-directory: mobile
+      - run: flutter analyze --no-pub && flutter test --no-pub
+        working-directory: mobile
+      - run: flutter build apk --no-pub --debug --target-platform android-arm64
+        working-directory: mobile
+      - name: Verify APK and prepare download
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner" || sdkmanager 'build-tools;36.0.0'
+          mkdir -p output
+          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.2_arm64.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
+          cd output
+          sha256sum *.apk > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bezpieczna_Polska_0.1.0-alpha.2_arm64
+          path: output/
+          if-no-files-found: error
+          retention-days: 30
