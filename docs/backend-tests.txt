@@ -1,0 +1,41 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> bezpieczna-polska-api@0.1.0-alpha.2 test
+> node --import tsx --test test/*.test.ts
+
+✔ no data is unknown (1.1805ms)
+✔ green requires complete fresh configured sources (0.158204ms)
+✔ partial coverage cannot turn green (0.179685ms)
+✔ source failure cannot turn green (0.224471ms)
+✔ stale source cannot turn green (0.125605ms)
+✔ official critical active warning raises local status (0.18294ms)
+✔ country describes local danger as local (0.265221ms)
+✔ another region is unaffected (0.168468ms)
+✔ messageContext=EXERCISE cannot raise danger (0.276037ms)
+✔ messageContext=TEST cannot raise danger (0.134298ms)
+✔ verification=REFUTED cannot raise danger (0.075861ms)
+✔ verification=UNVERIFIED cannot raise danger (0.158985ms)
+✔ lifecycle=ENDED cannot raise danger (0.077053ms)
+✔ lifecycle=CANCELLED cannot raise danger (0.080599ms)
+✔ reviewed=false cannot raise danger (0.052728ms)
+✔ isDemo=true cannot raise danger (0.156711ms)
+✔ expired warning remains last known uncertainty (0.741914ms)
+✔ OSINT cannot raise official critical status (0.145985ms)
+✔ RSO fixture contract maps province and valid times (29.297942ms)
+✔ RSO structural change fails closed (0.598252ms)
+✔ RSO rejects XML entities (0.094409ms)
+✔ RCB structural change fails closed (1.916625ms)
+✔ RCB index fixture includes alert links (2.320691ms)
+✔ RCB missing article selector fails closed (0.78004ms)
+✔ exercise detector never assumes actual from unknown text (0.07461ms)
+✔ fetch rejects private and arbitrary hosts (0.373601ms)
+✔ event revisions are append-only, idempotent and conflict-safe (4.500846ms)
+✔ API validates region and protects admin writes (92.152044ms)
+ℹ tests 28
+ℹ suites 0
+ℹ pass 28
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 676.789373

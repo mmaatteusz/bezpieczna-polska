@@ -1,0 +1,76 @@
+<newses><pagination_info totalItems="2"/><news>
+    <id>23344126</id>
+    <title>Jako&#x15b;&#x107; wody przeznaczonej do spo&#x17c;ycia</title>
+    <shortcut>Jako&#x15b;&#x107; wody przeznaczonej do spo&#x17c;ycia - Nowe Miasto Lubawskie</shortcut>
+    <content>-Pa&#x144;stwowy Powiatowy Inspektor Sanitarny w Nowym Mie&#x15b;cie Lubawskim w dniu 17 wrze&#x15b;nia 2026 r. stwierdzi&#x142; niezgodno&#x15b;&#x107; z warto&#x15b;ci&#x105; parametryczn&#x105; wody do spo&#x17c;ycia z odcinka sieci wodoci&#x105;gu publicznego Nowe Miasto Lubawskie (dotyczy ulic: Narutowicza od numeru 32- prawa strona, od numeru 27- lewa strona, Magnoliowa, Storczykowa, Konwaliowa, Tulipanowa) ze wzgl&#x119;du na zanieczyszczenie mikrobiologiczne wody (bakterie
+grupy coli). Ww. odcinek sieci Wodoci&#x105;gu Publicznego Nowe Miasto Lubawskie (dotyczy ulic: Narutowicza od numeru 32- prawa strona, od numeru 27- lewa strona, Magnoliowa, Storczykowa, Konwaliowa, Tulipanowa).
+W zwi&#x105;zku z powy&#x17c;szym PPIS w Nowym Mie&#x15b;cie Lubawskim w swoim komunikacie z dnia
+17 wrze&#x15b;nia 2026 r. zaleca przestrzeganie poni&#x17c;szych wskaz&#xf3;wek:
+- woda z kranu mo&#x17c;e by&#x107; u&#x17c;ywana do picia i przygotowywania posi&#x142;k&#xf3;w po uprzednim przegotowaniu,
+- woda mo&#x17c;e by&#x107; u&#x17c;ywana do mycia owoc&#xf3;w, warzyw, mycia z&#x119;b&#xf3;w i przemywania ran, po uprzednim przegotowaniu,
+- woda nadaje si&#x119; do k&#x105;pieli,
+- woda mo&#x17c;e by&#x107; wykorzystywana do urz&#x105;dze&#x144; sanitarnych tj. WC.</content>
+    <rso_alarm>0</rso_alarm>
+    <rso_icon/>
+    <valid_from>2026-09-18 11:40:00</valid_from>
+    <valid_to>2026-10-02 23:59:00</valid_to>
+    <repetition/>
+    <longitude>19.592306740942664</longitude>
+    <latitude>53.423943764064646</latitude>
+    <water_level_value/>
+    <water_level_warning_status_value/>
+    <water_level_alarm_status_value/>
+    <water_level_trend/>
+    <type/>
+    <river_name/>
+    <location_name/>
+    <created_at>2026-09-18 11:42:38</created_at>
+    <updated_at>2026-09-18 11:42:48</updated_at>
+    <provinces>
+      <province id="14" slug="warminsko-mazurskie" city="">warmi&#x144;sko-mazurskie</province>
+    </provinces>
+  </news>
+<news>
+    <id>23343814</id>
+    <title>DK 10 77+500 utrudnienia</title>
+    <shortcut>DK10 utrudnienia pomi&#x119;dzy miejscowo&#x15b;ciami Sucha&#x144; - Recz oba kierunki. Zderzenie ci&#x105;gnika siod&#x142;owego z samochodem osobowym - droga zablokowana</shortcut>
+    <content>1. Wojew&#xf3;dztwo:   zachodniopomorskie
+2. Nr drogi:   10
+3. Kilometra&#x17c;:   77+500
+4. Odcinek drogi ograniczony rozpoznawalnymi miejscowo&#x15b;ciami:   Sucha&#x144; - Recz
+5. Kierunek:   oba
+6. Miejscowo&#x15b;&#x107; zdarzenia:   Wapnica
+7. Rodzaj zdarzenia:   Wypadek
+8. Opis zdarzenia:   Zderzenie ci&#x105;gnika siod&#x142;owego z samochodem osobowym. Wypadek ze skutkiem &#x15b;miertelnym. Droga zablokowana.
+9. Rodzaj pojazd&#xf3;w uczestnicz&#x105;cych w zdarzeniu:   1 ci&#x105;gnik siod&#x142;owy + 1 samoch&#xf3;d osobowy
+10. Liczba rannych:   0
+11. Liczba zabitych:   1
+12. Rodzaj utrudnienia:   Droga zablokowana
+13. Rodzaj wprowadzonych u&#x142;atwie&#x144;:  Wytyczono objazd Sucha&#x144; - Choszczno - Recz (DW 160 i 151).
+14. Przewidywany czas utrudnienia (h):   4
+15. Data powstania zdarzenia:   18.09.2026
+16. Godzina powstania zdarzenia:   08:10
+17. Koniec utrudnienia:   
+18. &#x179;r&#xf3;d&#x142;o uzyskania informacji:   CPR
+19. Uszkodzenie infrastruktury drogowej:   
+20. Potwierdzenie utrudnienia:   18.09.2026 09:30</content>
+    <rso_alarm>0</rso_alarm>
+    <rso_icon/>
+    <valid_from>2026-09-18 08:23:00</valid_from>
+    <valid_to>2026-09-18 23:59:00</valid_to>
+    <repetition/>
+    <longitude/>
+    <latitude/>
+    <water_level_value/>
+    <water_level_warning_status_value/>
+    <water_level_alarm_status_value/>
+    <water_level_trend/>
+    <type/>
+    <river_name/>
+    <location_name/>
+    <created_at>2026-09-18 08:25:40</created_at>
+    <updated_at>2026-09-18 10:06:12</updated_at>
+    <provinces>
+      <province id="16" slug="zachodniopomorskie" city="">Zachodniopomorskie</province>
+    </provinces>
+  </news></newses>

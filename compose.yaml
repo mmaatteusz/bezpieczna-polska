@@ -1,0 +1,25 @@
+services:
+  database:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: bezpieczna
+      POSTGRES_USER: bezpieczna
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set database password}
+    volumes: ['postgres-data:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bezpieczna -d bezpieczna']
+      interval: 10s
+      retries: 5
+  api:
+    build: ./backend
+    depends_on:
+      database:
+        condition: service_healthy
+    ports: ['127.0.0.1:8080:8080']
+    environment:
+      DATABASE_URL: postgresql://bezpieczna:${POSTGRES_PASSWORD}@database:5432/bezpieczna
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?Set random admin token}
+      ENABLE_INGESTION: 'true'
+    restart: unless-stopped
+volumes:
+  postgres-data:

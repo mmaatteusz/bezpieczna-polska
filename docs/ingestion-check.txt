@@ -1,0 +1,114 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> bezpieczna-polska-api@0.1.0-alpha.2 ingest
+> node --import tsx src/ingest-cli.ts
+
+{
+  "events": 135,
+  "sources": [
+    {
+      "id": "RCB",
+      "name": "Rządowe Centrum Bezpieczeństwa",
+      "url": "https://www.gov.pl/web/rcb",
+      "state": "HEALTHY",
+      "lastSuccess": "2026-09-18T10:53:37.437Z",
+      "lastFailure": null,
+      "lastItemTime": null,
+      "failureCount": 0,
+      "responseTime": 10162,
+      "maxAgeSeconds": 600,
+      "complete": false
+    },
+    {
+      "id": "RSO",
+      "name": "Regionalny System Ostrzegania",
+      "url": "https://komunikaty.tvp.pl/",
+      "state": "HEALTHY",
+      "lastSuccess": "2026-09-18T10:53:46.921Z",
+      "lastFailure": null,
+      "lastItemTime": "2026-09-18T10:45:24.000Z",
+      "failureCount": 0,
+      "responseTime": 9484,
+      "maxAgeSeconds": 600,
+      "complete": false
+    },
+    {
+      "id": "CERT",
+      "name": "CERT Polska",
+      "url": "https://cert.pl/",
+      "state": "NOT_CONFIGURED",
+      "lastSuccess": null,
+      "lastFailure": null,
+      "lastItemTime": null,
+      "failureCount": 0,
+      "responseTime": null,
+      "maxAgeSeconds": 600,
+      "complete": false
+    },
+    {
+      "id": "PAA",
+      "name": "Państwowa Agencja Atomistyki",
+      "url": "https://www.gov.pl/web/paa",
+      "state": "NOT_CONFIGURED",
+      "lastSuccess": null,
+      "lastFailure": null,
+      "lastItemTime": null,
+      "failureCount": 0,
+      "responseTime": null,
+      "maxAgeSeconds": 600,
+      "complete": false
+    },
+    {
+      "id": "SG",
+      "name": "Straż Graniczna",
+      "url": "https://www.strazgraniczna.pl/",
+      "state": "NOT_CONFIGURED",
+      "lastSuccess": null,
+      "lastFailure": null,
+      "lastItemTime": null,
+      "failureCount": 0,
+      "responseTime": null,
+      "maxAgeSeconds": 600,
+      "complete": false
+    },
+    {
+      "id": "LEVELS",
+      "name": "Stopnie alarmowe RP",
+      "url": "https://www.gov.pl/web/rcb",
+      "state": "NOT_CONFIGURED",
+      "lastSuccess": null,
+      "lastFailure": null,
+      "lastItemTime": null,
+      "failureCount": 0,
+      "responseTime": null,
+      "maxAgeSeconds": 600,
+      "complete": false
+    },
+    {
+      "id": "SHELTERS",
+      "name": "Punkty schronienia",
+      "url": "https://gdziesieukryc.pl/",
+      "state": "NOT_CONFIGURED",
+      "lastSuccess": null,
+      "lastFailure": null,
+      "lastItemTime": null,
+      "failureCount": 0,
+      "responseTime": null,
+      "maxAgeSeconds": 600,
+      "complete": false
+    },
+    {
+      "id": "UA",
+      "name": "Alarmy Ukrainy — adapter nieaktywny",
+      "url": "https://alerts.in.ua/",
+      "state": "NOT_CONFIGURED",
+      "lastSuccess": null,
+      "lastFailure": null,
+      "lastItemTime": null,
+      "failureCount": 0,
+      "responseTime": null,
+      "maxAgeSeconds": 600,
+      "complete": false
+    }
+  ]
+}
