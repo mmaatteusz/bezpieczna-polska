@@ -1,19 +1,11 @@
-# RCB
+# RCB — adapter HTML
 
-Właściciel / operator: Rządowe Centrum Bezpieczeństwa
+Źródło: https://www.gov.pl/web/rcb/komunikaty
 
-URL: https://www.gov.pl/web/rcb
+Właściciel: Rządowe Centrum Bezpieczeństwa. Publiczny HTML, bez autoryzacji.
+Wersja adaptera: rcb-html/1.0.0. Synchronizacja co 5 minut.
 
-API / RSS / XML / HTML: HTML, częściowo wdrożone; pełnego API nie potwierdzono
-
-Częstotliwość: 5 minut w preview
-
-Limit: brak potwierdzonego limitu/SLA.
-
-Autoryzacja: brak dla aktualnego publicznego pobierania; CAP RSO osobno wymaga tokena
-
-Licencja i regulamin: patrz docs/SOURCES.md; publikacja produkcyjna wymaga weryfikacji warunków ponownego użycia.
-
-Backup source: nie skonfigurowano.
-
-Ryzyko zmiany formatu: wysokie, selektory HTML
+Kontrakt, ograniczenia i diagnostyka: [RCB_STAGE.md](../../docs/RCB_STAGE.md).
+Teksty: CC BY-SA 4.0 według stopki gov.pl; zachowujemy autorstwo i odnośnik.
+Nie pobieramy obrazów. Pełne API aktywnych alertów niepotwierdzone.
+Brak gwarancji SLA; kompletność bieżących zagrożeń nie jest deklarowana.

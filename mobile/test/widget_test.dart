@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,11 +36,15 @@ void main() {
     await tester.pumpWidget(SafetyApp(repository: r));
     await tester.pumpAndSettle();
     expect(find.text('Brak bieżącej oceny sytuacji'), findsNWidgets(2));
-    expect(find.text('Skonfiguruj serwer danych'), findsOneWidget);
-    await expectLater(
-      find.byType(MaterialApp),
-      matchesGoldenFile('goldens/status.png'),
+    expect(find.text('Skonfiguruj serwer danych'), findsNothing);
+    expect(
+      find.textContaining('Wymagana jest aktualizacja aplikacji'),
+      findsOneWidget,
     );
+    // The setup button was intentionally removed. Keep the unchanged map
+    // golden and verify status cards structurally until a new baseline is reviewed.
+    expect(find.text('STATUS POLSKI'), findsOneWidget);
+    expect(find.textContaining('TWOJA OKOLICA'), findsOneWidget);
     await tester.runAsync(() async {
       await rootBundle.loadString('assets/europe.geojson');
       await tester.tap(find.text('Mapa').last);
@@ -87,4 +94,72 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets(
+    'normal settings hide server input; Developer Settings contain the override',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final r = DataRepository(
+        await SharedPreferences.getInstance(),
+        developerSettingsEnabled: true,
+      );
+      await tester.pumpWidget(SafetyApp(repository: r));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Ustawienia'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      await tester.tap(find.text('Developer Settings'));
+      await tester.pumpAndSettle();
+      expect(find.text('Backend URL (HTTPS)'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'fresh installation connects automatically using build configuration',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      var requests = 0;
+      final now = DateTime.now().toUtc();
+      final status = {
+        'displayText': 'Brak wystarczających aktualnych danych',
+        'hazardLevel': 'UNKNOWN',
+        'validUntil': now.add(const Duration(minutes: 1)).toIso8601String(),
+      };
+      final r = DataRepository(
+        await SharedPreferences.getInstance(),
+        buildApi: 'https://build.example',
+        developerSettingsEnabled: false,
+        client: MockClient((request) async {
+          requests++;
+          expect(request.url.host, 'build.example');
+          return http.Response(
+            jsonEncode({
+              'schemaVersion': 1,
+              'regionId': '04',
+              'serverTime': now.toIso8601String(),
+              'status': status,
+              'nationalStatus': status,
+              'events': [],
+              'sources': [],
+            }),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }),
+      );
+      await tester.pumpWidget(SafetyApp(repository: r));
+      await tester.pumpAndSettle();
+      expect(requests, 1);
+      expect(
+        find.text('Brak wystarczających aktualnych danych'),
+        findsNWidgets(2),
+      );
+      await tester.tap(find.byTooltip('Ustawienia'));
+      await tester.pumpAndSettle();
+      expect(find.text('Developer Settings'), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 }

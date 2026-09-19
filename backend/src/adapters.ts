@@ -1,23 +1,22 @@
 import * as cheerio from 'cheerio';
 import {DateTime} from 'luxon';
-import {createHash} from 'node:crypto';
 import {eventSchema,REGIONS,type Event,type Health} from './domain.js';
 import {Store} from './store.js';
-export const SOURCES=[
- {id:'RCB',name:'Rządowe Centrum Bezpieczeństwa',url:'https://www.gov.pl/web/rcb'},
- {id:'RSO',name:'Regionalny System Ostrzegania',url:'https://komunikaty.tvp.pl/'},
- {id:'CERT',name:'CERT Polska',url:'https://cert.pl/'},
- {id:'PAA',name:'Państwowa Agencja Atomistyki',url:'https://www.gov.pl/web/paa'},
- {id:'SG',name:'Straż Graniczna',url:'https://www.strazgraniczna.pl/'},
- {id:'LEVELS',name:'Stopnie alarmowe RP',url:'https://www.gov.pl/web/rcb'},
- {id:'SHELTERS',name:'Punkty schronienia',url:'https://gdziesieukryc.pl/'},
- {id:'UA',name:'Alarmy Ukrainy — adapter nieaktywny',url:'https://alerts.in.ua/'}
-];
-export async function initializeSources(store:Store){const existing=await store.health();for(const s of SOURCES)if(!existing.some(h=>h.id===s.id))await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:600,complete:false});}
+import {SOURCES, type SourceAdapter} from './source-adapter.js';
+import {rcbAdapter} from './rcb-adapter.js';
+export {SOURCES} from './source-adapter.js';
+export {parseRcbIndex,parseRcbArticle} from './rcb-adapter.js';
+export async function initializeSources(store:Store){
+ const existing=await store.health();
+ for(const s of SOURCES){
+  const previous=existing.find(h=>h.id===s.id);
+  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
+  else if(!s.enabled)await store.setHealth({...previous,...s,state:'NOT_CONFIGURED',complete:false});
+  else await store.setHealth({...previous,...s});
+ }
+}
 export function messageContext(text:string):Event['messageContext']{return /ćwicz|cwicz|exercise/i.test(text)?'EXERCISE':/test syren|test systemu/i.test(text)?'TEST':'UNKNOWN';}
 function base(id:string,title:string,description:string,sourceId:string,url:string,now:Date):Event{return eventSchema.parse({id,title,description,eventType:'OTHER',severity:'NORMAL',verification:'UNVERIFIED',lifecycle:'UNKNOWN',messageContext:messageContext(title+' '+description),regions:[],geographicScope:'UNKNOWN',publishedAt:null,retrievedAt:now.toISOString(),validFrom:null,validTo:null,sources:[{id:sourceId,name:SOURCES.find(s=>s.id===sourceId)!.name,url,tier:1}],instructions:[],officialWarning:false,reviewed:false,revision:1,correction:null,latitude:null,longitude:null,isDemo:false});}
-export function parseRcbIndex(html:string):string[]{const $=cheerio.load(html);const urls=new Set<string>();$('main a[href]').each((_,a)=>{const href=$(a).attr('href')!;const u=new URL(href,'https://www.gov.pl');if(u.hostname==='www.gov.pl'&&/^\/web\/rcb\/alert-rcb-.+/.test(u.pathname))urls.add(u.href);});if(!urls.size)throw new Error('RCB_HTML_CONTRACT_CHANGED');return [...urls].slice(0,10);}
-export function parseRcbArticle(html:string,url:string,now=new Date()):Event{const $=cheerio.load(html);const title=$('article h2').first().text().trim();const content=$('article .editor-content').first().text().trim();if(!title||content.length<20)throw new Error('RCB_ARTICLE_CONTRACT_CHANGED');return base('RCB-'+createHash('sha256').update(url).digest('hex').slice(0,24),title,content,'RCB',url,now);}
 export function parseRso(xml:string,now=new Date()):Event[]{
  if(/<!DOCTYPE|<!ENTITY/i.test(xml))throw new Error('UNSAFE_XML');
  const $=cheerio.load(xml,{xml:true});const total=Number($('pagination_info').attr('totalItems'));const nodes=$('news');if(!Number.isInteger(total)||total!==nodes.length||!nodes.length)throw new Error('RSO_INCOMPLETE_OR_EMPTY');
@@ -37,10 +36,29 @@ export async function fetchPublic(url:string):Promise<string>{
  const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/xml'}});if(!response.ok||!response.body)throw new Error('SOURCE_HTTP_ERROR');
  let size=0;const chunks:Uint8Array[]=[];for await(const chunk of response.body){size+=chunk.length;if(size>4*1024*1024)throw new Error('SOURCE_TOO_LARGE');chunks.push(chunk);}return Buffer.concat(chunks).toString('utf8');
 }
-export async function ingest(store:Store){await initializeSources(store);for(const source of SOURCES.filter(s=>['RCB','RSO'].includes(s.id))){const previous=(await store.health()).find(s=>s.id===source.id)!;const begin=Date.now();try{
- const now=new Date();let items:Event[];
- if(source.id==='RSO')items=parseRso(await fetchPublic('https://komunikaty.tvp.pl/komunikatyxml/wszystkie/wszystkie/0?_format=xml'),now);
- else{items=[];const urls=parseRcbIndex(await fetchPublic(source.url));for(const url of urls)items.push(parseRcbArticle(await fetchPublic(url),url,now));}
- for(const e of items)await store.put(e);
- const published=items.map(e=>e.publishedAt).filter((v):v is string=>v!==null).sort();await store.setHealth({...previous,state:'HEALTHY',lastSuccess:new Date().toISOString(),lastItemTime:published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:false});
- }catch{await store.setHealth({...previous,state:'BROKEN',lastFailure:new Date().toISOString(),failureCount:previous.failureCount+1,responseTime:Date.now()-begin,complete:false});}}}
+// Sharing the same coordinator prevents timer/admin overlap on this Store.
+const running = new WeakMap<Store, Promise<void>>();
+export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter], fetchText=fetchPublic):Promise<void>{
+ const existing=running.get(store);if(existing)return existing;
+ const task=syncSources(store,adapters,fetchText).finally(()=>running.delete(store));
+ running.set(store,task);return task;
+}
+async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:string)=>Promise<string>){
+ await initializeSources(store);
+ for(const adapter of adapters){
+  const previous=(await store.health()).find(s=>s.id===adapter.id);
+  if(!previous)throw new Error('UNKNOWN_ADAPTER');
+  const begin=Date.now(),lastAttempt=new Date(begin).toISOString();
+  try{
+   const batch=await adapter.sync({now:new Date(begin),fetchText});
+   const items=batch.events.map(e=>eventSchema.parse(e));
+   if(items.some(e=>e.isDemo||!e.sources.some(s=>s.id===adapter.id)))throw new Error('SOURCE_INVALID_EVENT');
+   const published=items.map(e=>e.publishedAt).filter((v):v is string=>v!==null).sort();
+   await store.applySync(items,{...previous,enabled:true,state:'HEALTHY',lastAttempt,lastSuccess:new Date().toISOString(),lastItemTime:published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:batch.complete,coverage:batch.coverage,pagesFetched:batch.pagesFetched,itemCount:items.length,errorCode:null,adapterVersion:adapter.version});
+  }catch(error){
+   const message=error instanceof Error?error.message:'';
+   const errorCode=/^[A-Z][A-Z0-9_]{2,100}$/.test(message)?message:'SOURCE_SYNC_FAILED';
+   await store.setHealth({...previous,enabled:true,state:'BROKEN',lastAttempt,lastFailure:new Date().toISOString(),failureCount:previous.failureCount+1,responseTime:Date.now()-begin,complete:false,errorCode,adapterVersion:adapter.version});
+  }
+ }
+}

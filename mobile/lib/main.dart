@@ -60,7 +60,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   late String region;
   Snapshot? snapshot;
   String? error;
-  Timer? timer;
+  Timer? timer, refreshTimer;
   String filter = 'Wszystkie', query = '';
   Map<String, int> seen = {};
   @override
@@ -74,6 +74,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       if (mounted) setState(() {});
     });
     if (widget.repository.api.isNotEmpty) unawaited(refresh());
+    refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted &&
+          !loading &&
+          widget.repository.api.isNotEmpty &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        unawaited(refresh());
+      }
+    });
   }
 
   void loadSeen() {
@@ -95,6 +103,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   @override
   void dispose() {
     timer?.cancel();
+    refreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -378,10 +387,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       statusCard(true),
       statusCard(false),
       if (widget.repository.api.isEmpty)
-        FilledButton.icon(
-          onPressed: settings,
-          icon: const Icon(Icons.settings_ethernet),
-          label: const Text('Skonfiguruj serwer danych'),
+        notice(
+          'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
+          Icons.cloud_off,
         ),
       const SizedBox(height: 12),
       notice(
@@ -432,7 +440,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             ),
             title: Text(s['name'] as String),
             subtitle: Text(
-              '${healthy ? 'Dane pobrane' : 'Brak aktualnego połączenia'}\n${stamp(s['lastSuccess'])}',
+              '${healthy ? 'Dane pobrane' : sourceStateLabel(s['state'] as String)}\nOstatnia poprawna synchronizacja: ${stamp(s['lastSuccess'])}',
             ),
             onTap: () => openLink(s['url'] as String),
           ),
@@ -470,7 +478,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   ? 'Obszar nieustalony — sprawdź treść'
                   : e.areas.map((r) => regions[r] ?? r).join(', '),
             ),
-            Text('Publikacja: ${stamp(e.data['publishedAt'])}'),
+            Text(
+              'Publikacja: ${e.data['publishedAt'] == null ? (e.data['publicationDate'] ?? 'Nie podano') : stamp(e.data['publishedAt'])}',
+            ),
+            if (e.data['locationText'] != null)
+              Text('Obszar według źródła: ${e.data['locationText']}'),
             Text('Pobrano: ${stamp(e.data['retrievedAt'])}'),
           ],
         ),
@@ -699,7 +711,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   e.data['correction'] as String,
                   Icons.fact_check_outlined,
                 ),
-              Text('Publikacja: ${stamp(e.data['publishedAt'])}'),
+              Text(
+                'Publikacja: ${e.data['publishedAt'] == null ? (e.data['publicationDate'] ?? 'Nie podano') : stamp(e.data['publishedAt'])}',
+              ),
+              if (e.data['locationText'] != null)
+                Text('Obszar według źródła: ${e.data['locationText']}'),
               Text('Pobrano: ${stamp(e.data['retrievedAt'])}'),
               Text('Od: ${stamp(e.data['validFrom'])}'),
               Text('Do: ${stamp(e.data['validTo'])}'),
@@ -719,94 +735,138 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   }
 
   Future<void> settings() async {
-    final controller = TextEditingController(text: widget.repository.api);
-    String? validation;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (sheet) => StatefulBuilder(
-        builder: (sheet, update) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            22,
-            22,
-            22,
-            MediaQuery.viewInsetsOf(sheet).bottom + 22,
+        builder: (sheet, update) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Ustawienia',
+                    style: Theme.of(sheet).textTheme.titleLarge,
+                  ),
+                  SwitchListTile(
+                    title: const Text('Tryb ciemny'),
+                    value: widget.repository.dark,
+                    onChanged: (v) async {
+                      await widget.repository.prefs.setBool('dark', v);
+                      widget.onTheme();
+                      update(() {});
+                    },
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      ++generation;
+                      await widget.repository.clearData();
+                      if (mounted) {
+                        setState(() {
+                          snapshot = null;
+                          online = false;
+                          loading = false;
+                          seen = {};
+                        });
+                      }
+                      if (sheet.mounted) Navigator.pop(sheet);
+                    },
+                    child: const Text('Usuń zapisane komunikaty'),
+                  ),
+                  if (widget.repository.developerSettingsEnabled)
+                    ListTile(
+                      title: const Text('Developer Settings'),
+                      leading: const Icon(Icons.developer_mode),
+                      onTap: () {
+                        Navigator.pop(sheet);
+                        unawaited(developerSettings());
+                      },
+                    ),
+                  const Text('0.1.0-alpha.3 • Push nieaktywny • Bez GPS'),
+                ],
+              ),
+            ),
           ),
-          child: SingleChildScrollView(
+        ),
+      ),
+    );
+  }
+
+  Future<void> developerSettings() async {
+    if (!widget.repository.developerSettingsEnabled) return;
+    final controller = TextEditingController(
+      text: widget.repository.developerApi,
+    );
+    String? validation;
+    await showDialog<void>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (dialog, update) => AlertDialog(
+          title: const Text('Developer Settings'),
+          content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Ustawienia', style: Theme.of(sheet).textTheme.titleLarge),
-                SwitchListTile(
-                  title: const Text('Tryb ciemny'),
-                  value: widget.repository.dark,
-                  onChanged: (v) async {
-                    await widget.repository.prefs.setBool('dark', v);
-                    widget.onTheme();
-                    update(() {});
-                  },
+                Text(
+                  'Adres z buildu: ${widget.repository.buildApi.isEmpty ? "brak" : widget.repository.buildApi}',
                 ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: controller,
                   keyboardType: TextInputType.url,
                   autocorrect: false,
                   decoration: InputDecoration(
-                    labelText: 'Adres serwera danych HTTPS',
+                    labelText: 'Backend URL (HTTPS)',
+                    helperText: 'Puste pole przywraca konfigurację buildu.',
                     errorText: validation,
                     border: const OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Wersja rozwojowa wymaga backendu. Nie wpisuj haseł ani tokenów w adresie.',
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    try {
-                      ++generation;
-                      await widget.repository.setApi(controller.text);
-                      if (sheet.mounted) Navigator.pop(sheet);
-                      if (mounted) {
-                        setState(() {
-                          snapshot = widget.repository.cached(region);
-                          online = false;
-                          loading = false;
-                          loadSeen();
-                        });
-                        if (widget.repository.api.isNotEmpty) await refresh();
-                      }
-                    } catch (_) {
-                      update(
-                        () => validation = 'Wymagany poprawny adres HTTPS.',
-                      );
-                    }
-                  },
-                  child: const Text('Zapisz i połącz'),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    ++generation;
-                    await widget.repository.clearData();
-                    if (mounted) {
-                      setState(() {
-                        snapshot = null;
-                        online = false;
-                        loading = false;
-                        seen = {};
-                      });
-                    }
-                    if (sheet.mounted) Navigator.pop(sheet);
-                  },
-                  child: const Text('Usuń zapisane komunikaty'),
-                ),
-                const Text('0.1.0-alpha.2 • Push nieaktywny • Bez GPS'),
               ],
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog),
+              child: const Text('Anuluj'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                try {
+                  ++generation;
+                  await widget.repository.setDeveloperApi(controller.text);
+                  if (dialog.mounted) Navigator.pop(dialog);
+                  if (mounted) {
+                    setState(() {
+                      snapshot = widget.repository.cached(region);
+                      online = false;
+                      loading = false;
+                      loadSeen();
+                    });
+                    if (widget.repository.api.isNotEmpty) await refresh();
+                  }
+                } catch (_) {
+                  update(() => validation = 'Wymagany poprawny adres HTTPS.');
+                }
+              },
+              child: const Text('Zapisz i połącz'),
+            ),
+          ],
         ),
       ),
     );
     controller.dispose();
   }
 }
+
+String sourceStateLabel(String state) => switch (state) {
+  'NOT_CONFIGURED' => 'Integracja oczekuje',
+  'BROKEN' => 'Błąd synchronizacji',
+  'STALE' => 'Dane nieaktualne',
+  'DEGRADED' => 'Niepełne dane',
+  _ => 'Brak aktualnego połączenia',
+};

@@ -1,11 +1,35 @@
 import Fastify from 'fastify';import rateLimit from '@fastify/rate-limit';import {timingSafeEqual} from 'node:crypto';import {z} from 'zod';
-import {computeStatus,eventSchema,REGIONS} from './domain.js';import {Store} from './store.js';import {initializeSources,ingest} from './adapters.js';
+import {computeStatus,eventSchema,REGIONS,sourceHealth} from './domain.js';import {Store} from './store.js';import {initializeSources,ingest} from './adapters.js';
 export async function buildApp(store:Store,adminToken?:string){
  const app=Fastify({logger:false,bodyLimit:128*1024});await app.register(rateLimit,{max:100,timeWindow:'1 minute'});
  app.addHook('onSend',async(_,r,p)=>{r.header('Cache-Control','no-store').header('X-Content-Type-Options','nosniff');return p;});
  app.setErrorHandler((e,_,r)=>{if(e instanceof z.ZodError)return r.code(400).send({error:'INVALID_REQUEST'});if(e instanceof Error&&e.message==='REVISION_CONFLICT')return r.code(409).send({error:'REVISION_CONFLICT'});const status=typeof e==='object'&&e&&'statusCode'in e?Number(e.statusCode):500;return r.code(status>=400&&status<600?status:500).send({error:'REQUEST_FAILED'});});
  app.get('/healthz',async()=>({ok:true,version:'0.1.0-alpha.2'}));
- app.get('/v1/snapshot',async req=>{const {regionId}=z.object({regionId:z.string().refine(v=>v==='PL'||v in REGIONS).default('PL')}).parse(req.query);const events=await store.events(),health=await store.health();return {schemaVersion:1,serverTime:new Date().toISOString(),releaseStage:'ALPHA',regionId,status:computeStatus(events,health,regionId),nationalStatus:computeStatus(events,health,'PL'),events:events.filter(e=>regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId)),sources:health,shelters:[],securityLevels:[],ukraineAlerts:[],capabilities:{push:false,shelters:false,ukraine:false,liveMap:false}};});
+ const regionQuery=z.object({regionId:z.string().refine(v=>v==='PL'||v in REGIONS).default('PL')});
+ app.get('/status',async req=>{
+  const {regionId}=regionQuery.parse(req.query),{events,health}=await store.snapshot(),now=new Date();
+  return {schemaVersion:1,evaluatedAt:now.toISOString(),poland:computeStatus(events,health,'PL',now),region:{id:regionId,name:REGIONS[regionId]??'Cała Polska',...computeStatus(events,health,regionId,now)},sourceHealth:sourceHealth(health,now)};
+ });
+ app.get('/v1/sources',async()=>({sourceHealth:sourceHealth(await store.health())}));
+ app.get('/readyz',async(_,reply)=>{
+  await store.db.all('SELECT 1 AS ok');
+  const sources=sourceHealth(await store.health()).filter(s=>s.enabled);
+  const ready=sources.length>0&&sources.every(s=>s.state==='HEALTHY');
+  return reply.code(ready?200:503).send({ready,database:store.db.kind,sourceHealth:sources});
+ });
+ app.get('/v1/snapshot',async req=>{
+  const {regionId}=regionQuery.parse(req.query),{events,health}=await store.snapshot(),now=new Date();
+  const sources=sourceHealth(health,now);
+  return {schemaVersion:1,serverTime:now.toISOString(),releaseStage:'ALPHA',regionId,status:computeStatus(events,health,regionId,now),nationalStatus:computeStatus(events,health,'PL',now),events:events.filter(e=>regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId)),sources,sourceHealth:sources,shelters:[],securityLevels:[],ukraineAlerts:[],capabilities:{push:false,shelters:false,ukraine:false,liveMap:false,rcb:true}};
+ });
+ app.get('/v1/layers/events.geojson',async(req,reply)=>{
+  const {regionId}=regionQuery.parse(req.query);
+  const {bbox:raw}=z.object({bbox:z.string().optional()}).parse(req.query);
+  const bbox=raw===undefined?undefined:z.tuple([z.number().min(-180).max(180),z.number().min(-90).max(90),z.number().min(-180).max(180),z.number().min(-90).max(90)]).refine(b=>b[0]<=b[2]&&b[1]<=b[3]).parse(raw.split(',').map(Number));
+  if(bbox&&store.db.kind!=='postgres')return reply.code(503).send({error:'POSTGIS_REQUIRED'});
+  const rows=(await store.spatialEvents(bbox)).filter(e=>!e.isDemo&&(regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId)));
+  return {type:'FeatureCollection',features:rows.map(e=>({type:'Feature',id:e.id,geometry:e.geometry,properties:{title:e.title,eventType:e.eventType,severity:e.severity,lifecycle:e.lifecycle,messageContext:e.messageContext,validTo:e.validTo,publicationDate:e.publicationDate,sourceUrl:e.sources[0].url,areaPrecision:e.areaPrecision}}))};
+ });
  app.get('/v1/events/:id/timeline',async req=>store.timeline(z.object({id:z.string().max(150)}).parse(req.params).id));
  const auth=(actual:string|undefined)=>{const a=Buffer.from(actual??''),b=Buffer.from(`Bearer ${adminToken??''}`);return !!adminToken&&adminToken.length>=32&&a.length===b.length&&timingSafeEqual(a,b);};
  app.post('/admin/events',async(req,r)=>{if(!auth(req.headers.authorization))return r.code(401).send({error:'UNAUTHORIZED'});const b=z.object({event:eventSchema,expectedRevision:z.number().int().nonnegative(),reason:z.string().min(10).max(1000)}).parse(req.body);await store.put({...b.event,reviewed:true},'operator',b.reason,b.expectedRevision);return {ok:true};});

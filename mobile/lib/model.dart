@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -158,10 +159,24 @@ class DataRepository {
   final SharedPreferences prefs;
   final http.Client client;
   int _generation = 0;
-  DataRepository(this.prefs, {http.Client? client})
-    : client = client ?? http.Client();
+  final String buildApi;
+  final bool developerSettingsEnabled;
+  DataRepository(
+    this.prefs, {
+    http.Client? client,
+    this.buildApi = const String.fromEnvironment('API_BASE_URL'),
+    this.developerSettingsEnabled = const bool.fromEnvironment(
+      'ENABLE_DEVELOPER_SETTINGS',
+      defaultValue: kDebugMode,
+    ),
+  }) : client = client ?? http.Client();
+  String get developerApi => prefs.getString('developer_api') ?? '';
   String get api =>
-      prefs.getString('api') ?? const String.fromEnvironment('API_BASE_URL');
+      (developerSettingsEnabled && developerApi.isNotEmpty
+              ? developerApi
+              : buildApi)
+          .trim()
+          .replaceAll(RegExp(r'/+$'), '');
   String get region => prefs.getString('region') ?? '04';
   bool get dark => prefs.getBool('dark') ?? true;
   static Uri validateApi(String value) {
@@ -179,10 +194,16 @@ class DataRepository {
     return u;
   }
 
-  Future<void> setApi(String value) async {
+  Future<void> setDeveloperApi(String value) async {
+    if (!developerSettingsEnabled) {
+      throw StateError('Developer Settings are disabled in this build');
+    }
     if (value.trim().isNotEmpty) validateApi(value);
     ++_generation;
-    await prefs.setString('api', value.trim().replaceAll(RegExp(r'/+$'), ''));
+    await prefs.setString(
+      'developer_api',
+      value.trim().replaceAll(RegExp(r'/+$'), ''),
+    );
   }
 
   Future<void> setRegion(String value) async {

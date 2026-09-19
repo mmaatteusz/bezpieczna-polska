@@ -1,0 +1,5 @@
+{$API_DOMAIN} {
+  @admin path /admin /admin/*
+  respond @admin 404
+  reverse_proxy api:8080
+}
