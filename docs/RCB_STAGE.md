@@ -59,8 +59,10 @@ jest błędem wydania, nie zadaniem dla użytkownika.
 
 `scripts/build-android.sh` sprawdza działający HTTPS /readyz, PostGIS,
 synchronizację RCB i kontrakt mobilny, następnie przekazuje adres do kompilacji.
-Nie używać starego workflow tworzącego alpha.2 bez API_BASE_URL jako wydania
-tego etapu. Nie budować użytkowego APK przed uruchomieniem backendu.
+Workflow `.github/workflows/build.yml` pobiera adres ze zmiennej repozytorium
+`API_BASE_URL`, uruchamia ten sam test gotowości i wyłącza Developer Settings
+w APK. Pusty adres zatrzymuje wydanie. Nie budować użytkowego APK przed
+uruchomieniem backendu.
 
 ## Wdrożenie — brakuje docelowego hosta
 
@@ -94,3 +96,16 @@ hostingu i dostępu wdrożeniowego. Nie deklarować działania na telefonie.
 
 Po każdym adapterze: test kontraktowy, błędy i aktualność, rzeczywisty odczyt
 z podaniem daty i URL, dopiero potem jego włączenie.
+
+## Weryfikacja w CI — 19.09.2026
+
+Przebieg https://github.com/mmaatteusz/bezpieczna-polska/actions/runs/35424069743:
+38/38 testów backendu, bez pominięć; rzeczywisty PostGIS 17/3.5, migracja,
+SRID, GiST, filtrowanie bbox oraz wycofanie paczki przy błędnej geometrii.
+Flutter 3.47.4: analiza bez uwag i 19/19 testów aplikacji, w tym automatyczne
+pobranie na świeżej instalacji, Developer Settings, mapa i duże fonty.
+
+Rzeczywista synchronizacja RCB została wykonana również w CI i zapisana do
+PostGIS. Raport źródła i przykładowe publikacje: `validation/rcb/rcb-live.json`.
+Są to publikacje, nie potwierdzona lista bieżących zagrożeń. Publiczny backend
+nie jest jeszcze wdrożony. MapLibre i kolejne źródła pozostają następnymi etapami.
