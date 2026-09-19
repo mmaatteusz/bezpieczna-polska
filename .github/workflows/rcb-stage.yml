@@ -1,8 +1,10 @@
 name: Verify RCB stage
 on:
   push:
-    branches: [stage/rcb-live]
+    branches: [main, stage/rcb-live]
+    paths: ['backend/**', 'mobile/**', '.github/workflows/rcb-stage.yml']
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -12,8 +14,6 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: write
     services:
       postgis:
         image: postgis/postgis:17-3.5
@@ -33,16 +33,6 @@ jobs:
       TEST_DATABASE_URL: postgresql://test:disposable_ci_only@localhost:5432/test
     steps:
       - uses: actions/checkout@v4
-      - name: Apply verified first-stage changes
-        if: github.event_name == 'push'
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f rcb-stage.patch ]; then
-            echo 'f7b52248a464f037048b799bb243639e149a1a3fbeeb3c2312d928441b21ea23  rcb-stage.patch' | sha256sum --check
-            git apply --index rcb-stage.patch
-            git rm rcb-stage.patch
-          fi
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -60,24 +50,12 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          dart format lib/main.dart lib/model.dart test/model_test.dart test/widget_test.dart
+          dart format --output=none --set-exit-if-changed lib/main.dart lib/model.dart test/model_test.dart test/widget_test.dart
           flutter analyze --no-pub
           flutter test --no-pub
       - name: Fetch real RCB publications into PostGIS
         working-directory: backend
         run: node scripts/live-rcb.mjs ../docs/validation/rcb
-      - name: Persist tested source and live observation
-        if: github.event_name == 'push'
-        env:
-          BRANCH_NAME: ${{ github.ref_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          git add backend mobile docs deploy scripts sources README.md compose.yaml
-          if ! git diff --cached --quiet; then
-            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Apply tested RCB stage with live data observation'
-            git push origin "HEAD:$BRANCH_NAME"
-          fi
       - uses: actions/upload-artifact@v4
         with:
           name: rcb-live-validation
