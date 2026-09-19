@@ -55,6 +55,7 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
+          dart format lib/main.dart lib/model.dart lib/shelters.dart lib/shelter_panel.dart test/model_test.dart test/widget_test.dart test/shelters_test.dart
           dart fix --apply --code=curly_braces_in_flow_control_structures,use_null_aware_elements
           dart format lib/main.dart lib/model.dart lib/shelters.dart lib/shelter_panel.dart test/model_test.dart test/widget_test.dart test/shelters_test.dart
           flutter analyze --no-pub
