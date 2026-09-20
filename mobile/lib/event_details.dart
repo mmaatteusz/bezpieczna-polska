@@ -30,6 +30,49 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     return widget.repository.eventTimeline(widget.event.id);
   }
 
+  String fieldLabel(String field) => switch (field) {
+    'CREATED' => 'Utworzono zapis',
+    'title' => 'Tytuł',
+    'description' => 'Treść',
+    'lifecycle' => 'Stan komunikatu',
+    'verification' => 'Weryfikacja',
+    'validFrom' => 'Ważny od',
+    'validTo' => 'Ważny do',
+    'correction' => 'Korekta / sprostowanie',
+    'regions' => 'Obszar',
+    _ => field,
+  };
+
+  String changeValue(String field, dynamic value) {
+    if (value == null) return 'brak';
+    if (field == 'validFrom' || field == 'validTo') return stamp(value);
+    if (field == 'regions' && value is List) {
+      return value.map((r) => regions[r] ?? r.toString()).join(', ');
+    }
+    if (field == 'lifecycle') {
+      return switch (value) {
+        'ACTIVE' => 'aktywne',
+        'SCHEDULED' => 'zaplanowane',
+        'ENDED' => 'zakończone',
+        'CANCELLED' => 'odwołane',
+        'EXPIRED' => 'termin minął',
+        _ => value.toString(),
+      };
+    }
+    if (field == 'verification') {
+      return switch (value) {
+        'CONFIRMED' => 'potwierdzone',
+        'PROBABLE' => 'prawdopodobne',
+        'UNVERIFIED' => 'niezweryfikowane',
+        'REFUTED' => 'zdementowane',
+        'DISPUTED' => 'sporne',
+        _ => value.toString(),
+      };
+    }
+    final text = value.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+    return text.length > 220 ? '${text.substring(0, 220)}…' : text;
+  }
+
   Widget badge(BuildContext context, String text) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(
@@ -99,9 +142,7 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   child: ListTile(
                     leading: const Icon(Icons.history_toggle_off),
                     title: const Text('Historia chwilowo niedostępna'),
-                    subtitle: const Text(
-                      'Treść komunikatu pozostaje dostępna. Spróbuj ponownie po połączeniu z backendem.',
-                    ),
+                    subtitle: Text(apiFailureMessage(snapshot.error!)),
                     trailing: IconButton(
                       tooltip: 'Ponów',
                       onPressed: () => setState(() => timeline = _loadTimeline()),
@@ -123,16 +164,59 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                   final lifecycle = payload['lifecycle'] as String? ?? 'UNKNOWN';
                   final verification = payload['verification'] as String? ?? 'UNVERIFIED';
                   final correction = payload['correction'] as String?;
+                  final changes = (row['changes'] as List? ?? const [])
+                      .whereType<Map>()
+                      .map((raw) => Map<String, dynamic>.from(raw))
+                      .toList();
                   return Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.history),
+                    child: ExpansionTile(
+                      leading: Icon(
+                        correction != null || verification == 'REFUTED'
+                            ? Icons.fact_check_outlined
+                            : Icons.history,
+                      ),
                       title: Text('Wersja $revision • $lifecycle'),
                       subtitle: Text(
-                        '${stamp(row['recorded_at'])}\n'
-                        '${row['reason']}\n'
-                        'Weryfikacja: $verification'
-                        '${correction == null ? '' : '\nKorekta: $correction'}',
+                        '${stamp(row['recorded_at'])} • ${row['actor'] ?? 'system'}\n${row['reason']}',
                       ),
+                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                      children: [
+                        if (changes.isEmpty)
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('Brak opisanych zmian pól.'),
+                          ),
+                        ...changes.map((change) {
+                          final field = change['field']?.toString() ?? 'zmiana';
+                          if (field == 'CREATED') {
+                            return ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.add_circle_outline, size: 20),
+                              title: Text(fieldLabel(field)),
+                            );
+                          }
+                          return ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.compare_arrows, size: 20),
+                            title: Text(fieldLabel(field)),
+                            subtitle: Text(
+                              '${changeValue(field, change['from'])}\n→ ${changeValue(field, change['to'])}',
+                            ),
+                          );
+                        }),
+                        if (correction != null)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Korekta: $correction',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                      ],
                     ),
                   );
                 }).toList(),
