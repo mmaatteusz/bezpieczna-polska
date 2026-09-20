@@ -4,7 +4,7 @@ import {Store,openDb} from '../src/store.js';
 import {parseRcbArticle} from '../src/rcb-adapter.js';
 import {readFileSync} from 'node:fs';
 import {buildApp} from '../src/app.js';
-import {parseShelterCatalog,parseShelterCsv} from '../src/shelter-adapter.js';
+import {parseShelterResource,parseShelterCsv} from '../src/shelter-adapter.js';
 import {initializeSources} from '../src/adapters.js';
 
 // CI supplies a disposable PostGIS service. Never run against a production DB.
@@ -43,7 +43,7 @@ test('PostGIS migration, SRID, GiST, bbox and geometry/payload atomicity', {skip
 
 test('PostGIS shelters: exact points, regional bbox, full replacement and transaction rollback',{skip:!process.env.TEST_DATABASE_URL},async()=>{
  const db=openDb(process.env.TEST_DATABASE_URL),store=new Store(db);await store.init();await initializeSources(store);
- const points=parseShelterCsv(readFileSync('test/fixtures/psp-shelters.csv','utf8'),parseShelterCatalog(readFileSync('test/fixtures/psp-catalog.xml','utf8'),new Date('2026-09-19T12:00:00Z')));
+ const points=parseShelterCsv(readFileSync('test/fixtures/psp-shelters.csv','utf8'),parseShelterResource(readFileSync('test/fixtures/psp-resource.json','utf8'),new Date('2026-09-19T12:00:00Z')));
  const original=(await store.health()).find(h=>h.id==='SHELTERS')!;
  const health={...original,state:'HEALTHY' as const,complete:true,coverage:'FACILITY_CATALOG' as const,itemCount:points.length,lastSuccess:new Date().toISOString(),sourceContentHash:'a'.repeat(64)};
  try{
