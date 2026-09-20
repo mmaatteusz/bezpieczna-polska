@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'model.dart';
 import 'shelters.dart';
 
@@ -23,8 +24,9 @@ class ShelterPanel extends StatefulWidget {
 class _ShelterPanelState extends State<ShelterPanel> {
   final search = TextEditingController();
   ShelterPage? page;
-  bool loading = false, connected = false;
-  String? message;
+  bool loading = false, connected = false, nearestLoading = false;
+  String? message, nearestMessage;
+  NearestSheltersResult? nearest;
   int request = 0;
   @override
   void initState() {
@@ -91,18 +93,77 @@ class _ShelterPanelState extends State<ShelterPanel> {
           connected = true;
         });
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted && ticket == request) {
         setState(() {
           connected = false;
-          message =
-              'Nie udało się pobrać wyników. Widoczna jest ostatnia zapisana strona.';
+          message = apiFailureMessage(error);
         });
       }
     } finally {
       if (mounted && ticket == request) {
         setState(() => loading = false);
       }
+    }
+  }
+
+  Future<void> locateNearest() async {
+    if (nearestLoading) return;
+    setState(() {
+      nearestLoading = true;
+      nearestMessage = null;
+    });
+    try {
+      if (widget.repository.api.isEmpty) {
+        throw const ApiFailure(ApiFailureKind.notConfigured);
+      }
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        if (mounted) {
+          setState(() => nearestMessage = 'Włącz lokalizację w telefonie, aby znaleźć najbliższy punkt.');
+        }
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        if (mounted) {
+          setState(() => nearestMessage = 'Bez zgody na lokalizację nie można policzyć odległości. Możesz nadal wyszukiwać po adresie.');
+        }
+        return;
+      }
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          setState(() => nearestMessage = 'Dostęp do lokalizacji jest zablokowany w ustawieniach Androida. Możesz nadal wyszukiwać po adresie.');
+        }
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      final result = await widget.repository.nearestShelters(
+        position.latitude,
+        position.longitude,
+        limit: 3,
+      );
+      if (mounted) {
+        setState(() {
+          nearest = result;
+          nearestMessage = result.items.isEmpty
+              ? 'Brak punktów schronienia w aktualnym pakiecie danych.'
+              : null;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => nearestMessage = apiFailureMessage(error));
+      }
+    } finally {
+      if (mounted) setState(() => nearestLoading = false);
     }
   }
 
@@ -121,6 +182,41 @@ class _ShelterPanelState extends State<ShelterPanel> {
         const Text(
           'Wpis w wykazie nie potwierdza klasy schronu ani możliwości wejścia w tej chwili. Klasy ochrony, pojemności i dostępności dla osób z niepełnosprawnościami nie podano.',
         ),
+        const SizedBox(height: 16),
+        FilledButton.tonalIcon(
+          onPressed: nearestLoading ? null : locateNearest,
+          icon: nearestLoading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.near_me_outlined),
+          label: const Text('Znajdź najbliższe schronienie'),
+        ),
+        const Text(
+          'Lokalizacja jest pobierana tylko po tym kliknięciu, wyłącznie do obliczenia odległości i nie jest zapisywana.',
+        ),
+        if (nearestMessage != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(nearestMessage!),
+          ),
+        if (nearest != null && nearest!.items.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          ...nearest!.items.map(
+            (item) => Card(
+              child: ListTile(
+                leading: const Icon(Icons.location_on_outlined),
+                title: Text(item.point.address),
+                subtitle: Text(
+                  '${item.distanceLabel} • ${item.point.data["municipality"]}\n${item.point.availability}',
+                ),
+                isThreeLine: true,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         TextField(
           controller: search,
