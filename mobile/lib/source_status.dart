@@ -19,6 +19,14 @@ class SourceStatusPage extends StatelessWidget {
     _ => state,
   };
 
+  String fallbackLabel(dynamic value) => switch (value) {
+    'PRIMARY_OFFICIAL_SOURCE' => 'Bieżące oficjalne źródło',
+    'SECONDARY_OFFICIAL_SOURCE' => 'Oficjalne archiwum zapasowe',
+    'LAST_KNOWN_GOOD_COPY' => 'Ostatnia poprawna kopia',
+    'NONE' => 'Brak danych',
+    _ => value?.toString() ?? 'Nie podano',
+  };
+
   IconData icon(String state) => switch (state) {
     'HEALTHY' => Icons.check_circle_outline,
     'STALE' => Icons.schedule_outlined,
@@ -69,7 +77,7 @@ class SourceStatusPage extends StatelessWidget {
                   if (source['adapterVersion'] != null)
                     _row('Adapter', source['adapterVersion'].toString()),
                   if (fallback is Map) ...[
-                    _row('Tryb danych', fallback['selected']?.toString() ?? 'Nie podano'),
+                    _row('Tryb danych', fallbackLabel(fallback['selected'])),
                     if (fallback['reason'] != null)
                       _row('Powód fallbacku', fallback['reason'].toString()),
                   ],
