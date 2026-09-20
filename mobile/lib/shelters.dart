@@ -54,6 +54,53 @@ class ShelterPoint {
   };
 }
 
+class NearestShelter {
+  final ShelterPoint point;
+  final int distanceMeters;
+  NearestShelter._(this.point, this.distanceMeters);
+
+  factory NearestShelter.parse(dynamic input) {
+    final m = Map<String, dynamic>.from(input as Map);
+    final distance = m['distanceMeters'];
+    if (distance is! int || distance < 0 || m['point'] == null) {
+      throw const FormatException('Niepoprawny najbliższy punkt');
+    }
+    return NearestShelter._(ShelterPoint.parse(m['point']), distance);
+  }
+
+  String get distanceLabel => distanceMeters < 1000
+      ? '$distanceMeters m'
+      : '${(distanceMeters / 1000).toStringAsFixed(distanceMeters < 10000 ? 1 : 0)} km';
+}
+
+class NearestSheltersResult {
+  final List<NearestShelter> items;
+  final Map<String, dynamic>? health;
+  final DateTime serverTime;
+  NearestSheltersResult._(this.items, this.health, this.serverTime);
+
+  factory NearestSheltersResult.parse(dynamic input) {
+    final m = Map<String, dynamic>.from(input as Map);
+    if (m['schemaVersion'] != 1 || m['items'] is! List || m['serverTime'] is! String) {
+      throw const FormatException('Niepoprawna odpowiedź najbliższych punktów');
+    }
+    final items = (m['items'] as List).map(NearestShelter.parse).toList();
+    if (items.length > 10) throw const FormatException('Za dużo punktów');
+    for (var i = 1; i < items.length; i++) {
+      if (items[i - 1].distanceMeters > items[i].distanceMeters) {
+        throw const FormatException('Niepoprawna kolejność punktów');
+      }
+    }
+    final h = m['health'];
+    if (h != null && h is! Map) throw const FormatException('Niepoprawny stan źródła');
+    return NearestSheltersResult._(
+      items,
+      h == null ? null : Map<String, dynamic>.from(h),
+      DateTime.parse(m['serverTime'] as String),
+    );
+  }
+}
+
 class ShelterPage {
   final Map<String, dynamic> data;
   final List<ShelterPoint> items;
