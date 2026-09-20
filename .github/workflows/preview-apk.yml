@@ -1,0 +1,72 @@
+name: Build security-levels preview APK
+on:
+  push:
+    branches: [stage/security-levels]
+    paths: ['.github/workflows/preview-apk.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: preview-apk-security-levels
+  cancel-in-progress: true
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgis:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: disposable_ci_only
+          POSTGRES_DB: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://test:disposable_ci_only@localhost:5432/test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Backend build and tests
+        working-directory: backend
+        run: npm ci && npm run build && npm test
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Flutter analyze and tests
+        working-directory: mobile
+        run: |
+          flutter pub get
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Build Android preview
+        working-directory: mobile
+        run: flutter build apk --debug --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=true
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.3-preview-arm64.apk
+          sha256sum output/*.apk > output/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bezpieczna_Polska_0.1.0-alpha.3-preview-arm64
+          path: output/
+          if-no-files-found: error
+          retention-days: 30
