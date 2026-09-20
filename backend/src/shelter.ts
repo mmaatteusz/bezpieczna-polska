@@ -13,7 +13,7 @@ export const shelterSchema=z.object({
  availability:z.enum(['24H','ON_REQUEST','LIMITED_HOURS','UNKNOWN']),sourceAvailability:z.string().max(300),
  openingHours:z.null(),capacity:z.null(),wheelchairAccess:z.literal('UNKNOWN'),
  dataDate:z.iso.date(),sourceUpdatedAt:z.iso.datetime({offset:true}),
- sourceUrl:z.union([z.literal('https://api.dane.gov.pl/resources/1393918,punkty-schronienia-dane-csv/file'),z.literal('https://gdziesieukryc.pl/PS_XML/punkty_schronienia.csv')]),
+ sourceUrl:z.union([z.literal('https://api.dane.gov.pl/datasets/28058,punkty-schronienia-w-polsce/resources/files/download'),z.literal('https://api.dane.gov.pl/resources/1393918,punkty-schronienia-dane-csv/file'),z.literal('https://gdziesieukryc.pl/PS_XML/punkty_schronienia.csv')]),
  datasetUrl:z.literal('https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce'),
  license:z.literal('CC BY 4.0'),publisher:z.literal('Komenda Główna Państwowej Straży Pożarnej'),
 });
