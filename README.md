@@ -1,6 +1,6 @@
 # Bezpieczna Polska
 
-Flutter + backend TypeScript/PostgreSQL. **0.1.0-alpha.3 — wersja rozwojowa, nie pełne MVP.**
+Flutter + backend TypeScript/PostgreSQL. **0.1.0-alpha.4 — wersja rozwojowa, nie pełne MVP.**
 
 ## Uruchomienie
 
@@ -35,9 +35,9 @@ Bez backendu aplikacja pokazuje brak danych. Nie korzysta bezpośrednio z API os
 
 - RCB: SourceAdapter listy komunikatów (3 strony) i pełnych artykułów, data publikacji, obszar odbiorców, ćwiczenia/odwołania, transakcyjna synchronizacja i diagnostyka źródła. To publikacje, nie kompletna lista aktywnych ostrzeżeń.
 - PSP/dane.gov.pl: pełny import oficjalnego wykazu, PostGIS, wyszukiwanie adresu/gminy, stronicowanie, GeoJSON i ograniczona kopia offline. Szczegóły: [etap PSP](docs/SHELTERS_STAGE.md).
-- RSO: dotychczasowy parser XML pozostaje w testach. Synchronizacja wyłączona do jego etapu, po PSP i stopniach alarmowych.
+- RSO: publiczny pełny eksport XML jest podłączony do SourceAdaptera i synchronizowany co 5 minut. Komunikaty są prezentowane jako osobne źródło; aplikacja nie zgaduje, że każdy wpis RSO oznacza bezpośrednie zagrożenie.
 - Źródła zachowują oryginalną treść. Niepewna interpretacja nie podnosi automatycznie statusu.
-- Historia wersji, korekty, stan źródeł, deterministyczne statusy, kopie offline, mapa MapLibre z zapytaniami bbox i klastrami PostGIS, 112 wymagające działania użytkownika.
+- Historia wersji, korekty, widoczny timeline komunikatu, wyjaśnienie „Dlaczego taki status?”, stan źródeł, deterministyczne statusy, kopie offline, mapa MapLibre z zapytaniami bbox i klastrami PostGIS, systemowy Share Sheet dla „Jestem bezpieczny” oraz 112 wymagające działania użytkownika.
 - Brakuje: pełnych adapterów WCZK/SG/CERT/PAA/Ukraina, push FCM/APNs, RLS, panelu administratora z MFA i wdrożenia produkcyjnego.
 
 Aktualny zakres i wdrożenie: [etap RCB](docs/RCB_STAGE.md). Hosting HTTPS nie został jeszcze uruchomiony.
