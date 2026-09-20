@@ -33,6 +33,14 @@ export function parseRso(xml:string,now=new Date()):Event[]{
   return eventSchema.parse(e);
  }).get();
 }
+const RSO_XML='https://komunikaty.tvp.pl/komunikatyxml/wszystkie/wszystkie/0?_format=xml';
+export const rsoAdapter:SourceAdapter={
+ id:'RSO',version:'1.0.0',minSyncIntervalSeconds:300,
+ async sync({now,fetchText}){
+  const xml=await fetchText(RSO_XML),events=parseRso(xml,now);
+  return {events,complete:true,coverage:'ACTIVE_WARNINGS',pagesFetched:1};
+ }
+};
 export async function fetchPublic(url:string):Promise<string>{
  const shelterUrl=[SHELTER_DATASET,SHELTER_CATALOG,SHELTER_CSV].includes(url);
  const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterUrl&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
@@ -41,7 +49,7 @@ export async function fetchPublic(url:string):Promise<string>{
 }
 // Sharing the same coordinator prevents timer/admin overlap on this Store.
 const running = new WeakMap<Store, Promise<void>>();
-export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter], fetchText=fetchPublic):Promise<void>{
+export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter], fetchText=fetchPublic):Promise<void>{
  const existing=running.get(store);if(existing)return existing;
  const task=syncSources(store,adapters,fetchText).finally(()=>running.delete(store));
  running.set(store,task);return task;
