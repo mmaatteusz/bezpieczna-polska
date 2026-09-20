@@ -1,15 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {shelterAdapter,parseShelterResource,parseShelterCsv,SHELTER_MIRROR_CSV,SHELTER_RESOURCE,SHELTER_DATASET} from '../src/shelter-adapter.js';
+import {deflateRawSync} from 'node:zlib';
+import {shelterAdapter,parseShelterResource,parseShelterCsv,extractShelterCsv,SHELTER_DOWNLOAD,SHELTER_RESOURCE,SHELTER_DATASET,SHELTER_ARCHIVE} from '../src/shelter-adapter.js';
 import {Store,openDb} from '../src/store.js';
-import {ingest,initializeSources,fetchPublic} from '../src/adapters.js';
+import {ingest,initializeSources,fetchPublicBytes} from '../src/adapters.js';
 import {computeStatus,sourceHealth} from '../src/domain.js';
 import {buildApp} from '../src/app.js';
 const now=new Date('2026-09-19T12:00:00Z');
 const csv=readFileSync('test/fixtures/psp-shelters.csv','utf8'),resource=readFileSync('test/fixtures/psp-resource.json','utf8'),dataset=readFileSync('test/fixtures/psp-dataset.json','utf8');
-const fetchText=async(url:string)=>{if(url===SHELTER_MIRROR_CSV)return csv;if(url===SHELTER_RESOURCE)return resource;if(url===SHELTER_DATASET)return dataset;throw new Error('UNEXPECTED_URL');};
-const batch=()=>shelterAdapter.sync({now,fetchText});
+function zipCsv(text:string){
+ const name=Buffer.from('Punkty schronienia dane CSV_1393918.csv','utf8'),raw=Buffer.from(text,'utf8'),compressed=deflateRawSync(raw);
+ const local=Buffer.alloc(30);local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);local.writeUInt16LE(0x800,6);local.writeUInt16LE(8,8);local.writeUInt32LE(compressed.length,18);local.writeUInt32LE(raw.length,22);local.writeUInt16LE(name.length,26);
+ const central=Buffer.alloc(46);central.writeUInt32LE(0x02014b50,0);central.writeUInt16LE(20,4);central.writeUInt16LE(20,6);central.writeUInt16LE(0x800,8);central.writeUInt16LE(8,10);central.writeUInt32LE(compressed.length,20);central.writeUInt32LE(raw.length,24);central.writeUInt16LE(name.length,28);central.writeUInt32LE(0,42);
+ const eocd=Buffer.alloc(22);eocd.writeUInt32LE(0x06054b50,0);eocd.writeUInt16LE(1,8);eocd.writeUInt16LE(1,10);eocd.writeUInt32LE(central.length+name.length,12);eocd.writeUInt32LE(local.length+name.length+compressed.length,16);
+ return Buffer.concat([local,name,compressed,central,name,eocd]);
+}
+const fetchText=async(url:string)=>{if(url===SHELTER_RESOURCE)return resource;if(url===SHELTER_DATASET)return dataset;throw new Error('UNEXPECTED_URL');};
+const fetchBytes=async(url:string)=>{if(url===SHELTER_ARCHIVE)return zipCsv(csv);throw new Error('UNEXPECTED_BINARY_URL');};
+const batch=()=>shelterAdapter.sync({now,fetchText,fetchBytes});
 test('real PSP CSV subset preserves official IDs, addresses, coordinates and unknown protection',async()=>{
  const b=await batch();assert.equal(b.shelters!.length,3);assert.equal(b.events.length,0);
  const s=b.shelters![0];assert.equal(s.address,'ul. Narcyza Gieryna 4, Bydgoszcz');assert.equal(s.regionId,'04');
@@ -26,13 +35,13 @@ test('CSV rejects truncation, duplicate IDs, bad columns, unknown region and swa
  assert.throws(()=>parseShelterCsv(csv.replace('53.1661471448123,18.1731816478461','18.1731816478461,53.1661471448123'),meta));
  assert.throws(()=>parseShelterCsv(csv.replace('53.1661471448123',''),meta));
 });
-test('official dane.gov.pl resource validates publisher, mirror path, dates and stable export version',async()=>{
- assert.throws(()=>parseShelterResource(resource.replace(SHELTER_MIRROR_CSV,'https://example.com/file.csv'),now),/CONTRACT/);
+test('official dane.gov.pl resource and archive validate publisher, dates and stable export version',async()=>{
+ assert.throws(()=>parseShelterResource(resource.replace(SHELTER_DOWNLOAD,'https://example.com/file.csv'),now),/CONTRACT/);
  assert.throws(()=>parseShelterResource(resource,new Date('2026-10-10T12:00:00Z')),/OUTDATED/);
  assert.throws(()=>parseShelterResource(resource,new Date('2026-08-10T12:00:00Z')),/FUTURE_DATE/);
- await assert.rejects(shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_DATASET?dataset.replace('"22"','"999"'):fetchText(u)}),/PUBLISHER/);
- let calls=0;await assert.rejects(shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_RESOURCE&&++calls===2?resource.replace('08:24:06','08:25:06'):fetchText(u)}),/CHANGED_DURING_SYNC/);
- await assert.rejects(fetchPublic(SHELTER_MIRROR_CSV+'?redirect=https://example.com'),/DENIED/);
+ await assert.rejects(shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_DATASET?dataset.replace('"22"','"999"'):fetchText(u),fetchBytes}),/PUBLISHER/);
+ let calls=0;await assert.rejects(shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_RESOURCE&&++calls===2?resource.replace('08:24:06','08:25:06'):fetchText(u),fetchBytes}),/CHANGED_DURING_SYNC/);
+ assert.equal(extractShelterCsv(zipCsv(csv)),csv);
 });
 test('unknown availability is preserved without claiming all-day access',()=>{
  const s=parseShelterCsv(csv.replace('Na żądanie','Nowa wartość'),parseShelterResource(resource,now))[0];assert.equal(s.availability,'UNKNOWN');assert.equal(s.sourceAvailability,'Nowa wartość');
@@ -98,6 +107,6 @@ test('HTTP denial keeps its status code for source diagnostics',async()=>{
  const original=globalThis.fetch;
  try{
   globalThis.fetch=async()=>new Response('Access denied',{status:403});
-  await assert.rejects(fetchPublic(SHELTER_MIRROR_CSV),/SOURCE_HTTP_403/);
+  await assert.rejects(fetchPublicBytes(SHELTER_ARCHIVE),/SOURCE_HTTP_403/);
  }finally{globalThis.fetch=original;}
 });
