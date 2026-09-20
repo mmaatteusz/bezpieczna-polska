@@ -10,19 +10,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Probe dane.gov.pl official endpoints
+      - name: Probe dane.gov.pl official shelter transport
         shell: bash
         run: |
           set -euo pipefail
-          for url in \
-            'https://api.dane.gov.pl/1.4/datasets/28058/resources?page_size=15' \
-            'https://api.dane.gov.pl/1.4/resources/1393918' \
-            'https://api.dane.gov.pl/1.4/resources/1393918/data?page_size=1'
-          do
-            echo "===== $url ====="
-            curl --fail-with-body --silent --show-error --location --max-time 30 \
-              --header 'Accept: application/json' \
-              --header 'User-Agent: BezpiecznaPolska/0.1 official-open-data-check' \
-              "$url" | head -c 12000
-            echo
-          done
+          echo '===== RESOURCE METADATA ====='
+          curl --fail-with-body --silent --show-error --max-time 30 \
+            --header 'Accept: application/json' \
+            --header 'User-Agent: BezpiecznaPolska/0.1 official-open-data-check' \
+            'https://api.dane.gov.pl/1.4/resources/1393918' > resource.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('resource.json'))['data']['attributes']
+          print('modified=',d['modified'])
+          print('data_date=',d['data_date'])
+          print('download_url=',d['download_url'])
+          print('description=',d['description'])
+          PY
+          echo '===== MIRROR HEADERS / REDIRECT CHAIN ====='
+          curl --silent --show-error --head --location --max-time 30 \
+            --user-agent 'BezpiecznaPolska/0.1 official-open-data-check' \
+            --write-out '\nFINAL_URL=%{url_effective}\nHTTP=%{http_code}\n' \
+            'https://api.dane.gov.pl/resources/1393918,punkty-schronienia-dane-csv/file'
+          echo '===== MIRROR FIRST BYTES ====='
+          curl --fail-with-body --silent --show-error --location --max-time 30 \
+            --range 0-1023 \
+            --user-agent 'BezpiecznaPolska/0.1 official-open-data-check' \
+            'https://api.dane.gov.pl/resources/1393918,punkty-schronienia-dane-csv/file' \
+            -o mirror-prefix.bin
+          wc -c mirror-prefix.bin
+          python3 - <<'PY'
+          b=open('mirror-prefix.bin','rb').read(256)
+          print(repr(b[:160]))
+          PY
