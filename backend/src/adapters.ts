@@ -5,7 +5,7 @@ import {eventSchema,REGIONS,type Event,type Health} from './domain.js';
 import {Store} from './store.js';
 import {SOURCES, type SourceAdapter} from './source-adapter.js';
 import {rcbAdapter} from './rcb-adapter.js';
-import {shelterAdapter,SHELTER_DATASET,SHELTER_RESOURCE,SHELTER_ARCHIVE} from './shelter-adapter.js';
+import {shelterAdapter,SHELTER_DATASET,SHELTER_RESOURCE,SHELTER_ORIGIN_CSV,SHELTER_ARCHIVE} from './shelter-adapter.js';
 export {SOURCES} from './source-adapter.js';
 export {parseRcbIndex,parseRcbArticle} from './rcb-adapter.js';
 export async function initializeSources(store:Store){
@@ -42,10 +42,14 @@ export const rsoAdapter:SourceAdapter={
  }
 };
 export async function fetchPublic(url:string):Promise<string>{
- const shelterUrl=[SHELTER_DATASET,SHELTER_RESOURCE].includes(url);
- const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterUrl&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
- const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/xml,application/json,text/csv'}});if(!response.ok)throw new Error(`SOURCE_HTTP_${response.status}`);if(!response.body)throw new Error('SOURCE_EMPTY_BODY');
- let size=0;const chunks:Uint8Array[]=[];for await(const chunk of response.body){size+=chunk.length;if(size>4*1024*1024)throw new Error('SOURCE_TOO_LARGE');chunks.push(chunk);}return new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks));
+ const shelterMeta=[SHELTER_DATASET,SHELTER_RESOURCE].includes(url),shelterCurrent=url===SHELTER_ORIGIN_CSV;
+ const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterMeta&&!shelterCurrent&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
+ if(shelterCurrent&&(u.hostname!=='gdziesieukryc.pl'||u.pathname!=='/PS_XML/punkty_schronienia.csv'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
+ const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(shelterCurrent?90000:20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/xml,application/json,text/csv'}});
+ if(!response.ok)throw new Error(`SOURCE_HTTP_${response.status}`);if(!response.body)throw new Error('SOURCE_EMPTY_BODY');
+ const limit=(shelterCurrent?64:4)*1024*1024;let size=0;const chunks:Uint8Array[]=[];
+ for await(const chunk of response.body){size+=chunk.length;if(size>limit)throw new Error('SOURCE_TOO_LARGE');chunks.push(chunk);}
+ return new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks));
 }
 export async function fetchPublicBytes(url:string):Promise<Uint8Array>{
  if(url!==SHELTER_ARCHIVE)throw new Error('SOURCE_URL_DENIED');
@@ -78,6 +82,7 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
    const health:Health={...previous,...batch.metadata,enabled:true,state:'HEALTHY',lastAttempt,lastSuccess:new Date().toISOString(),lastItemTime:batch.metadata?.sourceUpdatedAt??published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:batch.complete,coverage:batch.coverage,pagesFetched:batch.pagesFetched,itemCount:batch.shelters?.length??items.length,errorCode:null,adapterVersion:adapter.version};
    if(batch.shelters){
     if(adapter.id!=='SHELTERS'||items.length||batch.coverage!=='FACILITY_CATALOG'||!batch.complete||!batch.metadata)throw new Error('SOURCE_INVALID_BATCH');
+    if(previous.sourceUpdatedAt&&Date.parse(batch.metadata.sourceUpdatedAt)<Date.parse(previous.sourceUpdatedAt))throw new Error('SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD');
     await store.applyShelterSync(batch.shelters,health);
    }else await store.applySync(items,health);
   }catch(error){
