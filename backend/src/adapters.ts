@@ -5,7 +5,7 @@ import {eventSchema,REGIONS,type Event,type Health} from './domain.js';
 import {Store} from './store.js';
 import {SOURCES, type SourceAdapter} from './source-adapter.js';
 import {rcbAdapter} from './rcb-adapter.js';
-import {shelterAdapter,SHELTER_DATASET,SHELTER_CATALOG,SHELTER_CSV} from './shelter-adapter.js';
+import {shelterAdapter,SHELTER_DATASET,SHELTER_RESOURCE,SHELTER_MIRROR_CSV} from './shelter-adapter.js';
 export {SOURCES} from './source-adapter.js';
 export {parseRcbIndex,parseRcbArticle} from './rcb-adapter.js';
 export async function initializeSources(store:Store){
@@ -42,10 +42,10 @@ export const rsoAdapter:SourceAdapter={
  }
 };
 export async function fetchPublic(url:string):Promise<string>{
- const shelterUrl=[SHELTER_DATASET,SHELTER_CATALOG,SHELTER_CSV].includes(url);
+ const shelterUrl=[SHELTER_DATASET,SHELTER_RESOURCE,SHELTER_MIRROR_CSV].includes(url);
  const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterUrl&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
- const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(url===SHELTER_CSV?90000:20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/xml,application/json,text/csv'}});if(!response.ok)throw new Error(`SOURCE_HTTP_${response.status}`);if(!response.body)throw new Error('SOURCE_EMPTY_BODY');
- let size=0;const chunks:Uint8Array[]=[];for await(const chunk of response.body){size+=chunk.length;if(size>(url===SHELTER_CSV?64:4)*1024*1024)throw new Error('SOURCE_TOO_LARGE');chunks.push(chunk);}return new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks));
+ const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(url===SHELTER_MIRROR_CSV?90000:20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/xml,application/json,text/csv'}});if(!response.ok)throw new Error(`SOURCE_HTTP_${response.status}`);if(!response.body)throw new Error('SOURCE_EMPTY_BODY');
+ let size=0;const chunks:Uint8Array[]=[];for await(const chunk of response.body){size+=chunk.length;if(size>(url===SHELTER_MIRROR_CSV?64:4)*1024*1024)throw new Error('SOURCE_TOO_LARGE');chunks.push(chunk);}return new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks));
 }
 // Sharing the same coordinator prevents timer/admin overlap on this Store.
 const running = new WeakMap<Store, Promise<void>>();
