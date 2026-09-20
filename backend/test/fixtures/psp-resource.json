@@ -1,0 +1,20 @@
+{
+  "data": {
+    "type": "resource",
+    "id": "1393918",
+    "relationships": {
+      "dataset": {"data": {"type": "dataset", "id": "28058"}},
+      "institution": {"data": {"type": "institution", "id": "22"}}
+    },
+    "attributes": {
+      "title": "Punkty schronienia — dane CSV",
+      "modified": "2026-09-19T08:24:06Z",
+      "format": "csv",
+      "file_url": "https://gdziesieukryc.pl/PS_XML/punkty_schronienia.csv",
+      "download_url": "https://api.dane.gov.pl/resources/1393918,punkty-schronienia-dane-csv/file",
+      "description": "Plik CSV (UTF-8 z BOM) zawierający 3 rekordów punktów schronienia z lokalizacją, rodzajem obiektu i danymi adresowymi.",
+      "data_date": "2026-09-19"
+    }
+  },
+  "jsonapi": {"version": "1.4"}
+}
