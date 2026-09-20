@@ -1,7 +1,7 @@
-name: Build completion-pass preview APK
+name: Build quality-pass preview APK
 on:
   push:
-    branches: [stage/completion-pass]
+    branches: [stage/quality-pass]
     paths:
       - 'backend/**'
       - 'mobile/**'
@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: preview-apk-completion-pass
+  group: preview-apk-quality-pass
   cancel-in-progress: true
 env:
   CI: 'true'
@@ -66,11 +66,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p output
-          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.4-preview-arm64.apk
+          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.5-preview-arm64.apk
           sha256sum output/*.apk > output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: Bezpieczna_Polska_0.1.0-alpha.4-preview-arm64
+          name: Bezpieczna_Polska_0.1.0-alpha.5-preview-arm64
           path: output/
           if-no-files-found: error
           retention-days: 30
