@@ -111,6 +111,22 @@ export class Store{
   const rows=await this.db.all('SELECT payload FROM shelters'+where+' ORDER BY id LIMIT ? OFFSET ?',[...params,limit,offset]);
   return {items:rows.map(r=>shelterSchema.parse(JSON.parse(r.payload as string))),total,offset,limit,hasMore:offset+rows.length<total,version:health?.sourceContentHash??null,health,regionId,query:q};
  }
+ async nearestShelters(latitude:number,longitude:number,limit:number){
+  if(this.db.kind==='postgres'){
+   const candidates=Math.max(100,Math.min(1000,limit*25));
+   const rows=await this.db.all(`WITH p AS (SELECT ST_SetSRID(ST_MakePoint(?,?),4326) AS g),
+    c AS (SELECT s.payload,s.geom FROM shelters s CROSS JOIN p ORDER BY s.geom <-> p.g LIMIT ?)
+    SELECT c.payload,ST_DistanceSphere(c.geom,p.g) AS distance_m FROM c CROSS JOIN p ORDER BY distance_m LIMIT ?`,[longitude,latitude,candidates,limit]);
+   return rows.map(r=>({point:shelterSchema.parse(JSON.parse(r.payload as string)),distanceMeters:Math.round(Number(r.distance_m))}));
+  }
+  const rad=(v:number)=>v*Math.PI/180;
+  const distance=(s:Shelter)=>{
+   const dLat=rad(s.latitude-latitude),dLon=rad(s.longitude-longitude),a=Math.sin(dLat/2)**2+Math.cos(rad(latitude))*Math.cos(rad(s.latitude))*Math.sin(dLon/2)**2;
+   return 6371008.8*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  };
+  const rows=(await this.db.all('SELECT payload FROM shelters')).map(r=>shelterSchema.parse(JSON.parse(r.payload as string)));
+  return rows.map(point=>({point,distanceMeters:Math.round(distance(point))})).sort((a,b)=>a.distanceMeters-b.distanceMeters||a.point.id.localeCompare(b.point.id)).slice(0,limit);
+ }
  async spatialEvents(bbox?:[number,number,number,number]){
   if(this.db.kind==='postgres'){
    const rows=await this.db.all(`SELECT r.payload FROM event_revisions r JOIN (SELECT event_id,MAX(revision) AS rev FROM event_revisions GROUP BY event_id) last ON r.event_id=last.event_id AND r.revision=last.rev WHERE r.geom IS NOT NULL${bbox?' AND ST_Intersects(r.geom,ST_MakeEnvelope(?,?,?,?,4326))':''} ORDER BY r.event_id`,bbox);
