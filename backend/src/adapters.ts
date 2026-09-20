@@ -5,7 +5,7 @@ import {eventSchema,REGIONS,type Event,type Health} from './domain.js';
 import {Store} from './store.js';
 import {SOURCES, type SourceAdapter} from './source-adapter.js';
 import {rcbAdapter} from './rcb-adapter.js';
-import {shelterAdapter,SHELTER_DATASET,SHELTER_RESOURCE,SHELTER_MIRROR_CSV} from './shelter-adapter.js';
+import {shelterAdapter,SHELTER_DATASET,SHELTER_RESOURCE,SHELTER_ARCHIVE} from './shelter-adapter.js';
 export {SOURCES} from './source-adapter.js';
 export {parseRcbIndex,parseRcbArticle} from './rcb-adapter.js';
 export async function initializeSources(store:Store){
@@ -42,19 +42,28 @@ export const rsoAdapter:SourceAdapter={
  }
 };
 export async function fetchPublic(url:string):Promise<string>{
- const shelterUrl=[SHELTER_DATASET,SHELTER_RESOURCE,SHELTER_MIRROR_CSV].includes(url);
+ const shelterUrl=[SHELTER_DATASET,SHELTER_RESOURCE].includes(url);
  const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterUrl&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
- const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(url===SHELTER_MIRROR_CSV?90000:20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/xml,application/json,text/csv'}});if(!response.ok)throw new Error(`SOURCE_HTTP_${response.status}`);if(!response.body)throw new Error('SOURCE_EMPTY_BODY');
- let size=0;const chunks:Uint8Array[]=[];for await(const chunk of response.body){size+=chunk.length;if(size>(url===SHELTER_MIRROR_CSV?64:4)*1024*1024)throw new Error('SOURCE_TOO_LARGE');chunks.push(chunk);}return new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks));
+ const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/xml,application/json,text/csv'}});if(!response.ok)throw new Error(`SOURCE_HTTP_${response.status}`);if(!response.body)throw new Error('SOURCE_EMPTY_BODY');
+ let size=0;const chunks:Uint8Array[]=[];for await(const chunk of response.body){size+=chunk.length;if(size>4*1024*1024)throw new Error('SOURCE_TOO_LARGE');chunks.push(chunk);}return new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks));
+}
+export async function fetchPublicBytes(url:string):Promise<Uint8Array>{
+ if(url!==SHELTER_ARCHIVE)throw new Error('SOURCE_URL_DENIED');
+ const u=new URL(url);if(u.protocol!=='https:'||u.hostname!=='api.dane.gov.pl'||u.username||u.password||u.port||u.search||u.hash)throw new Error('SOURCE_URL_DENIED');
+ const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(120000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (official open-data archive)','Accept':'application/zip'}});
+ if(!response.ok)throw new Error(`SOURCE_HTTP_${response.status}`);if(!response.body)throw new Error('SOURCE_EMPTY_BODY');
+ const declared=Number(response.headers.get('content-length')??'0');if(declared&&(!Number.isInteger(declared)||declared>32*1024*1024))throw new Error('SOURCE_TOO_LARGE');
+ let size=0;const chunks:Uint8Array[]=[];for await(const chunk of response.body){size+=chunk.length;if(size>32*1024*1024)throw new Error('SOURCE_TOO_LARGE');chunks.push(chunk);}
+ if(size<22)throw new Error('SOURCE_EMPTY_BODY');return Buffer.concat(chunks);
 }
 // Sharing the same coordinator prevents timer/admin overlap on this Store.
 const running = new WeakMap<Store, Promise<void>>();
-export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter], fetchText=fetchPublic):Promise<void>{
+export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
  const existing=running.get(store);if(existing)return existing;
- const task=syncSources(store,adapters,fetchText).finally(()=>running.delete(store));
+ const task=syncSources(store,adapters,fetchText,fetchBytes).finally(()=>running.delete(store));
  running.set(store,task);return task;
 }
-async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:string)=>Promise<string>){
+async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:string)=>Promise<string>,fetchBytes:(url:string)=>Promise<Uint8Array>){
  await initializeSources(store);
  for(const adapter of adapters){
   const previous=(await store.health()).find(s=>s.id===adapter.id);
@@ -62,7 +71,7 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
   const begin=Date.now(),lastAttempt=new Date(begin).toISOString();
   if(adapter.minSyncIntervalSeconds&&previous.lastSuccess&&previous.state==='HEALTHY'&&begin-Date.parse(previous.lastSuccess)>=0&&begin-Date.parse(previous.lastSuccess)<adapter.minSyncIntervalSeconds*1000)continue;
   try{
-   const batch=await adapter.sync({now:new Date(begin),fetchText});
+   const batch=await adapter.sync({now:new Date(begin),fetchText,fetchBytes});
    const items=batch.events.map(e=>eventSchema.parse(e));
    if(items.some(e=>e.isDemo||!e.sources.some(s=>s.id===adapter.id)))throw new Error('SOURCE_INVALID_EVENT');
    const published=items.map(e=>e.publishedAt??(e.securityLevel?.publishedAt?e.securityLevel.publishedAt:null)).filter((v):v is string=>v!==null).sort();
