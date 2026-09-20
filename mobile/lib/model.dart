@@ -37,6 +37,7 @@ class SafetyEvent {
       .map((s) => Map<String, dynamic>.from(s as Map))
       .toList();
   bool get isRcb => sources.any((s) => s['id'] == 'RCB');
+  bool get isRso => sources.any((s) => s['id'] == 'RSO');
   bool get hasPoint => data['latitude'] is num && data['longitude'] is num;
   String get provenance => sources.any((s) => s['tier'] == 1 || s['tier'] == 2)
       ? 'ŹRÓDŁO OFICJALNE'
