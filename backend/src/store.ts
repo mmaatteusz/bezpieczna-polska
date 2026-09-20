@@ -135,7 +135,22 @@ export class Store{
   if(bbox)throw new Error('POSTGIS_REQUIRED');
   return (await this.events()).filter(e=>e.geometry!==null);
  }
- async timeline(id:string){return (await this.db.all('SELECT payload,actor,reason,recorded_at FROM event_revisions WHERE event_id=? ORDER BY revision',[id])).map(r=>({...r,payload:JSON.parse(r.payload as string)}));}
+ async timeline(id:string){
+  const rows=(await this.db.all('SELECT payload,actor,reason,recorded_at FROM event_revisions WHERE event_id=? ORDER BY revision',[id])).map(r=>({...r,payload:eventSchema.parse(JSON.parse(r.payload as string))}));
+  let previous:Event|null=null;
+  return rows.map(row=>{
+   const current=row.payload,changes:{field:string;from:unknown;to:unknown}[]=[];
+   if(!previous)changes.push({field:'CREATED',from:null,to:current.revision});
+   else{
+    for(const field of ['title','description','lifecycle','verification','validFrom','validTo','correction','regions'] as const){
+     const from=previous[field],to=current[field];
+     if(JSON.stringify(from)!==JSON.stringify(to))changes.push({field,from,to});
+    }
+   }
+   previous=current;
+   return {...row,changes};
+  });
+ }
  async health():Promise<Health[]>{return (await this.db.all('SELECT payload FROM source_health ORDER BY id')).map(r=>JSON.parse(r.payload as string) as Health);}
  async setHealth(h:Health){await this.db.run('INSERT INTO source_health(id,payload) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',[h.id,JSON.stringify(h)]);}
 }
