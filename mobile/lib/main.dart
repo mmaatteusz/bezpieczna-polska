@@ -10,6 +10,7 @@ import 'security_levels.dart';
 import 'shelter_panel.dart';
 import 'event_details.dart';
 import 'status_explanation.dart';
+import 'source_status.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,7 +66,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   Snapshot? snapshot;
   String? error;
   Timer? timer, refreshTimer;
-  String filter = 'Wszystkie', query = '';
+  String statusFilter = 'Wszystkie', sourceFilter = 'Wszystkie', typeFilter = 'Wszystkie', query = '';
   Map<String, int> seen = {};
   @override
   void initState() {
@@ -134,12 +135,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           online = true;
         });
       }
-    } catch (_) {
+    } catch (failure) {
       if (mounted && ticket == generation) {
         setState(() {
           online = false;
-          error =
-              'Nie udało się odświeżyć danych. Zachowano ostatnią poprawną kopię.';
+          error = apiFailureMessage(failure);
         });
       }
     } finally {
@@ -179,7 +179,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             [
               'Twoje bezpieczeństwo',
               'Mapa bezpieczeństwa',
-              'Komunikaty RCB',
+              'Centrum alertów',
               'Znajdź schronienie',
               'Pomoc i przygotowanie',
             ][page],
@@ -230,7 +230,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 ),
                 IconButton(
                   tooltip: 'Odśwież',
-                  onPressed: loading ? null : refresh,
+                  onPressed: loading || widget.repository.api.isEmpty ? null : refresh,
                   icon: loading
                       ? const SizedBox(
                           width: 20,
@@ -276,7 +276,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Mapa'),
         NavigationDestination(
           icon: Icon(Icons.campaign_outlined),
-          label: 'RCB',
+          label: 'Alerty',
         ),
         NavigationDestination(
           icon: Icon(Icons.home_work_outlined),
@@ -408,7 +408,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ),
       const SizedBox(height: 12),
       notice(
-        'Wersja rozwojowa 0.1.0 • Powiadomienia push nie są aktywne.',
+        'Wersja rozwojowa 0.1.0-alpha.5 • Powiadomienia push nie są aktywne.',
         Icons.science_outlined,
       ),
       heading('Od ostatniej wizyty'),
@@ -438,29 +438,32 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           'RCB, RSO i pozostałe kategorie pokażą swój stan po synchronizacji.',
           Icons.hub_outlined,
         ),
-      ...?(snapshot?.data['sources'] as List?)?.map((raw) {
+      ...?((snapshot?.data['sources'] as List?)?.take(4).map((raw) {
         final s = raw as Map;
-        final last = DateTime.tryParse(s['lastSuccess'] as String? ?? '');
-        final healthy =
-            online &&
-            s['state'] == 'HEALTHY' &&
-            last != null &&
-            !last.isAfter(DateTime.now()) &&
-            DateTime.now().difference(last).inSeconds <
-                (s['maxAgeSeconds'] as num);
+        final state = (s['healthStatus'] ?? s['state'] ?? 'UNKNOWN').toString();
         return Card(
           child: ListTile(
             leading: Icon(
-              healthy ? Icons.check_circle_outline : Icons.info_outline,
+              state == 'HEALTHY'
+                  ? Icons.check_circle_outline
+                  : state == 'STALE'
+                  ? Icons.schedule_outlined
+                  : Icons.info_outline,
             ),
             title: Text(s['name'] as String),
+            trailing: state == 'STALE' ? badge('STALE') : null,
             subtitle: Text(
-              '${healthy ? 'Dane pobrane' : sourceStateLabel(s['state'] as String)}\nOstatnia poprawna synchronizacja: ${stamp(s['lastSuccess'])}',
+              '${sourceStateLabel(state)}\nOstatnia poprawna synchronizacja: ${stamp(s['lastSuccess'])}',
             ),
-            onTap: () => openLink(s['url'] as String),
           ),
         );
-      }),
+      })),
+      if (snapshot != null)
+        OutlinedButton.icon(
+          onPressed: openSources,
+          icon: const Icon(Icons.hub_outlined),
+          label: const Text('Pokaż wszystkie źródła i diagnostykę'),
+        ),
       heading('Zapisane komunikaty regionu'),
       ...events.take(30).map(eventCard),
     ];
@@ -481,6 +484,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 badge(e.sources.first['name'] as String),
                 badge(e.badge),
                 badge(e.provenance),
+                if (eventSourceState(e) == 'STALE') badge('STALE • DANE NIEAKTUALNE'),
               ],
             ),
             const SizedBox(height: 12),
@@ -504,25 +508,77 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ),
     ),
   );
+  bool alertStatusMatches(SafetyEvent e) {
+    final lifecycle = e.data['lifecycle'] as String;
+    final correction = e.data['correction'];
+    final expired = DateTime.tryParse(e.data['validTo'] as String? ?? '')
+        ?.isBefore(DateTime.now()) ?? false;
+    return switch (statusFilter) {
+      'Aktywne' => lifecycle == 'ACTIVE' && !expired,
+      'Zakończone' =>
+        ['ENDED', 'CANCELLED', 'EXPIRED'].contains(lifecycle) || expired,
+      'Nieustalone' => lifecycle == 'UNKNOWN',
+      'Korekty' =>
+        correction != null ||
+        e.revision > 1 ||
+        ['REFUTED', 'DISPUTED'].contains(e.data['verification']),
+      _ => true,
+    };
+  }
+
+  String eventSourceState(SafetyEvent e) {
+    final sources = snapshot?.data['sources'];
+    if (sources is! List) return 'UNKNOWN';
+    for (final eventSource in e.sources) {
+      for (final raw in sources) {
+        if (raw is Map && raw['id'] == eventSource['id']) {
+          return (raw['healthStatus'] ?? raw['state'] ?? 'UNKNOWN').toString();
+        }
+      }
+    }
+    return 'UNKNOWN';
+  }
+
+  String eventTypeLabel(String value) => switch (value) {
+    'AIR' => 'Powietrzne',
+    'BORDER' => 'Granica',
+    'CYBER' => 'Cyber',
+    'RADIATION' => 'Radiacja',
+    'FIRE' => 'Pożary',
+    'EVACUATION' => 'Ewakuacja',
+    'OUTAGE' => 'Awarie',
+    'WEATHER' => 'Pogoda',
+    'OTHER' => 'Inne',
+    _ => value,
+  };
+
   List<Widget> rcbPage() {
-    final list = events
-        .where(
-          (e) =>
-              e.isRcb &&
-              ('${e.title} ${e.description}').toLowerCase().contains(
-                query.toLowerCase(),
-              ) &&
-              (filter == 'Wszystkie' ||
-                  filter == 'Aktywne' && e.badge == 'AKTYWNE WG ŹRÓDŁA' ||
-                  filter == 'Zakończone' &&
-                      ['ZAKOŃCZONE', 'TERMIN MINĄŁ'].contains(e.badge) ||
-                  filter == 'Nieustalone' && e.badge == 'WAŻNOŚĆ NIEUSTALONA'),
-        )
-        .toList();
+    final sourceOptions = <String>{
+      'Wszystkie',
+      ...events.expand((e) => e.sources.map((s) => s['id'].toString())),
+    }.toList();
+    final typeOptions = <String>{
+      'Wszystkie',
+      ...events.map((e) => e.data['eventType'].toString()),
+    }.toList();
+    if (!sourceOptions.contains(sourceFilter)) sourceFilter = 'Wszystkie';
+    if (!typeOptions.contains(typeFilter)) typeFilter = 'Wszystkie';
+    final normalized = query.trim().toLowerCase();
+    final list = events.where((e) {
+      final text = '${e.title} ${e.description}'.toLowerCase();
+      final sourceOk = sourceFilter == 'Wszystkie' ||
+          e.sources.any((s) => s['id'] == sourceFilter);
+      final typeOk = typeFilter == 'Wszystkie' ||
+          e.data['eventType'] == typeFilter;
+      return text.contains(normalized) &&
+          sourceOk &&
+          typeOk &&
+          alertStatusMatches(e);
+    }).toList();
     return [
       TextField(
         decoration: const InputDecoration(
-          labelText: 'Szukaj w komunikatach',
+          labelText: 'Szukaj w alertach',
           prefixIcon: Icon(Icons.search),
         ),
         onChanged: (v) => setState(() => query = v),
@@ -530,28 +586,71 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       const SizedBox(height: 12),
       Wrap(
         spacing: 8,
-        children: ['Wszystkie', 'Aktywne', 'Zakończone', 'Nieustalone']
+        runSpacing: 8,
+        children: ['Wszystkie', 'Aktywne', 'Zakończone', 'Nieustalone', 'Korekty']
             .map(
               (s) => ChoiceChip(
                 label: Text(s),
-                selected: filter == s,
-                onSelected: (_) => setState(() => filter = s),
+                selected: statusFilter == s,
+                onSelected: (_) => setState(() => statusFilter = s),
               ),
             )
             .toList(),
       ),
       const SizedBox(height: 12),
+      Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              initialValue: sourceFilter,
+              decoration: const InputDecoration(labelText: 'Źródło'),
+              items: sourceOptions
+                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                  .toList(),
+              onChanged: (v) => setState(() => sourceFilter = v ?? 'Wszystkie'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              initialValue: typeFilter,
+              decoration: const InputDecoration(labelText: 'Kategoria'),
+              items: typeOptions
+                  .map(
+                    (s) => DropdownMenuItem(
+                      value: s,
+                      child: Text(s == 'Wszystkie' ? s : eventTypeLabel(s)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() => typeFilter = v ?? 'Wszystkie'),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      Text('Pokazano ${list.length} z ${events.length} zapisanych alertów'),
       if (list.isEmpty)
         empty(
-          'Brak zapisanych komunikatów w tym widoku',
-          'Sprawdź synchronizację i wybrany filtr.',
+          'Brak alertów dla tych filtrów',
+          'Zmień filtr lub sprawdź stan synchronizacji źródeł.',
           Icons.campaign_outlined,
         ),
       ...list.map(eventCard),
-      OutlinedButton.icon(
-        onPressed: () => openLink('https://www.gov.pl/web/rcb'),
-        icon: const Icon(Icons.open_in_new),
-        label: const Text('Oficjalna strona RCB'),
+      Wrap(
+        spacing: 8,
+        children: [
+          OutlinedButton.icon(
+            onPressed: () => openLink('https://www.gov.pl/web/rcb'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('RCB'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => openLink('https://komunikaty.tvp.pl/'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('RSO'),
+          ),
+        ],
       ),
     ];
   }
@@ -632,7 +731,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ),
     heading('Prywatność'),
     const Text(
-      'Konto jest niewymagane. Aplikacja nie pobiera GPS. Region, ustawienia i kopie komunikatów pozostają na urządzeniu. Serwer przy odświeżaniu poznaje wybrany region i dane połączenia. Linki otwierają zewnętrzną przeglądarkę.',
+      'Konto jest niewymagane. GPS jest używany wyłącznie po naciśnięciu „Znajdź najbliższe schronienie”; pozycja nie jest zapisywana ani śledzona w tle. Region, ustawienia i kopie komunikatów pozostają na urządzeniu. Serwer przy odświeżaniu poznaje wybrany region i dane połączenia. Przy wyszukiwaniu najbliższego schronienia serwer otrzymuje jednorazowo współrzędne potrzebne do obliczenia odległości. Linki otwierają zewnętrzną przeglądarkę.',
     ),
     const SizedBox(height: 16),
     notice(
@@ -686,6 +785,22 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         );
       }
     }
+  }
+
+  void openSources() {
+    final raw = snapshot?.data['sources'];
+    final sources = raw is List
+        ? raw.whereType<Map>().map((s) => Map<String, dynamic>.from(s)).toList()
+        : <Map<String, dynamic>>[];
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => SourceStatusPage(
+          sources: sources,
+          openLink: openLink,
+        ),
+      ),
+    );
   }
 
   void details(SafetyEvent e) {
@@ -752,7 +867,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                         unawaited(developerSettings());
                       },
                     ),
-                  const Text('0.1.0-alpha.4 • Push nieaktywny • Bez GPS'),
+                  const Text('0.1.0-alpha.5 • Push nieaktywny • GPS tylko na żądanie'),
                 ],
               ),
             ),
@@ -832,8 +947,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
 
 String sourceStateLabel(String state) => switch (state) {
   'NOT_CONFIGURED' => 'Integracja oczekuje',
+  'HEALTHY' => 'Dane aktualne',
   'BROKEN' => 'Błąd synchronizacji',
-  'STALE' => 'Dane nieaktualne',
+  'STALE' => 'STALE • dane nieaktualne',
   'DEGRADED' => 'Niepełne dane',
   _ => 'Brak aktualnego połączenia',
 };
