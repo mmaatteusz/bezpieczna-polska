@@ -4,6 +4,8 @@ import {Store,openDb} from '../src/store.js';
 import {parseRcbArticle} from '../src/rcb-adapter.js';
 import {readFileSync} from 'node:fs';
 import {buildApp} from '../src/app.js';
+import {parseShelterCatalog,parseShelterCsv} from '../src/shelter-adapter.js';
+import {initializeSources} from '../src/adapters.js';
 
 // CI supplies a disposable PostGIS service. Never run against a production DB.
 test('PostGIS migration, SRID, GiST, bbox and geometry/payload atomicity', {skip:!process.env.TEST_DATABASE_URL},async()=>{
@@ -36,5 +38,33 @@ test('PostGIS migration, SRID, GiST, bbox and geometry/payload atomicity', {skip
   assert.equal(await store.get(e.id+'-rollback'),null);
  }finally{
   await db.run('DELETE FROM event_revisions WHERE event_id LIKE ?',[e.id+'%']);await db.close();
+ }
+});
+
+test('PostGIS shelters: exact points, regional bbox, full replacement and transaction rollback',{skip:!process.env.TEST_DATABASE_URL},async()=>{
+ const db=openDb(process.env.TEST_DATABASE_URL),store=new Store(db);await store.init();await initializeSources(store);
+ const points=parseShelterCsv(readFileSync('test/fixtures/psp-shelters.csv','utf8'),parseShelterCatalog(readFileSync('test/fixtures/psp-catalog.xml','utf8'),new Date('2026-09-19T12:00:00Z')));
+ const original=(await store.health()).find(h=>h.id==='SHELTERS')!;
+ const health={...original,state:'HEALTHY' as const,complete:true,coverage:'FACILITY_CATALOG' as const,itemCount:points.length,lastSuccess:new Date().toISOString(),sourceContentHash:'a'.repeat(64)};
+ try{
+  await store.applyShelterSync(points,health);
+  const row=(await db.all('SELECT ST_SRID(geom) AS srid,ST_X(geom) AS lon FROM shelters WHERE id=?',[points[0].id]))[0];assert.equal(row.srid,4326);assert.equal(row.lon,points[0].longitude);
+  assert.ok((await db.all("SELECT indexdef FROM pg_indexes WHERE indexname='shelter_geometry_gist'"))[0].indexdef.toString().includes('gist'));
+  const bbox:[number,number,number,number]=[17.8,53,18.3,53.3];
+  assert.equal((await store.shelterPage({regionId:'04',q:'',offset:0,limit:50,bbox})).total,3);
+  assert.equal((await store.shelterPage({regionId:'02',q:'',offset:0,limit:50,bbox})).total,0);
+  const app=await buildApp(store);try{const geo=(await app.inject('/v1/layers/shelters.geojson?bbox=17.8,53,18.3,53.3')).json();assert.equal(geo.features.length,3);}finally{await app.close();}
+  // Force a real database error during replacement, after DELETE and INSERT.
+  await db.run("CREATE OR REPLACE FUNCTION fixture_reject_shelter() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture_write_failure'; END $$");
+  await db.run('CREATE TRIGGER fixture_shelter_failure BEFORE INSERT ON shelters FOR EACH ROW EXECUTE FUNCTION fixture_reject_shelter()');
+  await assert.rejects(store.applyShelterSync([points[0]],{...health,itemCount:1,sourceContentHash:'b'.repeat(64)}),/fixture_write_failure/);
+  assert.equal((await store.shelterPage({regionId:'PL',q:'',offset:0,limit:50})).total,3);
+  assert.equal((await store.health()).find(h=>h.id==='SHELTERS')!.sourceContentHash,health.sourceContentHash);
+  await db.run('DROP TRIGGER fixture_shelter_failure ON shelters');
+  await store.applyShelterSync([points[0]],{...health,itemCount:1,sourceContentHash:'b'.repeat(64)});
+  assert.equal((await store.shelterPage({regionId:'PL',q:'',offset:0,limit:50})).total,1);
+ }finally{
+  await db.run('DROP TRIGGER IF EXISTS fixture_shelter_failure ON shelters');await db.run('DROP FUNCTION IF EXISTS fixture_reject_shelter()');
+  for(const p of points)await db.run('DELETE FROM shelters WHERE id=?',[p.id]);await store.setHealth(original);await db.close();
  }
 });

@@ -28,9 +28,11 @@ export const eventSchema=z.object({
  if(e.geometry&&e.latitude!==null&&(e.geometry.type!=='Point'||e.geometry.coordinates[0]!==e.longitude||e.geometry.coordinates[1]!==e.latitude))ctx.addIssue({code:'custom',message:'Conflicting event geometry'});
 }).transform(e=>({...e,geometry:e.geometry??(e.latitude!==null&&e.longitude!==null?{type:'Point' as const,coordinates:[e.longitude,e.latitude] as [number,number]}:null)}));
 export type Event=z.infer<typeof eventSchema>;
-export type Health={id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS';pagesFetched?:number};
+export type Health={id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS'|'FACILITY_CATALOG';pagesFetched?:number;dataDate?:string;sourceUpdatedAt?:string;sourceContentHash?:string;sourceUrl?:string;datasetUrl?:string;license?:string};
 export function computeStatus(events:Event[],health:Health[],region:string,now=new Date()){
  const ms=now.getTime();
+ // Facilities are reference data, never evidence of the absence of hazards.
+ health=health.filter(h=>h.id!=='SHELTERS'&&h.coverage!=='FACILITY_CATALOG');
  const relevant=events.filter(e=>!e.isDemo&&e.officialWarning&&e.messageContext==='ACTUAL'&&e.verification==='CONFIRMED'&&e.sources.some(s=>s.tier===1)&&(region==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(region)));
  const fresh=health.filter(h=>h.state==='HEALTHY'&&h.lastSuccess&&Date.parse(h.lastSuccess)<=ms+30000&&ms-Date.parse(h.lastSuccess)<h.maxAgeSeconds*1000);
  const coverage=health.length>0&&fresh.length===health.length&&fresh.every(h=>h.complete)?'COMPLETE_FOR_CONFIGURED_SCOPE':fresh.length?'PARTIAL':'UNAVAILABLE';
@@ -48,7 +50,7 @@ export function computeStatus(events:Event[],health:Health[],region:string,now=n
 
 export function sourceHealth(health:Health[],now=new Date()){
  return health.map(h=>{
-  const stale=h.state==='HEALTHY'&&(!h.lastSuccess||Date.parse(h.lastSuccess)>now.getTime()+30000||now.getTime()-Date.parse(h.lastSuccess)>=h.maxAgeSeconds*1000);
+  const stale=h.state==='HEALTHY'&&(!h.lastSuccess||Date.parse(h.lastSuccess)>now.getTime()+30000||now.getTime()-Date.parse(h.lastSuccess)>=h.maxAgeSeconds*1000||(h.sourceUpdatedAt!==undefined&&now.getTime()-Date.parse(h.sourceUpdatedAt)>14*86400000));
   return {...h,state:stale?'STALE':h.state,lastSuccessfulSyncAt:h.lastSuccess,lastAttemptAt:h.lastAttempt??null,errorCode:h.errorCode??null};
  });
 }

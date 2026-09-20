@@ -2,6 +2,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {createHash} from 'node:crypto';
 import pg from 'pg';
 import {eventSchema,type Event,type Health} from './domain.js';
+import {shelterSchema,searchText,type Shelter,type ShelterFilter} from './shelter.js';
 type Row=Record<string,unknown>;
 export interface Db {
  kind:'postgres'|'sqlite';
@@ -38,6 +39,8 @@ export class Store{
   if(this.db.kind==='postgres')await this.db.run('CREATE EXTENSION IF NOT EXISTS postgis');
   await this.db.run('CREATE TABLE IF NOT EXISTS event_revisions(event_id TEXT NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL, content_hash TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT NOT NULL, recorded_at TEXT NOT NULL, PRIMARY KEY(event_id,revision))');
   await this.db.run('CREATE TABLE IF NOT EXISTS source_health(id TEXT PRIMARY KEY,payload TEXT NOT NULL)');
+  await this.db.run('CREATE TABLE IF NOT EXISTS shelters(id TEXT PRIMARY KEY,region_id TEXT NOT NULL,search_text TEXT NOT NULL,payload TEXT NOT NULL)');
+  await this.db.run('CREATE INDEX IF NOT EXISTS shelter_region_idx ON shelters(region_id,id)');
   if(this.db.kind==='postgres'){
    // An indexed generated column keeps geometry and the audited event payload
    // in the same atomic write, including existing events during migration.
@@ -48,6 +51,8 @@ export class Store{
      THEN ST_SetSRID(ST_MakePoint((payload::jsonb->>'longitude')::double precision,(payload::jsonb->>'latitude')::double precision),4326)
      ELSE NULL END) STORED CHECK (geom IS NULL OR ST_IsValid(geom))`);
    await this.db.run('CREATE INDEX IF NOT EXISTS event_geometry_gist ON event_revisions USING GIST (geom)');
+   await this.db.run(`ALTER TABLE shelters ADD COLUMN IF NOT EXISTS geom geometry(Point,4326) GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint((payload::jsonb->>'longitude')::double precision,(payload::jsonb->>'latitude')::double precision),4326)) STORED`);
+   await this.db.run('CREATE INDEX IF NOT EXISTS shelter_geometry_gist ON shelters USING GIST (geom)');
   }
  }
  async events():Promise<Event[]>{
@@ -69,6 +74,42 @@ export class Store{
  }
  async applySync(events:Event[],health:Health){
   await this.db.transaction(async db=>{const s=new Store(db);for(const e of events)await s.put(e);await s.setHealth(health);});
+ }
+ async applyShelterSync(items:Shelter[],health:Health){
+  if(health.id!=='SHELTERS'||health.coverage!=='FACILITY_CATALOG'||!health.complete||!items.length||items.length!==health.itemCount||!health.sourceContentHash)throw new Error('SHELTER_INVALID_BATCH');
+  // Validate everything before beginning replacement. A failed transaction keeps
+  // the entire previous national package and its previous success timestamp.
+  const rows=items.map(s=>shelterSchema.parse(s));
+  if(new Set(rows.map(s=>s.id)).size!==rows.length)throw new Error('SHELTER_DUPLICATE_ID');
+  await this.db.transaction(async db=>{
+   const scoped=new Store(db),previous=(await scoped.health()).find(h=>h.id==='SHELTERS');
+   if(previous?.sourceContentHash!==health.sourceContentHash||previous?.sourceUpdatedAt!==health.sourceUpdatedAt||previous?.dataDate!==health.dataDate){
+    await db.run('DELETE FROM shelters');
+    for(let i=0;i<rows.length;i+=200){
+     const batch=rows.slice(i,i+200),params=batch.flatMap(s=>[s.id,s.regionId,searchText(`${s.municipality} ${s.county} ${s.address}`),JSON.stringify(s)]);
+     await db.run(`INSERT INTO shelters(id,region_id,search_text,payload) VALUES ${batch.map(()=>'(?,?,?,?)').join(',')}`,params);
+    }
+   }
+   await scoped.setHealth(health);
+  });
+ }
+ async shelterPage(filter:ShelterFilter){
+  return this.db.transaction(db=>new Store(db).readShelterPage(filter));
+ }
+ private async readShelterPage({regionId,q,limit,offset,version,bbox}:ShelterFilter){
+  const health=(await this.health()).find(h=>h.id==='SHELTERS')??null;
+  if(version&&health?.sourceContentHash!==version)throw new Error('SHELTER_VERSION_CHANGED');
+  const conditions:string[]=[],params:unknown[]=[];
+  if(regionId!=='PL'){conditions.push('region_id=?');params.push(regionId);}
+  if(q){conditions.push("search_text LIKE ? ESCAPE '!'");params.push('%'+searchText(q).replace(/[!%_]/g,s=>'!'+s)+'%');}
+  if(bbox){
+   if(this.db.kind!=='postgres')throw new Error('POSTGIS_REQUIRED');
+   conditions.push('ST_Intersects(geom,ST_MakeEnvelope(?,?,?,?,4326))');params.push(...bbox);
+  }
+  const where=conditions.length?' WHERE '+conditions.join(' AND '):'';
+  const total=Number((await this.db.all('SELECT COUNT(*) AS total FROM shelters'+where,params))[0].total);
+  const rows=await this.db.all('SELECT payload FROM shelters'+where+' ORDER BY id LIMIT ? OFFSET ?',[...params,limit,offset]);
+  return {items:rows.map(r=>shelterSchema.parse(JSON.parse(r.payload as string))),total,offset,limit,hasMore:offset+rows.length<total,version:health?.sourceContentHash??null,health,regionId,query:q};
  }
  async spatialEvents(bbox?:[number,number,number,number]){
   if(this.db.kind==='postgres'){

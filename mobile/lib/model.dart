@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'shelters.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -134,8 +135,17 @@ class Snapshot {
       }
       if (s['lastSuccess'] != null) DateTime.parse(s['lastSuccess'] as String);
     }
+    if (m['shelterPage'] != null) {
+      final page = ShelterPage.parse(m['shelterPage']);
+      if (page.region != m['regionId']) {
+        throw const FormatException('Błędny region punktów');
+      }
+    }
     return Snapshot._(m, (m['events'] as List).map(SafetyEvent.parse).toList());
   }
+  ShelterPage? get shelters => data['shelterPage'] == null
+      ? null
+      : ShelterPage.parse(data['shelterPage']);
   String get region => data['regionId'] as String;
   bool freshAt(DateTime now, {bool national = false}) =>
       now.isBefore(
@@ -248,12 +258,74 @@ class DataRepository {
     return s;
   }
 
+  int get dataGeneration => _generation;
+  String shelterCacheKey(String r) => 'shelters:$api:$r';
+  ShelterPage? cachedShelters(String r) {
+    try {
+      final text = prefs.getString(shelterCacheKey(r));
+      final page = text == null ? null : ShelterPage.parse(jsonDecode(text));
+      return page?.region == r ? page : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<ShelterPage> refreshShelters(
+    String r, {
+    String query = '',
+    int offset = 0,
+    String? version,
+  }) async {
+    final ticket = _generation, key = shelterCacheKey(r);
+    final u = validateApi(api);
+    final q = query.trim();
+    final response = await client
+        .get(
+          u.replace(
+            path: '${u.path}/v1/shelters',
+            queryParameters: {
+              'regionId': r,
+              'q': q,
+              'offset': '$offset',
+              'limit': '50',
+              'version': ?version,
+            },
+          ),
+          headers: {'Accept': 'application/json'},
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 409) {
+      throw const ShelterVersionChanged();
+    }
+    if (response.statusCode != 200 ||
+        response.bodyBytes.length > 4 * 1024 * 1024) {
+      throw const FormatException('Błąd odpowiedzi serwera');
+    }
+    final page = ShelterPage.parse(jsonDecode(utf8.decode(response.bodyBytes)));
+    if (page.region != r ||
+        page.query != q ||
+        page.offset != offset ||
+        (version != null && page.version != version)) {
+      throw const FormatException('Błędny zakres punktów');
+    }
+    if (ticket != _generation) {
+      throw StateError('Kopia usunięta lub zmieniony serwer');
+    }
+    await prefs.setString(key, jsonEncode(page.data));
+    return page;
+  }
+
   Future<void> clearData() async {
     ++_generation;
     for (final k
         in prefs
             .getKeys()
-            .where((k) => k.startsWith('snapshot:') || k.startsWith('seen:'))
+            .where(
+              (k) =>
+                  k.startsWith('snapshot:') ||
+                  k.startsWith('seen:') ||
+                  k.startsWith('shelters:'),
+            )
             .toList()) {
       await prefs.remove(k);
     }

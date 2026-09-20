@@ -1,4 +1,4 @@
-# Stan kontynuacji — etap RCB
+# Stan kontynuacji — etap PSP/dane.gov.pl
 
 Repozytorium prywatne: https://github.com/mmaatteusz/bezpieczna-polska.
 Alpha.2 została zbudowana: Actions run 35398119623 zakończony sukcesem.
@@ -17,3 +17,5 @@ Stary workflow alpha.2 nie jest ścieżką wydania alpha.3.
 Nie instalować ponownie lokalnego Android SDK; CI ma potrzebne narzędzia.
 Lokalnie Node.js 24, brak Flutter i serwera PostGIS. Test PostGIS wymaga
 TEST_DATABASE_URL do bazy testowej, a nie bazy produkcyjnej.
+
+Kolejny etap PSP: docs/SHELTERS_STAGE.md. Adapter i zakładka schronienia zachowują istniejący UI. Po PSP następne są stopnie alarmowe RP. Nie uruchamiać pozostałych integracji równolegle.

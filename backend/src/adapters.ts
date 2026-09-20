@@ -4,15 +4,16 @@ import {eventSchema,REGIONS,type Event,type Health} from './domain.js';
 import {Store} from './store.js';
 import {SOURCES, type SourceAdapter} from './source-adapter.js';
 import {rcbAdapter} from './rcb-adapter.js';
+import {shelterAdapter,SHELTER_DATASET,SHELTER_CATALOG,SHELTER_CSV} from './shelter-adapter.js';
 export {SOURCES} from './source-adapter.js';
 export {parseRcbIndex,parseRcbArticle} from './rcb-adapter.js';
 export async function initializeSources(store:Store){
  const existing=await store.health();
  for(const s of SOURCES){
   const previous=existing.find(h=>h.id===s.id);
-  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
+  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:s.id==='SHELTERS'?172800:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
   else if(!s.enabled)await store.setHealth({...previous,...s,state:'NOT_CONFIGURED',complete:false});
-  else await store.setHealth({...previous,...s});
+  else await store.setHealth({...previous,...s,maxAgeSeconds:s.id==='SHELTERS'?172800:900});
  }
 }
 export function messageContext(text:string):Event['messageContext']{return /ćwicz|cwicz|exercise/i.test(text)?'EXERCISE':/test syren|test systemu/i.test(text)?'TEST':'UNKNOWN';}
@@ -32,13 +33,14 @@ export function parseRso(xml:string,now=new Date()):Event[]{
  }).get();
 }
 export async function fetchPublic(url:string):Promise<string>{
- const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname))throw new Error('SOURCE_URL_DENIED');
- const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/xml'}});if(!response.ok||!response.body)throw new Error('SOURCE_HTTP_ERROR');
- let size=0;const chunks:Uint8Array[]=[];for await(const chunk of response.body){size+=chunk.length;if(size>4*1024*1024)throw new Error('SOURCE_TOO_LARGE');chunks.push(chunk);}return Buffer.concat(chunks).toString('utf8');
+ const shelterUrl=[SHELTER_DATASET,SHELTER_CATALOG,SHELTER_CSV].includes(url);
+ const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterUrl&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
+ const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(url===SHELTER_CSV?90000:20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/xml,application/json,text/csv'}});if(!response.ok)throw new Error(`SOURCE_HTTP_${response.status}`);if(!response.body)throw new Error('SOURCE_EMPTY_BODY');
+ let size=0;const chunks:Uint8Array[]=[];for await(const chunk of response.body){size+=chunk.length;if(size>(url===SHELTER_CSV?64:4)*1024*1024)throw new Error('SOURCE_TOO_LARGE');chunks.push(chunk);}return new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks));
 }
 // Sharing the same coordinator prevents timer/admin overlap on this Store.
 const running = new WeakMap<Store, Promise<void>>();
-export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter], fetchText=fetchPublic):Promise<void>{
+export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,shelterAdapter], fetchText=fetchPublic):Promise<void>{
  const existing=running.get(store);if(existing)return existing;
  const task=syncSources(store,adapters,fetchText).finally(()=>running.delete(store));
  running.set(store,task);return task;
@@ -49,12 +51,17 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
   const previous=(await store.health()).find(s=>s.id===adapter.id);
   if(!previous)throw new Error('UNKNOWN_ADAPTER');
   const begin=Date.now(),lastAttempt=new Date(begin).toISOString();
+  if(adapter.minSyncIntervalSeconds&&previous.lastSuccess&&previous.state==='HEALTHY'&&begin-Date.parse(previous.lastSuccess)>=0&&begin-Date.parse(previous.lastSuccess)<adapter.minSyncIntervalSeconds*1000)continue;
   try{
    const batch=await adapter.sync({now:new Date(begin),fetchText});
    const items=batch.events.map(e=>eventSchema.parse(e));
    if(items.some(e=>e.isDemo||!e.sources.some(s=>s.id===adapter.id)))throw new Error('SOURCE_INVALID_EVENT');
    const published=items.map(e=>e.publishedAt).filter((v):v is string=>v!==null).sort();
-   await store.applySync(items,{...previous,enabled:true,state:'HEALTHY',lastAttempt,lastSuccess:new Date().toISOString(),lastItemTime:published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:batch.complete,coverage:batch.coverage,pagesFetched:batch.pagesFetched,itemCount:items.length,errorCode:null,adapterVersion:adapter.version});
+   const health:Health={...previous,...batch.metadata,enabled:true,state:'HEALTHY',lastAttempt,lastSuccess:new Date().toISOString(),lastItemTime:batch.metadata?.sourceUpdatedAt??published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:batch.complete,coverage:batch.coverage,pagesFetched:batch.pagesFetched,itemCount:batch.shelters?.length??items.length,errorCode:null,adapterVersion:adapter.version};
+   if(batch.shelters){
+    if(adapter.id!=='SHELTERS'||items.length||batch.coverage!=='FACILITY_CATALOG'||!batch.complete||!batch.metadata)throw new Error('SOURCE_INVALID_BATCH');
+    await store.applyShelterSync(batch.shelters,health);
+   }else await store.applySync(items,health);
   }catch(error){
    const message=error instanceof Error?error.message:'';
    const errorCode=/^[A-Z][A-Z0-9_]{2,100}$/.test(message)?message:'SOURCE_SYNC_FAILED';

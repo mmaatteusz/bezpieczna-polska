@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'model.dart';
 import 'safety_map.dart';
+import 'shelter_panel.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -570,24 +571,15 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     if (!ukraine) ...events.where((e) => e.hasPoint).take(20).map(eventCard),
   ];
   List<Widget> shelterPage() => [
-    empty(
-      'Brak zweryfikowanego pakietu schronienia',
-      'Nie można wskazać najbliższego obiektu bez danych o jego rodzaju i dostępności.',
-      Icons.home_work_outlined,
-    ),
-    heading('Rozróżniaj rodzaje obiektów'),
-    notice(
-      'Schron • Ukrycie • Miejsce doraźnego schronienia\nTo różne kategorie ochrony.',
-      Icons.shield_outlined,
-    ),
-    OutlinedButton.icon(
-      onPressed: () => openLink('https://gdziesieukryc.pl/'),
-      icon: const Icon(Icons.open_in_new),
-      label: const Text('Otwórz serwis PSP'),
-    ),
-    heading('Tryb offline'),
-    const Text(
-      'Po synchronizacji dostępne są zapisane komunikaty i statusy z datą pobrania. Mapa poglądowa działa bez internetu. Pakietów punktów schronienia jeszcze nie ma.',
+    ShelterPanel(
+      key: ValueKey(
+        '${widget.repository.api}:$region:${widget.repository.dataGeneration}',
+      ),
+      repository: widget.repository,
+      region: region,
+      initial: snapshot?.shelters,
+      online: online,
+      openLink: openLink,
     ),
   ];
   List<Widget> helpPage() => [

@@ -3,7 +3,7 @@ import {computeStatus,eventSchema,REGIONS,sourceHealth} from './domain.js';impor
 export async function buildApp(store:Store,adminToken?:string){
  const app=Fastify({logger:false,bodyLimit:128*1024});await app.register(rateLimit,{max:100,timeWindow:'1 minute'});
  app.addHook('onSend',async(_,r,p)=>{r.header('Cache-Control','no-store').header('X-Content-Type-Options','nosniff');return p;});
- app.setErrorHandler((e,_,r)=>{if(e instanceof z.ZodError)return r.code(400).send({error:'INVALID_REQUEST'});if(e instanceof Error&&e.message==='REVISION_CONFLICT')return r.code(409).send({error:'REVISION_CONFLICT'});const status=typeof e==='object'&&e&&'statusCode'in e?Number(e.statusCode):500;return r.code(status>=400&&status<600?status:500).send({error:'REQUEST_FAILED'});});
+ app.setErrorHandler((e,_,r)=>{if(e instanceof z.ZodError)return r.code(400).send({error:'INVALID_REQUEST'});if(e instanceof Error&&['REVISION_CONFLICT','SHELTER_VERSION_CHANGED'].includes(e.message))return r.code(409).send({error:e.message});const status=typeof e==='object'&&e&&'statusCode'in e?Number(e.statusCode):500;return r.code(status>=400&&status<600?status:500).send({error:'REQUEST_FAILED'});});
  app.get('/healthz',async()=>({ok:true,version:'0.1.0-alpha.2'}));
  const regionQuery=z.object({regionId:z.string().refine(v=>v==='PL'||v in REGIONS).default('PL')});
  app.get('/status',async req=>{
@@ -17,10 +17,24 @@ export async function buildApp(store:Store,adminToken?:string){
   const ready=sources.length>0&&sources.every(s=>s.state==='HEALTHY');
   return reply.code(ready?200:503).send({ready,database:store.db.kind,sourceHealth:sources});
  });
+ const shelterQuery=z.object({regionId:z.string().refine(v=>v==='PL'||v in REGIONS).default('PL'),q:z.string().trim().max(120).default(''),limit:z.coerce.number().int().min(1).max(500).default(50),offset:z.coerce.number().int().min(0).max(500000).default(0),version:z.string().regex(/^[a-f0-9]{64}$/).optional()});
+ const sheltersResponse=async(query:z.infer<typeof shelterQuery>,bbox?:[number,number,number,number])=>{
+  const result=await store.shelterPage({...query,bbox});
+  return {schemaVersion:1,serverTime:new Date().toISOString(),...result,health:result.health?sourceHealth([result.health])[0]:null};
+ };
+ app.get('/v1/shelters',async req=>sheltersResponse(shelterQuery.parse(req.query)));
+ app.get('/v1/layers/shelters.geojson',async(req,reply)=>{
+  const raw=z.object({bbox:z.string().optional()}).parse(req.query).bbox;
+  const bbox=raw===undefined?undefined:z.tuple([z.number().min(-180).max(180),z.number().min(-90).max(90),z.number().min(-180).max(180),z.number().min(-90).max(90)]).refine(b=>b[0]<=b[2]&&b[1]<=b[3]).parse(raw.split(',').map(Number));
+  if(bbox&&store.db.kind!=='postgres')return reply.code(503).send({error:'POSTGIS_REQUIRED'});
+  const result=await sheltersResponse(shelterQuery.parse(req.query),bbox),{items,...metadata}=result;
+  return {type:'FeatureCollection',metadata,features:items.map(s=>({type:'Feature',id:s.id,geometry:{type:'Point',coordinates:[s.longitude,s.latitude]},properties:s}))};
+ });
  app.get('/v1/snapshot',async req=>{
   const {regionId}=regionQuery.parse(req.query),{events,health}=await store.snapshot(),now=new Date();
   const sources=sourceHealth(health,now);
-  return {schemaVersion:1,serverTime:now.toISOString(),releaseStage:'ALPHA',regionId,status:computeStatus(events,health,regionId,now),nationalStatus:computeStatus(events,health,'PL',now),events:events.filter(e=>regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId)),sources,sourceHealth:sources,shelters:[],securityLevels:[],ukraineAlerts:[],capabilities:{push:false,shelters:false,ukraine:false,liveMap:false,rcb:true}};
+  const shelterPage=await sheltersResponse(shelterQuery.parse({regionId}));
+  return {schemaVersion:1,serverTime:now.toISOString(),releaseStage:'ALPHA',regionId,status:computeStatus(events,health,regionId,now),nationalStatus:computeStatus(events,health,'PL',now),events:events.filter(e=>regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId)),sources,sourceHealth:sources,shelters:shelterPage.items,shelterPage,securityLevels:[],ukraineAlerts:[],capabilities:{push:false,shelters:shelterPage.version!==null,ukraine:false,liveMap:false,rcb:true}};
  });
  app.get('/v1/layers/events.geojson',async(req,reply)=>{
   const {regionId}=regionQuery.parse(req.query);
