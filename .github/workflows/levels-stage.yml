@@ -1,45 +1,23 @@
-name: Verify security levels stage
+name: Build security-levels preview APK
 on:
   push:
     branches: [stage/security-levels]
-    paths: ['levels-stage.tar.gz']
+    paths: ['.github/workflows/levels-stage.yml']
+  workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
-  group: levels-import
+  group: preview-apk-security-levels
   cancel-in-progress: true
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
 jobs:
-  verify:
+  android:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-    services:
-      postgis:
-        image: postgis/postgis:17-3.5
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: disposable_ci_only
-          POSTGRES_DB: test
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U test -d test"
-          --health-interval 10s --health-timeout 5s --health-retries 10
-    env:
-      TEST_DATABASE_URL: postgresql://test:disposable_ci_only@localhost:5432/test
-      FLUTTER_SUPPRESS_ANALYTICS: 'true'
-      CI: 'true'
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Apply reviewed source package
-        run: |
-          echo 'a1d2aeaab31b2a103110a58adbc496634987f927490fe5e13b75d23e5a77bb59  levels-stage.tar.gz' | sha256sum -c -
-          tar -xzf levels-stage.tar.gz
-          rm -f mobile/lib/safety_map.dart mobile/assets/europe.geojson mobile/test/goldens/map.png
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-      - name: Backend and PostGIS
-        working-directory: backend
-        run: npm ci && npm run build && npm test
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -49,26 +27,25 @@ jobs:
           flutter-version: '3.47.4'
           channel: stable
           cache: true
-      - name: Flutter analyze and tests
+      - name: Flutter dependencies, analyze and tests
         working-directory: mobile
         run: |
           flutter pub get
-          dart format lib test
-          dart fix --apply
-          dart format lib test
           flutter analyze --no-pub
           flutter test --no-pub
-      - name: Android native MapLibre compilation
+      - name: Build Android preview
         working-directory: mobile
-        run: chmod +x android/gradlew && flutter build apk --debug --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=false
-      - name: Live security levels
-        working-directory: backend
-        run: node scripts/live-levels.mjs ../docs/validation/levels-ci
-      - name: Save verified implementation
+        run: flutter build apk --debug --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=true
+      - name: Prepare preview artifact
+        shell: bash
         run: |
-          rm levels-stage.tar.gz
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add backend mobile docs scripts README.md levels-stage.tar.gz
-          git commit -m 'Add tested MapLibre viewport queries, clustering and bounded offline cache'
-          git push origin HEAD:stage/security-levels
+          set -euo pipefail
+          mkdir -p output
+          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.3-preview-arm64.apk
+          sha256sum output/*.apk > output/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bezpieczna_Polska_0.1.0-alpha.3-preview-arm64
+          path: output/
+          if-no-files-found: error
+          retention-days: 30
