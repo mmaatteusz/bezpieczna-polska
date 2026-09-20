@@ -10,36 +10,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Probe dane.gov.pl official shelter transport
+      - name: Probe dane.gov.pl tabular fallback
         shell: bash
         run: |
           set -euo pipefail
-          echo '===== RESOURCE METADATA ====='
-          curl --fail-with-body --silent --show-error --max-time 30 \
+          echo '===== TABULAR HEADERS ====='
+          curl --silent --show-error --head --max-time 30 \
             --header 'Accept: application/json' \
-            --header 'User-Agent: BezpiecznaPolska/0.1 official-open-data-check' \
-            'https://api.dane.gov.pl/1.4/resources/1393918' > resource.json
-          python3 - <<'PY'
-          import json
-          d=json.load(open('resource.json'))['data']['attributes']
-          print('modified=',d['modified'])
-          print('data_date=',d['data_date'])
-          print('download_url=',d['download_url'])
-          print('description=',d['description'])
-          PY
-          echo '===== MIRROR HEADERS / REDIRECT CHAIN ====='
-          curl --silent --show-error --head --location --max-time 30 \
             --user-agent 'BezpiecznaPolska/0.1 official-open-data-check' \
-            --write-out '\nFINAL_URL=%{url_effective}\nHTTP=%{http_code}\n' \
-            'https://api.dane.gov.pl/resources/1393918,punkty-schronienia-dane-csv/file'
-          echo '===== MIRROR FIRST BYTES ====='
-          curl --fail-with-body --silent --show-error --location --max-time 30 \
-            --range 0-1023 \
+            'https://api.dane.gov.pl/1.4/resources/1393918/data'
+          echo '===== SMALL QUERY METADATA ====='
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            --header 'Accept: application/json' \
             --user-agent 'BezpiecznaPolska/0.1 official-open-data-check' \
-            'https://api.dane.gov.pl/resources/1393918,punkty-schronienia-dane-csv/file' \
-            -o mirror-prefix.bin
-          wc -c mirror-prefix.bin
+            'https://api.dane.gov.pl/1.4/resources/1393918/data?page=1&page_size=10' \
+            -o table.json
           python3 - <<'PY'
-          b=open('mirror-prefix.bin','rb').read(256)
-          print(repr(b[:160]))
+          import json, os
+          d=json.load(open('table.json'))
+          print('bytes=',os.path.getsize('table.json'))
+          print('rows=',len(d.get('data',[])))
+          print('count=',d.get('meta',{}).get('count'))
+          print('params=',d.get('meta',{}).get('params'))
+          print('links=',d.get('links'))
+          rows=d.get('data',[])
+          if rows:
+              print('first_updated=',rows[0].get('meta',{}).get('updated_at'))
+              print('first_id=',rows[0].get('attributes',{}).get('col1',{}).get('val'))
           PY
