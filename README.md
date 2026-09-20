@@ -37,8 +37,8 @@ Bez backendu aplikacja pokazuje brak danych. Nie korzysta bezpośrednio z API os
 - PSP/dane.gov.pl: pełny import oficjalnego wykazu, PostGIS, wyszukiwanie adresu/gminy, stronicowanie, GeoJSON i ograniczona kopia offline. Szczegóły: [etap PSP](docs/SHELTERS_STAGE.md).
 - RSO: dotychczasowy parser XML pozostaje w testach. Synchronizacja wyłączona do jego etapu, po PSP i stopniach alarmowych.
 - Źródła zachowują oryginalną treść. Niepewna interpretacja nie podnosi automatycznie statusu.
-- Historia wersji, korekty, stan źródeł, deterministyczne statusy, kopie offline, mapa poglądowa granic, 112 wymagające działania użytkownika.
-- Brakuje: pełnych adapterów WCZK/SG/CERT/PAA/Ukraina, stopni alarmowych, push FCM/APNs, MapLibre, RLS, panelu administratora z MFA i wdrożenia produkcyjnego.
+- Historia wersji, korekty, stan źródeł, deterministyczne statusy, kopie offline, mapa MapLibre z zapytaniami bbox i klastrami PostGIS, 112 wymagające działania użytkownika.
+- Brakuje: pełnych adapterów WCZK/SG/CERT/PAA/Ukraina, push FCM/APNs, RLS, panelu administratora z MFA i wdrożenia produkcyjnego.
 
 Aktualny zakres i wdrożenie: [etap RCB](docs/RCB_STAGE.md). Hosting HTTPS nie został jeszcze uruchomiony.
 
@@ -50,3 +50,7 @@ APK preview ma osobny identyfikator `pl.bezpiecznapolska.preview`. Podpis debug 
 Ukończyć zakres MVP, umowy/licencje źródeł, hosting z HTTPS i backupem, testy push i działania offline na prawdziwych telefonach, audyt bezpieczeństwa, politykę prywatności i podpis wydawcy. iOS wymaga macOS, konta Apple Developer i osobnej walidacji.
 
 Nigdy nie commitować sekretów, kluczy, `.env`, baz użytkowników ani tokenów.
+
+## Etap stopni alarmowych i MapLibre
+
+Adapter oficjalnego HTML RCB obsługuje równoległe stopnie PHYSICAL/CRP i zakresy infrastrukturalne. `/status` zwraca osobne listy dla Polski i regionu; stopnie nie powodują automatycznie RED. Mapa używa `/v1/map/shelters?bbox=minLon,minLat,maxLon,maxLat&zoom=10`, indeksu PostGIS, klastrów i ograniczonego cache telefonu. Budowanie Androida wymaga JDK 21. Szczegóły, prawdziwe dane i ograniczenia: [raport etapu](docs/SECURITY_LEVELS_MAP_STAGE.md).

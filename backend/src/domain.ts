@@ -30,7 +30,7 @@ export const eventSchema=z.object({
  if(e.geometry&&e.latitude!==null&&(e.geometry.type!=='Point'||e.geometry.coordinates[0]!==e.longitude||e.geometry.coordinates[1]!==e.latitude))ctx.addIssue({code:'custom',message:'Conflicting event geometry'});
 }).transform(e=>({...e,geometry:e.geometry??(e.latitude!==null&&e.longitude!==null?{type:'Point' as const,coordinates:[e.longitude,e.latitude] as [number,number]}:null)}));
 export type Event=z.infer<typeof eventSchema>;
-export type Health={id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS'|'FACILITY_CATALOG';pagesFetched?:number;dataDate?:string;sourceUpdatedAt?:string;sourceContentHash?:string;sourceUrl?:string;datasetUrl?:string;license?:string};
+export type Health={id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS'|'FACILITY_CATALOG';pagesFetched?:number;dataDate?:string;sourceUpdatedAt?:string;sourceContentHash?:string;sourceUrl?:string;datasetUrl?:string;license?:string;fallback?:{selected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'|'LAST_KNOWN_GOOD_COPY'|'NONE';secondaryStatus:'NOT_VERIFIED';reason:string|null}};
 export function computeStatus(events:Event[],health:Health[],region:string,now=new Date()){
  const ms=now.getTime();
  // Facilities are reference data, never evidence of the absence of hazards.
@@ -46,6 +46,7 @@ export function computeStatus(events:Event[],health:Health[],region:string,now=n
  else if(caution.length){hazardLevel='CAUTION';displayText='Obowiązują istotne ostrzeżenia';reasonCodes.push('OFFICIAL_CAUTION');}
  else if(stale.length){displayText='Nie potwierdzono zakończenia wcześniejszego zagrożenia';reasonCodes.push('LAST_KNOWN_WARNING');}
  else if(coverage==='COMPLETE_FOR_CONFIGURED_SCOPE'){hazardLevel='NO_ACTIVE_WARNINGS';displayText='Brak aktywnych ostrzeżeń w monitorowanych źródłach';}
+ if(events.some(e=>e.securityLevel&&e.validFrom&&e.validTo&&Date.parse(e.validFrom)<=ms&&Date.parse(e.validTo)>=ms&&(region==='PL'||e.regions.includes('PL')||e.regions.includes(region))))reasonCodes.push('ADMINISTRATIVE_READINESS_LEVELS');
  if(coverage!=='COMPLETE_FOR_CONFIGURED_SCOPE')reasonCodes.push('INCOMPLETE_SOURCE_COVERAGE');
  return {hazardLevel,displayText,coverageState:coverage,reasonCodes,supportingEventIds:[...critical,...caution].map(e=>e.id),lastKnownEventIds:stale.map(e=>e.id),evaluatedAt:now.toISOString(),validUntil:new Date(Math.min(ms+60000,...active.map(e=>Date.parse(e.validTo!)),...fresh.map(h=>Date.parse(h.lastSuccess!)+h.maxAgeSeconds*1000))).toISOString(),rulesetVersion:'1.1.0'};
 }
@@ -53,6 +54,7 @@ export function computeStatus(events:Event[],health:Health[],region:string,now=n
 export function sourceHealth(health:Health[],now=new Date()){
  return health.map(h=>{
   const stale=h.state==='HEALTHY'&&(!h.lastSuccess||Date.parse(h.lastSuccess)>now.getTime()+30000||now.getTime()-Date.parse(h.lastSuccess)>=h.maxAgeSeconds*1000||(h.sourceUpdatedAt!==undefined&&now.getTime()-Date.parse(h.sourceUpdatedAt)>14*86400000));
-  return {...h,healthStatus:stale?'STALE':h.state,state:stale?'STALE':h.state,lastSuccessfulSyncAt:h.lastSuccess,lastAttemptAt:h.lastAttempt??null,errorCode:h.errorCode??null};
+  const fallback=h.id==='SHELTERS'?{selected:h.lastSuccess?(stale||h.state!=='HEALTHY'?'LAST_KNOWN_GOOD_COPY':'PRIMARY_OFFICIAL_SOURCE'):'NONE',secondaryStatus:'NOT_VERIFIED',reason:stale||h.state!=='HEALTHY'?'Official secondary download redirects to primary; tabular copy has unverified completeness':null}:undefined;
+  return {...h,...(fallback?{fallback}:{}),healthStatus:stale?'STALE':h.state,state:stale?'STALE':h.state,lastSuccessfulSyncAt:h.lastSuccess,lastAttemptAt:h.lastAttempt??null,errorCode:h.errorCode??null};
  });
 }

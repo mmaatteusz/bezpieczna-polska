@@ -1,0 +1,73 @@
+{
+  "observedAt": "2026-09-20T11:45:58.954061+00:00",
+  "observations": [
+    {
+      "name": "catalog",
+      "url": "https://gdziesieukryc.pl/PS_XML/punkty_schronienia.xml",
+      "requestedProtocol": "--http1.1",
+      "curlResult": "200 1.1 0",
+      "exitCode": 0,
+      "headers": [
+        "HTTP/1.1 200 OK",
+        "HTTP/1.1 200 OK",
+        "Content-Type: application/xml; charset=utf-8",
+        "Server: cloudflare",
+        "via: 1.1 google",
+        "cf-cache-status: BYPASS",
+        "CF-RAY: a3e0958edc5af789-DFW"
+      ],
+      "title": "\n      <polish>Punkty schronienia w Polsce</polish>\n      <english>Shelter points in Poland</english>\n    ",
+      "bodyPreview": null
+    },
+    {
+      "name": "catalog",
+      "url": "https://gdziesieukryc.pl/PS_XML/punkty_schronienia.xml",
+      "requestedProtocol": "--http2",
+      "curlResult": "200 2 0",
+      "exitCode": 0,
+      "headers": [
+        "HTTP/1.1 200 OK",
+        "HTTP/2 200 ",
+        "content-type: application/xml; charset=utf-8",
+        "server: cloudflare",
+        "via: 1.1 google",
+        "cf-cache-status: BYPASS",
+        "cf-ray: a3e095cf2c12f789-DFW"
+      ],
+      "title": "\n      <polish>Punkty schronienia w Polsce</polish>\n      <english>Shelter points in Poland</english>\n    ",
+      "bodyPreview": null
+    },
+    {
+      "name": "dataset",
+      "url": "https://api.dane.gov.pl/1.4/datasets/28058",
+      "requestedProtocol": "--http2",
+      "curlResult": "200 2 0",
+      "exitCode": 0,
+      "headers": [
+        "HTTP/1.1 200 OK",
+        "HTTP/2 200 ",
+        "server: nginx",
+        "content-type: application/vnd.api+json; ext=bulk"
+      ],
+      "title": null,
+      "bodyPreview": null
+    },
+    {
+      "name": "mirror",
+      "url": "https://api.dane.gov.pl/resources/1393918,punkty-schronienia-dane-csv/file",
+      "requestedProtocol": "--http2",
+      "curlResult": "302 2 0",
+      "exitCode": 0,
+      "headers": [
+        "HTTP/1.1 200 OK",
+        "HTTP/2 302 ",
+        "server: nginx",
+        "content-type: application/json",
+        "location: https://gdziesieukryc.pl/PS_XML/punkty_schronienia.csv"
+      ],
+      "title": null,
+      "bodyPreview": null
+    }
+  ],
+  "note": "No automatic redirect following; no changed identity/network; at most two catalog GETs. Server-side policy cannot be proven without owner logs."
+}

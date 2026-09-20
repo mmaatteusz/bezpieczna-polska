@@ -3,13 +3,33 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bezpieczna_polska/main.dart';
 import 'package:bezpieczna_polska/model.dart';
 
+// Only the native surface is substituted. Data parsing/cache have independent tests.
+class TestMapPlatform extends MapLibrePlatform {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+  @override
+  Widget buildView(
+    Map<String, dynamic> creationParams,
+    OnPlatformViewCreatedCallback onPlatformViewCreated,
+    Set<Factory<OneSequenceGestureRecognizer>>? gestureRecognizers,
+  ) => const SizedBox(key: ValueKey('native-map-surface'));
+}
+
 void main() {
+  setUp(() {
+    final original = MapLibrePlatform.createInstance;
+    MapLibrePlatform.createInstance = () => TestMapPlatform();
+    addTearDown(() => MapLibrePlatform.createInstance = original);
+  });
   setUpAll(() async {
     for (final f in {
       'Roboto': 'Roboto-Regular.ttf',
@@ -24,7 +44,7 @@ void main() {
       await loader.load();
     }
   });
-  testWidgets('phone layout, offline map, navigation and deliberate SOS', (
+  testWidgets('phone layout, MapLibre surface, navigation and deliberate SOS', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -41,21 +61,14 @@ void main() {
       find.textContaining('Wymagana jest aktualizacja aplikacji'),
       findsOneWidget,
     );
-    // The setup button was intentionally removed. Keep the unchanged map
-    // golden and verify status cards structurally until a new baseline is reviewed.
     expect(find.text('STATUS POLSKI'), findsOneWidget);
     expect(find.textContaining('TWOJA OKOLICA'), findsOneWidget);
-    await tester.runAsync(() async {
-      await rootBundle.loadString('assets/europe.geojson');
-      await tester.tap(find.text('Mapa').last);
-      await tester.pump();
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-    });
+    await tester.tap(find.text('Mapa').last);
     await tester.pumpAndSettle();
-    await expectLater(
-      find.byType(MaterialApp),
-      matchesGoldenFile('goldens/map.png'),
-    );
+    expect(find.byType(MapLibreMap), findsOneWidget);
+    expect(find.byKey(const ValueKey('native-map-surface')), findsOneWidget);
+    expect(find.text('Punkty schronienia • wszystkie'), findsOneWidget);
+    // A native platform view cannot be captured by Linux widget golden tests.
     expect(tester.takeException(), isNull);
     await tester.tap(find.text('Schronienie').last);
     await tester.pumpAndSettle();

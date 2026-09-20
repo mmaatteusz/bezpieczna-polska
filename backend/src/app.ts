@@ -1,3 +1,4 @@
+import {mapLayers,mapQuery,shelterViewport} from './map-layers.js';
 import {securityLevelStatus} from './security-level.js';
 import Fastify from 'fastify';import rateLimit from '@fastify/rate-limit';import {timingSafeEqual} from 'node:crypto';import {z} from 'zod';
 import {computeStatus,eventSchema,REGIONS,sourceHealth} from './domain.js';import {Store} from './store.js';import {initializeSources,ingest} from './adapters.js';
@@ -11,6 +12,8 @@ export async function buildApp(store:Store,adminToken?:string){
   const {regionId}=regionQuery.parse(req.query),{events,health}=await store.snapshot(),now=new Date();
   return {schemaVersion:1,evaluatedAt:now.toISOString(),...securityLevelStatus(events,health,regionId,now),poland:{...computeStatus(events,health,'PL',now),...securityLevelStatus(events,health,'PL',now)},region:{id:regionId,name:REGIONS[regionId]??'Cała Polska',...computeStatus(events,health,regionId,now),...securityLevelStatus(events,health,regionId,now)},sourceHealth:sourceHealth(health,now)};
  });
+ app.get('/v1/map/layers',async()=>({schemaVersion:1,layers:mapLayers}));
+ app.get('/v1/map/shelters',async(req,reply)=>{const q=mapQuery.parse(req.query);if(store.db.kind!=='postgres')return reply.code(503).send({error:'POSTGIS_REQUIRED'});return shelterViewport(store,q);});
  app.get('/v1/sources',async()=>({sourceHealth:sourceHealth(await store.health())}));
  app.get('/readyz',async(_,reply)=>{
   await store.db.all('SELECT 1 AS ok');
@@ -35,7 +38,7 @@ export async function buildApp(store:Store,adminToken?:string){
   const {regionId}=regionQuery.parse(req.query),{events,health}=await store.snapshot(),now=new Date();
   const sources=sourceHealth(health,now);
   const shelterPage=await sheltersResponse(shelterQuery.parse({regionId}));
-  return {schemaVersion:1,serverTime:now.toISOString(),releaseStage:'ALPHA',regionId,status:computeStatus(events,health,regionId,now),nationalStatus:computeStatus(events,health,'PL',now),events:events.filter(e=>!e.securityLevel&&(regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId))),sources,sourceHealth:sources,shelters:shelterPage.items,shelterPage,...securityLevelStatus(events,health,regionId,now),nationalSecurityLevels:securityLevelStatus(events,health,'PL',now).securityLevels,ukraineAlerts:[],capabilities:{push:false,shelters:shelterPage.version!==null,ukraine:false,liveMap:false,rcb:true}};
+  return {schemaVersion:1,serverTime:now.toISOString(),releaseStage:'ALPHA',regionId,status:computeStatus(events,health,regionId,now),nationalStatus:computeStatus(events,health,'PL',now),events:events.filter(e=>!e.securityLevel&&(regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId))),sources,sourceHealth:sources,shelters:shelterPage.items,shelterPage,...securityLevelStatus(events,health,regionId,now),nationalSecurityLevels:securityLevelStatus(events,health,'PL',now).securityLevels,ukraineAlerts:[],capabilities:{push:false,shelters:shelterPage.version!==null,ukraine:false,liveMap:store.db.kind==='postgres',rcb:true}};
  });
  app.get('/v1/layers/events.geojson',async(req,reply)=>{
   const {regionId}=regionQuery.parse(req.query);

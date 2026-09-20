@@ -331,7 +331,8 @@ class DataRepository {
               (k) =>
                   k.startsWith('snapshot:') ||
                   k.startsWith('seen:') ||
-                  k.startsWith('shelters:'),
+                  k.startsWith('shelters:') ||
+                  k.startsWith('map:'),
             )
             .toList()) {
       await prefs.remove(k);

@@ -66,7 +66,7 @@ export class Store{
   if(expectedRevision!==undefined&&(previous?.revision??0)!==expectedRevision)throw new Error('REVISION_CONFLICT');
   if(actor==='adapter'&&previous?.reviewed)return false;
   // Formatting changes in upstream HTML must not generate user-facing alerts.
-  const hash=(v:Event)=>{const {retrievedAt,revision,sourceContentHash,...stable}=v;return createHash('sha256').update(JSON.stringify(stable)).digest('hex');};
+  const hash=(v:Event)=>{const {retrievedAt,revision,sourceContentHash,...stable}=v;if(stable.securityLevel){stable.securityLevel={...stable.securityLevel,isActive:false};if(stable.lifecycle!=='CANCELLED')stable.lifecycle='SCHEDULED';}return createHash('sha256').update(JSON.stringify(stable)).digest('hex');};
   if(previous&&hash(previous)===hash(e))return false;
   const next={...e,revision:(previous?.revision??0)+1};
   try{await this.db.run('INSERT INTO event_revisions(event_id,revision,payload,content_hash,actor,reason,recorded_at) VALUES(?,?,?,?,?,?,?)',[next.id,next.revision,JSON.stringify(next),hash(next),actor,reason,new Date().toISOString()]);}catch(err){if(err instanceof Error&&/unique|duplicate/i.test(err.message))throw new Error('REVISION_CONFLICT');throw err;}

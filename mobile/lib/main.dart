@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'model.dart';
-import 'safety_map.dart';
+import 'shelter_map.dart';
 import 'security_levels.dart';
 import 'shelter_panel.dart';
 
@@ -558,20 +558,20 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       onSelectionChanged: (v) => setState(() => ukraine = v.first),
     ),
     const SizedBox(height: 12),
-    SizedBox(
-      height: 350,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: SafetyMap(events: ukraine ? [] : events, ukraine: ukraine),
+    ShelterMap(
+      key: ValueKey(
+        'map:${widget.repository.api}:$region:$ukraine:${widget.repository.dataGeneration}',
       ),
+      repository: widget.repository,
+      region: region,
+      ukraine: ukraine,
+      openLink: openLink,
     ),
-    const SizedBox(height: 12),
-    const Text('Mapa poglądowa offline • Natural Earth, domena publiczna'),
     const SizedBox(height: 12),
     notice(
       ukraine
           ? 'Alarmy Ukrainy nie są podłączone. Brak oznaczeń nie oznacza braku alarmów.'
-          : 'Punkty pokazują zapisane komunikaty, również zakończone i o nieznanej ważności. Nie oznaczają aktywnego zagrożenia. Ostrzeżenia obszarowe znajdziesz na liście. Mapa nie służy do nawigacji.',
+          : 'Mapa pokazuje punkty schronienia wg PSP. Liczby grupują punkty w widocznym obszarze. Przybliż mapę, aby wybrać punkt. Mapa nie potwierdza bieżącej dostępności i nie służy do nawigacji. Offline dostępne są tylko zapisane obszary; podkład mapy wymaga internetu lub wcześniejszego cache.',
       Icons.info_outline,
     ),
     if (!ukraine) ...events.where((e) => e.hasPoint).take(20).map(eventCard),

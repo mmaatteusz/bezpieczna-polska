@@ -1,5 +1,5 @@
 {
-  "observedAt": "2026-09-20T11:48:36.019Z",
+  "observedAt": "2026-09-20T19:24:58.408Z",
   "database": "postgres",
   "health": {
     "id": "LEVELS",
@@ -7,14 +7,14 @@
     "url": "https://www.gov.pl/web/rcb/komunikaty",
     "enabled": true,
     "state": "HEALTHY",
-    "lastSuccess": "2026-09-20T11:48:35.909Z",
+    "lastSuccess": "2026-09-20T19:24:58.301Z",
     "lastFailure": null,
     "lastItemTime": "2026-08-26",
     "failureCount": 0,
-    "responseTime": 3261,
+    "responseTime": 4702,
     "maxAgeSeconds": 7200,
     "complete": false,
-    "lastAttempt": "2026-09-20T11:48:32.648Z",
+    "lastAttempt": "2026-09-20T19:24:53.599Z",
     "errorCode": null,
     "itemCount": 8,
     "adapterVersion": "security-levels-html/1.0.0",
@@ -23,7 +23,7 @@
   },
   "status": {
     "schemaVersion": 1,
-    "evaluatedAt": "2026-09-20T11:48:36.015Z",
+    "evaluatedAt": "2026-09-20T19:24:58.404Z",
     "securityLevels": [
       {
         "id": "LEVELS-PRM-2026-50",
@@ -87,7 +87,7 @@
       }
     ],
     "securityLevelsStatus": "AVAILABLE",
-    "securityLevelsLastSuccess": "2026-09-20T11:48:35.909Z",
+    "securityLevelsLastSuccess": "2026-09-20T19:24:58.301Z",
     "securityLevelsCoverage": "PUBLISHED_DECISIONS_ONLY",
     "securityLevelsNotice": "Stopnie dotyczą gotowości służb i administracji; same nie potwierdzają bezpośredniego zagrożenia. Wykaz opiera się na publikacjach RCB.",
     "poland": {
@@ -95,12 +95,13 @@
       "displayText": "Brak wystarczających aktualnych danych",
       "coverageState": "PARTIAL",
       "reasonCodes": [
+        "ADMINISTRATIVE_READINESS_LEVELS",
         "INCOMPLETE_SOURCE_COVERAGE"
       ],
       "supportingEventIds": [],
       "lastKnownEventIds": [],
-      "evaluatedAt": "2026-09-20T11:48:36.015Z",
-      "validUntil": "2026-09-20T11:49:36.015Z",
+      "evaluatedAt": "2026-09-20T19:24:58.404Z",
+      "validUntil": "2026-09-20T19:25:58.404Z",
       "rulesetVersion": "1.1.0",
       "securityLevels": [
         {
@@ -183,7 +184,7 @@
         }
       ],
       "securityLevelsStatus": "AVAILABLE",
-      "securityLevelsLastSuccess": "2026-09-20T11:48:35.909Z",
+      "securityLevelsLastSuccess": "2026-09-20T19:24:58.301Z",
       "securityLevelsCoverage": "PUBLISHED_DECISIONS_ONLY",
       "securityLevelsNotice": "Stopnie dotyczą gotowości służb i administracji; same nie potwierdzają bezpośredniego zagrożenia. Wykaz opiera się na publikacjach RCB."
     },
@@ -194,12 +195,13 @@
       "displayText": "Brak wystarczających aktualnych danych",
       "coverageState": "PARTIAL",
       "reasonCodes": [
+        "ADMINISTRATIVE_READINESS_LEVELS",
         "INCOMPLETE_SOURCE_COVERAGE"
       ],
       "supportingEventIds": [],
       "lastKnownEventIds": [],
-      "evaluatedAt": "2026-09-20T11:48:36.015Z",
-      "validUntil": "2026-09-20T11:49:36.015Z",
+      "evaluatedAt": "2026-09-20T19:24:58.404Z",
+      "validUntil": "2026-09-20T19:25:58.404Z",
       "rulesetVersion": "1.1.0",
       "securityLevels": [
         {
@@ -264,7 +266,7 @@
         }
       ],
       "securityLevelsStatus": "AVAILABLE",
-      "securityLevelsLastSuccess": "2026-09-20T11:48:35.909Z",
+      "securityLevelsLastSuccess": "2026-09-20T19:24:58.301Z",
       "securityLevelsCoverage": "PUBLISHED_DECISIONS_ONLY",
       "securityLevelsNotice": "Stopnie dotyczą gotowości służb i administracji; same nie potwierdzają bezpośredniego zagrożenia. Wykaz opiera się na publikacjach RCB."
     },
@@ -296,22 +298,22 @@
         "url": "https://www.gov.pl/web/rcb/komunikaty",
         "enabled": true,
         "state": "HEALTHY",
-        "lastSuccess": "2026-09-20T11:48:35.909Z",
+        "lastSuccess": "2026-09-20T19:24:58.301Z",
         "lastFailure": null,
         "lastItemTime": "2026-08-26",
         "failureCount": 0,
-        "responseTime": 3261,
+        "responseTime": 4702,
         "maxAgeSeconds": 7200,
         "complete": false,
-        "lastAttempt": "2026-09-20T11:48:32.648Z",
+        "lastAttempt": "2026-09-20T19:24:53.599Z",
         "errorCode": null,
         "itemCount": 8,
         "adapterVersion": "security-levels-html/1.0.0",
         "coverage": "RECENT_PUBLICATIONS",
         "pagesFetched": 17,
         "healthStatus": "HEALTHY",
-        "lastSuccessfulSyncAt": "2026-09-20T11:48:35.909Z",
-        "lastAttemptAt": "2026-09-20T11:48:32.648Z"
+        "lastSuccessfulSyncAt": "2026-09-20T19:24:58.301Z",
+        "lastAttemptAt": "2026-09-20T19:24:53.599Z"
       },
       {
         "id": "PAA",
@@ -414,6 +416,11 @@
         "errorCode": null,
         "itemCount": 0,
         "adapterVersion": null,
+        "fallback": {
+          "selected": "NONE",
+          "secondaryStatus": "NOT_VERIFIED",
+          "reason": "Official secondary download redirects to primary; tabular copy has unverified completeness"
+        },
         "healthStatus": "NOT_CONFIGURED",
         "lastSuccessfulSyncAt": null,
         "lastAttemptAt": null
