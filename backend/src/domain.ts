@@ -30,7 +30,7 @@ export const eventSchema=z.object({
  if(e.geometry&&e.latitude!==null&&(e.geometry.type!=='Point'||e.geometry.coordinates[0]!==e.longitude||e.geometry.coordinates[1]!==e.latitude))ctx.addIssue({code:'custom',message:'Conflicting event geometry'});
 }).transform(e=>({...e,geometry:e.geometry??(e.latitude!==null&&e.longitude!==null?{type:'Point' as const,coordinates:[e.longitude,e.latitude] as [number,number]}:null)}));
 export type Event=z.infer<typeof eventSchema>;
-export type Health={id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS'|'FACILITY_CATALOG';pagesFetched?:number;dataDate?:string;sourceUpdatedAt?:string;sourceContentHash?:string;sourceUrl?:string;datasetUrl?:string;license?:string;fallback?:{selected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'|'LAST_KNOWN_GOOD_COPY'|'NONE';secondaryStatus:'NOT_VERIFIED';reason:string|null}};
+export type Health={id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS'|'FACILITY_CATALOG';pagesFetched?:number;dataDate?:string;sourceUpdatedAt?:string;sourceContentHash?:string;sourceUrl?:string;datasetUrl?:string;license?:string;fallback?:{selected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'|'LAST_KNOWN_GOOD_COPY'|'NONE';secondaryStatus:'NOT_NEEDED'|'NOT_VERIFIED';reason:string|null}};
 export function computeStatus(events:Event[],health:Health[],region:string,now=new Date()){
  const ms=now.getTime();
  // Facilities are reference data, never evidence of the absence of hazards.
@@ -54,7 +54,7 @@ export function computeStatus(events:Event[],health:Health[],region:string,now=n
 export function sourceHealth(health:Health[],now=new Date()){
  return health.map(h=>{
   const stale=h.state==='HEALTHY'&&(!h.lastSuccess||Date.parse(h.lastSuccess)>now.getTime()+30000||now.getTime()-Date.parse(h.lastSuccess)>=h.maxAgeSeconds*1000||(h.sourceUpdatedAt!==undefined&&now.getTime()-Date.parse(h.sourceUpdatedAt)>14*86400000));
-  const fallback=h.id==='SHELTERS'?{selected:h.lastSuccess?(stale||h.state!=='HEALTHY'?'LAST_KNOWN_GOOD_COPY':'PRIMARY_OFFICIAL_SOURCE'):'NONE',secondaryStatus:'NOT_VERIFIED',reason:stale||h.state!=='HEALTHY'?'Official secondary download redirects to primary; tabular copy has unverified completeness':null}:undefined;
+  const fallback=h.id==='SHELTERS'?{selected:h.lastSuccess?(stale||h.state!=='HEALTHY'?'LAST_KNOWN_GOOD_COPY':'PRIMARY_OFFICIAL_SOURCE'):'NONE',secondaryStatus:'NOT_NEEDED' as const,reason:stale||h.state!=='HEALTHY'?'Synchronizacja oficjalnego mirroru dane.gov.pl nie jest świeża; używana jest ostatnia poprawna kopia.':null}:undefined;
   return {...h,...(fallback?{fallback}:{}),healthStatus:stale?'STALE':h.state,state:stale?'STALE':h.state,lastSuccessfulSyncAt:h.lastSuccess,lastAttemptAt:h.lastAttempt??null,errorCode:h.errorCode??null};
  });
 }
