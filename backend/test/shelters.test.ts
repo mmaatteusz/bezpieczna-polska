@@ -42,7 +42,7 @@ test('official dane.gov.pl resource and archive validate publisher, dates and st
  assert.throws(()=>parseShelterResource(resource,new Date('2026-08-10T12:00:00Z')),/FUTURE_DATE/);
  await assert.rejects(shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_DATASET?dataset.replace('"22"','"999"'):fetchText(u),fetchBytes}),/PUBLISHER/);
  let calls=0;await assert.rejects(shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_RESOURCE&&++calls===2?resource.replace('08:24:06','08:25:06'):fetchText(u),fetchBytes}),/CHANGED_DURING_SYNC/);
- const extracted=extractShelterCsv(zipCsv(csv));assert.equal(extracted.csv,csv);assert.equal(extracted.dataDate,'2026-03-10');
+ const extracted=extractShelterCsv(zipCsv(csv));assert.equal(extracted.csv,csv.replace(/^\uFEFF/,''));assert.equal(extracted.dataDate,'2026-03-10');
 });
 test('403 on current PSP CSV falls back to official dane.gov.pl archive and marks its older date',async()=>{
  const b=await shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_ORIGIN_CSV?Promise.reject(new Error('SOURCE_HTTP_403')):fetchText(u),fetchBytes});
