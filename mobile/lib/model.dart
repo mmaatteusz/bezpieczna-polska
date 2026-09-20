@@ -322,6 +322,31 @@ class DataRepository {
     return page;
   }
 
+  Future<List<Map<String, dynamic>>> eventTimeline(String id) async {
+    if (id.isEmpty || id.length > 150) throw const FormatException('Błędny identyfikator');
+    final u = validateApi(api);
+    final response = await client
+        .get(
+          u.replace(path: '${u.path}/v1/events/${Uri.encodeComponent(id)}/timeline'),
+          headers: {'Accept': 'application/json'},
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200 || response.bodyBytes.length > 2 * 1024 * 1024) {
+      throw const FormatException('Nie udało się pobrać historii');
+    }
+    final raw = jsonDecode(utf8.decode(response.bodyBytes));
+    if (raw is! List) throw const FormatException('Niepoprawna historia');
+    return raw.map((item) {
+      if (item is! Map || item['payload'] is! Map || item['recorded_at'] is! String || item['reason'] is! String) {
+        throw const FormatException('Niepoprawna historia');
+      }
+      final payload = Map<String, dynamic>.from(item['payload'] as Map);
+      SafetyEvent.parse(payload);
+      DateTime.parse(item['recorded_at'] as String);
+      return Map<String, dynamic>.from(item);
+    }).toList();
+  }
+
   Future<void> clearData() async {
     ++_generation;
     for (final k
