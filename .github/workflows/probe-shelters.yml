@@ -10,24 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Probe dane.gov.pl tabular pagination parameters
+      - name: Probe dane.gov.pl archived official resource package
         shell: bash
         run: |
           set -euo pipefail
+          url='https://api.dane.gov.pl/datasets/28058,punkty-schronienia-w-polsce/resources/files/download'
+          echo '===== HEAD / REDIRECT ====='
+          curl --silent --show-error --head --location --max-time 30 \
+            --user-agent 'BezpiecznaPolska/0.1 official-open-data-check' \
+            --write-out '\nFINAL_URL=%{url_effective}\nHTTP=%{http_code}\nTYPE=%{content_type}\n' \
+            "$url"
+          echo '===== FIRST 4 KiB ====='
+          curl --fail-with-body --silent --show-error --location --max-time 60 \
+            --range 0-4095 \
+            --user-agent 'BezpiecznaPolska/0.1 official-open-data-check' \
+            "$url" -o archive-prefix.bin
+          wc -c archive-prefix.bin
+          file archive-prefix.bin
           python3 - <<'PY'
-          import subprocess,json,urllib.parse,os
-          variants=[
-            {'page':'1','page_size':'500'},
-            {'page':'1','per_page':'500'},
-            {'page':'1','size':'500'},
-            {'page[number]':'1','page[size]':'500'},
-            {'page':'1','limit':'500'},
-          ]
-          base='https://api.dane.gov.pl/1.4/resources/1393918/data'
-          for params in variants:
-              url=base+'?'+urllib.parse.urlencode(params)
-              print('====',url)
-              subprocess.run(['curl','--fail-with-body','--silent','--show-error','--max-time','60','--header','Accept: application/json','--user-agent','BezpiecznaPolska/0.1 official-open-data-check',url,'-o','table.json'],check=True)
-              d=json.load(open('table.json'))
-              print('bytes',os.path.getsize('table.json'),'rows',len(d.get('data',[])),'params',d.get('meta',{}).get('params'),'links',d.get('links'))
+          b=open('archive-prefix.bin','rb').read(64)
+          print(repr(b))
           PY
