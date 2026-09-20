@@ -2,7 +2,7 @@ name: Verify security levels stage
 on:
   push:
     branches: [stage/security-levels]
-    paths: ['levels-stage.tar.gz', '.github/workflows/levels-stage.yml']
+    paths: ['levels-stage.tar.gz']
 permissions:
   contents: write
 concurrency:
@@ -11,7 +11,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     services:
       postgis:
         image: postgis/postgis:17-3.5
@@ -31,36 +31,19 @@ jobs:
       - uses: actions/checkout@v4
       - name: Apply reviewed source package
         run: |
-          echo '9088e7a7e909f2c3a28207b0482f6dffc90a7a4f16b1a199d1ba36c21ef7638b  levels-stage.tar.gz' | sha256sum -c -
+          echo '5e3bf294e3642ef324147d441236ec974c4952b45a206f5836b1516eeaa88e3f  levels-stage.tar.gz' | sha256sum -c -
           tar -xzf levels-stage.tar.gz
+          rm -f mobile/lib/safety_map.dart mobile/assets/europe.geojson mobile/test/goldens/map.png
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Bounded PSP HTTP diagnostics
-        run: |
-          python - <<'PYCODE'
-          """Bounded transparent HTTP diagnostics. No proxies, spoofing, retries or bypasses."""
-          import subprocess,json,pathlib,sys,tempfile,datetime,re
-          out=pathlib.Path(sys.argv[1] if len(sys.argv)>1 else 'docs/validation/psp-http');out.mkdir(parents=True,exist_ok=True)
-          urls=[('catalog','https://gdziesieukryc.pl/PS_XML/punkty_schronienia.xml'),('dataset','https://api.dane.gov.pl/1.4/datasets/28058'),('mirror','https://api.dane.gov.pl/resources/1393918,punkty-schronienia-dane-csv/file')]
-          results=[]
-          for name,url in urls:
-           for protocol in (['--http1.1','--http2'] if name=='catalog' else ['--http2']):
-            with tempfile.TemporaryDirectory() as tmp:
-             p=pathlib.Path(tmp);args=['curl','--silent','--show-error','--max-time','25','--max-filesize','1000000',protocol,'-A','BezpiecznaPolska-preview/0.1 (official data connectivity diagnosis)','-H','Accept: application/xml,application/json,text/csv,text/html','-D',str(p/'headers'),'-o',str(p/'body'),'-w','%{http_code} %{http_version} %{num_redirects}',url]
-             r=subprocess.run(args,capture_output=True,text=True)
-             headers=(p/'headers').read_text() if (p/'headers').exists() else ''
-             keep=[line for line in headers.splitlines() if re.match(r'^(HTTP/|server:|via:|cf-ray:|cf-cache-status:|retry-after:|location:|content-type:|x-ratelimit)',line,re.I)]
-             body=(p/'body').read_text(errors='replace') if (p/'body').exists() else ''
-             title=re.search(r'<title>(.*?)</title>',body,re.S|re.I)
-             item={'name':name,'url':url,'requestedProtocol':protocol,'curlResult':r.stdout,'exitCode':r.returncode,'headers':keep,'title':title.group(1) if title else None,'bodyPreview':re.sub('<[^>]+>',' ',body[:20000]).strip()[:2000] if 'text/html' in headers else None}
-             results.append(item);print(json.dumps(item,ensure_ascii=False),flush=True)
-          report={'observedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'observations':results,'note':'No automatic redirect following; no changed identity/network; at most two catalog GETs. Server-side policy cannot be proven without owner logs.'}
-          (out/'psp-http.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
-          PYCODE
       - name: Backend and PostGIS
         working-directory: backend
         run: npm ci && npm run build && npm test
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.4'
@@ -75,6 +58,9 @@ jobs:
           dart format lib test
           flutter analyze --no-pub
           flutter test --no-pub
+      - name: Android native MapLibre compilation
+        working-directory: mobile
+        run: chmod +x android/gradlew && flutter build apk --debug --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=false
       - name: Live security levels
         working-directory: backend
         run: node scripts/live-levels.mjs ../docs/validation/levels-ci
@@ -83,6 +69,6 @@ jobs:
           rm levels-stage.tar.gz
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add backend mobile docs levels-stage.tar.gz
-          git commit -m 'Integrate tested official RP security levels and offline status section'
+          git add backend mobile docs scripts .github levels-stage.tar.gz
+          git commit -m 'Add tested MapLibre viewport queries, clustering and bounded offline cache'
           git push origin HEAD:stage/security-levels
