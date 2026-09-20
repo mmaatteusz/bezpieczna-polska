@@ -81,6 +81,19 @@ test('shelter API provides filtered pages, source freshness, exact GeoJSON and h
 });
 
 
+test('nearest shelter endpoint returns distance-sorted official points',async()=>{
+ const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();const b=await batch();await ingest(store,[{...shelterAdapter,sync:async()=>b}]);const app=await buildApp(store);
+ try{
+  const first=b.shelters![0];
+  const response=await app.inject(`/v1/shelters/nearest?lat=${first.latitude}&lon=${first.longitude}&limit=3`);
+  assert.equal(response.statusCode,200);
+  const body=response.json();assert.equal(body.items.length,3);assert.equal(body.items[0].point.id,first.id);assert.equal(body.items[0].distanceMeters,0);
+  assert.ok(body.items[0].distanceMeters<=body.items[1].distanceMeters&&body.items[1].distanceMeters<=body.items[2].distanceMeters);
+  assert.equal((await app.inject('/v1/shelters/nearest?lat=999&lon=18')).statusCode,400);
+ }finally{await app.close();await db.close();}
+});
+
+
 test('HTTP denial keeps its status code for source diagnostics',async()=>{
  const original=globalThis.fetch;
  try{
