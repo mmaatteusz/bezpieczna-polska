@@ -152,7 +152,7 @@ class _ShelterMapState extends State<ShelterMap> {
         online = true;
         message = '';
       });
-    } catch (_) {
+    } catch (failure) {
       if (!mounted || current != ticket) return;
       final cached = request == null ? null : provider.cached(request);
       if (cached != null) await c.setGeoJsonSource('shelters', cached.data);
@@ -161,8 +161,8 @@ class _ShelterMapState extends State<ShelterMap> {
         viewport = cached;
         online = false;
         message = cached == null
-            ? 'Brak danych dla tego obszaru. Spróbuj ponownie.'
-            : '';
+            ? apiFailureMessage(failure)
+            : 'Pokazano zapisaną kopię. ${apiFailureMessage(failure)}';
       });
     } finally {
       if (mounted && current == ticket) setState(() => loading = false);
