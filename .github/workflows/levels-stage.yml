@@ -2,7 +2,10 @@ name: Verify security levels stage
 on:
   push:
     branches: [stage/security-levels]
-    paths: ['levels-stage.tar.gz']
+    paths:
+      - 'levels-stage.tar.gz'
+      - '.github/workflows/levels-stage.yml'
+  workflow_dispatch:
 permissions:
   contents: write
 concurrency:
@@ -60,7 +63,21 @@ jobs:
           flutter test --no-pub
       - name: Android native MapLibre compilation
         working-directory: mobile
-        run: chmod +x android/gradlew && flutter build apk --debug --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=false
+        run: flutter build apk --debug --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=true
+      - name: Prepare preview APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.3-preview-arm64.apk
+          sha256sum output/*.apk > output/SHA256SUMS.txt
+      - name: Upload preview APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bezpieczna_Polska_0.1.0-alpha.3-preview-arm64
+          path: output/
+          if-no-files-found: error
+          retention-days: 30
       - name: Live security levels
         working-directory: backend
         run: node scripts/live-levels.mjs ../docs/validation/levels-ci
@@ -70,5 +87,9 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add backend mobile docs scripts README.md levels-stage.tar.gz
-          git commit -m 'Add tested MapLibre viewport queries, clustering and bounded offline cache'
-          git push origin HEAD:stage/security-levels
+          if git diff --cached --quiet; then
+            echo 'No verified source changes to commit.'
+          else
+            git commit -m 'Refresh tested MapLibre and security-levels implementation'
+            git push origin HEAD:stage/security-levels
+          fi
