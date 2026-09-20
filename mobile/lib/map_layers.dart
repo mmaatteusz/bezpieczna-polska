@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'model.dart';
 import 'shelters.dart';
 
@@ -129,22 +131,48 @@ class ShelterMapProvider implements MapLayerProvider {
   @override
   Future<MapViewport> fetch(MapRequest q) async {
     final key = cacheKey(q), generation = repository.dataGeneration;
-    final uri = DataRepository.validateApi(repository.api);
-    final response = await repository.client
-        .get(
-          uri.replace(
-            path: '${uri.path}/v1/map/shelters',
-            queryParameters: q.query,
-          ),
-          headers: {'Accept': 'application/geo+json,application/json'},
-        )
-        .timeout(const Duration(seconds: 15));
+    Uri uri;
+    try {
+      uri = DataRepository.validateApi(repository.api);
+    } catch (_) {
+      throw const ApiFailure(ApiFailureKind.notConfigured);
+    }
+    late http.Response response;
+    try {
+      response = await repository.client
+          .get(
+            uri.replace(
+              path: '${uri.path}/v1/map/shelters',
+              queryParameters: q.query,
+            ),
+            headers: {'Accept': 'application/geo+json,application/json'},
+          )
+          .timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      throw const ApiFailure(ApiFailureKind.timeout);
+    } on http.ClientException {
+      throw const ApiFailure(ApiFailureKind.network);
+    } catch (error) {
+      if (error is ApiFailure) rethrow;
+      throw const ApiFailure(ApiFailureKind.network);
+    }
+    if (response.statusCode == 429) {
+      throw const ApiFailure(ApiFailureKind.rateLimited, 429);
+    }
+    if (response.statusCode >= 500) {
+      throw ApiFailure(ApiFailureKind.server, response.statusCode);
+    }
     if (response.statusCode != 200 ||
         response.bodyBytes.length > 2 * 1024 * 1024) {
-      throw const FormatException('Nie udało się pobrać mapy');
+      throw ApiFailure(ApiFailureKind.invalidResponse, response.statusCode);
     }
-    final raw = utf8.decode(response.bodyBytes),
-        viewport = MapViewport.parse(raw, q);
+    final raw = utf8.decode(response.bodyBytes);
+    late MapViewport viewport;
+    try {
+      viewport = MapViewport.parse(raw, q);
+    } catch (_) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
     if (generation != repository.dataGeneration || key != cacheKey(q)) {
       throw StateError('Konfiguracja zmieniona');
     }
