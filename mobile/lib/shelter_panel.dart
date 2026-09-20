@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'model.dart';
@@ -153,10 +154,19 @@ class _ShelterPanelState extends State<ShelterPanel> {
       if (mounted) {
         setState(() {
           nearest = result;
+          final state = result.health?['healthStatus'] ?? result.health?['state'];
           nearestMessage = result.items.isEmpty
               ? 'Brak punktów schronienia w aktualnym pakiecie danych.'
-              : null;
+              : state == 'STALE'
+                  ? 'Uwaga: najbliższe punkty wyliczono z zapisanej, nieaktualnej kopii wykazu.'
+                  : state == 'BROKEN' || state == 'DEGRADED'
+                      ? 'Uwaga: aktualność wykazu nie jest obecnie w pełni potwierdzona.'
+                      : null;
         });
+      }
+    } on TimeoutException {
+      if (mounted) {
+        setState(() => nearestMessage = 'Nie udało się ustalić lokalizacji w wymaganym czasie. Spróbuj ponownie na zewnątrz lub wyszukaj adres ręcznie.');
       }
     } catch (error) {
       if (mounted) {
