@@ -82,6 +82,7 @@ export const shelterAdapter:SourceAdapter={id:'SHELTERS',version:'dane-gov-pl-ar
   const catalog=JSON.parse(await fetchText(SHELTER_DATASET));
   if(catalog.data?.id!=='28058'||catalog.data?.relationships?.institution?.data?.id!=='22'||catalog.data?.attributes?.license_name!=='CC BY 4.0'||catalog.data?.relationships?.resources?.meta?.count!==1||catalog.data?.attributes?.archived_resources_files_url!==SHELTER_ARCHIVE)throw new Error('SHELTER_PUBLISHER_CONTRACT_CHANGED');
   const before=parseShelterResource(await fetchText(SHELTER_RESOURCE),now);
+  if(!fetchBytes)throw new Error('SHELTER_BINARY_FETCH_UNAVAILABLE');
   const archive=await fetchBytes(SHELTER_ARCHIVE),csv=extractShelterCsv(archive),shelters=parseShelterCsv(csv,before);
   const after=parseShelterResource(await fetchText(SHELTER_RESOURCE),now);
   if(JSON.stringify(before)!==JSON.stringify(after))throw new Error('SHELTER_EXPORT_CHANGED_DURING_SYNC');
