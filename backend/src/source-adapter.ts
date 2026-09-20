@@ -1,7 +1,7 @@
 import type {Event} from './domain.js';
 import type {Shelter} from './shelter.js';
 
-export type SourceContext = {now: Date; fetchText: (url: string) => Promise<string>};
+export type SourceContext = {now: Date; fetchText: (url: string) => Promise<string>; fetchBytes: (url: string) => Promise<Uint8Array>};
 export type SourceBatch = {
   events: Event[];
   shelters?: Shelter[];
