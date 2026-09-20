@@ -27,6 +27,12 @@ export async function buildApp(store:Store,adminToken?:string){
   return {schemaVersion:1,serverTime:new Date().toISOString(),...result,health:result.health?sourceHealth([result.health])[0]:null};
  };
  app.get('/v1/shelters',async req=>sheltersResponse(shelterQuery.parse(req.query)));
+ app.get('/v1/shelters/nearest',async req=>{
+  const q=z.object({lat:z.coerce.number().min(-90).max(90),lon:z.coerce.number().min(-180).max(180),limit:z.coerce.number().int().min(1).max(10).default(3)}).parse(req.query);
+  const items=await store.nearestShelters(q.lat,q.lon,q.limit);
+  const health=(await store.health()).find(h=>h.id==='SHELTERS');
+  return {schemaVersion:1,serverTime:new Date().toISOString(),query:{latitude:q.lat,longitude:q.lon},items,health:health?sourceHealth([health])[0]:null};
+ });
  app.get('/v1/layers/shelters.geojson',async(req,reply)=>{
   const raw=z.object({bbox:z.string().optional()}).parse(req.query).bbox;
   const bbox=raw===undefined?undefined:z.tuple([z.number().min(-180).max(180),z.number().min(-90).max(90),z.number().min(-180).max(180),z.number().min(-90).max(90)]).refine(b=>b[0]<=b[2]&&b[1]<=b[3]).parse(raw.split(',').map(Number));
