@@ -1,0 +1,28 @@
+name: Probe official shelter data
+on:
+  push:
+    branches: [stage/quality-pass]
+    paths: ['.github/workflows/probe-shelters.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe dane.gov.pl official endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in \
+            'https://api.dane.gov.pl/1.4/datasets/28058/resources?page_size=15' \
+            'https://api.dane.gov.pl/1.4/resources/1393918' \
+            'https://api.dane.gov.pl/1.4/resources/1393918/data?page_size=1'
+          do
+            echo "===== $url ====="
+            curl --fail-with-body --silent --show-error --location --max-time 30 \
+              --header 'Accept: application/json' \
+              --header 'User-Agent: BezpiecznaPolska/0.1 official-open-data-check' \
+              "$url" | head -c 12000
+            echo
+          done
