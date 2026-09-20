@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {securityLevelSchema} from './security-level.js';
 export const REGIONS:Record<string,string>={'02':'Dolnośląskie','04':'Kujawsko-pomorskie','06':'Lubelskie','08':'Lubuskie','10':'Łódzkie','12':'Małopolskie','14':'Mazowieckie','16':'Opolskie','18':'Podkarpackie','20':'Podlaskie','22':'Pomorskie','24':'Śląskie','26':'Świętokrzyskie','28':'Warmińsko-mazurskie','30':'Wielkopolskie','32':'Zachodniopomorskie'};
 const date=z.iso.datetime({offset:true});
 const position=z.tuple([z.number().min(-180).max(180),z.number().min(-90).max(90)]);
@@ -9,6 +10,7 @@ export const geometrySchema=z.discriminatedUnion('type',[
  z.object({type:z.literal('MultiPolygon'),coordinates:z.array(z.array(ring).min(1)).min(1)})
 ]);
 export const eventSchema=z.object({
+ securityLevel:securityLevelSchema.optional(),
  id:z.string().min(1).max(150),title:z.string().min(1).max(350),description:z.string().max(40000),
  eventType:z.enum(['AIR','BORDER','CYBER','RADIATION','FIRE','EVACUATION','OUTAGE','WEATHER','OTHER']),
  severity:z.enum(['CRITICAL','HIGH','NORMAL','INFORMATIONAL']),
@@ -51,6 +53,6 @@ export function computeStatus(events:Event[],health:Health[],region:string,now=n
 export function sourceHealth(health:Health[],now=new Date()){
  return health.map(h=>{
   const stale=h.state==='HEALTHY'&&(!h.lastSuccess||Date.parse(h.lastSuccess)>now.getTime()+30000||now.getTime()-Date.parse(h.lastSuccess)>=h.maxAgeSeconds*1000||(h.sourceUpdatedAt!==undefined&&now.getTime()-Date.parse(h.sourceUpdatedAt)>14*86400000));
-  return {...h,state:stale?'STALE':h.state,lastSuccessfulSyncAt:h.lastSuccess,lastAttemptAt:h.lastAttempt??null,errorCode:h.errorCode??null};
+  return {...h,healthStatus:stale?'STALE':h.state,state:stale?'STALE':h.state,lastSuccessfulSyncAt:h.lastSuccess,lastAttemptAt:h.lastAttempt??null,errorCode:h.errorCode??null};
  });
 }

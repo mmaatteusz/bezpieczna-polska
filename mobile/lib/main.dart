@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'model.dart';
 import 'safety_map.dart';
+import 'security_levels.dart';
 import 'shelter_panel.dart';
 
 Future<void> main() async {
@@ -387,6 +388,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     return [
       statusCard(true),
       statusCard(false),
+      SecurityLevelsPanel(
+        snapshot: snapshot,
+        online: online,
+        openSource: openLink,
+      ),
       if (widget.repository.api.isEmpty)
         notice(
           'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',

@@ -22,7 +22,7 @@ export interface SourceAdapter {
 export const SOURCES = [
   {id: 'RCB', name: 'Rządowe Centrum Bezpieczeństwa', url: 'https://www.gov.pl/web/rcb/komunikaty', enabled: true},
   {id: 'SHELTERS', name: 'Punkty schronienia PSP / dane.gov.pl', url: 'https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce', enabled: true},
-  {id: 'LEVELS', name: 'Stopnie alarmowe RP', url: 'https://www.gov.pl/web/rcb', enabled: false},
+  {id: 'LEVELS', name: 'Stopnie alarmowe RP', url: 'https://www.gov.pl/web/rcb/komunikaty', enabled: true},
   {id: 'RSO', name: 'Regionalny System Ostrzegania / WCZK', url: 'https://komunikaty.tvp.pl/', enabled: false},
   {id: 'PAA', name: 'Państwowa Agencja Atomistyki', url: 'https://www.gov.pl/web/paa', enabled: false},
   {id: 'CERT', name: 'CERT Polska', url: 'https://cert.pl/', enabled: false},

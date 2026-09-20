@@ -1,0 +1,65 @@
+{
+  "observedAt": "2026-09-20T11:47:18.087601+00:00",
+  "observations": [
+    {
+      "name": "catalog",
+      "url": "https://gdziesieukryc.pl/PS_XML/punkty_schronienia.xml",
+      "requestedProtocol": "--http1.1",
+      "curlResult": "403 1.1 0",
+      "exitCode": 0,
+      "headers": [
+        "HTTP/1.1 403 Forbidden",
+        "Content-Type: text/html; charset=UTF-8",
+        "Server: cloudflare",
+        "CF-RAY: a3e098286c5055b7-YYZ"
+      ],
+      "title": "Dostęp zablokowany - Safe Place Admin",
+      "bodyPreview": "Dostęp zablokowany - Safe Place Admin \n   \n   \n   /* latin-ext */\n@font-face {\n  font-family: 'Lato';\n  font-style: normal;\n  font-weight: 400;\n  font-display: swap;\n  src: url(data:font/woff2;base64,d09GMgABAAAAAAusAA0AAAAAFFwAAAtZAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAG4EuHCgGYACBJBEMCphElEILYAABNgIkA4E2BCAFhRgHgigbFxEoHgPuxiQnVajkJM+vCzzBePj//b7t82QG9aQaoXlIppYs4qGoSqi/sbg/z2/zz6V9j2oLF4qRa1QmExttEIuwchsWsIDtr2DRzkW6qiYW/aMq/UMI/v/9WnXeF0xDUgsVQprQCYU43PfPY+5c1DwkCxVvNCYhWk2yhaKRxtkmHuqGUDgb0j7MWaRqjGWMUmfy+Zz8kgKoJYEaYVCmpgykc83dncBEAqQkIKQRyOY0TCVp40RgCVIiAKTVJGR1r1KmwGjhPSIU2eHDhAgVZjgibrqBl14QjKBulKpxkiPEDjGTeRNJmgsJSc0IKfpgbPWeQVazKpeB2Cuze15w0VIgg3IlmQ8QLcC6+WXoj19qEAksMqGLnEQkEB0AvdzY0lVFGkgDrVtTcv+zoaXUE2iPDGAHIK+UgwBaI4Cc5dgkJeSzSZZSUAYZsLrvvzmoSILUqAqZ0Qy0nHAzu529bi37/3/aa0lIjFSoEplQP+27FamSPk4die7ff16XnPtvx38r/jX+a/hX8w4DpDOFes1QU1Lfyb3YeF07q3zhBsUz4COwRUXOHrrXAkaCxdRx6ISgEVlO4WTB+IdCHdkkUrxIKWBGi1PZJExOU7MjUgO4nBFcPobJ+Hw6j2/f+9Dvx91erxccby/dO3dOXIbpNh69+PDiUeT0Ya5bp3ZhLqnV+RR3n969HxxHd53CXE9sHCu7lGNn290CrceDuXy+F8j50v8x7vZqy1YOYa49Z+74fJjL4/GA453Xi7v9fv/EnXb3dol17VZExa2Ya4fUNrgBKLXsuJ036UIS490VX6BAVz6wM4u9P1cOcvq6ROTEYNU/SB8JI9tw925Jy/7DknVH49sG9uK4HRyd+znADWe0nY3sK1dirjN3tlX78CzulpwhWjKjGKdmacHaiyki1SI7uWVlJPsaGat7h6a4tVG5xOb0fauHR9UrYu6t7Y71/G4WMMO5SdTHRCw7suUa/cohDCtfdxa3ulcJtLvE4LnfotC1R1rJ1K85hWF23IoNnTq3DxzPcPfOnQM2luGIbr1HzLk3EZ9jraNXH0bvkOrOeY5G5S/TyeM5l7dHmHS8hObtsPhpNPKoMsup87d30pxp5wAzY40GF5M7HhYnFV9RyUGM6VVY9s985Ck7hdGFmlgv8Uz2OnC0NxFYwC7LkDOinIzbSeXg2MsvI2F1RV+1x4P5Atztf5p2Mup27EEIL29gqY4uzyNPWRkD7FGX7QLtKsHAgOgtdMD1mN2x79wpUqgzFw4g58GLZ6edPr9f7VgGrN6L250XN544ppJodoLe7y93nweok1nnqFTYiXT7xw5i0h5p71y795sDWXbTkGzCwM7OUKdgul0NiIdNPhDWUM+cOelBBey4iY3DsifKK8ePCy68U/nriLHsZhvenbj8TtO/f8pHZSdPiJzScxiXHKeMIse/TRBOvk8Tiaj3FwoT3gh+GXoA5H0PBHVA7l4HuSFn38srKW/4a8rhdX+3Hr5kZmzd2sw4f5nWunnjJ2Z9qVLfEsRhXFljzAk0c9MsFwoWLNM8njV3dJ0fLT2e15LWwNSF5iYUM4HTYVC68OdRn4yPZIt+3wPkfbWi7z+M8owTh/L/vfmfqh7G3z29WMnmXFbLTWEZqrphk5LDiuJTFAWmcTa5I9o21lSqsFYYJg7ZrEcypro/qS/Sjquy"
+    },
+    {
+      "name": "catalog",
+      "url": "https://gdziesieukryc.pl/PS_XML/punkty_schronienia.xml",
+      "requestedProtocol": "--http2",
+      "curlResult": "403 2 0",
+      "exitCode": 0,
+      "headers": [
+        "HTTP/2 403 ",
+        "content-type: text/html; charset=UTF-8",
+        "server: cloudflare",
+        "cf-ray: a3e09829a9cca6fa-BOS"
+      ],
+      "title": "Dostęp zablokowany - Safe Place Admin",
+      "bodyPreview": "Dostęp zablokowany - Safe Place Admin \n   \n   \n   /* latin-ext */\n@font-face {\n  font-family: 'Lato';\n  font-style: normal;\n  font-weight: 400;\n  font-display: swap;\n  src: url(data:font/woff2;base64,d09GMgABAAAAAAusAA0AAAAAFFwAAAtZAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAG4EuHCgGYACBJBEMCphElEILYAABNgIkA4E2BCAFhRgHgigbFxEoHgPuxiQnVajkJM+vCzzBePj//b7t82QG9aQaoXlIppYs4qGoSqi/sbg/z2/zz6V9j2oLF4qRa1QmExttEIuwchsWsIDtr2DRzkW6qiYW/aMq/UMI/v/9WnXeF0xDUgsVQprQCYU43PfPY+5c1DwkCxVvNCYhWk2yhaKRxtkmHuqGUDgb0j7MWaRqjGWMUmfy+Zz8kgKoJYEaYVCmpgykc83dncBEAqQkIKQRyOY0TCVp40RgCVIiAKTVJGR1r1KmwGjhPSIU2eHDhAgVZjgibrqBl14QjKBulKpxkiPEDjGTeRNJmgsJSc0IKfpgbPWeQVazKpeB2Cuze15w0VIgg3IlmQ8QLcC6+WXoj19qEAksMqGLnEQkEB0AvdzY0lVFGkgDrVtTcv+zoaXUE2iPDGAHIK+UgwBaI4Cc5dgkJeSzSZZSUAYZsLrvvzmoSILUqAqZ0Qy0nHAzu529bi37/3/aa0lIjFSoEplQP+27FamSPk4die7ff16XnPtvx38r/jX+a/hX8w4DpDOFes1QU1Lfyb3YeF07q3zhBsUz4COwRUXOHrrXAkaCxdRx6ISgEVlO4WTB+IdCHdkkUrxIKWBGi1PZJExOU7MjUgO4nBFcPobJ+Hw6j2/f+9Dvx91erxccby/dO3dOXIbpNh69+PDiUeT0Ya5bp3ZhLqnV+RR3n969HxxHd53CXE9sHCu7lGNn290CrceDuXy+F8j50v8x7vZqy1YOYa49Z+74fJjL4/GA453Xi7v9fv/EnXb3dol17VZExa2Ya4fUNrgBKLXsuJ036UIS490VX6BAVz6wM4u9P1cOcvq6ROTEYNU/SB8JI9tw925Jy/7DknVH49sG9uK4HRyd+znADWe0nY3sK1dirjN3tlX78CzulpwhWjKjGKdmacHaiyki1SI7uWVlJPsaGat7h6a4tVG5xOb0fauHR9UrYu6t7Y71/G4WMMO5SdTHRCw7suUa/cohDCtfdxa3ulcJtLvE4LnfotC1R1rJ1K85hWF23IoNnTq3DxzPcPfOnQM2luGIbr1HzLk3EZ9jraNXH0bvkOrOeY5G5S/TyeM5l7dHmHS8hObtsPhpNPKoMsup87d30pxp5wAzY40GF5M7HhYnFV9RyUGM6VVY9s985Ck7hdGFmlgv8Uz2OnC0NxFYwC7LkDOinIzbSeXg2MsvI2F1RV+1x4P5Atztf5p2Mup27EEIL29gqY4uzyNPWRkD7FGX7QLtKsHAgOgtdMD1mN2x79wpUqgzFw4g58GLZ6edPr9f7VgGrN6L250XN544ppJodoLe7y93nweok1nnqFTYiXT7xw5i0h5p71y795sDWXbTkGzCwM7OUKdgul0NiIdNPhDWUM+cOelBBey4iY3DsifKK8ePCy68U/nriLHsZhvenbj8TtO/f8pHZSdPiJzScxiXHKeMIse/TRBOvk8Tiaj3FwoT3gh+GXoA5H0PBHVA7l4HuSFn38srKW/4a8rhdX+3Hr5kZmzd2sw4f5nWunnjJ2Z9qVLfEsRhXFljzAk0c9MsFwoWLNM8njV3dJ0fLT2e15LWwNSF5iYUM4HTYVC68OdRn4yPZIt+3wPkfbWi7z+M8owTh/L/vfmfqh7G3z29WMnmXFbLTWEZqrphk5LDiuJTFAWmcTa5I9o21lSqsFYYJg7ZrEcypro/qS/Sjquy"
+    },
+    {
+      "name": "dataset",
+      "url": "https://api.dane.gov.pl/1.4/datasets/28058",
+      "requestedProtocol": "--http2",
+      "curlResult": "200 1.1 0",
+      "exitCode": 0,
+      "headers": [
+        "HTTP/1.1 200 OK",
+        "Server: nginx",
+        "Content-Type: application/vnd.api+json; ext=bulk"
+      ],
+      "title": null,
+      "bodyPreview": null
+    },
+    {
+      "name": "mirror",
+      "url": "https://api.dane.gov.pl/resources/1393918,punkty-schronienia-dane-csv/file",
+      "requestedProtocol": "--http2",
+      "curlResult": "302 1.1 0",
+      "exitCode": 0,
+      "headers": [
+        "HTTP/1.1 302 Found",
+        "Server: nginx",
+        "Content-Type: application/json",
+        "location: https://gdziesieukryc.pl/PS_XML/punkty_schronienia.csv"
+      ],
+      "title": null,
+      "bodyPreview": null
+    }
+  ],
+  "note": "No automatic redirect following; no changed identity/network; at most two catalog GETs. Server-side policy cannot be proven without owner logs."
+}

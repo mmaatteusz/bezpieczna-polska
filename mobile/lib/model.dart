@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'shelters.dart';
+import 'security_levels.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -134,6 +135,12 @@ class Snapshot {
         throw const FormatException('Niepoprawny stan źródła');
       }
       if (s['lastSuccess'] != null) DateTime.parse(s['lastSuccess'] as String);
+    }
+    for (final raw in m['securityLevels'] as List? ?? []) {
+      SecurityLevel.parse(raw);
+    }
+    for (final raw in m['nationalSecurityLevels'] as List? ?? []) {
+      SecurityLevel.parse(raw);
     }
     if (m['shelterPage'] != null) {
       final page = ShelterPage.parse(m['shelterPage']);
