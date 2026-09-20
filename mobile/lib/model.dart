@@ -1,9 +1,48 @@
+import 'dart:async';
 import 'dart:convert';
 import 'shelters.dart';
 import 'security_levels.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+enum ApiFailureKind {
+  notConfigured,
+  timeout,
+  network,
+  server,
+  rateLimited,
+  invalidResponse,
+}
+
+class ApiFailure implements Exception {
+  final ApiFailureKind kind;
+  final int? statusCode;
+  const ApiFailure(this.kind, [this.statusCode]);
+}
+
+String apiFailureMessage(Object error) {
+  if (error is ApiFailure) {
+    return switch (error.kind) {
+      ApiFailureKind.notConfigured =>
+        'Aplikacja nie ma skonfigurowanego połączenia z backendem.',
+      ApiFailureKind.timeout =>
+        'Serwer nie odpowiedział na czas. Zachowano ostatnią poprawną kopię danych.',
+      ApiFailureKind.network =>
+        'Brak połączenia z serwerem. Sprawdź internet; zapisane dane pozostają dostępne.',
+      ApiFailureKind.rateLimited =>
+        'Serwer chwilowo ogranicza liczbę zapytań. Spróbuj ponownie za moment.',
+      ApiFailureKind.server =>
+        'Usługa jest chwilowo niedostępna. Zachowano ostatnią poprawną kopię danych.',
+      ApiFailureKind.invalidResponse =>
+        'Serwer zwrócił niepoprawne dane. Nie zastąpiono ostatniej poprawnej kopii.',
+    };
+  }
+  if (error is ShelterVersionChanged) {
+    return 'Zbiór schronień został zaktualizowany. Odświeżono listę od początku.';
+  }
+  return 'Nie udało się pobrać danych. Zachowano ostatnią poprawną kopię.';
+}
 
 const regions = <String, String>{
   'PL': 'Cała Polska',
@@ -197,6 +236,40 @@ class DataRepository {
           .replaceAll(RegExp(r'/+$'), '');
   String get region => prefs.getString('region') ?? '04';
   bool get dark => prefs.getBool('dark') ?? true;
+  Uri _apiUri() {
+    if (api.isEmpty) throw const ApiFailure(ApiFailureKind.notConfigured);
+    try {
+      return validateApi(api);
+    } catch (_) {
+      throw const ApiFailure(ApiFailureKind.notConfigured);
+    }
+  }
+
+  Future<http.Response> _get(Uri uri, {Duration timeout = const Duration(seconds: 15)}) async {
+    try {
+      return await client
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(timeout);
+    } on TimeoutException {
+      throw const ApiFailure(ApiFailureKind.timeout);
+    } on http.ClientException {
+      throw const ApiFailure(ApiFailureKind.network);
+    } catch (error) {
+      if (error is ApiFailure) rethrow;
+      throw const ApiFailure(ApiFailureKind.network);
+    }
+  }
+
+  Never _responseFailure(http.Response response) {
+    if (response.statusCode == 429) {
+      throw const ApiFailure(ApiFailureKind.rateLimited, 429);
+    }
+    if (response.statusCode >= 500) {
+      throw ApiFailure(ApiFailureKind.server, response.statusCode);
+    }
+    throw ApiFailure(ApiFailureKind.invalidResponse, response.statusCode);
+  }
+
   static Uri validateApi(String value) {
     final u = Uri.tryParse(value.trim());
     if (u == null ||
@@ -241,21 +314,23 @@ class DataRepository {
 
   Future<Snapshot> refresh(String r) async {
     final ticket = _generation, key = cacheKey(r);
-    final u = validateApi(api);
-    final response = await client
-        .get(
-          u.replace(
-            path: '${u.path}/v1/snapshot',
-            queryParameters: {'regionId': r},
-          ),
-          headers: {'Accept': 'application/json'},
-        )
-        .timeout(const Duration(seconds: 15));
-    if (response.statusCode != 200 ||
-        response.bodyBytes.length > 4 * 1024 * 1024) {
-      throw const FormatException('Błąd odpowiedzi serwera');
+    final u = _apiUri();
+    final response = await _get(
+      u.replace(
+        path: '${u.path}/v1/snapshot',
+        queryParameters: {'regionId': r},
+      ),
+    );
+    if (response.statusCode != 200) _responseFailure(response);
+    if (response.bodyBytes.length > 4 * 1024 * 1024) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
-    final s = Snapshot.parse(utf8.decode(response.bodyBytes));
+    Snapshot s;
+    try {
+      s = Snapshot.parse(utf8.decode(response.bodyBytes));
+    } catch (_) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
     if (s.region != r) throw const FormatException('Błędny region');
     if (ticket != _generation) {
       throw StateError(
@@ -285,31 +360,33 @@ class DataRepository {
     String? version,
   }) async {
     final ticket = _generation, key = shelterCacheKey(r);
-    final u = validateApi(api);
+    final u = _apiUri();
     final q = query.trim();
-    final response = await client
-        .get(
-          u.replace(
-            path: '${u.path}/v1/shelters',
-            queryParameters: {
-              'regionId': r,
-              'q': q,
-              'offset': '$offset',
-              'limit': '50',
-              'version': ?version,
-            },
-          ),
-          headers: {'Accept': 'application/json'},
-        )
-        .timeout(const Duration(seconds: 15));
+    final response = await _get(
+      u.replace(
+        path: '${u.path}/v1/shelters',
+        queryParameters: {
+          'regionId': r,
+          'q': q,
+          'offset': '$offset',
+          'limit': '50',
+          'version': ?version,
+        },
+      ),
+    );
     if (response.statusCode == 409) {
       throw const ShelterVersionChanged();
     }
-    if (response.statusCode != 200 ||
-        response.bodyBytes.length > 4 * 1024 * 1024) {
-      throw const FormatException('Błąd odpowiedzi serwera');
+    if (response.statusCode != 200) _responseFailure(response);
+    if (response.bodyBytes.length > 4 * 1024 * 1024) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
-    final page = ShelterPage.parse(jsonDecode(utf8.decode(response.bodyBytes)));
+    ShelterPage page;
+    try {
+      page = ShelterPage.parse(jsonDecode(utf8.decode(response.bodyBytes)));
+    } catch (_) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
     if (page.region != r ||
         page.query != q ||
         page.offset != offset ||
@@ -323,17 +400,52 @@ class DataRepository {
     return page;
   }
 
+  Future<NearestSheltersResult> nearestShelters(
+    double latitude,
+    double longitude, {
+    int limit = 3,
+  }) async {
+    if (!latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude.abs() > 90 ||
+        longitude.abs() > 180 ||
+        limit < 1 ||
+        limit > 10) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+    final u = _apiUri();
+    final response = await _get(
+      u.replace(
+        path: '${u.path}/v1/shelters/nearest',
+        queryParameters: {
+          'lat': '$latitude',
+          'lon': '$longitude',
+          'limit': '$limit',
+        },
+      ),
+    );
+    if (response.statusCode != 200) _responseFailure(response);
+    if (response.bodyBytes.length > 2 * 1024 * 1024) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+    try {
+      return NearestSheltersResult.parse(
+        jsonDecode(utf8.decode(response.bodyBytes)),
+      );
+    } catch (_) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+  }
+
   Future<List<Map<String, dynamic>>> eventTimeline(String id) async {
     if (id.isEmpty || id.length > 150) throw const FormatException('Błędny identyfikator');
-    final u = validateApi(api);
-    final response = await client
-        .get(
-          u.replace(path: '${u.path}/v1/events/${Uri.encodeComponent(id)}/timeline'),
-          headers: {'Accept': 'application/json'},
-        )
-        .timeout(const Duration(seconds: 15));
-    if (response.statusCode != 200 || response.bodyBytes.length > 2 * 1024 * 1024) {
-      throw const FormatException('Nie udało się pobrać historii');
+    final u = _apiUri();
+    final response = await _get(
+      u.replace(path: '${u.path}/v1/events/${Uri.encodeComponent(id)}/timeline'),
+    );
+    if (response.statusCode != 200) _responseFailure(response);
+    if (response.bodyBytes.length > 2 * 1024 * 1024) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
     final raw = jsonDecode(utf8.decode(response.bodyBytes));
     if (raw is! List) throw const FormatException('Niepoprawna historia');
