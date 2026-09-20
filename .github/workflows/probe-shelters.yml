@@ -10,20 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Probe dane.gov.pl tabular page size
+      - name: Probe dane.gov.pl tabular pagination parameters
         shell: bash
         run: |
           set -euo pipefail
-          for size in 100 500 1000 5000; do
-            echo "===== page_size=$size ====="
-            curl --fail-with-body --silent --show-error --max-time 60 \
-              --header 'Accept: application/json' \
-              --user-agent 'BezpiecznaPolska/0.1 official-open-data-check' \
-              "https://api.dane.gov.pl/1.4/resources/1393918/data?page=1&page_size=$size" \
-              -o table.json
-            SIZE="$size" python3 - <<'PY'
-          import json, os
-          d=json.load(open('table.json'))
-          print('requested=',os.environ['SIZE'],'bytes=',os.path.getsize('table.json'),'rows=',len(d.get('data',[])),'count=',d.get('meta',{}).get('count'),'links=',d.get('links'))
+          python3 - <<'PY'
+          import subprocess,json,urllib.parse,os
+          variants=[
+            {'page':'1','page_size':'500'},
+            {'page':'1','per_page':'500'},
+            {'page':'1','size':'500'},
+            {'page[number]':'1','page[size]':'500'},
+            {'page':'1','limit':'500'},
+          ]
+          base='https://api.dane.gov.pl/1.4/resources/1393918/data'
+          for params in variants:
+              url=base+'?'+urllib.parse.urlencode(params)
+              print('====',url)
+              subprocess.run(['curl','--fail-with-body','--silent','--show-error','--max-time','60','--header','Accept: application/json','--user-agent','BezpiecznaPolska/0.1 official-open-data-check',url,'-o','table.json'],check=True)
+              d=json.load(open('table.json'))
+              print('bytes',os.path.getsize('table.json'),'rows',len(d.get('data',[])),'params',d.get('meta',{}).get('params'),'links',d.get('links'))
           PY
-          done
