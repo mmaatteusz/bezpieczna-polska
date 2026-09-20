@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import 'model.dart';
 import 'shelter_map.dart';
 import 'security_levels.dart';
 import 'shelter_panel.dart';
+import 'event_details.dart';
+import 'status_explanation.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -375,6 +377,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               'Dane: ${stamp(snapshot?.data['serverTime'])}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            if (status is Map)
+              StatusExplanation(status: status, events: events),
           ],
         ),
       ),
@@ -393,6 +397,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         online: online,
         openSource: openLink,
       ),
+      if (events.any((e) => e.isRso)) ...[
+        heading('Regionalny System Ostrzegania'),
+        ...events.where((e) => e.isRso).take(5).map(eventCard),
+      ],
       if (widget.repository.api.isEmpty)
         notice(
           'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
@@ -596,21 +604,16 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ),
     heading('Jestem bezpieczny'),
     const Text(
-      'Wiadomość skopiujesz i wyślesz samodzielnie. Lokalizacja nie jest dołączana.',
+      'Udostępnij krótką wiadomość przez wybraną aplikację. Lokalizacja nie jest dołączana.',
     ),
     OutlinedButton.icon(
       onPressed: () async {
-        await Clipboard.setData(
-          const ClipboardData(text: 'Jestem bezpieczny.'),
+        await SharePlus.instance.share(
+          ShareParams(text: 'Jestem bezpieczny.'),
         );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Skopiowano „Jestem bezpieczny.”')),
-          );
-        }
       },
-      icon: const Icon(Icons.copy),
-      label: const Text('Skopiuj wiadomość'),
+      icon: const Icon(Icons.share_outlined),
+      label: const Text('Udostępnij „Jestem bezpieczny”'),
     ),
     heading('Oficjalne informacje'),
     ...[
@@ -689,44 +692,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (c) => Scaffold(
-          appBar: AppBar(title: const Text('Szczegóły komunikatu')),
-          body: ListView(
-            padding: const EdgeInsets.all(22),
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [badge(e.badge), badge(e.provenance)],
-              ),
-              const SizedBox(height: 20),
-              Text(e.title, style: Theme.of(c).textTheme.headlineSmall),
-              const SizedBox(height: 16),
-              SelectableText(e.description),
-              const SizedBox(height: 20),
-              if (e.data['correction'] != null)
-                notice(
-                  e.data['correction'] as String,
-                  Icons.fact_check_outlined,
-                ),
-              Text(
-                'Publikacja: ${e.data['publishedAt'] == null ? (e.data['publicationDate'] ?? 'Nie podano') : stamp(e.data['publishedAt'])}',
-              ),
-              if (e.data['locationText'] != null)
-                Text('Obszar według źródła: ${e.data['locationText']}'),
-              Text('Pobrano: ${stamp(e.data['retrievedAt'])}'),
-              Text('Od: ${stamp(e.data['validFrom'])}'),
-              Text('Do: ${stamp(e.data['validTo'])}'),
-              Text('Wersja: ${e.revision}'),
-              ...e.sources.map(
-                (s) => OutlinedButton.icon(
-                  onPressed: () => openLink(s['url'] as String),
-                  icon: const Icon(Icons.open_in_new),
-                  label: Text(s['name'] as String),
-                ),
-              ),
-            ],
-          ),
+        builder: (_) => EventDetailsPage(
+          event: e,
+          repository: widget.repository,
+          openLink: openLink,
         ),
       ),
     );
