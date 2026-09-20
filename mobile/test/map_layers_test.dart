@@ -128,7 +128,7 @@ void main() {
       expect(prefs.getKeys().where((k) => k.startsWith('map:')).length, 4);
       final latest = MapRequest(request.bbox, 13, '04');
       bad = true;
-      await expectLater(provider.fetch(latest), throwsFormatException);
+      await expectLater(provider.fetch(latest), throwsA(isA<ApiFailure>()));
       expect(provider.cached(latest), isNotNull);
       await repo.setDeveloperApi('https://different.example');
       expect(provider.cached(latest), isNull);
