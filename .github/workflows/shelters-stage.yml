@@ -62,7 +62,17 @@ jobs:
           flutter test --no-pub
       - name: Fetch real PSP shelter catalog into PostGIS
         working-directory: backend
-        run: node scripts/live-shelters.mjs ../docs/validation/shelters
+        run: |
+          node --input-type=module <<'JS'
+          for (const u of ['https://api.dane.gov.pl/1.4/datasets/28058','https://gdziesieukryc.pl/PS_XML/punkty_schronienia.xml','https://gdziesieukryc.pl/PS_XML/punkty_schronienia.csv']) {
+            try {
+              const r = await fetch(u,{redirect:'manual',signal:AbortSignal.timeout(20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/xml,application/json,text/csv'}});
+              console.log(JSON.stringify({url:u,status:r.status,contentType:r.headers.get('content-type')}));
+              if(!r.ok) console.log((await r.text()).slice(0,1000)); else await r.body?.cancel();
+            } catch(e) { console.log(JSON.stringify({url:u,error:e.message})); }
+          }
+          JS
+          node scripts/live-shelters.mjs ../docs/validation/shelters
       - uses: actions/upload-artifact@v4
         with:
           name: shelters-live-validation
