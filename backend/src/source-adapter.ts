@@ -5,7 +5,7 @@ export type SourceContext = {now: Date; fetchText: (url: string) => Promise<stri
 export type SourceBatch = {
   events: Event[];
   shelters?: Shelter[];
-  metadata?: {dataDate:string;sourceUpdatedAt:string;sourceContentHash:string;sourceUrl:string;datasetUrl:string;license:string};
+  metadata?: {dataDate:string;sourceUpdatedAt:string;sourceContentHash:string;sourceUrl:string;datasetUrl:string;license:string;fallbackSelected?:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'};
   // A publication archive is never proof that there are no active warnings.
   complete: boolean;
   coverage: 'RECENT_PUBLICATIONS' | 'ACTIVE_WARNINGS' | 'FACILITY_CATALOG';
