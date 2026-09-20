@@ -38,7 +38,7 @@ export async function buildApp(store:Store,adminToken?:string){
   const {regionId}=regionQuery.parse(req.query),{events,health}=await store.snapshot(),now=new Date();
   const sources=sourceHealth(health,now);
   const shelterPage=await sheltersResponse(shelterQuery.parse({regionId}));
-  return {schemaVersion:1,serverTime:now.toISOString(),releaseStage:'ALPHA',regionId,status:computeStatus(events,health,regionId,now),nationalStatus:computeStatus(events,health,'PL',now),events:events.filter(e=>!e.securityLevel&&(regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId))),sources,sourceHealth:sources,shelters:shelterPage.items,shelterPage,...securityLevelStatus(events,health,regionId,now),nationalSecurityLevels:securityLevelStatus(events,health,'PL',now).securityLevels,ukraineAlerts:[],capabilities:{push:false,shelters:shelterPage.version!==null,ukraine:false,liveMap:store.db.kind==='postgres',rcb:true}};
+  return {schemaVersion:1,serverTime:now.toISOString(),releaseStage:'ALPHA',regionId,status:computeStatus(events,health,regionId,now),nationalStatus:computeStatus(events,health,'PL',now),events:events.filter(e=>!e.securityLevel&&(regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId))),sources,sourceHealth:sources,shelters:shelterPage.items,shelterPage,...securityLevelStatus(events,health,regionId,now),nationalSecurityLevels:securityLevelStatus(events,health,'PL',now).securityLevels,ukraineAlerts:[],capabilities:{push:false,shelters:shelterPage.version!==null,ukraine:false,liveMap:store.db.kind==='postgres',rcb:true,rso:true}};
  });
  app.get('/v1/layers/events.geojson',async(req,reply)=>{
   const {regionId}=regionQuery.parse(req.query);
