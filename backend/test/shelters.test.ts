@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {shelterAdapter,parseShelterCatalog,parseShelterCsv,SHELTER_CSV,SHELTER_CATALOG,SHELTER_DATASET} from '../src/shelter-adapter.js';
+import {shelterAdapter,parseShelterResource,parseShelterCsv,SHELTER_MIRROR_CSV,SHELTER_RESOURCE,SHELTER_DATASET} from '../src/shelter-adapter.js';
 import {Store,openDb} from '../src/store.js';
 import {ingest,initializeSources,fetchPublic} from '../src/adapters.js';
 import {computeStatus,sourceHealth} from '../src/domain.js';
 import {buildApp} from '../src/app.js';
 const now=new Date('2026-09-19T12:00:00Z');
-const csv=readFileSync('test/fixtures/psp-shelters.csv','utf8'),xml=readFileSync('test/fixtures/psp-catalog.xml','utf8'),dataset=readFileSync('test/fixtures/psp-dataset.json','utf8');
-const fetchText=async(url:string)=>{if(url===SHELTER_CSV)return csv;if(url===SHELTER_CATALOG)return xml;if(url===SHELTER_DATASET)return dataset;throw new Error('UNEXPECTED_URL');};
+const csv=readFileSync('test/fixtures/psp-shelters.csv','utf8'),resource=readFileSync('test/fixtures/psp-resource.json','utf8'),dataset=readFileSync('test/fixtures/psp-dataset.json','utf8');
+const fetchText=async(url:string)=>{if(url===SHELTER_MIRROR_CSV)return csv;if(url===SHELTER_RESOURCE)return resource;if(url===SHELTER_DATASET)return dataset;throw new Error('UNEXPECTED_URL');};
 const batch=()=>shelterAdapter.sync({now,fetchText});
 test('real PSP CSV subset preserves official IDs, addresses, coordinates and unknown protection',async()=>{
  const b=await batch();assert.equal(b.shelters!.length,3);assert.equal(b.events.length,0);
@@ -18,7 +18,7 @@ test('real PSP CSV subset preserves official IDs, addresses, coordinates and unk
  assert.equal(b.metadata!.license,'CC BY 4.0');assert.equal(b.complete,true);
 });
 test('CSV rejects truncation, duplicate IDs, bad columns, unknown region and swapped coordinates',()=>{
- const meta=parseShelterCatalog(xml,now);
+ const meta=parseShelterResource(resource,now);
  assert.throws(()=>parseShelterCsv(csv,{...meta,count:4}),/COUNT_MISMATCH/);
  assert.throws(()=>parseShelterCsv(csv.replace('Dostepnosc','Availability'),meta),/COLUMNS_CHANGED/);
  const lines=csv.trimEnd().split(/\r?\n/);assert.throws(()=>parseShelterCsv([lines[0],lines[1],lines[1],lines[3]].join('\n'),meta),/DUPLICATE/);
@@ -26,17 +26,16 @@ test('CSV rejects truncation, duplicate IDs, bad columns, unknown region and swa
  assert.throws(()=>parseShelterCsv(csv.replace('53.1661471448123,18.1731816478461','18.1731816478461,53.1661471448123'),meta));
  assert.throws(()=>parseShelterCsv(csv.replace('53.1661471448123',''),meta));
 });
-test('catalog validates publisher, license, resource path, dates and stable export version',async()=>{
- assert.throws(()=>parseShelterCatalog(xml.replaceAll('CC BY 4.0','proprietary'),now),/CONTRACT/);
- assert.throws(()=>parseShelterCatalog('<!DOCTYPE a>'+xml,now),/UNSAFE_XML/);
- assert.throws(()=>parseShelterCatalog(xml,new Date('2026-10-10T12:00:00Z')),/OUTDATED/);
- assert.throws(()=>parseShelterCatalog(xml,new Date('2026-08-10T12:00:00Z')),/FUTURE_DATE/);
+test('official dane.gov.pl resource validates publisher, mirror path, dates and stable export version',async()=>{
+ assert.throws(()=>parseShelterResource(resource.replace(SHELTER_MIRROR_CSV,'https://example.com/file.csv'),now),/CONTRACT/);
+ assert.throws(()=>parseShelterResource(resource,new Date('2026-10-10T12:00:00Z')),/OUTDATED/);
+ assert.throws(()=>parseShelterResource(resource,new Date('2026-08-10T12:00:00Z')),/FUTURE_DATE/);
  await assert.rejects(shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_DATASET?dataset.replace('"22"','"999"'):fetchText(u)}),/PUBLISHER/);
- let calls=0;await assert.rejects(shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_CATALOG&&++calls===2?xml.replaceAll('08:24:06','08:25:06'):fetchText(u)}),/CHANGED_DURING_SYNC/);
- await assert.rejects(fetchPublic(SHELTER_CSV+'?redirect=https://example.com'),/DENIED/);
+ let calls=0;await assert.rejects(shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_RESOURCE&&++calls===2?resource.replace('08:24:06','08:25:06'):fetchText(u)}),/CHANGED_DURING_SYNC/);
+ await assert.rejects(fetchPublic(SHELTER_MIRROR_CSV+'?redirect=https://example.com'),/DENIED/);
 });
 test('unknown availability is preserved without claiming all-day access',()=>{
- const s=parseShelterCsv(csv.replace('Na żądanie','Nowa wartość'),parseShelterCatalog(xml,now))[0];assert.equal(s.availability,'UNKNOWN');assert.equal(s.sourceAvailability,'Nowa wartość');
+ const s=parseShelterCsv(csv.replace('Na żądanie','Nowa wartość'),parseShelterResource(resource,now))[0];assert.equal(s.availability,'UNKNOWN');assert.equal(s.sourceAvailability,'Nowa wartość');
 });
 test('shelter sync is isolated from events, retains last good data on failure, and uses six-hour interval',async()=>{
  const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();
@@ -86,6 +85,6 @@ test('HTTP denial keeps its status code for source diagnostics',async()=>{
  const original=globalThis.fetch;
  try{
   globalThis.fetch=async()=>new Response('Access denied',{status:403});
-  await assert.rejects(fetchPublic(SHELTER_CSV),/SOURCE_HTTP_403/);
+  await assert.rejects(fetchPublic(SHELTER_MIRROR_CSV),/SOURCE_HTTP_403/);
  }finally{globalThis.fetch=original;}
 });
