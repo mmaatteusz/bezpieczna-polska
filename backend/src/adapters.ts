@@ -1,4 +1,4 @@
-import {sgAdapter,SG_INDEX,isAllowedSgUrl} from './sg-adapter.js';
+import {sgAdapter,isAllowedSgUrl} from './sg-adapter.js';
 import {certAdapter,CERT_FEED,CSIRT_GOV_RSS_PAGE} from './cyber-adapter.js';
 import {paaAdapter} from './paa-adapter.js';
 import {wczkAdapters,WCZK_PODKARPACKIE} from './wczk-adapter.js';
