@@ -27,7 +27,8 @@ function articleUrl(value:string){
 
 export function parseSgIndex(html:string){
  const $=cheerio.load(html);
- if(!$('#content').length||clean($('.naglowek h2').first().text())!=='Aktualności')throw new Error('SG_INDEX_CONTRACT_CHANGED');
+ const sectionTitles=$('.naglowek h2').map((_,node)=>clean($(node).text())).get();
+ if(!$('#content').length||!sectionTitles.includes('Aktualności'))throw new Error('SG_INDEX_CONTRACT_CHANGED');
  const byId=new Map<string,string>();
  $('a[href]').each((_,node)=>{
   const href=$(node).attr('href')??'';
