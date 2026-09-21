@@ -52,7 +52,8 @@ export async function fetchPublic(url:string):Promise<string>{
  if(shelterCurrent&&(u.hostname!=='gdziesieukryc.pl'||u.pathname!=='/PS_XML/punkty_schronienia.csv'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(certFeed&&(u.hostname!=='moje.cert.pl'||u.pathname!=='/advisory_feed/advisory/feed/'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(csirtRssPage&&(u.hostname!=='www.csirt.gov.pl'||u.pathname!=='/cer/rss'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
- if(sgSource&&!isAllowedSgUrl(u.href))throw new Error('SOURCE_URL_DENIED');\n if(policeSource&&!isAllowedPoliceUrl(u.href))throw new Error('SOURCE_URL_DENIED');
+ if(sgSource&&!isAllowedSgUrl(u.href))throw new Error('SOURCE_URL_DENIED');
+ if(policeSource&&!isAllowedPoliceUrl(u.href))throw new Error('SOURCE_URL_DENIED');
  const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(shelterCurrent?90000:20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/rss+xml,application/xml,application/json,text/csv'}});
  if(!response.ok)throw new Error(`SOURCE_HTTP_${response.status}`);if(!response.body)throw new Error('SOURCE_EMPTY_BODY');
  const limit=(shelterCurrent?64:4)*1024*1024;let size=0;const chunks:Uint8Array[]=[];
