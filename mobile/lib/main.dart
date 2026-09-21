@@ -441,14 +441,22 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             .take(3)
             .map(eventCard),
       ],
-      if (events.any((e) => e.sources.any((s) => s['id'] == 'POLICE' || s['id'] == 'PSP_INCIDENTS'))) ...[
+      if (events.any(
+        (e) => e.sources.any(
+          (s) => s['id'] == 'POLICE' || s['id'] == 'PSP_INCIDENTS',
+        ),
+      )) ...[
         heading('Zdarzenia służb'),
         notice(
           'Pokazujemy tylko zdarzenia Policji i PSP istotne sytuacyjnie. Pojedyncza publikacja służby nie podnosi automatycznie statusu całego województwa.',
           Icons.local_fire_department_outlined,
         ),
         ...events
-            .where((e) => e.sources.any((s) => s['id'] == 'POLICE' || s['id'] == 'PSP_INCIDENTS'))
+            .where(
+              (e) => e.sources.any(
+                (s) => s['id'] == 'POLICE' || s['id'] == 'PSP_INCIDENTS',
+              ),
+            )
             .take(5)
             .map(eventCard),
       ],
@@ -692,9 +700,13 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           Expanded(
             child: DropdownButtonFormField<String>(
               initialValue: sourceFilter,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Źródło'),
               items: sourceOptions
-                  .map((s) => DropdownMenuItem(value: s, child: Text(sourceLabel(s))))
+                  .map(
+                    (s) =>
+                        DropdownMenuItem(value: s, child: Text(sourceLabel(s))),
+                  )
                   .toList(),
               onChanged: (v) => setState(() => sourceFilter = v ?? 'Wszystkie'),
             ),
@@ -703,6 +715,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           Expanded(
             child: DropdownButtonFormField<String>(
               initialValue: typeFilter,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Kategoria'),
               items: typeOptions
                   .map(
@@ -761,7 +774,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             label: const Text('Policja'),
           ),
           OutlinedButton.icon(
-            onPressed: () => openLink('https://www.gov.pl/web/kgpsp/aktualnosci'),
+            onPressed: () =>
+                openLink('https://www.gov.pl/web/kgpsp/aktualnosci'),
             icon: const Icon(Icons.open_in_new),
             label: const Text('PSP'),
           ),
