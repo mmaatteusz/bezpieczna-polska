@@ -7,7 +7,7 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 | # | Element | Stan |
 |---:|---|:---:|
 | 1 | Flutter Android | ✅ |
-| 2 | Nawigacja Status / Mapa / RCB / Schronienie / Pomoc | ✅ |
+| 2 | Nawigacja Status / Mapa / Alerty / Schronienie / Pomoc | ✅ |
 | 3 | Backend TypeScript | ✅ |
 | 4 | PostgreSQL | ✅ |
 | 5 | PostGIS | ✅ |
@@ -31,15 +31,15 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 | 23 | Pełniejsze pakiety offline mapy/regionu | 🟡 |
 | 24 | Stabilny niezależny fallback PSP zamiast 403 | 🟡 |
 | 25 | RSO XML | ✅ |
-| 26 | WCZK per województwo | ❌ |
-| 27 | Korelacja/deduplikacja RCB–RSO–WCZK | 🟡 |
+| 26 | WCZK per województwo | 🟡 |
+| 27 | Korelacja/deduplikacja RCB–RSO–WCZK | ✅ |
 | 28 | Timeline komunikatu w UI | ✅ |
-| 29 | PAA | ❌ |
-| 30 | CERT Polska / CSIRT GOV | ❌ |
+| 29 | PAA | 🟡 |
+| 30 | CERT Polska / CSIRT GOV | 🟡 |
 | 31 | Straż Graniczna | ❌ |
 | 32 | Istotne zdarzenia Policji / PSP | ❌ |
 | 33 | Obserwowane lokalizacje | ❌ |
-| 34 | „Co dzieje się wokół mnie?” | ❌ |
+| 34 | „Co dzieje się wokół mnie?” | 🟡 |
 | 35 | Alarmy Ukrainy | ❌ |
 | 36 | NEPTUN jako osobna warstwa OSINT | ❌ |
 | 37 | Push FCM/APNs | ❌ |
@@ -49,16 +49,16 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 
 ## Najbliższa kolejność
 
-1. WCZK i korelacja RCB–RSO–WCZK.
-2. PAA.
-3. CERT Polska / CSIRT GOV.
-4. Straż Graniczna.
-5. Obserwowane lokalizacje i „wokół mnie”.
-6. Alarmy Ukrainy.
-7. NEPTUN.
-8. Push.
-9. Pełniejsze offline.
-10. Publiczny backend, monitoring, backup, podpisane wydanie.
+1. Straż Graniczna.
+2. Istotne zdarzenia Policji / PSP.
+3. Obserwowane lokalizacje i szersze „wokół mnie”.
+4. Alarmy Ukrainy.
+5. NEPTUN.
+6. Push.
+7. Pełniejsze offline.
+8. Publiczny backend, monitoring, backup, podpisane wydanie.
+
+Uwagi do częściowych etapów: WCZK ma jeden niezależny adapter oraz integrację RSO dla pozostałych publikacji; PAA ma komunikaty, ale pomiary pozostają zablokowane przez brak zweryfikowanego publicznego kontraktu; CERT Polska działa z oficjalnego RSS, natomiast publiczna lista RSS CSIRT GOV jest obecnie pusta. „Wokół mnie” obejmuje już najbliższe schronienia, ale nie pełny agregator zdarzeń w promieniu.
 
 ## Zasady
 
