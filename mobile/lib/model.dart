@@ -257,8 +257,9 @@ class Snapshot {
     }
     if (m['radiation'] != null) {
       final radiation = RadiationData.parse(m['radiation']);
-      if (radiation.data['regionId'] != m['regionId'])
+      if (radiation.data['regionId'] != m['regionId']) {
         throw const FormatException('Błędny region PAA');
+      }
     }
     if (m['shelterPage'] != null) {
       final page = ShelterPage.parse(m['shelterPage']);

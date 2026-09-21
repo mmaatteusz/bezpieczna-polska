@@ -54,7 +54,7 @@ export function computeStatus(events:Event[],health:Health[],region:string,now=n
  const groups=incidents??correlate(events),supporting=[...critical,...caution];
  const supportingIncidents=groups.flatMap(g=>{const members=supporting.filter(e=>g.relatedEventIds.includes(e.id));if(!members.length)return [];return [{...g,primaryEventId:choosePrimary(members,now).id,supportingEventIds:members.map(e=>e.id)}];});
  const grouped=new Set(supportingIncidents.flatMap(g=>g.relatedEventIds));
- return {supportingIncidents,incidentCount:supportingIncidents.length+supporting.filter(e=>!grouped.has(e.id)).length,hazardLevel,displayText,coverageState:coverage,reasonCodes,supportingEventIds:[...supportingIncidents.map(g=>g.primaryEventId),...supporting.filter(e=>!grouped.has(e.id)).map(e=>e.id)],lastKnownEventIds:stale.map(e=>e.id),evaluatedAt:now.toISOString(),validUntil:new Date(Math.min(ms+60000,...active.filter(e=>e.validTo).map(e=>Date.parse(e.validTo!)),...fresh.map(h=>Date.parse(h.lastSuccess!)+h.maxAgeSeconds*1000))).toISOString(),rulesetVersion:'1.2.0'};
+ return {supportingIncidents,incidentCount:supportingIncidents.length+supporting.filter(e=>!grouped.has(e.id)).length,hazardLevel,displayText,coverageState:coverage,reasonCodes,supportingEventIds:[...supportingIncidents.map(g=>g.primaryEventId),...supporting.filter(e=>!grouped.has(e.id)).map(e=>e.id)],lastKnownEventIds:stale.map(e=>e.id),evaluatedAt:now.toISOString(),validUntil:new Date(Math.min(ms+60000,...active.filter(e=>e.validTo).map(e=>Date.parse(e.validTo!)),...fresh.map(h=>Date.parse(h.lastSuccess!)+h.maxAgeSeconds*1000))).toISOString(),rulesetVersion:'1.3.0'};
 }
 
 export function sourceHealth(health:Health[],now=new Date()){

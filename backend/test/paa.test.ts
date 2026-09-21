@@ -73,3 +73,26 @@ test('Bounded archive rechecks known messages; HTTP failure aborts',async()=>{
  const result=await paaAdapter.sync({now,previousEvents:[warning()],fetchText:async u=>{seen.push(u);return u===PAA_INDEX?index:u===url?article('Alarm radiacyjny zakończony','Zakończono zdarzenie radiacyjne, działania dobiegły końca.'):article('Spotkanie przedstawicieli PAA','Spotkanie poświęcone współpracy i sprawom organizacyjnym.');}});
  assert.ok(seen.includes(url));assert.equal(result.events[0].lifecycle,'ENDED');assert.equal(result.complete,false);await assert.rejects(paaAdapter.sync({now,fetchText:async()=>{throw new Error('SOURCE_HTTP_503');}}),/503/);
 });
+
+test('Real multiple-body editorial page is not an incident',()=>{
+ assert.equal(parsePaaArticle(readFileSync('test/fixtures/paa/editorial-multiple-blocks.html','utf8'),'https://www.gov.pl/web/paa/miedzynarodowi-eksperci-w-paa--przygotowania-do-misji-irrs-follow-up',now),null);
+});
+test('Stable revision still has fresh checkedEventIds after a new synchronization',async()=>{
+ const store=new Store(openDb(undefined,':memory:'));await store.init();
+ try{
+  const adapter={id:'PAA',version:'test-only',async sync(){return {events:[warning()],complete:false,coverage:'RECENT_PUBLICATIONS' as const,pagesFetched:1};}};
+  await ingest(store,[adapter]);await ingest(store,[adapter]);const h=(await store.health()).find(h=>h.id==='PAA')!;
+  assert.ok(h.checkedEventIds?.includes(warning().id));
+  assert.equal(computeStatus(await store.events(),[h],'PL',new Date()).hazardLevel,'CAUTION');
+  assert.equal((await store.timeline(warning().id)).length,1);
+ }finally{await store.db.close();}
+});
+test('PAA PostGIS source/event transaction survives connection restart',{skip:!process.env.TEST_DATABASE_URL},async()=>{
+ const id='PAA-postgis-'+Date.now();let store=new Store(openDb(process.env.TEST_DATABASE_URL));
+ const e={...warning(),id};
+ try{
+  await store.init();await store.applySync([e],{...health(),checkedEventIds:[id]});await store.db.close();
+  store=new Store(openDb(process.env.TEST_DATABASE_URL));await store.init();
+  assert.equal((await store.get(id))?.eventType,'RADIATION');await store.applySync([e],{...health(),checkedEventIds:[id]});assert.equal((await store.timeline(id)).length,1);
+ }finally{await store.db.run('DELETE FROM event_revisions WHERE event_id=?',[id]);await store.db.close();}
+});

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'model.dart';
-import 'shelters.dart';
 
 class RadiationData {
   final Map<String, dynamic> data;

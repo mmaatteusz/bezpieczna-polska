@@ -46,6 +46,16 @@ class _ShelterMapState extends State<ShelterMap> {
   }
 
   @override
+  void didUpdateWidget(covariant ShelterMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (showRadiation &&
+        (oldWidget.radiation != widget.radiation ||
+            oldWidget.radiationOnline != widget.radiationOnline)) {
+      idle();
+    }
+  }
+
+  @override
   void dispose() {
     ticket++;
     debounce?.cancel();
@@ -425,7 +435,13 @@ class _ShelterMapState extends State<ShelterMap> {
           ),
         ),
         if (!widget.ukraine && showRadiation) ...[
-          Text(message),
+          Text(
+            widget.radiation == null
+                ? message
+                : RadiationData.parse(
+                    widget.radiation,
+                  ).measurementText(DateTime.now(), widget.radiationOnline),
+          ),
           const Text(
             'Komunikaty PAA są dostępne w Statusie i Alert Center. Brak punktów na mapie nie oznacza braku zagrożenia.',
           ),
