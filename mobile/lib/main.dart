@@ -422,13 +422,32 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             .take(3)
             .map(eventCard),
       ],
+      if (events.any(
+        (e) =>
+            e.data['eventType'] == 'BORDER' &&
+            e.sources.any((s) => s['id'] == 'SG'),
+      )) ...[
+        heading('Granice • Straż Graniczna'),
+        notice(
+          'Pokazujemy wyłącznie operacyjne informacje o zamknięciach, ograniczeniach, kontrolach i utrudnieniach granicznych. Taki komunikat nie podnosi automatycznie głównego statusu zagrożenia.',
+          Icons.travel_explore_outlined,
+        ),
+        ...events
+            .where(
+              (e) =>
+                  e.data['eventType'] == 'BORDER' &&
+                  e.sources.any((s) => s['id'] == 'SG'),
+            )
+            .take(3)
+            .map(eventCard),
+      ],
       if (events.any((e) => e.isRso)) ...[
         heading('Regionalny System Ostrzegania'),
         ...events.where((e) => e.isRso).take(5).map(eventCard),
       ],
       const SizedBox(height: 12),
       notice(
-        'Wersja rozwojowa 0.1.0-alpha.8 • Powiadomienia push nie są aktywne.',
+        'Wersja rozwojowa 0.1.0-alpha.9 • Powiadomienia push nie są aktywne.',
         Icons.science_outlined,
       ),
       heading('Od ostatniej wizyty'),
@@ -588,6 +607,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       'PAA',
       'CERT',
       'CSIRT_GOV',
+      'SG',
       ...events.expand((e) => e.sources.map((s) => s['id'].toString())),
     }.toList();
     final typeOptions = <String>{
@@ -700,6 +720,12 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             icon: const Icon(Icons.open_in_new),
             label: const Text('CSIRT GOV'),
           ),
+          OutlinedButton.icon(
+            onPressed: () =>
+                openLink('https://www.strazgraniczna.pl/pl/aktualnosci'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Straż Graniczna'),
+          ),
         ],
       ),
     ];
@@ -771,6 +797,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ('Państwowa Agencja Atomistyki', 'https://www.gov.pl/web/paa'),
       ('CERT Polska', 'https://moje.cert.pl/komunikaty/'),
       ('CSIRT GOV', 'https://www.csirt.gov.pl/cer/rss'),
+      ('Straż Graniczna', 'https://www.strazgraniczna.pl/pl/aktualnosci'),
     ].map(
       (e) => Card(
         child: ListTile(
@@ -916,7 +943,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       },
                     ),
                   const Text(
-                    '0.1.0-alpha.7 • Push nieaktywny • GPS tylko na żądanie',
+                    '0.1.0-alpha.9 • Push nieaktywny • GPS tylko na żądanie',
                   ),
                 ],
               ),
