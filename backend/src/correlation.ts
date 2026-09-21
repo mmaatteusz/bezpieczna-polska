@@ -22,6 +22,9 @@ function interval(e:Event):[number,number]|null{
 function tokens(e:Event){return new Set(normalize(e.title+' '+e.description).split(' ').filter(w=>w.length>2&&!['alert','rcb','rso','wczk','ostrzezenie','uwaga','komunikat','wojewodztwo'].includes(w)));}
 function similarity(a:Set<string>,b:Set<string>){const common=[...a].filter(t=>b.has(t)).length;return common/(a.size+b.size-common||1);}
 function numbers(e:Event){return (normalize(e.title+' '+e.description).match(/\b\d+\b/g)??[]).sort().join(',');}
+// Only publisher labels and a standalone attention word may differ. A high
+// token score must never hide a changed street, object, or negation.
+function incidentContent(e:Event){return normalize(e.title+' '+e.description).split(' ').filter(w=>!['rcb','rso','wczk','alert','komunikat','uwaga','uwazaj'].includes(w)).join(' ');}
 
 /** Complete-link matching, no fuzzy geography, no transitive A-B-C merge. */
 export function canCorrelate(a:Event,b:Event):boolean{
@@ -39,6 +42,7 @@ export function canCorrelate(a:Event,b:Event):boolean{
  if(numbers(a)!==numbers(b))return false;
  if(a.geometry&&b.geometry&&JSON.stringify(a.geometry)!==JSON.stringify(b.geometry))return false;
  const exactArea=al&&bl&&a.areaPrecision==='EXACT'&&b.areaPrecision==='EXACT';
+ if(exactArea&&incidentContent(a)!==incidentContent(b))return false;
  if(!exactArea&&normalize(a.title+' '+a.description)!==normalize(b.title+' '+b.description))return false;
  const score=similarity(tokens(a),tokens(b));
  return score>=(exactArea?0.78:1)&&Math.min(tokens(a).size,tokens(b).size)>=5;

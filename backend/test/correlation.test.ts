@@ -55,3 +55,9 @@ test('PostGIS persists correlation and rollback leaves event and group unchanged
 
 test('near-identical boilerplate without exact local area cannot merge different places',()=>{const text='Powódź. '+ 'Pozostań w domu, zachowaj ostrożność, zabezpiecz mienie i unikaj podróży. '.repeat(20);assert.equal(canCorrelate(report('RCB',{title:'Powódź Bydgoszcz',description:text,locationText:null}),report('RSO',{title:'Powódź Toruń',description:text,locationText:null})),false);});
 test('similar content requires exact matching local area and rejects conflicting geometry',()=>{const a=report('RCB',{areaPrecision:'EXACT'}),b=report('RSO',{areaPrecision:'EXACT',description:a.description+' Uważaj.'});assert.equal(canCorrelate(a,b),true);assert.equal(canCorrelate({...a,geometry:{type:'Point',coordinates:[18,53]}},{...b,geometry:{type:'Point',coordinates:[19,53]}}),false);});
+test('exact city and high similarity cannot hide different streets or a negation',()=>{
+ const common='Powódź w Bydgoszczy. Zalane budynki i piwnice, zachowaj ostrożność, zabezpiecz mienie i unikaj podróży. ';
+ for(const [left,right] of [['Ulica Gdańska','Ulica Dworcowa'],['Most jest przejezdny','Most nie jest przejezdny']]){
+  assert.equal(canCorrelate(report('RCB',{areaPrecision:'EXACT',description:common+left}),report('RSO',{areaPrecision:'EXACT',description:common+right})),false);
+ }
+});

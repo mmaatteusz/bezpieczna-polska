@@ -58,7 +58,10 @@ Bez LLM. `canCorrelate` wymaga różnego źródła, identycznego zbioru znanych 
 zgodnego typu i jednego rozpoznanego rodzaju zagrożenia, nakładających się okresów,
 różnicy początku do 12 h oraz wysokiego podobieństwa zbiorów słów. Przy jednakowym
 pełnym `locationText` i obszarze EXACT w obu źródłach próg wynosi 0.78. W pozostałych
-przypadkach wymagana jest identyczna znormalizowana treść wraz z tytułem. Są to techniczne progi testowalne,
+przypadkach wymagana jest identyczna znormalizowana treść wraz z tytułem. Także przy EXACT
+treść po pominięciu zamkniętej listy etykiet wydawcy i słów „uwaga/uważaj” musi być identyczna:
+wysokie podobieństwo nie może przesłonić różnicy ulicy, obiektu czy zaprzeczenia.
+Są to techniczne progi testowalne,
 nie procenty wiarygodności i nie są prezentowane użytkownikowi. Różniące się liczby,
 obszary, ćwiczenia, złożone wielozagrożeniowe komunikaty i brak czasu blokują dopasowanie.
 
