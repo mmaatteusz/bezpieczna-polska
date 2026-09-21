@@ -132,8 +132,8 @@ export function parsePspArticle(html:string,url:string,now=new Date()):Event|nul
   const title=clean(article.find('h2').first().text()),intro=clean(article.find('p.intro').text());
   const paragraphs=body.find('p,li').map((_,n)=>clean($(n).text())).get().filter(Boolean);
   const description=[intro,...paragraphs].filter(Boolean).join('\n\n')||clean(body.text());
-  const day=DateTime.fromFormat(clean(article.find('.event-date').text()),'dd.MM.yyyy',{zone:'Europe/Warsaw'});
-  if(article.length!==1||(body.length<1||body.length>10)||!title||description.length<20||!day.isValid||day.startOf('day').toMillis()>now.getTime()+86400000)throw new Error('PSP_INCIDENTS_ARTICLE_CONTRACT_CHANGED');
+  const dayText=clean(article.find('.event-date').text()),day=DateTime.fromFormat(dayText,'dd.MM.yyyy',{zone:'Europe/Warsaw'});
+  if(article.length!==1||(body.length<1||body.length>10)||!title||description.length<20||!day.isValid||day.startOf('day').toMillis()>now.getTime()+86400000)throw new Error(`PSP_INCIDENTS_ARTICLE_CONTRACT_CHANGED:article=${article.length}:body=${body.length}:title=${title?'YES':'NO'}:desc=${description.length}:eventDate=${dayText||'EMPTY'}:dateNodes=${article.find('.date').length}:timeNodes=${article.find('time[datetime]').length}:paragraphs=${article.find('p').length}:url=${canonical.pathname}`);
   const classification=classifyServiceIncident(title,description);if(!classification)return null;
   const regions=explicitRegions(title+' '+description),locationText=pspLocation(title);
   const publishedRaw=article.find('time[datetime]').first().attr('datetime');
