@@ -49,13 +49,12 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 
 ## Najbliższa kolejność
 
-1. Istotne zdarzenia Policji / PSP.
-2. Obserwowane lokalizacje i szersze „wokół mnie”.
-3. Alarmy Ukrainy.
-4. NEPTUN.
-5. Push.
-6. Pełniejsze offline.
-7. Publiczny backend, monitoring, backup, podpisane wydanie.
+1. Obserwowane lokalizacje i szersze „wokół mnie”.
+2. Alarmy Ukrainy.
+3. NEPTUN.
+4. Push.
+5. Pełniejsze offline.
+6. Publiczny backend, monitoring, backup, podpisane wydanie.
 
 Uwagi do częściowych etapów: WCZK ma jeden niezależny adapter oraz integrację RSO dla pozostałych publikacji; PAA ma komunikaty, ale pomiary pozostają zablokowane przez brak zweryfikowanego publicznego kontraktu; CERT Polska działa z oficjalnego RSS, publiczna lista RSS CSIRT GOV jest obecnie pusta, a Straż Graniczna korzysta z oficjalnych Aktualności z konserwatywnym filtrem komunikatów operacyjnych (publiczna lista RSS KGSG jest pusta). „Wokół mnie” obejmuje już najbliższe schronienia, ale nie pełny agregator zdarzeń w promieniu.
 
