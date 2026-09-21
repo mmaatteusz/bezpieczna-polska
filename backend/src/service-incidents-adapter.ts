@@ -78,7 +78,7 @@ export function parsePoliceRss(xml:string,now=new Date()):PoliceRssItem[]{
   const seen=new Set<string>();
   const out:PoliceRssItem[]=[];
   items.each((_,node)=>{
-    const n=$(node),title=clean(n.children('title').first().text()),description=clean(n.children('description').first().text()),link=clean(n.children('link').first().text()),pubDate=clean(n.children('pubDate').first().text());
+    const n=$(node),title=clean(n.children('title').first().text()),description=clean(cheerio.load(n.children('description').first().text()).text()),link=clean(n.children('link').first().text()),pubDate=clean(n.children('pubDate').first().text());
     if(!title||!link)throw new Error('POLICE_RSS_CONTRACT_CHANGED');
     const u=policeArticleUrl(link),id=u.pathname.match(/^\/pol\/aktualnosci\/(\d+),/)?.[1];
     if(!id||seen.has(id))throw new Error('POLICE_RSS_DUPLICATE_ID');seen.add(id);
