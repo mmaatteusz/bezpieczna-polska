@@ -400,6 +400,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     return [
       statusCard(true),
       statusCard(false),
+      if (widget.repository.api.isEmpty)
+        notice(
+          'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
+          Icons.cloud_off,
+        ),
       RadiationPanel(snapshot: snapshot, online: online, openSource: openLink),
       SecurityLevelsPanel(
         snapshot: snapshot,
@@ -410,11 +415,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         heading('Regionalny System Ostrzegania'),
         ...events.where((e) => e.isRso).take(5).map(eventCard),
       ],
-      if (widget.repository.api.isEmpty)
-        notice(
-          'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
-          Icons.cloud_off,
-        ),
       const SizedBox(height: 12),
       notice(
         'Wersja rozwojowa 0.1.0-alpha.7 • Powiadomienia push nie są aktywne.',
