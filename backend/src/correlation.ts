@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import type {Event} from './domain.js';
 
-export const CORRELATION_VERSION='1.0.0';
+export const CORRELATION_VERSION='1.1.0';
 export type Incident={eventRevisions:Record<string,number>;id:string;relatedEventIds:string[];primaryEventId:string;sourceIds:string[];sourceCount:number;confirmedSourceCount:number;hasConflictingReports:boolean;revision:number;rulesetVersion:string};
 export const normalize=(s:string)=>s.normalize('NFD').replace(/\p{M}/gu,'').replace(/ł/g,'l').replace(/Ł/g,'L').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 const physicalEligible=(e:Event)=>!e.isDemo&&!e.securityLevel&&e.sources.some(s=>s.id==='RCB'||s.id==='RSO'||s.id==='POLICE'||s.id==='PSP_INCIDENTS'||/^WCZK-\d{2}$/.test(s.id));
