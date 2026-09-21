@@ -79,7 +79,7 @@ void main() {
     expect(find.text('Zdarzenia służb'),findsOneWidget);
     expect(find.textContaining('nie podnosi automatycznie statusu'),findsOneWidget);
 
-    await tester.tap(find.text('Alerty'));
+    await tester.tap(find.text('Alerty').last);
     await tester.pumpAndSettle();
     final dropdowns=find.byType(DropdownButtonFormField<String>);
     expect(dropdowns,findsNWidgets(2));
