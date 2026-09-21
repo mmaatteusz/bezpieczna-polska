@@ -441,13 +441,24 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             .take(3)
             .map(eventCard),
       ],
+      if (events.any((e) => e.sources.any((s) => s['id'] == 'POLICE' || s['id'] == 'PSP_INCIDENTS'))) ...[
+        heading('Zdarzenia służb'),
+        notice(
+          'Pokazujemy tylko zdarzenia Policji i PSP istotne sytuacyjnie. Pojedyncza publikacja służby nie podnosi automatycznie statusu całego województwa.',
+          Icons.local_fire_department_outlined,
+        ),
+        ...events
+            .where((e) => e.sources.any((s) => s['id'] == 'POLICE' || s['id'] == 'PSP_INCIDENTS'))
+            .take(5)
+            .map(eventCard),
+      ],
       if (events.any((e) => e.isRso)) ...[
         heading('Regionalny System Ostrzegania'),
         ...events.where((e) => e.isRso).take(5).map(eventCard),
       ],
       const SizedBox(height: 12),
       notice(
-        'Wersja rozwojowa 0.1.0-alpha.9 • Powiadomienia push nie są aktywne.',
+        'Wersja rozwojowa 0.1.0-alpha.10 • Powiadomienia push nie są aktywne.',
         Icons.science_outlined,
       ),
       heading('Od ostatniej wizyty'),
@@ -590,11 +601,22 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     'BORDER' => 'Granica',
     'CYBER' => 'Cyber',
     'RADIATION' => 'Radiacja',
-    'FIRE' => 'Pożary',
+    'FIRE' => 'Pożar',
+    'EXPLOSION' => 'Wybuch',
+    'HAZMAT' => 'Zagrożenie chemiczne',
+    'RESCUE' => 'Ratownictwo',
+    'PUBLIC_SAFETY' => 'Bezpieczeństwo publiczne',
     'EVACUATION' => 'Ewakuacja',
     'OUTAGE' => 'Awarie',
     'WEATHER' => 'Pogoda',
     'OTHER' => 'Inne',
+    _ => value,
+  };
+
+  String sourceLabel(String value) => switch (value) {
+    'POLICE' => 'Policja',
+    'PSP_INCIDENTS' => 'PSP',
+    'CSIRT_GOV' => 'CSIRT GOV',
     _ => value,
   };
 
@@ -608,10 +630,17 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       'CERT',
       'CSIRT_GOV',
       'SG',
+      'POLICE',
+      'PSP_INCIDENTS',
       ...events.expand((e) => e.sources.map((s) => s['id'].toString())),
     }.toList();
     final typeOptions = <String>{
       'Wszystkie',
+      'FIRE',
+      'EXPLOSION',
+      'RESCUE',
+      'HAZMAT',
+      'PUBLIC_SAFETY',
       ...events.map((e) => e.data['eventType'].toString()),
     }.toList();
     if (!sourceOptions.contains(sourceFilter)) sourceFilter = 'Wszystkie';
@@ -665,7 +694,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               initialValue: sourceFilter,
               decoration: const InputDecoration(labelText: 'Źródło'),
               items: sourceOptions
-                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                  .map((s) => DropdownMenuItem(value: s, child: Text(sourceLabel(s))))
                   .toList(),
               onChanged: (v) => setState(() => sourceFilter = v ?? 'Wszystkie'),
             ),
@@ -725,6 +754,16 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 openLink('https://www.strazgraniczna.pl/pl/aktualnosci'),
             icon: const Icon(Icons.open_in_new),
             label: const Text('Straż Graniczna'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => openLink('https://policja.pl/pol/aktualnosci'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Policja'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => openLink('https://www.gov.pl/web/kgpsp/aktualnosci'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('PSP'),
           ),
         ],
       ),
@@ -798,6 +837,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ('CERT Polska', 'https://moje.cert.pl/komunikaty/'),
       ('CSIRT GOV', 'https://www.csirt.gov.pl/cer/rss'),
       ('Straż Graniczna', 'https://www.strazgraniczna.pl/pl/aktualnosci'),
+      ('Policja', 'https://policja.pl/pol/aktualnosci'),
+      ('Państwowa Straż Pożarna', 'https://www.gov.pl/web/kgpsp/aktualnosci'),
     ].map(
       (e) => Card(
         child: ListTile(
