@@ -95,8 +95,9 @@ class NearestSheltersResult {
       }
     }
     final h = m['health'];
-    if (h != null && h is! Map)
+    if (h != null && h is! Map) {
       throw const FormatException('Niepoprawny stan źródła');
+    }
     return NearestSheltersResult._(
       items,
       h == null ? null : Map<String, dynamic>.from(h),
