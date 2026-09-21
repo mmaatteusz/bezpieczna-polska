@@ -192,8 +192,9 @@ class Snapshot {
     }
     final incidents = m['incidents'];
     if (incidents != null) {
-      if (incidents is! List)
+      if (incidents is! List) {
         throw const FormatException('Niepoprawne incydenty');
+      }
       final assigned = <String>{};
       for (final i in incidents) {
         if (i is! Map ||
