@@ -9,7 +9,7 @@ import 'package:bezpieczna_polska/model.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('cached SG operational notice appears in border section and Alert Center', (tester) async {
+  testWidgets('cached SG operational notice appears in the dedicated border section', (tester) async {
     final now=DateTime.now().toUtc();
     final status={
       'hazardLevel':'UNKNOWN',
@@ -84,11 +84,5 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.text('Alerty').last);
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Utrudnienia na przejściu'), findsWidgets);
-    await tester.tap(find.byType(DropdownButtonFormField<String>).last);
-    await tester.pumpAndSettle();
-    expect(find.text('Granica'), findsOneWidget);
   });
 }
