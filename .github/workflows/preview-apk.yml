@@ -1,7 +1,7 @@
-name: Build PAA radiation preview APK
+name: Build CERT CSIRT preview APK
 on:
   push:
-    branches: [stage/paa-radiation]
+    branches: [stage/cert-csirt]
     paths:
       - 'backend/**'
       - 'mobile/**'
@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: preview-apk-paa-radiation
+  group: preview-apk-cert-csirt
   cancel-in-progress: true
 env:
   CI: 'true'
@@ -67,18 +67,21 @@ jobs:
       - name: Live PAA communication contract check
         working-directory: backend
         run: node scripts/live-paa.mjs ../output/paa-live.json
+      - name: Live CERT and CSIRT GOV contract check
+        working-directory: backend
+        run: node scripts/live-cyber.mjs ../output/cyber-live.json
       - name: Prepare artifact
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p output
-          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.7-preview-arm64.apk
+          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.8-preview-arm64.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
           sha256sum output/*.apk | tee output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: Bezpieczna_Polska_0.1.0-alpha.7-preview-arm64
+          name: Bezpieczna_Polska_0.1.0-alpha.8-preview-arm64
           path: output/
           if-no-files-found: error
           retention-days: 30
