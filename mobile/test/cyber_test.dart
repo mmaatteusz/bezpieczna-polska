@@ -80,7 +80,9 @@ void main() {
 
     await tester.tap(find.text('Alerty').last);
     await tester.pumpAndSettle();
-    expect(find.textContaining('CVE-2026-12345'),findsOneWidget);
-    expect(find.text('Cyber'),findsWidgets);
+    expect(find.textContaining('CVE-2026-12345'), findsOneWidget);
+    await tester.tap(find.text('Wszystkie').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Cyber'), findsOneWidget);
   });
 }
