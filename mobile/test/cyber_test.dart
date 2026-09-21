@@ -66,8 +66,16 @@ void main() {
     await tester.pumpWidget(SafetyApp(repository:repo));
     await tester.pumpAndSettle();
 
-    expect(find.text('Cyberbezpieczeństwo'),findsOneWidget);
-    expect(find.textContaining('CVE-2026-12345'),findsOneWidget);
+    for (
+      var i = 0;
+      i < 8 && find.text('Cyberbezpieczeństwo').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Cyberbezpieczeństwo'), findsOneWidget);
+    expect(find.textContaining('CVE-2026-12345'), findsOneWidget);
 
     await tester.tap(find.text('Alerty').last);
     await tester.pumpAndSettle();
