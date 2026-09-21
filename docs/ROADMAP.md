@@ -37,7 +37,7 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 | 29 | PAA | 🟡 |
 | 30 | CERT Polska / CSIRT GOV | 🟡 |
 | 31 | Straż Graniczna | ✅ |
-| 32 | Istotne zdarzenia Policji / PSP | ❌ |
+| 32 | Istotne zdarzenia Policji / PSP | ✅ |
 | 33 | Obserwowane lokalizacje | ❌ |
 | 34 | „Co dzieje się wokół mnie?” | 🟡 |
 | 35 | Alarmy Ukrainy | ❌ |
