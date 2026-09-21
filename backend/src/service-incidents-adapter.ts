@@ -46,7 +46,7 @@ function correctionText(text:string){
 type Classification={eventType:Event['eventType'];severity:Event['severity']};
 export function classifyServiceIncident(title:string,description:string):Classification|null{
   const text=clean(title+' '+description);
-  const editorial=/(?:\brocznic\w*\b|\bhistoryczn\w*\b|\b(?:19|20)\d{2}\s*r\.?.*\b(?:rocznic|sprzed)\b|konferenc\w*|szkoleni\w*|trening\w*|ćwiczeni\w*|warsztat\w*|kampani\w*|profilakty\w*|konkurs\w*|mistrzostw\w*|turniej\w*|uroczysto\w*|rekolekc\w*|narad\w*|spotkani\w*|podsumowani\w*|nab[oó]r\w*|dotacj\w*|przekazani\w*\s+sprzęt|nowy\w*\s+sztandar)/iu.test(text);
+  const editorial=/(?:\brocznic\w*\b|\bhistoryczn\w*\b|\b(?:19|20)\d{2}\s*r\.?.*\b(?:rocznic|sprzed)\b|konferenc\w*|szkoleni\w*|trening\w*|ćwiczeni\w*|warsztat\w*|kampani\w*|profilakty\w*|konkurs\w*|mistrzostw\w*|turniej\w*|uroczysto\w*|rekolekc\w*|narad\w*|spotkani\w*|podsumowani\w*|nab[oó]r\w*|dotacj\w*|przekazani\w*\s+sprzęt|nowy\w*\s+sztandar|prepozycjonowan\w*|moduł\w*\s+GFFF|misj\w*\s+zagraniczn\w*)/iu.test(text);
   if(editorial)return null;
 
   const explosion=/(?:\bwybuch\w*|\beksplozj\w*)/iu.test(text);
@@ -55,7 +55,7 @@ export function classifyServiceIncident(title:string,description:string):Classif
   const hazmat=/(?:HAZMAT|zagrożeni\w* chemiczn\w*|substancj\w* chemiczn\w*|wyciek\w* (?:amoniak\w*|chlor\w*|kwas\w*|gazu\b|substancj\w*)|rozszczeln\w*.*(?:amoniak|chlor|gaz|chemiczn)|skażeni\w* chemiczn\w*)/iu.test(text);
   if(hazmat)return {eventType:'HAZMAT',severity:/(?:ewaku\w*|stref\w* zagrożenia|zakład\w*|magazyn\w*|infrastruktur\w*)/iu.test(text)?'HIGH':'NORMAL'};
 
-  const industrialFire=/(?:pożar\w*|płon\w*)/iu.test(text)&&/(?:duż\w* pożar|magazyn\w*|hal\w*|zakład\w*|fabryk\w*|rafineri\w*|elektrowni\w*|stacj\w* transformator|składowisk\w*|centrum logistyczn\w*|budyn\w* wielorodzinn\w*|szpital\w*|szkoł\w*|infrastruktur\w* krytyczn\w*|ewaku\w*|kilkadziesiąt zastęp\w*|wiele zastęp\w*)/iu.test(text);
+  const industrialFire=/(?:\bpożar(?:\b|u\b|em\b|ze\b|y\b|ów\b|om\b|ami\b|ach\b)|\bpłon\w*)/iu.test(text)&&/(?:duż\w* pożar|magazyn\w*|hal\w*|zakład\w*|fabryk\w*|rafineri\w*|elektrowni\w*|stacj\w* transformator|składowisk\w*|centrum logistyczn\w*|budyn\w* wielorodzinn\w*|szpital\w*|szkoł\w*|infrastruktur\w* krytyczn\w*|ewaku\w*|kilkadziesiąt zastęp\w*|wiele zastęp\w*)/iu.test(text);
   if(industrialFire)return {eventType:'FIRE',severity:/(?:ewaku\w*|zakład\w*|fabryk\w*|rafineri\w*|elektrowni\w*|infrastruktur\w* krytyczn\w*|duż\w* pożar)/iu.test(text)?'HIGH':'NORMAL'};
 
   const massRescue=/(?:katastrof\w* budowlan\w*|zawali\w* (?:się )?(?:budyn|hal|dach)|wypadek kolejow\w*|katastrof\w* kolejow\w*|akcj\w* ratownicz\w*)/iu.test(text)
