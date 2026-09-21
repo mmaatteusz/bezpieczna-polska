@@ -82,7 +82,9 @@ class NearestSheltersResult {
 
   factory NearestSheltersResult.parse(dynamic input) {
     final m = Map<String, dynamic>.from(input as Map);
-    if (m['schemaVersion'] != 1 || m['items'] is! List || m['serverTime'] is! String) {
+    if (m['schemaVersion'] != 1 ||
+        m['items'] is! List ||
+        m['serverTime'] is! String) {
       throw const FormatException('Niepoprawna odpowiedź najbliższych punktów');
     }
     final items = (m['items'] as List).map(NearestShelter.parse).toList();
@@ -93,7 +95,8 @@ class NearestSheltersResult {
       }
     }
     final h = m['health'];
-    if (h != null && h is! Map) throw const FormatException('Niepoprawny stan źródła');
+    if (h != null && h is! Map)
+      throw const FormatException('Niepoprawny stan źródła');
     return NearestSheltersResult._(
       items,
       h == null ? null : Map<String, dynamic>.from(h),

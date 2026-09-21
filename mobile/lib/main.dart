@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+
 import 'model.dart';
 import 'shelter_map.dart';
 import 'security_levels.dart';
@@ -66,7 +68,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   Snapshot? snapshot;
   String? error;
   Timer? timer, refreshTimer;
-  String statusFilter = 'Wszystkie', sourceFilter = 'Wszystkie', typeFilter = 'Wszystkie', query = '';
+  String statusFilter = 'Wszystkie',
+      sourceFilter = 'Wszystkie',
+      typeFilter = 'Wszystkie',
+      query = '';
   Map<String, int> seen = {};
   @override
   void initState() {
@@ -93,12 +98,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     try {
       seen = Map<String, int>.from(
         jsonDecode(
-              widget.repository.prefs.getString(
-                    'seen:${widget.repository.api}:$region',
-                  ) ??
-                  '{}',
-            )
-            as Map,
+          widget.repository.prefs.getString(
+                'seen:${widget.repository.api}:$region',
+              ) ??
+              '{}',
+        ) as Map,
       );
     } catch (_) {
       seen = {};
@@ -171,9 +175,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         children: [
           Text(
             'BEZPIECZNA POLSKA',
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(letterSpacing: 2),
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(letterSpacing: 2),
           ),
           Text(
             [
@@ -230,7 +233,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 ),
                 IconButton(
                   tooltip: 'Odśwież',
-                  onPressed: loading || widget.repository.api.isEmpty ? null : refresh,
+                  onPressed: loading || widget.repository.api.isEmpty
+                      ? null
+                      : refresh,
                   icon: loading
                       ? const SizedBox(
                           width: 20,
@@ -309,9 +314,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     padding: const EdgeInsets.only(top: 22, bottom: 12),
     child: Text(
       text,
-      style: Theme.of(
-        context,
-      ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+      style: Theme.of(context).textTheme.titleLarge
+          ?.copyWith(fontWeight: FontWeight.w700),
     ),
   );
   Widget empty(String title, String text, IconData icon) => Card(
@@ -484,7 +488,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 badge(e.sources.first['name'] as String),
                 badge(e.badge),
                 badge(e.provenance),
-                if (eventSourceState(e) == 'STALE') badge('STALE • DANE NIEAKTUALNE'),
+                if (eventSourceState(e) == 'STALE')
+                  badge('STALE • DANE NIEAKTUALNE'),
               ],
             ),
             const SizedBox(height: 12),
@@ -511,8 +516,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   bool alertStatusMatches(SafetyEvent e) {
     final lifecycle = e.data['lifecycle'] as String;
     final correction = e.data['correction'];
-    final expired = DateTime.tryParse(e.data['validTo'] as String? ?? '')
-        ?.isBefore(DateTime.now()) ?? false;
+    final expired =
+        DateTime.tryParse(e.data['validTo'] as String? ?? '')
+            ?.isBefore(DateTime.now()) ??
+        false;
     return switch (statusFilter) {
       'Aktywne' => lifecycle == 'ACTIVE' && !expired,
       'Zakończone' =>
@@ -520,8 +527,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       'Nieustalone' => lifecycle == 'UNKNOWN',
       'Korekty' =>
         correction != null ||
-        e.revision > 1 ||
-        ['REFUTED', 'DISPUTED'].contains(e.data['verification']),
+            e.revision > 1 ||
+            ['REFUTED', 'DISPUTED'].contains(e.data['verification']),
       _ => true,
     };
   }
@@ -566,10 +573,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     final normalized = query.trim().toLowerCase();
     final list = events.where((e) {
       final text = '${e.title} ${e.description}'.toLowerCase();
-      final sourceOk = sourceFilter == 'Wszystkie' ||
+      final sourceOk =
+          sourceFilter == 'Wszystkie' ||
           e.sources.any((s) => s['id'] == sourceFilter);
-      final typeOk = typeFilter == 'Wszystkie' ||
-          e.data['eventType'] == typeFilter;
+      final typeOk =
+          typeFilter == 'Wszystkie' || e.data['eventType'] == typeFilter;
       return text.contains(normalized) &&
           sourceOk &&
           typeOk &&
@@ -587,15 +595,16 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       Wrap(
         spacing: 8,
         runSpacing: 8,
-        children: ['Wszystkie', 'Aktywne', 'Zakończone', 'Nieustalone', 'Korekty']
-            .map(
-              (s) => ChoiceChip(
-                label: Text(s),
-                selected: statusFilter == s,
-                onSelected: (_) => setState(() => statusFilter = s),
-              ),
-            )
-            .toList(),
+        children:
+            ['Wszystkie', 'Aktywne', 'Zakończone', 'Nieustalone', 'Korekty']
+                .map(
+                  (s) => ChoiceChip(
+                    label: Text(s),
+                    selected: statusFilter == s,
+                    onSelected: (_) => setState(() => statusFilter = s),
+                  ),
+                )
+                .toList(),
       ),
       const SizedBox(height: 12),
       Row(
@@ -707,9 +716,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ),
     OutlinedButton.icon(
       onPressed: () async {
-        await SharePlus.instance.share(
-          ShareParams(text: 'Jestem bezpieczny.'),
-        );
+        await SharePlus.instance.share(ShareParams(text: 'Jestem bezpieczny.'));
       },
       icon: const Icon(Icons.share_outlined),
       label: const Text('Udostępnij „Jestem bezpieczny”'),
@@ -795,10 +802,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => SourceStatusPage(
-          sources: sources,
-          openLink: openLink,
-        ),
+        builder: (_) => SourceStatusPage(sources: sources, openLink: openLink),
       ),
     );
   }
@@ -867,7 +871,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                         unawaited(developerSettings());
                       },
                     ),
-                  const Text('0.1.0-alpha.5 • Push nieaktywny • GPS tylko na żądanie'),
+                  const Text(
+                    '0.1.0-alpha.5 • Push nieaktywny • GPS tylko na żądanie',
+                  ),
                 ],
               ),
             ),

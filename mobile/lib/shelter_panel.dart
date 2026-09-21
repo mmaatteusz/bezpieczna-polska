@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+
 import 'model.dart';
 import 'shelters.dart';
 
@@ -120,7 +122,10 @@ class _ShelterPanelState extends State<ShelterPanel> {
       }
       if (!await Geolocator.isLocationServiceEnabled()) {
         if (mounted) {
-          setState(() => nearestMessage = 'Włącz lokalizację w telefonie, aby znaleźć najbliższy punkt.');
+          setState(
+            () => nearestMessage =
+                'Włącz lokalizację w telefonie, aby znaleźć najbliższy punkt.',
+          );
         }
         return;
       }
@@ -130,13 +135,17 @@ class _ShelterPanelState extends State<ShelterPanel> {
       }
       if (permission == LocationPermission.denied) {
         if (mounted) {
-          setState(() => nearestMessage = 'Bez zgody na lokalizację nie można policzyć odległości. Możesz nadal wyszukiwać po adresie.');
+          setState(
+            () => nearestMessage = 'Bez zgody na lokalizację nie można policzyć odległości. Możesz nadal wyszukiwać po adresie.',
+          );
         }
         return;
       }
       if (permission == LocationPermission.deniedForever) {
         if (mounted) {
-          setState(() => nearestMessage = 'Dostęp do lokalizacji jest zablokowany w ustawieniach Androida. Możesz nadal wyszukiwać po adresie.');
+          setState(
+            () => nearestMessage = 'Dostęp do lokalizacji jest zablokowany w ustawieniach Androida. Możesz nadal wyszukiwać po adresie.',
+          );
         }
         return;
       }
@@ -154,19 +163,22 @@ class _ShelterPanelState extends State<ShelterPanel> {
       if (mounted) {
         setState(() {
           nearest = result;
-          final state = result.health?['healthStatus'] ?? result.health?['state'];
+          final state =
+              result.health?['healthStatus'] ?? result.health?['state'];
           nearestMessage = result.items.isEmpty
               ? 'Brak punktów schronienia w aktualnym pakiecie danych.'
               : state == 'STALE'
-                  ? 'Uwaga: najbliższe punkty wyliczono z zapisanej, nieaktualnej kopii wykazu.'
-                  : state == 'BROKEN' || state == 'DEGRADED'
-                      ? 'Uwaga: aktualność wykazu nie jest obecnie w pełni potwierdzona.'
-                      : null;
+              ? 'Uwaga: najbliższe punkty wyliczono z zapisanej, nieaktualnej kopii wykazu.'
+              : state == 'BROKEN' || state == 'DEGRADED'
+              ? 'Uwaga: aktualność wykazu nie jest obecnie w pełni potwierdzona.'
+              : null;
         });
       }
     } on TimeoutException {
       if (mounted) {
-        setState(() => nearestMessage = 'Nie udało się ustalić lokalizacji w wymaganym czasie. Spróbuj ponownie na zewnątrz lub wyszukaj adres ręcznie.');
+        setState(
+          () => nearestMessage = 'Nie udało się ustalić lokalizacji w wymaganym czasie. Spróbuj ponownie na zewnątrz lub wyszukaj adres ręcznie.',
+        );
       }
     } catch (error) {
       if (mounted) {

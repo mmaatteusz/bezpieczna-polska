@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'shelters.dart';
 import 'security_levels.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,16 +28,12 @@ String apiFailureMessage(Object error) {
     return switch (error.kind) {
       ApiFailureKind.notConfigured =>
         'Aplikacja nie ma skonfigurowanego połączenia z backendem.',
-      ApiFailureKind.timeout =>
-        'Serwer nie odpowiedział na czas. Zachowano ostatnią poprawną kopię danych.',
-      ApiFailureKind.network =>
-        'Brak połączenia z serwerem. Sprawdź internet; zapisane dane pozostają dostępne.',
+      ApiFailureKind.timeout => 'Serwer nie odpowiedział na czas. Zachowano ostatnią poprawną kopię danych.',
+      ApiFailureKind.network => 'Brak połączenia z serwerem. Sprawdź internet; zapisane dane pozostają dostępne.',
       ApiFailureKind.rateLimited =>
         'Serwer chwilowo ogranicza liczbę zapytań. Spróbuj ponownie za moment.',
-      ApiFailureKind.server =>
-        'Usługa jest chwilowo niedostępna. Zachowano ostatnią poprawną kopię danych.',
-      ApiFailureKind.invalidResponse =>
-        'Serwer zwrócił niepoprawne dane. Nie zastąpiono ostatniej poprawnej kopii.',
+      ApiFailureKind.server => 'Usługa jest chwilowo niedostępna. Zachowano ostatnią poprawną kopię danych.',
+      ApiFailureKind.invalidResponse => 'Serwer zwrócił niepoprawne dane. Nie zastąpiono ostatniej poprawnej kopii.',
     };
   }
   if (error is ShelterVersionChanged) {
@@ -200,9 +198,8 @@ class Snapshot {
           data[national ? 'nationalStatus' : 'status']['validUntil'] as String,
         ),
       ) &&
-      !DateTime.parse(
-        data['serverTime'] as String,
-      ).isAfter(now.add(const Duration(seconds: 30)));
+      !DateTime.parse(data['serverTime'] as String)
+          .isAfter(now.add(const Duration(seconds: 30)));
   String statusText(
     DateTime now, {
     required bool online,
@@ -245,7 +242,10 @@ class DataRepository {
     }
   }
 
-  Future<http.Response> _get(Uri uri, {Duration timeout = const Duration(seconds: 15)}) async {
+  Future<http.Response> _get(
+    Uri uri, {
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
     try {
       return await client
           .get(uri, headers: {'Accept': 'application/json'})
@@ -438,10 +438,13 @@ class DataRepository {
   }
 
   Future<List<Map<String, dynamic>>> eventTimeline(String id) async {
-    if (id.isEmpty || id.length > 150) throw const FormatException('Błędny identyfikator');
+    if (id.isEmpty || id.length > 150)
+      throw const FormatException('Błędny identyfikator');
     final u = _apiUri();
     final response = await _get(
-      u.replace(path: '${u.path}/v1/events/${Uri.encodeComponent(id)}/timeline'),
+      u.replace(
+        path: '${u.path}/v1/events/${Uri.encodeComponent(id)}/timeline',
+      ),
     );
     if (response.statusCode != 200) _responseFailure(response);
     if (response.bodyBytes.length > 2 * 1024 * 1024) {
@@ -450,7 +453,10 @@ class DataRepository {
     final raw = jsonDecode(utf8.decode(response.bodyBytes));
     if (raw is! List) throw const FormatException('Niepoprawna historia');
     return raw.map((item) {
-      if (item is! Map || item['payload'] is! Map || item['recorded_at'] is! String || item['reason'] is! String) {
+      if (item is! Map ||
+          item['payload'] is! Map ||
+          item['recorded_at'] is! String ||
+          item['reason'] is! String) {
         throw const FormatException('Niepoprawna historia');
       }
       final payload = Map<String, dynamic>.from(item['payload'] as Map);

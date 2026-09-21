@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -43,36 +44,33 @@ void main() {
     },
   );
 
-  test(
-    'build URL, region and query isolation; bounded cache and clear invalidation',
-    () async {
-      final prefs = await SharedPreferences.getInstance();
-      final pending = Completer<http.Response>();
-      var delay = false;
-      final r = DataRepository(
-        prefs,
-        buildApi: 'https://build.example',
-        client: MockClient((request) async {
-          expect(request.url.path, '/v1/shelters');
-          expect(request.url.queryParameters['regionId'], '04');
-          expect(request.url.queryParameters['q'], 'Bydgoszcz');
-          return delay ? pending.future : response(fixture());
-        }),
-      );
-      await r.refreshShelters('04', query: ' Bydgoszcz ');
-      expect(r.cachedShelters('04')?.items.length, 3);
-      expect(r.cachedShelters('02'), isNull);
-      final other = DataRepository(prefs, buildApi: 'https://other.example');
-      expect(other.cachedShelters('04'), isNull);
-      delay = true;
-      final late = r.refreshShelters('04', query: 'Bydgoszcz');
-      final assertion = expectLater(late, throwsStateError);
-      await r.clearData();
-      pending.complete(response(fixture()));
-      await assertion;
-      expect(r.cachedShelters('04'), isNull);
-    },
-  );
+  test('build URL, region and query isolation; bounded cache and clear invalidation', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final pending = Completer<http.Response>();
+    var delay = false;
+    final r = DataRepository(
+      prefs,
+      buildApi: 'https://build.example',
+      client: MockClient((request) async {
+        expect(request.url.path, '/v1/shelters');
+        expect(request.url.queryParameters['regionId'], '04');
+        expect(request.url.queryParameters['q'], 'Bydgoszcz');
+        return delay ? pending.future : response(fixture());
+      }),
+    );
+    await r.refreshShelters('04', query: ' Bydgoszcz ');
+    expect(r.cachedShelters('04')?.items.length, 3);
+    expect(r.cachedShelters('02'), isNull);
+    final other = DataRepository(prefs, buildApi: 'https://other.example');
+    expect(other.cachedShelters('04'), isNull);
+    delay = true;
+    final late = r.refreshShelters('04', query: 'Bydgoszcz');
+    final assertion = expectLater(late, throwsStateError);
+    await r.clearData();
+    pending.complete(response(fixture()));
+    await assertion;
+    expect(r.cachedShelters('04'), isNull);
+  });
 
   test(
     'failed response keeps the last good page; version conflict is explicit',
@@ -110,40 +108,73 @@ void main() {
     },
   );
 
-
-  test('nearest shelter response validates ordering and repository request', () async {
-    final raw=fixture(),first=Map<String,dynamic>.from((raw['items'] as List).first as Map);
-    final result={
-      'schemaVersion':1,
-      'serverTime':'2026-09-19T12:00:00Z',
-      'query':{'latitude':first['latitude'],'longitude':first['longitude']},
-      'health':raw['health'],
-      'items':[
-        {'point':first,'distanceMeters':0},
-        {'point':Map<String,dynamic>.from((raw['items'] as List)[1] as Map),'distanceMeters':550},
-      ],
-    };
-    final parsed=NearestSheltersResult.parse(result);
-    expect(parsed.items.first.distanceLabel,'0 m');
-    expect(parsed.items[1].distanceLabel,'550 m');
-    expect(()=>NearestSheltersResult.parse({...result,'items':[
-      {'point':first,'distanceMeters':500},
-      {'point':Map<String,dynamic>.from((raw['items'] as List)[1] as Map),'distanceMeters':100},
-    ]}),throwsFormatException);
-    final repo=DataRepository(
-      await SharedPreferences.getInstance(),
-      buildApi:'https://build.example',
-      client:MockClient((request) async {
-        expect(request.url.path,'/v1/shelters/nearest');
-        expect(request.url.queryParameters['lat'],first['latitude'].toString());
-        expect(request.url.queryParameters['lon'],first['longitude'].toString());
-        expect(request.url.queryParameters['limit'],'3');
-        return response(result);
-      }),
-    );
-    final fetched=await repo.nearestShelters(first['latitude'] as double,first['longitude'] as double);
-    expect(fetched.items.first.point.id,first['id']);
-  });
+  test(
+    'nearest shelter response validates ordering and repository request',
+    () async {
+      final raw = fixture(),
+          first = Map<String, dynamic>.from(
+            (raw['items'] as List).first as Map,
+          );
+      final result = {
+        'schemaVersion': 1,
+        'serverTime': '2026-09-19T12:00:00Z',
+        'query': {
+          'latitude': first['latitude'],
+          'longitude': first['longitude'],
+        },
+        'health': raw['health'],
+        'items': [
+          {'point': first, 'distanceMeters': 0},
+          {
+            'point': Map<String, dynamic>.from(
+              (raw['items'] as List)[1] as Map,
+            ),
+            'distanceMeters': 550,
+          },
+        ],
+      };
+      final parsed = NearestSheltersResult.parse(result);
+      expect(parsed.items.first.distanceLabel, '0 m');
+      expect(parsed.items[1].distanceLabel, '550 m');
+      expect(
+        () => NearestSheltersResult.parse({
+          ...result,
+          'items': [
+            {'point': first, 'distanceMeters': 500},
+            {
+              'point': Map<String, dynamic>.from(
+                (raw['items'] as List)[1] as Map,
+              ),
+              'distanceMeters': 100,
+            },
+          ],
+        }),
+        throwsFormatException,
+      );
+      final repo = DataRepository(
+        await SharedPreferences.getInstance(),
+        buildApi: 'https://build.example',
+        client: MockClient((request) async {
+          expect(request.url.path, '/v1/shelters/nearest');
+          expect(
+            request.url.queryParameters['lat'],
+            first['latitude'].toString(),
+          );
+          expect(
+            request.url.queryParameters['lon'],
+            first['longitude'].toString(),
+          );
+          expect(request.url.queryParameters['limit'], '3');
+          return response(result);
+        }),
+      );
+      final fetched = await repo.nearestShelters(
+        first['latitude'] as double,
+        first['longitude'] as double,
+      );
+      expect(fetched.items.first.point.id, first['id']);
+    },
+  );
 
   testWidgets(
     'offline results, availability and search preserve phone layout at 200%',
