@@ -40,6 +40,11 @@ for(const [name,title,description] of [
  ['education','Szkolenie z pożarów magazynów','Strażacy ćwiczyli działania ratownicze i ewakuację.'],
 ] as const)test(name+' is rejected',()=>assert.equal(classifyServiceIncident(title,description),null));
 
+test('irrelevant PSP article without publication date is rejected without breaking sync',()=>{
+ const html='<main><article><h2>VIII Mistrzostwa Polski Strażaków</h2><div class="editor-content"><p>Relacja z zawodów sportowych i wręczenia pucharów strażakom.</p></div></article></main>';
+ assert.equal(parsePspArticle(html,'https://www.gov.pl/web/kgpsp/viii-mistrzostwa-polski-strazakow',now),null);
+});
+
 test('PSP event preserves date-only publication and source locality without invented point/time',()=>{
  const e=parsePspArticle(pspArticle('Sokolniki Suche - wypadek kolejowy','Pociągiem podróżowało ponad 100 osób. 8 osób zabrano do szpitala. Na miejscu pracowało blisko 30 zastępów i specjalistyczne grupy ratownictwa.'),pspUrl,now)!;
  assert.ok(e);assert.equal(e.eventType,'RESCUE');assert.equal(e.publicationDate,'2026-09-21');assert.equal(e.publishedAt,null);
