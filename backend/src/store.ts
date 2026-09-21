@@ -1,3 +1,4 @@
+import {correlate,type Incident} from './correlation.js';
 import {DatabaseSync} from 'node:sqlite';
 import {createHash} from 'node:crypto';
 import pg from 'pg';
@@ -38,6 +39,7 @@ export class Store{
  async init(){
   if(this.db.kind==='postgres')await this.db.run('CREATE EXTENSION IF NOT EXISTS postgis');
   await this.db.run('CREATE TABLE IF NOT EXISTS event_revisions(event_id TEXT NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL, content_hash TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT NOT NULL, recorded_at TEXT NOT NULL, PRIMARY KEY(event_id,revision))');
+  await this.db.run('CREATE TABLE IF NOT EXISTS incident_revisions(incident_id TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,content_hash TEXT NOT NULL,recorded_at TEXT NOT NULL,PRIMARY KEY(incident_id,revision))');
   await this.db.run('CREATE TABLE IF NOT EXISTS source_health(id TEXT PRIMARY KEY,payload TEXT NOT NULL)');
   await this.db.run('CREATE TABLE IF NOT EXISTS shelters(id TEXT PRIMARY KEY,region_id TEXT NOT NULL,search_text TEXT NOT NULL,payload TEXT NOT NULL)');
   await this.db.run('CREATE INDEX IF NOT EXISTS shelter_region_idx ON shelters(region_id,id)');
@@ -54,14 +56,18 @@ export class Store{
    await this.db.run(`ALTER TABLE shelters ADD COLUMN IF NOT EXISTS geom geometry(Point,4326) GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint((payload::jsonb->>'longitude')::double precision,(payload::jsonb->>'latitude')::double precision),4326)) STORED`);
    await this.db.run('CREATE INDEX IF NOT EXISTS shelter_geometry_gist ON shelters USING GIST (geom)');
   }
+  await this.db.transaction(async db=>{const s=new Store(db);await s.reconcileIncidents(await s.events());});
  }
  async events():Promise<Event[]>{
   const rows=await this.db.all('SELECT r.payload FROM event_revisions r JOIN (SELECT event_id,MAX(revision) AS rev FROM event_revisions GROUP BY event_id) last ON r.event_id=last.event_id AND r.revision=last.rev');
   return rows.map(r=>eventSchema.parse(JSON.parse(r.payload as string))).sort((a,b)=>(b.publishedAt??b.publicationDate??'').localeCompare(a.publishedAt??a.publicationDate??'')||a.id.localeCompare(b.id));
  }
- async snapshot(){return this.db.transaction(async db=>{const s=new Store(db);return {events:await s.events(),health:await s.health()};});}
+ async snapshot(){return this.db.transaction(async db=>{const s=new Store(db);const events=await s.events();return {events,health:await s.health(),incidents:await s.incidents()};});}
  async get(id:string){const r=await this.db.all('SELECT payload FROM event_revisions WHERE event_id=? ORDER BY revision DESC LIMIT 1',[id]);return r.length?eventSchema.parse(JSON.parse(r[0].payload as string)):null;}
  async put(input:Event,actor='adapter',reason='Source content updated',expectedRevision?:number){
+  return this.db.transaction(async db=>{const s=new Store(db);const changed=await s.putRecord(input,actor,reason,expectedRevision);if(changed)await s.reconcileIncidents(await s.events());return changed;});
+ }
+ private async putRecord(input:Event,actor='adapter',reason='Source content updated',expectedRevision?:number){
   const e=eventSchema.parse(input);const previous=await this.get(e.id);
   if(expectedRevision!==undefined&&(previous?.revision??0)!==expectedRevision)throw new Error('REVISION_CONFLICT');
   if(actor==='adapter'&&previous?.reviewed)return false;
@@ -73,7 +79,7 @@ export class Store{
   return true;
  }
  async applySync(events:Event[],health:Health){
-  await this.db.transaction(async db=>{const s=new Store(db);for(const e of events)await s.put(e);await s.setHealth(health);});
+  await this.db.transaction(async db=>{const s=new Store(db);for(const e of events)await s.putRecord(e);await s.reconcileIncidents(await s.events());await s.setHealth(health);});
  }
  async applyShelterSync(items:Shelter[],health:Health){
   if(health.id!=='SHELTERS'||health.coverage!=='FACILITY_CATALOG'||!health.complete||!items.length||items.length!==health.itemCount||!health.sourceContentHash)throw new Error('SHELTER_INVALID_BATCH');
@@ -136,7 +142,7 @@ export class Store{
   return (await this.events()).filter(e=>e.geometry!==null);
  }
  async timeline(id:string){
-  const rows=(await this.db.all('SELECT payload,actor,reason,recorded_at FROM event_revisions WHERE event_id=? ORDER BY revision',[id])).map(r=>({...r,payload:eventSchema.parse(JSON.parse(r.payload as string))}));
+  const rows=(await this.db.all('SELECT payload,actor,reason,recorded_at FROM event_revisions WHERE event_id=? ORDER BY revision',[id])).map(r=>({...r,actor:String(r.actor),reason:String(r.reason),recorded_at:String(r.recorded_at),payload:eventSchema.parse(JSON.parse(r.payload as string))}));
   let previous:Event|null=null;
   return rows.map(row=>{
    const current=row.payload,changes:{field:string;from:unknown;to:unknown}[]=[];
@@ -151,6 +157,27 @@ export class Store{
    return {...row,changes};
   });
  }
+ async incidents():Promise<Incident[]>{
+  const rows=await this.db.all('SELECT r.payload FROM incident_revisions r JOIN (SELECT incident_id,MAX(revision) AS rev FROM incident_revisions GROUP BY incident_id) last ON r.incident_id=last.incident_id AND r.revision=last.rev');
+  return rows.map(r=>JSON.parse(r.payload as string) as Incident).sort((a,b)=>a.id.localeCompare(b.id));
+ }
+ private async reconcileIncidents(events:Event[]){
+  const previous=await this.incidents(),byId=new Map(events.map(e=>[e.id,e]));
+  for(const incident of correlate(events,previous)){
+   const old=(await this.db.all('SELECT revision,content_hash FROM incident_revisions WHERE incident_id=? ORDER BY revision DESC LIMIT 1',[incident.id]))[0];
+   const {revision,...stable}=incident;
+   const hash=createHash('sha256').update(JSON.stringify({ ...stable,eventRevisions:incident.relatedEventIds.map(id=>[id,byId.get(id)!.revision])})).digest('hex');
+   if(old?.content_hash===hash)continue;
+   const next={...incident,revision:Number(old?.revision??0)+1};
+   await this.db.run('INSERT INTO incident_revisions(incident_id,revision,payload,content_hash,recorded_at) VALUES(?,?,?,?,?)',[next.id,next.revision,JSON.stringify(next),hash,new Date().toISOString()]);
+  }
+ }
+ async incidentTimeline(id:string){
+  const incident=(await this.incidents()).find(i=>i.id===id);if(!incident)return [];
+  const rows=(await Promise.all(incident.relatedEventIds.map(eventId=>this.timeline(eventId)))).flat();
+  return rows.sort((a,b)=>String(a.recorded_at).localeCompare(String(b.recorded_at))||a.payload.id.localeCompare(b.payload.id)||a.payload.revision-b.payload.revision);
+ }
+ async incidentHistory(id:string){return (await this.db.all('SELECT payload,recorded_at FROM incident_revisions WHERE incident_id=? ORDER BY revision',[id])).map(r=>({...r,payload:JSON.parse(r.payload as string)}));}
  async health():Promise<Health[]>{return (await this.db.all('SELECT payload FROM source_health ORDER BY id')).map(r=>JSON.parse(r.payload as string) as Health);}
  async setHealth(h:Health){await this.db.run('INSERT INTO source_health(id,payload) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',[h.id,JSON.stringify(h)]);}
 }

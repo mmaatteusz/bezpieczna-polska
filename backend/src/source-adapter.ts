@@ -1,3 +1,4 @@
+import {WCZK_SOURCES} from './wczk-registry.js';
 import type {Event} from './domain.js';
 import type {Shelter} from './shelter.js';
 
@@ -20,6 +21,7 @@ export interface SourceAdapter {
 
 // Enable sources one by one, in the agreed integration order.
 export const SOURCES = [
+  ...WCZK_SOURCES,
   {id: 'RCB', name: 'Rządowe Centrum Bezpieczeństwa', url: 'https://www.gov.pl/web/rcb/komunikaty', enabled: true},
   {id: 'SHELTERS', name: 'Punkty schronienia PSP / dane.gov.pl', url: 'https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce', enabled: true},
   {id: 'LEVELS', name: 'Stopnie alarmowe RP', url: 'https://www.gov.pl/web/rcb/komunikaty', enabled: true},

@@ -28,16 +28,12 @@ String apiFailureMessage(Object error) {
     return switch (error.kind) {
       ApiFailureKind.notConfigured =>
         'Aplikacja nie ma skonfigurowanego połączenia z backendem.',
-      ApiFailureKind.timeout =>
-        'Serwer nie odpowiedział na czas. Zachowano ostatnią poprawną kopię danych.',
-      ApiFailureKind.network =>
-        'Brak połączenia z serwerem. Sprawdź internet; zapisane dane pozostają dostępne.',
+      ApiFailureKind.timeout => 'Serwer nie odpowiedział na czas. Zachowano ostatnią poprawną kopię danych.',
+      ApiFailureKind.network => 'Brak połączenia z serwerem. Sprawdź internet; zapisane dane pozostają dostępne.',
       ApiFailureKind.rateLimited =>
         'Serwer chwilowo ogranicza liczbę zapytań. Spróbuj ponownie za moment.',
-      ApiFailureKind.server =>
-        'Usługa jest chwilowo niedostępna. Zachowano ostatnią poprawną kopię danych.',
-      ApiFailureKind.invalidResponse =>
-        'Serwer zwrócił niepoprawne dane. Nie zastąpiono ostatniej poprawnej kopii.',
+      ApiFailureKind.server => 'Usługa jest chwilowo niedostępna. Zachowano ostatnią poprawną kopię danych.',
+      ApiFailureKind.invalidResponse => 'Serwer zwrócił niepoprawne dane. Nie zastąpiono ostatniej poprawnej kopii.',
     };
   }
   if (error is ShelterVersionChanged) {
@@ -72,11 +68,26 @@ class SafetyEvent {
   String get id => data['id'] as String;
   String get title => data['title'] as String;
   String get description => data['description'] as String;
-  int get revision => data['revision'] as int;
+  int get revision =>
+      (data['_incident'] as Map?)?['revision'] as int? ??
+      data['revision'] as int;
+  String? get incidentId => (data['_incident'] as Map?)?['id'] as String?;
+  List<SafetyEvent> get reports =>
+      (data['_reports'] as List?)?.cast<SafetyEvent>() ?? [this];
+  bool get hasConflictingReports =>
+      (data['_incident'] as Map?)?['hasConflictingReports'] == true;
+  String? get sourceSummary =>
+      sources.length > 1 ? 'Komunikaty z ${sources.length} źródeł' : null;
+  bool get isWczk => sources.any((s) => s['id'].toString().startsWith('WCZK-'));
   List<String> get areas => List<String>.from(data['regions'] as List);
-  List<Map<String, dynamic>> get sources => (data['sources'] as List)
-      .map((s) => Map<String, dynamic>.from(s as Map))
-      .toList();
+  List<Map<String, dynamic>> get sources {
+    final items = data['_reports'] == null
+        ? (data['sources'] as List).cast<Map>()
+        : reports.expand((e) => (e.data['sources'] as List).cast<Map>());
+    return {for (final s in items) s['id']: Map<String, dynamic>.from(s)}.values
+        .toList();
+  }
+
   bool get isRcb => sources.any((s) => s['id'] == 'RCB');
   bool get isRso => sources.any((s) => s['id'] == 'RSO');
   bool get hasPoint => data['latitude'] is num && data['longitude'] is num;
@@ -146,6 +157,31 @@ class Snapshot {
   final Map<String, dynamic> data;
   final List<SafetyEvent> events;
   Snapshot._(this.data, this.events);
+  List<SafetyEvent> get alertEvents {
+    final byId = {for (final e in events) e.id: e};
+    final grouped = <String>{};
+    final cards = <SafetyEvent>[];
+    for (final raw in data['incidents'] as List? ?? []) {
+      final incident = Map<String, dynamic>.from(raw as Map);
+      final reports = (incident['reports'] as List)
+          .map(SafetyEvent.parse)
+          .toList();
+      if (!reports.any((e) => byId.containsKey(e.id))) continue;
+      final primary = reports.firstWhere(
+        (e) => e.id == incident['primaryEventId'],
+      );
+      grouped.addAll(reports.map((e) => e.id));
+      cards.add(
+        SafetyEvent({
+          ...primary.data,
+          '_incident': incident,
+          '_reports': reports,
+        }),
+      );
+    }
+    return [...cards, ...events.where((e) => !grouped.contains(e.id))];
+  }
+
   factory Snapshot.parse(String text) {
     final m = Map<String, dynamic>.from(jsonDecode(text) as Map);
     if (m['schemaVersion'] != 1 ||
@@ -153,6 +189,34 @@ class Snapshot {
         m['sources'] is! List ||
         m['events'] is! List) {
       throw const FormatException('Nieobsługiwany format');
+    }
+    final incidents = m['incidents'];
+    if (incidents != null) {
+      if (incidents is! List)
+        throw const FormatException('Niepoprawne incydenty');
+      final assigned = <String>{};
+      for (final i in incidents) {
+        if (i is! Map ||
+            i['id'] is! String ||
+            i['revision'] is! int ||
+            i['reports'] is! List ||
+            (i['reports'] as List).isEmpty ||
+            i['primaryEventId'] is! String ||
+            i['relatedEventIds'] is! List ||
+            i['hasConflictingReports'] is! bool) {
+          throw const FormatException('Niepoprawny incydent');
+        }
+        final reports = (i['reports'] as List).map(SafetyEvent.parse).toList();
+        final ids = reports.map((e) => e.id).toSet();
+        if (ids.length != reports.length ||
+            !ids.contains(i['primaryEventId']) ||
+            ids.length != (i['relatedEventIds'] as List).length ||
+            !(i['relatedEventIds'] as List).every(ids.contains) ||
+            ids.any(assigned.contains)) {
+          throw const FormatException('Niespójne powiązania komunikatów');
+        }
+        assigned.addAll(ids);
+      }
     }
     DateTime.parse(m['serverTime'] as String);
     for (final s in [m['status'], m['nationalStatus']]) {
@@ -202,9 +266,8 @@ class Snapshot {
           data[national ? 'nationalStatus' : 'status']['validUntil'] as String,
         ),
       ) &&
-      !DateTime.parse(
-        data['serverTime'] as String,
-      ).isAfter(now.add(const Duration(seconds: 30)));
+      !DateTime.parse(data['serverTime'] as String)
+          .isAfter(now.add(const Duration(seconds: 30)));
   String statusText(
     DateTime now, {
     required bool online,
@@ -442,14 +505,18 @@ class DataRepository {
     }
   }
 
-  Future<List<Map<String, dynamic>>> eventTimeline(String id) async {
+  Future<List<Map<String, dynamic>>> eventTimeline(
+    String id, {
+    bool incident = false,
+  }) async {
     if (id.isEmpty || id.length > 150) {
       throw const FormatException('Błędny identyfikator');
     }
     final u = _apiUri();
     final response = await _get(
       u.replace(
-        path: '${u.path}/v1/events/${Uri.encodeComponent(id)}/timeline',
+        path:
+            '${u.path}/v1/${incident ? 'incidents' : 'events'}/${Uri.encodeComponent(id)}/timeline',
       ),
     );
     if (response.statusCode != 200) _responseFailure(response);

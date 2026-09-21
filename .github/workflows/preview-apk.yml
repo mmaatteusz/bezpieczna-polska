@@ -1,7 +1,7 @@
-name: Build quality-pass preview APK
+name: Build WCZK correlation preview APK
 on:
   push:
-    branches: [stage/quality-pass]
+    branches: [stage/wczk-dedup]
     paths:
       - 'backend/**'
       - 'mobile/**'
@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: preview-apk-quality-pass
+  group: preview-apk-wczk-dedup
   cancel-in-progress: true
 env:
   CI: 'true'
@@ -61,16 +61,21 @@ jobs:
       - name: Build Android preview
         working-directory: mobile
         run: flutter build apk --debug --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=true
+      - name: Live WCZK contract check
+        working-directory: backend
+        run: node scripts/live-wczk.mjs ../output/wczk-live.json
       - name: Prepare artifact
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p output
-          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.5-preview-arm64.apk
+          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.6-preview-arm64.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk > output/signature-check.txt
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
           sha256sum output/*.apk > output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: Bezpieczna_Polska_0.1.0-alpha.5-preview-arm64
+          name: Bezpieczna_Polska_0.1.0-alpha.6-preview-arm64
           path: output/
           if-no-files-found: error
           retention-days: 30

@@ -5,7 +5,7 @@ import {shelterSchema} from './shelter.js';
 // Shared discovery contract: disabled providers never return fabricated data.
 export const mapLayers=[
  {id:'shelters',sourceId:'SHELTERS',authority:'OFFICIAL_PL',enabled:true},
- ...['RCB','RSO_WCZK','radiation','border','police_PSP','Ukraine_alerts'].map(id=>({id,sourceId:id,authority:id==='Ukraine_alerts'?'OFFICIAL_UA':'OFFICIAL_PL',enabled:false})),
+ ...['RCB','WCZK','RSO_WCZK','radiation','border','police_PSP','Ukraine_alerts'].map(id=>({id,sourceId:id,authority:id==='Ukraine_alerts'?'OFFICIAL_UA':'OFFICIAL_PL',enabled:false})),
  {id:'NEPTUN',sourceId:'NEPTUN',authority:'OSINT',enabled:false},
 ];
 const bounds=z.tuple([z.number().min(-180).max(180),z.number().min(-85).max(85),z.number().min(-180).max(180),z.number().min(-85).max(85)]).refine(b=>b[0]<b[2]&&b[1]<b[3]);

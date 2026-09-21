@@ -1,3 +1,4 @@
+import {correlate,choosePrimary,type Incident} from './correlation.js';
 import {z} from 'zod';
 import {securityLevelSchema} from './security-level.js';
 export const REGIONS:Record<string,string>={'02':'Dolnośląskie','04':'Kujawsko-pomorskie','06':'Lubelskie','08':'Lubuskie','10':'Łódzkie','12':'Małopolskie','14':'Mazowieckie','16':'Opolskie','18':'Podkarpackie','20':'Podlaskie','22':'Pomorskie','24':'Śląskie','26':'Świętokrzyskie','28':'Warmińsko-mazurskie','30':'Wielkopolskie','32':'Zachodniopomorskie'};
@@ -30,11 +31,11 @@ export const eventSchema=z.object({
  if(e.geometry&&e.latitude!==null&&(e.geometry.type!=='Point'||e.geometry.coordinates[0]!==e.longitude||e.geometry.coordinates[1]!==e.latitude))ctx.addIssue({code:'custom',message:'Conflicting event geometry'});
 }).transform(e=>({...e,geometry:e.geometry??(e.latitude!==null&&e.longitude!==null?{type:'Point' as const,coordinates:[e.longitude,e.latitude] as [number,number]}:null)}));
 export type Event=z.infer<typeof eventSchema>;
-export type Health={id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS'|'FACILITY_CATALOG';pagesFetched?:number;dataDate?:string;sourceUpdatedAt?:string;sourceContentHash?:string;sourceUrl?:string;datasetUrl?:string;license?:string;fallbackSelected?:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE';fallback?:{selected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'|'LAST_KNOWN_GOOD_COPY'|'NONE';secondaryStatus:'NOT_NEEDED'|'AVAILABLE_STALE'|'NOT_VERIFIED';reason:string|null}};
-export function computeStatus(events:Event[],health:Health[],region:string,now=new Date()){
+export type Health={regionId?:string;implementation?:string;integrationNote?:string;id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS'|'FACILITY_CATALOG';pagesFetched?:number;dataDate?:string;sourceUpdatedAt?:string;sourceContentHash?:string;sourceUrl?:string;datasetUrl?:string;license?:string;fallbackSelected?:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE';fallback?:{selected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'|'LAST_KNOWN_GOOD_COPY'|'NONE';secondaryStatus:'NOT_NEEDED'|'AVAILABLE_STALE'|'NOT_VERIFIED';reason:string|null}};
+export function computeStatus(events:Event[],health:Health[],region:string,now=new Date(),incidents?:Incident[]){
  const ms=now.getTime();
  // Facilities are reference data, never evidence of the absence of hazards.
- health=health.filter(h=>h.id!=='SHELTERS'&&h.coverage!=='FACILITY_CATALOG');
+ health=health.filter(h=>h.id!=='SHELTERS'&&h.coverage!=='FACILITY_CATALOG'&&(!h.regionId||region==='PL'||h.regionId===region));
  const relevant=events.filter(e=>!e.isDemo&&e.officialWarning&&e.messageContext==='ACTUAL'&&e.verification==='CONFIRMED'&&e.sources.some(s=>s.tier===1)&&(region==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(region)));
  const fresh=health.filter(h=>h.state==='HEALTHY'&&h.lastSuccess&&Date.parse(h.lastSuccess)<=ms+30000&&ms-Date.parse(h.lastSuccess)<h.maxAgeSeconds*1000);
  const coverage=health.length>0&&fresh.length===health.length&&fresh.every(h=>h.complete)?'COMPLETE_FOR_CONFIGURED_SCOPE':fresh.length?'PARTIAL':'UNAVAILABLE';
@@ -48,7 +49,10 @@ export function computeStatus(events:Event[],health:Health[],region:string,now=n
  else if(coverage==='COMPLETE_FOR_CONFIGURED_SCOPE'){hazardLevel='NO_ACTIVE_WARNINGS';displayText='Brak aktywnych ostrzeżeń w monitorowanych źródłach';}
  if(events.some(e=>e.securityLevel&&e.validFrom&&e.validTo&&Date.parse(e.validFrom)<=ms&&Date.parse(e.validTo)>=ms&&(region==='PL'||e.regions.includes('PL')||e.regions.includes(region))))reasonCodes.push('ADMINISTRATIVE_READINESS_LEVELS');
  if(coverage!=='COMPLETE_FOR_CONFIGURED_SCOPE')reasonCodes.push('INCOMPLETE_SOURCE_COVERAGE');
- return {hazardLevel,displayText,coverageState:coverage,reasonCodes,supportingEventIds:[...critical,...caution].map(e=>e.id),lastKnownEventIds:stale.map(e=>e.id),evaluatedAt:now.toISOString(),validUntil:new Date(Math.min(ms+60000,...active.map(e=>Date.parse(e.validTo!)),...fresh.map(h=>Date.parse(h.lastSuccess!)+h.maxAgeSeconds*1000))).toISOString(),rulesetVersion:'1.1.0'};
+ const groups=incidents??correlate(events),supporting=[...critical,...caution];
+ const supportingIncidents=groups.flatMap(g=>{const members=supporting.filter(e=>g.relatedEventIds.includes(e.id));if(!members.length)return [];return [{...g,primaryEventId:choosePrimary(members,now).id,supportingEventIds:members.map(e=>e.id)}];});
+ const grouped=new Set(supportingIncidents.flatMap(g=>g.relatedEventIds));
+ return {supportingIncidents,incidentCount:supportingIncidents.length+supporting.filter(e=>!grouped.has(e.id)).length,hazardLevel,displayText,coverageState:coverage,reasonCodes,supportingEventIds:[...supportingIncidents.map(g=>g.primaryEventId),...supporting.filter(e=>!grouped.has(e.id)).map(e=>e.id)],lastKnownEventIds:stale.map(e=>e.id),evaluatedAt:now.toISOString(),validUntil:new Date(Math.min(ms+60000,...active.map(e=>Date.parse(e.validTo!)),...fresh.map(h=>Date.parse(h.lastSuccess!)+h.maxAgeSeconds*1000))).toISOString(),rulesetVersion:'1.2.0'};
 }
 
 export function sourceHealth(health:Health[],now=new Date()){

@@ -1,0 +1,253 @@
+{
+  "checkedAt": "2026-09-21T04:59:37.011Z",
+  "adapter": "WCZK-18",
+  "version": "1.0.0",
+  "complete": false,
+  "events": [
+    {
+      "id": "WCZK-18-82846",
+      "title": "Ostrzeżenie hydrologiczne:Susza hydrologiczna",
+      "description": "Ostrzeżenie hydrologiczne nr 216\nZjawisko: Susza hydrologiczna\nWażność: od godz. 09:12 dnia 14.08.2026 do odwołania\nObszar: Zlewnia Wisły od ujścia Dunajca do ujścia Wisłoki (podkarpackie, świętokrzyskie, małopolskie)\nPrzebieg: W związku z występującymi niskimi przepływami wody, w kolejnych dniach na odcinku Wisły od ujścia Dunajca do ujścia Wisłoki spodziewane jest dalsze utrzymywanie się przepływów wody poniżej SNQ\nPrawdopodobieństwo wystąpienia zjawiska: 95 %\nUwagi: Ostrzeżenie wydawane jest w sytuacji, gdy aktualne lub prognozowane wartości przepływu na stacjach wodowskazowych uznanych za reprezentatywne układają się poniżej SNQ przez minimum 10 dni w obrębie jednego obszaru hydrologicznego (który obejmuje grupę zlewni monitorowanych przez PSHM).",
+      "eventType": "WEATHER",
+      "severity": "NORMAL",
+      "verification": "CONFIRMED",
+      "lifecycle": "ACTIVE",
+      "messageContext": "ACTUAL",
+      "regions": [
+        "12",
+        "18",
+        "26"
+      ],
+      "geographicScope": "REGIONAL",
+      "publishedAt": null,
+      "retrievedAt": "2026-09-21T04:59:37.011Z",
+      "validFrom": "2026-08-14T07:12:00.000Z",
+      "validTo": null,
+      "sources": [
+        {
+          "id": "WCZK-18",
+          "name": "WCZK — Podkarpackie",
+          "url": "https://rzeszow.uw.gov.pl/wczk/ostrzezenia",
+          "tier": 1
+        }
+      ],
+      "instructions": [],
+      "officialWarning": true,
+      "reviewed": false,
+      "revision": 1,
+      "publicationDate": null,
+      "locationText": "Zlewnia Wisły od ujścia Dunajca do ujścia Wisłoki (podkarpackie, świętokrzyskie, małopolskie)",
+      "areaPrecision": "PROVINCE_SUBSET",
+      "geometry": null,
+      "adapterVersion": "1.0.0",
+      "sourceContentHash": "4b1624cf5a75291fce1f0745ff7d17f43646ddfe2ce97fb98793fa4ad157ce9a",
+      "correction": null,
+      "latitude": null,
+      "longitude": null,
+      "isDemo": false
+    },
+    {
+      "id": "WCZK-18-82818",
+      "title": "Ostrzeżenie hydrologiczne:Susza hydrologiczna",
+      "description": "Ostrzeżenie hydrologiczne nr 210\nZjawisko: susza hydrologiczna\nWażność:od godz. 10:17 dnia 07.08.2026 do odwołania\nObszar: Wisła od ujścia Sanu do ujścia Kamiennej (świętokrzyskie, podkarpackie, lubelskie)\nPrzebieg: W związku z występującymi niskimi przepływami wody, w kolejnych dniach na odcinku Wisły od ujścia Sanu do Kamiennej spodziewane jest dalsze utrzymywanie się przepływów wody poniżej SNQ.\nPrawdopodobieństwo wystąpienia zjawiska: 60%\nUwagi:Ostrzeżenie wydawane jest w sytuacji, gdy aktualne lub prognozowane wartości przepływu na stacjach wodowskazowych uznanych za reprezentatywne układają się poniżej SNQ przez minimum 10 dni w obrębie jednego obszaru hydrologicznego (który obejmuje grupę zlewni monitorowanych przez PSHM).",
+      "eventType": "WEATHER",
+      "severity": "NORMAL",
+      "verification": "CONFIRMED",
+      "lifecycle": "ACTIVE",
+      "messageContext": "ACTUAL",
+      "regions": [
+        "18",
+        "26",
+        "06"
+      ],
+      "geographicScope": "REGIONAL",
+      "publishedAt": null,
+      "retrievedAt": "2026-09-21T04:59:37.011Z",
+      "validFrom": "2026-08-07T08:17:00.000Z",
+      "validTo": null,
+      "sources": [
+        {
+          "id": "WCZK-18",
+          "name": "WCZK — Podkarpackie",
+          "url": "https://rzeszow.uw.gov.pl/wczk/ostrzezenia",
+          "tier": 1
+        }
+      ],
+      "instructions": [],
+      "officialWarning": true,
+      "reviewed": false,
+      "revision": 1,
+      "publicationDate": null,
+      "locationText": "Wisła od ujścia Sanu do ujścia Kamiennej (świętokrzyskie, podkarpackie, lubelskie)",
+      "areaPrecision": "PROVINCE_SUBSET",
+      "geometry": null,
+      "adapterVersion": "1.0.0",
+      "sourceContentHash": "3b59c36626e023357e0c75d5333ca4f1568ac36403b3fd97f3f1b86b4caf9f98",
+      "correction": null,
+      "latitude": null,
+      "longitude": null,
+      "isDemo": false
+    },
+    {
+      "id": "WCZK-18-82849",
+      "title": "Ostrzeżenie hydrologiczne:Susza hydrologiczna - stopień 1",
+      "description": "Ostrzeżenie hydrologiczne Nr: 218\nZjawisko: susza hydrologiczna\nStopień: nie dotyczy\nWażność: od godz. 09:38 dnia 15.08.2026 – do odwołania\nObszar: Wisła od ujścia Wisłoki do ujścia Sanu (podkarpackie, świętokrzyskie)\nPrzebieg: W związku z występującymi niskimi przepływami wody, w kolejnych dniach na odcinku Wisły od ujścia Wisłoki do ujścia Sanu spodziewane jest dalsze utrzymywanie się przepływów wody poniżej SNQ.\nPrawdopodobieństwo wystąpienia zjawiska: 95%\nUwagi: Ostrzeżenie wydawane jest w sytuacji, gdy aktualne lub prognozowane wartości przepływu na stacjach wodowskazowych uznanych za reprezentatywne układają się poniżej SNQ przez minimum 10 dni w obrębie jednego obszaru hydrologicznego (który obejmuje grupę zlewni monitorowanych przez PSHM).",
+      "eventType": "WEATHER",
+      "severity": "NORMAL",
+      "verification": "CONFIRMED",
+      "lifecycle": "ACTIVE",
+      "messageContext": "ACTUAL",
+      "regions": [
+        "18",
+        "26"
+      ],
+      "geographicScope": "REGIONAL",
+      "publishedAt": null,
+      "retrievedAt": "2026-09-21T04:59:37.011Z",
+      "validFrom": "2026-08-15T07:38:00.000Z",
+      "validTo": null,
+      "sources": [
+        {
+          "id": "WCZK-18",
+          "name": "WCZK — Podkarpackie",
+          "url": "https://rzeszow.uw.gov.pl/wczk/ostrzezenia",
+          "tier": 1
+        }
+      ],
+      "instructions": [],
+      "officialWarning": true,
+      "reviewed": false,
+      "revision": 1,
+      "publicationDate": null,
+      "locationText": "Wisła od ujścia Wisłoki do ujścia Sanu (podkarpackie, świętokrzyskie)",
+      "areaPrecision": "PROVINCE_SUBSET",
+      "geometry": null,
+      "adapterVersion": "1.0.0",
+      "sourceContentHash": "39d966087ea0b9d81009de3cbe36ed19e8a5cd49ccf9acdbd5f0100d7e44a1a4",
+      "correction": null,
+      "latitude": null,
+      "longitude": null,
+      "isDemo": false
+    },
+    {
+      "id": "WCZK-18-82699",
+      "title": "Ostrzeżenie hydrologiczne:Susza hydrologiczna",
+      "description": "Ostrzeżenie hydrologiczne Nr: 193\nZjawisko: susza hydrologiczna\nWażność: od godz. 08:43 dnia 30.07.2026 do odwołania\nObszar: zlewnia Strwiąża (podkarpackie)\nPrzebieg: W związku z występującymi niskimi przepływami wody, w kolejnych dniach na obszarze zlewni Strwiąża spodziewane jest dalsze utrzymywanie się przepływów wody poniżej SNQ.\nPrawdopodobieństwo : wystąpienia zjawiska: 100 %\nUwagi: Ostrzeżenie wydawane jest w sytuacji, gdy aktualne lub prognozowane wartości przepływu na stacjach wodowskazowych uznanych za reprezentatywne układają się poniżej SNQ przez minimum 10 dni w obrębie jednego obszaru hydrologicznego (który obejmuje grupę zlewni monitorowanych przez PSHM).",
+      "eventType": "WEATHER",
+      "severity": "NORMAL",
+      "verification": "CONFIRMED",
+      "lifecycle": "ACTIVE",
+      "messageContext": "ACTUAL",
+      "regions": [
+        "18"
+      ],
+      "geographicScope": "REGIONAL",
+      "publishedAt": null,
+      "retrievedAt": "2026-09-21T04:59:37.011Z",
+      "validFrom": "2026-07-30T06:43:00.000Z",
+      "validTo": null,
+      "sources": [
+        {
+          "id": "WCZK-18",
+          "name": "WCZK — Podkarpackie",
+          "url": "https://rzeszow.uw.gov.pl/wczk/ostrzezenia",
+          "tier": 1
+        }
+      ],
+      "instructions": [],
+      "officialWarning": true,
+      "reviewed": false,
+      "revision": 1,
+      "publicationDate": null,
+      "locationText": "zlewnia Strwiąża (podkarpackie)",
+      "areaPrecision": "PROVINCE_SUBSET",
+      "geometry": null,
+      "adapterVersion": "1.0.0",
+      "sourceContentHash": "ec0fa26e69103cee7e6d2f789fc9c2833d7ba0bb05db39b379ddd934c630413e",
+      "correction": null,
+      "latitude": null,
+      "longitude": null,
+      "isDemo": false
+    },
+    {
+      "id": "WCZK-18-82698",
+      "title": "Ostrzeżenie hydrologiczne:Susza hydrologiczna",
+      "description": "Ostrzeżenie hydrologiczne Nr: 192\nZjawisko: susza hydrologiczna Stopień: nie dotyczy\nWażność: od godz. 08:42 dnia 30.07.2026 do odwołania\nObszar: zlewnia Sanu do ujścia Osławy (wraz ze zlewnią Osławy) (podkarpackie)\nPrzebieg: W związku z występującymi niskimi przepływami wody, w kolejnych dniach na obszarze zlewni Sanu do ujścia Osławy (wraz ze zlewnią Osławy) spodziewane jest dalsze utrzymywanie się przepływów wody poniżej SNQ.\nPrawdopodobieństwo wystąpienia zjawiska: 100%\nUwagi: Ostrzeżenie wydawane jest w sytuacji, gdy aktualne lub prognozowane wartości przepływu na stacjach wodowskazowych uznanych za reprezentatywne układają się poniżej SNQ przez minimum 10 dni w obrębie jednego obszaru hydrologicznego (który obejmuje grupę zlewni monitorowanych przez PSHM).",
+      "eventType": "WEATHER",
+      "severity": "NORMAL",
+      "verification": "CONFIRMED",
+      "lifecycle": "ACTIVE",
+      "messageContext": "ACTUAL",
+      "regions": [
+        "18"
+      ],
+      "geographicScope": "REGIONAL",
+      "publishedAt": null,
+      "retrievedAt": "2026-09-21T04:59:37.011Z",
+      "validFrom": "2026-07-30T06:42:00.000Z",
+      "validTo": null,
+      "sources": [
+        {
+          "id": "WCZK-18",
+          "name": "WCZK — Podkarpackie",
+          "url": "https://rzeszow.uw.gov.pl/wczk/ostrzezenia",
+          "tier": 1
+        }
+      ],
+      "instructions": [],
+      "officialWarning": true,
+      "reviewed": false,
+      "revision": 1,
+      "publicationDate": null,
+      "locationText": "zlewnia Sanu do ujścia Osławy (wraz ze zlewnią Osławy) (podkarpackie)",
+      "areaPrecision": "PROVINCE_SUBSET",
+      "geometry": null,
+      "adapterVersion": "1.0.0",
+      "sourceContentHash": "18e3a701ad94f7360cf6c8b48c080650292d20b713bebb70a4881452aa30f3ac",
+      "correction": null,
+      "latitude": null,
+      "longitude": null,
+      "isDemo": false
+    },
+    {
+      "id": "WCZK-18-82379",
+      "title": "Ostrzeżenie hydrologiczne:Susza hydrologiczna",
+      "description": "Ostrzeżenie hydrologiczne Nr: 145\nZjawisko: susza hydrologiczna Stopień: nie dotyczy\nWażność: od godz. 09:31 dnia 03.07.2026 do odwołania\nObszar: zlewnia Sanu od ujścia Osławy do ujścia Wiaru (wraz ze zlewnią Wiaru) (podkarpackie)\nPrzebieg: W związku z występującymi niskimi przepływami wody na obszarze zlewni Sanu od ujścia Osławy do ujścia Wiaru (wraz ze zlewnią Wiaru) spodziewane jest dalsze utrzymywanie się przepływów wody poniżej SNQ.\nPrawdopodobieństwo wystąpienia zjawiska: 100%\nUwagi: Ostrzeżenie wydawane jest w sytuacji, gdy aktualne lub prognozowane wartości przepływu na stacjach wodowskazowych uznanych za reprezentatywne układają się poniżej SNQ przez minimum 10 dni w obrębie jednego obszaru hydrologicznego (który obejmuje grupę zlewni monitorowanych przez PSHM).",
+      "eventType": "WEATHER",
+      "severity": "NORMAL",
+      "verification": "CONFIRMED",
+      "lifecycle": "ACTIVE",
+      "messageContext": "ACTUAL",
+      "regions": [
+        "18"
+      ],
+      "geographicScope": "REGIONAL",
+      "publishedAt": null,
+      "retrievedAt": "2026-09-21T04:59:37.011Z",
+      "validFrom": "2026-07-03T07:31:00.000Z",
+      "validTo": null,
+      "sources": [
+        {
+          "id": "WCZK-18",
+          "name": "WCZK — Podkarpackie",
+          "url": "https://rzeszow.uw.gov.pl/wczk/ostrzezenia",
+          "tier": 1
+        }
+      ],
+      "instructions": [],
+      "officialWarning": true,
+      "reviewed": false,
+      "revision": 1,
+      "publicationDate": null,
+      "locationText": "zlewnia Sanu od ujścia Osławy do ujścia Wiaru (wraz ze zlewnią Wiaru) (podkarpackie)",
+      "areaPrecision": "PROVINCE_SUBSET",
+      "geometry": null,
+      "adapterVersion": "1.0.0",
+      "sourceContentHash": "e105dd2f70b49d937af7741030d2c14205cef9ab2c0a49f531b77584e7e1681f",
+      "correction": null,
+      "latitude": null,
+      "longitude": null,
+      "isDemo": false
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'model.dart';
 
 class EventDetailsPage extends StatefulWidget {
@@ -27,7 +28,10 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
 
   Future<List<Map<String, dynamic>>> _loadTimeline() async {
     if (widget.repository.api.isEmpty) return const [];
-    return widget.repository.eventTimeline(widget.event.id);
+    return widget.repository.eventTimeline(
+      widget.event.incidentId ?? widget.event.id,
+      incident: widget.event.incidentId != null,
+    );
   }
 
   String fieldLabel(String field) => switch (field) {
@@ -95,6 +99,11 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
             runSpacing: 8,
             children: [badge(context, e.badge), badge(context, e.provenance)],
           ),
+          if (e.sourceSummary != null) Text(e.sourceSummary!),
+          if (e.hasConflictingReports)
+            const Text(
+              'Źródła różnią się stanem lub obszarem. Zakończenie albo sprostowanie w jednym źródle nie unieważnia pozostałych komunikatów.',
+            ),
           const SizedBox(height: 20),
           Text(e.title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 16),
@@ -125,6 +134,39 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
               label: Text(s['name'] as String),
             ),
           ),
+          if (e.reports.length > 1) ...[
+            const SizedBox(height: 16),
+            const Text('Komunikaty źródłowe'),
+            ...e.reports.map(
+              (report) => Card(
+                child: ExpansionTile(
+                  title: Text(report.sources.map((s) => s['name']).join(', ')),
+                  subtitle: Text(
+                    '${report.badge} • Publikacja: ${stamp(report.data['publishedAt'])}',
+                  ),
+                  childrenPadding: const EdgeInsets.all(16),
+                  children: [
+                    Text(report.title),
+                    SelectableText(report.description),
+                    Text(
+                      'Obszar: ${report.data['locationText'] ?? report.areas.map((r) => regions[r] ?? r).join(', ')}',
+                    ),
+                    Text(
+                      'Od: ${stamp(report.data['validFrom'])} • Do: ${stamp(report.data['validTo'])}',
+                    ),
+                    if (report.data['correction'] != null)
+                      Text('Sprostowanie: ${report.data['correction']}'),
+                    ...report.sources.map(
+                      (s) => TextButton(
+                        onPressed: () => widget.openLink(s['url'] as String),
+                        child: Text(s['name'] as String),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           Text(
             'Historia komunikatu',
@@ -145,7 +187,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     subtitle: Text(apiFailureMessage(snapshot.error!)),
                     trailing: IconButton(
                       tooltip: 'Ponów',
-                      onPressed: () => setState(() => timeline = _loadTimeline()),
+                      onPressed: () =>
+                          setState(() => timeline = _loadTimeline()),
                       icon: const Icon(Icons.refresh),
                     ),
                   ),
@@ -159,10 +202,14 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
               }
               return Column(
                 children: rows.reversed.map((row) {
-                  final payload = Map<String, dynamic>.from(row['payload'] as Map);
+                  final payload = Map<String, dynamic>.from(
+                    row['payload'] as Map,
+                  );
                   final revision = payload['revision'];
-                  final lifecycle = payload['lifecycle'] as String? ?? 'UNKNOWN';
-                  final verification = payload['verification'] as String? ?? 'UNVERIFIED';
+                  final lifecycle =
+                      payload['lifecycle'] as String? ?? 'UNKNOWN';
+                  final verification =
+                      payload['verification'] as String? ?? 'UNVERIFIED';
                   final correction = payload['correction'] as String?;
                   final changes = (row['changes'] as List? ?? const [])
                       .whereType<Map>()
@@ -175,7 +222,9 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                             ? Icons.fact_check_outlined
                             : Icons.history,
                       ),
-                      title: Text('Wersja $revision • $lifecycle'),
+                      title: Text(
+                        '${(payload['sources'] as List).map((s) => (s as Map)['name']).join(', ')} • Wersja $revision • $lifecycle',
+                      ),
                       subtitle: Text(
                         '${stamp(row['recorded_at'])} • ${row['actor'] ?? 'system'}\n${row['reason']}',
                       ),
@@ -192,7 +241,10 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                             return ListTile(
                               dense: true,
                               contentPadding: EdgeInsets.zero,
-                              leading: const Icon(Icons.add_circle_outline, size: 20),
+                              leading: const Icon(
+                                Icons.add_circle_outline,
+                                size: 20,
+                              ),
                               title: Text(fieldLabel(field)),
                             );
                           }
@@ -211,9 +263,8 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                             alignment: Alignment.centerLeft,
                             child: Text(
                               'Korekta: $correction',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
                             ),
                           ),
                       ],

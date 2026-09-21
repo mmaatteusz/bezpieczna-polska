@@ -98,12 +98,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     try {
       seen = Map<String, int>.from(
         jsonDecode(
-              widget.repository.prefs.getString(
-                    'seen:${widget.repository.api}:$region',
-                  ) ??
-                  '{}',
-            )
-            as Map,
+          widget.repository.prefs.getString(
+                'seen:${widget.repository.api}:$region',
+              ) ??
+              '{}',
+        ) as Map,
       );
     } catch (_) {
       seen = {};
@@ -167,7 +166,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     if (widget.repository.api.isNotEmpty) await refresh();
   }
 
-  List<SafetyEvent> get events => snapshot?.events ?? [];
+  List<SafetyEvent> get events => snapshot?.alertEvents ?? [];
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -176,9 +175,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         children: [
           Text(
             'BEZPIECZNA POLSKA',
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(letterSpacing: 2),
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(letterSpacing: 2),
           ),
           Text(
             [
@@ -316,9 +314,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     padding: const EdgeInsets.only(top: 22, bottom: 12),
     child: Text(
       text,
-      style: Theme.of(
-        context,
-      ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+      style: Theme.of(context).textTheme.titleLarge
+          ?.copyWith(fontWeight: FontWeight.w700),
     ),
   );
   Widget empty(String title, String text, IconData icon) => Card(
@@ -385,7 +382,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             if (status is Map)
-              StatusExplanation(status: status, events: events),
+              StatusExplanation(status: status, events: snapshot?.events ?? []),
           ],
         ),
       ),
@@ -491,6 +488,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 badge(e.sources.first['name'] as String),
                 badge(e.badge),
                 badge(e.provenance),
+                if (e.sourceSummary != null) badge(e.sourceSummary!),
+                if (e.hasConflictingReports)
+                  badge('RÓŻNICE MIĘDZY KOMUNIKATAMI'),
                 if (eventSourceState(e) == 'STALE')
                   badge('STALE • DANE NIEAKTUALNE'),
               ],
@@ -520,9 +520,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     final lifecycle = e.data['lifecycle'] as String;
     final correction = e.data['correction'];
     final expired =
-        DateTime.tryParse(
-          e.data['validTo'] as String? ?? '',
-        )?.isBefore(DateTime.now()) ??
+        DateTime.tryParse(e.data['validTo'] as String? ?? '')
+            ?.isBefore(DateTime.now()) ??
         false;
     return switch (statusFilter) {
       'Aktywne' => lifecycle == 'ACTIVE' && !expired,
@@ -566,6 +565,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   List<Widget> rcbPage() {
     final sourceOptions = <String>{
       'Wszystkie',
+      'RCB',
+      'RSO',
+      'WCZK',
       ...events.expand((e) => e.sources.map((s) => s['id'].toString())),
     }.toList();
     final typeOptions = <String>{
@@ -576,16 +578,21 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     if (!typeOptions.contains(typeFilter)) typeFilter = 'Wszystkie';
     final normalized = query.trim().toLowerCase();
     final list = events.where((e) {
-      final text = '${e.title} ${e.description}'.toLowerCase();
+      final text = e.reports
+          .map((r) => '${r.title} ${r.description}')
+          .join(' ')
+          .toLowerCase();
       final sourceOk =
           sourceFilter == 'Wszystkie' ||
+          (sourceFilter == 'WCZK' && e.isWczk) ||
           e.sources.any((s) => s['id'] == sourceFilter);
       final typeOk =
-          typeFilter == 'Wszystkie' || e.data['eventType'] == typeFilter;
+          typeFilter == 'Wszystkie' ||
+          e.reports.any((r) => r.data['eventType'] == typeFilter);
       return text.contains(normalized) &&
           sourceOk &&
           typeOk &&
-          alertStatusMatches(e);
+          e.reports.any(alertStatusMatches);
     }).toList();
     return [
       TextField(

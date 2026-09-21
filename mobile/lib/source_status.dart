@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'model.dart';
 
 class SourceStatusPage extends StatelessWidget {
@@ -54,18 +55,28 @@ class SourceStatusPage extends StatelessWidget {
             return Card(
               child: ExpansionTile(
                 leading: Icon(icon(state)),
-                title: Text(source['name']?.toString() ?? source['id'].toString()),
+                title: Text(
+                  source['name']?.toString() ?? source['id'].toString(),
+                ),
                 subtitle: Text(
                   '${label(state)}\nOstatnia poprawna synchronizacja: ${stamp(source['lastSuccessfulSyncAt'] ?? source['lastSuccess'])}',
                 ),
                 childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 children: [
-                  _row('Ostatnia próba', stamp(source['lastAttemptAt'] ?? source['lastAttempt'])),
+                  if (source['integrationNote'] is String)
+                    Text(source['integrationNote'] as String),
+                  _row(
+                    'Ostatnia próba',
+                    stamp(source['lastAttemptAt'] ?? source['lastAttempt']),
+                  ),
                   _row('Ostatni element', stamp(source['lastItemTime'])),
                   if (source['dataDate'] != null)
                     _row('Data danych', source['dataDate'].toString()),
                   if (source['sourceUpdatedAt'] != null)
-                    _row('Aktualizacja źródła', stamp(source['sourceUpdatedAt'])),
+                    _row(
+                      'Aktualizacja źródła',
+                      stamp(source['sourceUpdatedAt']),
+                    ),
                   if (source['coverage'] != null)
                     _row('Zakres', source['coverage'].toString()),
                   if (source['itemCount'] != null)

@@ -1,0 +1,11 @@
+import {writeFile,mkdir} from 'node:fs/promises';
+import {dirname} from 'node:path';
+import {fetchPublic} from '../dist/adapters.js';
+import {podkarpackieAdapter} from '../dist/wczk-adapter.js';
+const path=process.argv[2];
+if(!path)throw new Error('OUTPUT_REQUIRED');
+const now=new Date(),batch=await podkarpackieAdapter.sync({now,fetchText:fetchPublic});
+if(!batch.events.length)throw new Error('EMPTY_WCZK_BATCH');
+await mkdir(dirname(path),{recursive:true});
+await writeFile(path,JSON.stringify({checkedAt:now.toISOString(),adapter:podkarpackieAdapter.id,version:podkarpackieAdapter.version,complete:batch.complete,events:batch.events},null,2));
+console.log(`${batch.events.length} official WCZK reports; publication dates/geometry remain null when absent`);

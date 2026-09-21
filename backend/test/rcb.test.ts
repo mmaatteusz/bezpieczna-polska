@@ -80,7 +80,7 @@ test('status separates Poland and region; RCB without geometry produces no inven
  try{
   const status=(await app.inject('/status?regionId=04')).json();
   assert.equal(status.region.id,'04');assert.equal(status.poland.hazardLevel,'UNKNOWN');assert.equal(status.region.hazardLevel,'UNKNOWN');
-  assert.equal(status.sourceHealth.length,8);assert.equal((await app.inject('/status?regionId=bad')).statusCode,400);
+  assert.equal(status.sourceHealth.length,24);assert.equal((await app.inject('/status?regionId=bad')).statusCode,400);
   assert.equal((await app.inject('/readyz')).statusCode,503);
   assert.deepEqual((await app.inject('/v1/layers/events.geojson')).json().features,[]);
   assert.equal((await app.inject('/v1/layers/events.geojson?bbox=bad')).statusCode,400);
