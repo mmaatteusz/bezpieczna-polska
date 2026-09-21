@@ -79,12 +79,10 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(find.text('Granice • Straż Graniczna'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.textContaining('Utrudnienia na przejściu').first,
-      220,
-      scrollable: find.byType(Scrollable).first,
+    expect(
+      find.textContaining('operacyjne informacje o zamknięciach'),
+      findsOneWidget,
     );
-    expect(find.textContaining('Utrudnienia na przejściu'), findsWidgets);
 
     await tester.tap(find.text('Alerty').last);
     await tester.pumpAndSettle();
