@@ -31,6 +31,20 @@ test('HAZMAT is imported',()=>{
  assert.equal(classifyServiceIncident('Wyciek amoniaku w zakładzie','Wyznaczono strefę zagrożenia i ewakuowano pracowników.')?.eventType,'HAZMAT');
 });
 
+test('rail crash mentioning fire brigade is rescue, not fire',()=>{
+ assert.deepEqual(
+  classifyServiceIncident('Sokolniki Suche - wypadek kolejowy','Pociągiem podróżowało ponad 100 osób. 8 osób zabrano do szpitala. Na miejscu pracowało blisko 30 zastępów straży pożarnej, w tym specjalistyczne grupy ratownictwa.'),
+  {eventType:'RESCUE',severity:'HIGH'},
+ );
+});
+
+test('foreign GFFF deployment update is not a Polish situational incident',()=>{
+ assert.equal(
+  classifyServiceIncident('Prepozycjonowanie modułu GFFF Poland w Hiszpanii - przyjazd II zmiany','Strażacy przejęli sprzęt i kontynuują ochronę terenów leśnych przed pożarami w Hiszpanii.'),
+  null,
+ );
+});
+
 for(const [name,title,description] of [
  ['routine police news','Policjanci zatrzymali złodzieja','Mężczyzna odpowie za kradzież w sklepie.'],
  ['arrest','Zatrzymany sprawca oszustw','Podejrzany został tymczasowo aresztowany.'],
