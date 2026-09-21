@@ -64,3 +64,6 @@ Workflow alpha.8 sprawdza:
 - oficjalną stronę RSS CSIRT GOV i oczekiwany brak publicznych kanałów.
 
 Moduł nie omija zabezpieczeń, nie korzysta z prywatnych ostrzeżeń CSIRT GOV i nie interpretuje raportów historycznych jako bieżących alarmów.
+
+
+Tymczasowy workflow używany wyłącznie do odkrycia i weryfikacji publicznych feedów został usunięty po potwierdzeniu kontraktów źródeł. Produkcyjny etap korzysta tylko z testów i live checków w głównym workflow preview.
