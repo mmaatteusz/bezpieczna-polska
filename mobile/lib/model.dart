@@ -443,8 +443,9 @@ class DataRepository {
   }
 
   Future<List<Map<String, dynamic>>> eventTimeline(String id) async {
-    if (id.isEmpty || id.length > 150)
+    if (id.isEmpty || id.length > 150) {
       throw const FormatException('Błędny identyfikator');
+    }
     final u = _apiUri();
     final response = await _get(
       u.replace(
