@@ -87,7 +87,7 @@ void main() {
     await tester.tap(find.text('Alerty').last);
     await tester.pumpAndSettle();
     expect(find.textContaining('Utrudnienia na przejściu'), findsWidgets);
-    await tester.tap(find.text('Wszystkie').last);
+    await tester.tap(find.byType(DropdownButtonFormField<String>).last);
     await tester.pumpAndSettle();
     expect(find.text('Granica'), findsOneWidget);
   });
