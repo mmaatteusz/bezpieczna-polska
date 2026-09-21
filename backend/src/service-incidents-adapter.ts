@@ -132,16 +132,18 @@ export function parsePspArticle(html:string,url:string,now=new Date()):Event|nul
   const title=clean(article.find('h2').first().text()),intro=clean(article.find('p.intro').text());
   const paragraphs=body.find('p,li').map((_,n)=>clean($(n).text())).get().filter(Boolean);
   const description=[intro,...paragraphs].filter(Boolean).join('\n\n')||clean(body.text());
-  const dayText=clean(article.find('.event-date').text()),day=DateTime.fromFormat(dayText,'dd.MM.yyyy',{zone:'Europe/Warsaw'});
-  if(article.length!==1||(body.length<1||body.length>10)||!title||description.length<20||!day.isValid||day.startOf('day').toMillis()>now.getTime()+86400000)throw new Error(`PSP_INCIDENTS_ARTICLE_CONTRACT_CHANGED:article=${article.length}:body=${body.length}:title=${title?'YES':'NO'}:desc=${description.length}:eventDate=${dayText||'EMPTY'}:dateNodes=${article.find('.date').length}:timeNodes=${article.find('time[datetime]').length}:paragraphs=${article.find('p').length}:url=${canonical.pathname}`);
+  if(article.length!==1||(body.length<1||body.length>10)||!title||description.length<20)throw new Error('PSP_INCIDENTS_ARTICLE_CONTRACT_CHANGED');
   const classification=classifyServiceIncident(title,description);if(!classification)return null;
+  const dayText=clean(article.find('.event-date').text()),day=dayText?DateTime.fromFormat(dayText,'dd.MM.yyyy',{zone:'Europe/Warsaw'}):null;
+  if(day&&(!day.isValid||day.startOf('day').toMillis()>now.getTime()+86400000))throw new Error('PSP_INCIDENTS_ARTICLE_DATE_INVALID');
   const regions=explicitRegions(title+' '+description),locationText=pspLocation(title);
   const publishedRaw=article.find('time[datetime]').first().attr('datetime');
   const publishedAt=publishedRaw&&/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(publishedRaw)?publishedRaw:null;
+  const publicationDate=day?.isValid?day.toISODate():publishedAt?DateTime.fromISO(publishedAt,{setZone:true}).setZone('Europe/Warsaw').toISODate():null;
   return eventSchema.parse({
     id:'PSP_INCIDENTS-'+createHash('sha256').update(canonical.href).digest('hex').slice(0,24),title,description,eventType:classification.eventType,severity:classification.severity,
     verification:'CONFIRMED',lifecycle:'UNKNOWN',messageContext:'ACTUAL',regions,geographicScope:regions.length?'REGIONAL':'UNKNOWN',
-    publishedAt,publicationDate:day.toISODate(),retrievedAt:now.toISOString(),validFrom:null,validTo:null,
+    publishedAt,publicationDate,retrievedAt:now.toISOString(),validFrom:null,validTo:null,
     sources:[{id:'PSP_INCIDENTS',name:'Państwowa Straż Pożarna — zdarzenia',url:canonical.href,tier:1}],instructions:[],officialWarning:false,reviewed:false,revision:1,
     correction:correctionText(description),latitude:null,longitude:null,geometry:null,locationText,areaPrecision:regions.length?'PROVINCE':locationText?'EXACT':'UNKNOWN',
     adapterVersion:PSP_INCIDENTS_VERSION,sourceContentHash:createHash('sha256').update(html).digest('hex'),isDemo:false,
