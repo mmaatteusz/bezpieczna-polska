@@ -82,6 +82,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.campaign_outlined).last);
     await tester.pumpAndSettle();
     expect(find.text('Centrum alertów'),findsOneWidget);
+    await tester.drag(find.byType(ListView).first,const Offset(0,-260));
+    await tester.pumpAndSettle();
     final dropdowns=find.byWidgetPredicate((w)=>w is DropdownButtonFormField<String>);
     expect(dropdowns,findsNWidgets(2));
     await tester.tap(dropdowns.last);
