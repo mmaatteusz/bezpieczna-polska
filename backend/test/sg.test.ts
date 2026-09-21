@@ -33,6 +33,8 @@ const ended=article(
 test('SG index accepts only official Aktualności article links and fails closed',()=>{
  const urls=parseSgIndex(page([opUrl,falseUrl]));
  assert.deepEqual(urls,[opUrl,falseUrl]);
+ const withEarlierHeading='<div id="content"><div class="naglowek"><h2>Opcje</h2></div><div class="naglowek"><h2>Aktualności</h2></div><a href="'+new URL(opUrl).pathname+'">x</a></div>';
+ assert.deepEqual(parseSgIndex(withEarlierHeading),[opUrl]);
  assert.throws(()=>parseSgIndex('<div id="content"><div class="naglowek"><h2>Aktualności</h2></div></div>'),/EMPTY/);
  assert.throws(()=>parseSgIndex(page([opUrl,opUrl.replace('Utrudnienia','Inny-slug')])),/DUPLICATE/);
 });
