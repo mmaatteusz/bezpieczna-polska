@@ -113,9 +113,9 @@ export function parsePspIndex(html:string,url=PSP_INCIDENTS_INDEX){
   const $=cheerio.load(html),article=$('main article'),rows=article.find('.art-prev');
   if(article.length!==1||clean(article.find('h2').first().text())!=='Aktualności'||!rows.length||rows.length>50)throw new Error('PSP_INCIDENTS_INDEX_CONTRACT_CHANGED');
   const urls:string[]=[];
-  rows.each((_,row)=>{
-    const link=$(row).find('.title a[href]'),date=clean($(row).find('.date').text());
-    if(link.length!==1||!DateTime.fromFormat(date,'dd.MM.yyyy').isValid||!clean(link.text()))throw new Error('PSP_INCIDENTS_INDEX_CONTRACT_CHANGED');
+  rows.each((i,row)=>{
+    const link=$(row).find('.title a[href]'),date=clean($(row).find('.date').text()),title=clean(link.first().text());
+    if(link.length!==1||!DateTime.fromFormat(date,'dd.MM.yyyy').isValid||!title)throw new Error(`PSP_INCIDENTS_INDEX_CONTRACT_CHANGED:row=${i}:links=${link.length}:date=${date||'EMPTY'}:title=${title?'YES':'NO'}`);
     const u=pspUrl(link.attr('href')!,url);u.search='';urls.push(u.href);
   });
   const href=article.find('#js-pagination-page-next').attr('href');let next:string|null=null;
