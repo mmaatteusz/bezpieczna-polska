@@ -4,7 +4,9 @@ import type {Event} from './domain.js';
 export const CORRELATION_VERSION='1.0.0';
 export type Incident={eventRevisions:Record<string,number>;id:string;relatedEventIds:string[];primaryEventId:string;sourceIds:string[];sourceCount:number;confirmedSourceCount:number;hasConflictingReports:boolean;revision:number;rulesetVersion:string};
 export const normalize=(s:string)=>s.normalize('NFD').replace(/\p{M}/gu,'').replace(/ł/g,'l').replace(/Ł/g,'L').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-const eligible=(e:Event)=>!e.isDemo&&!e.securityLevel&&e.sources.some(s=>s.id==='RCB'||s.id==='RSO'||/^WCZK-\d{2}$/.test(s.id));
+const physicalEligible=(e:Event)=>!e.isDemo&&!e.securityLevel&&e.sources.some(s=>s.id==='RCB'||s.id==='RSO'||/^WCZK-\d{2}$/.test(s.id));
+const cyberEligible=(e:Event)=>!e.isDemo&&!e.securityLevel&&e.eventType==='CYBER'&&e.sources.some(s=>s.id==='CERT'||s.id==='CSIRT_GOV');
+const eligible=(e:Event)=>physicalEligible(e)||cyberEligible(e);
 const families:(readonly [string,RegExp])[]=[['flood',/powodz|podtop|wezbran/],['wind',/siln\w* wiatr|wichur/],['storm',/burz/],['drought',/susza|suszy/],['fire',/pozar/],['outage',/awari\w* (prad|energet)|przerw\w* w dostaw\w* (prad|energ)/],['water',/wod\w* (do spozycia|niezdatn)|zanieczyszcz\w* wod/]];
 function kind(e:Event){
  const t=normalize(e.title+' '+e.description),matches=families.filter(([,re])=>re.test(t));
@@ -24,13 +26,26 @@ function similarity(a:Set<string>,b:Set<string>){const common=[...a].filter(t=>b
 function numbers(e:Event){return (normalize(e.title+' '+e.description).match(/\b\d+\b/g)??[]).sort().join(',');}
 // Only publisher labels and a standalone attention word may differ. A high
 // token score must never hide a changed street, object, or negation.
-function incidentContent(e:Event){return normalize(e.title+' '+e.description).split(' ').filter(w=>!['rcb','rso','wczk','alert','komunikat','uwaga','uwazaj'].includes(w)).join(' ');}
+function incidentContent(e:Event){return normalize(e.title+' '+e.description).split(' ').filter(w=>!['rcb','rso','wczk','cert','csirt','gov','alert','komunikat','uwaga','uwazaj'].includes(w)).join(' ');}
+function cves(e:Event){return new Set((e.title+' '+e.description).toUpperCase().match(/CVE-\d{4}-\d{4,7}/g)??[]);}
+function canCorrelateCyber(a:Event,b:Event){
+ if(!cyberEligible(a)||!cyberEligible(b)||!a.publishedAt||!b.publishedAt)return false;
+ if(Math.abs(Date.parse(a.publishedAt)-Date.parse(b.publishedAt))>72*3600000)return false;
+ const ac=cves(a),bc=cves(b),shared=[...ac].filter(x=>bc.has(x));
+ if(ac.size||bc.size)return shared.length>0;
+ if(numbers(a)!==numbers(b))return false;
+ const at=normalize(a.title),bt=normalize(b.title);
+ if(at===bt)return true;
+ const ta=tokens(a),tb=tokens(b);
+ return Math.min(ta.size,tb.size)>=6&&similarity(ta,tb)>=0.9;
+}
 
 /** Complete-link matching, no fuzzy geography, no transitive A-B-C merge. */
 export function canCorrelate(a:Event,b:Event):boolean{
  if(!eligible(a)||!eligible(b)||a.id===b.id)return false;
  if(a.sources.some(s=>b.sources.some(t=>s.id===t.id)))return false;
  if(['EXERCISE','TEST'].includes(a.messageContext)||['EXERCISE','TEST'].includes(b.messageContext))return false;
+ if(cyberEligible(a)||cyberEligible(b))return canCorrelateCyber(a,b);
  if(!a.regions.length||a.regions.includes('PL')||regionKey(a)!==regionKey(b))return false;
  const ak=kind(a),bk=kind(b);if(!ak||ak!==bk)return false;
  if(a.eventType!=='OTHER'&&b.eventType!=='OTHER'&&a.eventType!==b.eventType)return false;
