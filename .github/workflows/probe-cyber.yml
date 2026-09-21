@@ -15,20 +15,40 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import re, urllib.request
+          import re, urllib.request, urllib.error
           urls=['https://moje.cert.pl/komunikaty/','https://www.csirt.gov.pl/cer/rss']
           for url in urls:
-              req=urllib.request.Request(url,headers={'User-Agent':'BezpiecznaPolska-source-contract-probe/0.1','Accept':'text/html,application/xml;q=0.9,*/*;q=0.1'})
+              req=urllib.request.Request(url,headers={'User-Agent':'BezpiecznaPolska-source-contract-probe/0.2','Accept':'text/html,application/xml;q=0.9,*/*;q=0.1'})
               with urllib.request.urlopen(req,timeout=20) as r:
-                  raw=r.read(2_000_000)
-                  text=raw.decode('utf-8','replace')
+                  raw=r.read(2_000_000); text=raw.decode('utf-8','replace')
                   print('\n===',url,'status',r.status,'final',r.geturl(),'content-type',r.headers.get('content-type'),'bytes',len(raw),'===')
+                  print('generator/meta:', re.findall(r'<meta[^>]+(?:generator|application-name)[^>]*>',text,re.I)[:20])
+                  print('forms:', re.findall(r'<form[^>]+(?:action=["\']([^"\']*)["\'])?[^>]*>',text,re.I)[:20])
                   hrefs=re.findall(r'''(?:href|src)=["']([^"']+)["']''',text,re.I)
+                  print('all interesting hrefs:')
                   for h in hrefs:
-                      if re.search(r'rss|feed|xml',h,re.I):
+                      if re.search(r'rss|feed|xml|atom|export|publication|aktual|komunik',h,re.I):
                           print(h)
-                  print('RSS-like absolute strings:')
-                  for h in sorted(set(re.findall(r'https?://[^"\'<> ]+',text))):
-                      if re.search(r'rss|feed|xml',h,re.I):
-                          print(h[:500])
+                  print('snippets around rss/feed:')
+                  for m in re.finditer(r'(?i)rss|feed',text):
+                      print(re.sub(r'\s+',' ',text[max(0,m.start()-300):m.end()+500])[:900])
+          candidates=[
+            'https://moje.cert.pl/advisory_feed/advisory/feed/',
+            'https://www.csirt.gov.pl/cer/rss.xml',
+            'https://www.csirt.gov.pl/cer/rss/1.xml',
+            'https://www.csirt.gov.pl/cer/rss/aktualnosci.xml',
+            'https://www.csirt.gov.pl/cer/rss/komunikaty.xml',
+            'https://www.csirt.gov.pl/rss',
+            'https://www.csirt.gov.pl/rss.xml',
+            'https://www.csirt.gov.pl/cer/feed',
+            'https://www.csirt.gov.pl/cer/feed.xml',
+          ]
+          for url in candidates:
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'BezpiecznaPolska-source-contract-probe/0.2','Accept':'application/rss+xml,application/xml,text/xml,text/html;q=0.8'})
+                  with urllib.request.urlopen(req,timeout=15) as r:
+                      raw=r.read(300000)
+                      print('\nCANDIDATE',url,'->',r.status,r.geturl(),r.headers.get('content-type'),'bytes',len(raw),'prefix',raw[:180].decode('utf-8','replace').replace('\n',' '))
+              except Exception as e:
+                  print('\nCANDIDATE',url,'ERROR',type(e).__name__,str(e)[:240])
           PY
