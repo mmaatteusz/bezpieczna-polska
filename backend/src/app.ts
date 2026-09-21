@@ -6,7 +6,7 @@ export async function buildApp(store:Store,adminToken?:string){
  const app=Fastify({logger:false,bodyLimit:128*1024});await app.register(rateLimit,{max:100,timeWindow:'1 minute'});
  app.addHook('onSend',async(_,r,p)=>{r.header('Cache-Control','no-store').header('X-Content-Type-Options','nosniff');return p;});
  app.setErrorHandler((e,_,r)=>{if(e instanceof z.ZodError)return r.code(400).send({error:'INVALID_REQUEST'});if(e instanceof Error&&['REVISION_CONFLICT','SHELTER_VERSION_CHANGED'].includes(e.message))return r.code(409).send({error:e.message});const status=typeof e==='object'&&e&&'statusCode'in e?Number(e.statusCode):500;return r.code(status>=400&&status<600?status:500).send({error:'REQUEST_FAILED'});});
- app.get('/healthz',async()=>({ok:true,version:'0.1.0-alpha.4'}));
+ app.get('/healthz',async()=>({ok:true,version:'0.1.0-alpha.5'}));
  const regionQuery=z.object({regionId:z.string().refine(v=>v==='PL'||v in REGIONS).default('PL')});
  app.get('/status',async req=>{
   const {regionId}=regionQuery.parse(req.query),{events,health}=await store.snapshot(),now=new Date();
