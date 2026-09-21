@@ -36,7 +36,7 @@ export type Health={checkedEventIds?:string[];regionId?:string;implementation?:s
 export function computeStatus(events:Event[],health:Health[],region:string,now=new Date(),incidents?:Incident[]){
  const ms=now.getTime();
  // Facilities are reference data, never evidence of the absence of hazards.
- health=health.filter(h=>h.id!=='SHELTERS'&&h.coverage!=='FACILITY_CATALOG'&&(!h.regionId||region==='PL'||h.regionId===region));
+ health=health.filter(h=>!['SHELTERS','CERT','CSIRT_GOV'].includes(h.id)&&h.coverage!=='FACILITY_CATALOG'&&(!h.regionId||region==='PL'||h.regionId===region));
  const relevant=events.filter(e=>!e.isDemo&&e.officialWarning&&e.messageContext==='ACTUAL'&&e.verification==='CONFIRMED'&&e.sources.some(s=>s.tier===1)&&(region==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(region)));
  const fresh=health.filter(h=>h.state==='HEALTHY'&&h.lastSuccess&&Date.parse(h.lastSuccess)<=ms+30000&&ms-Date.parse(h.lastSuccess)<h.maxAgeSeconds*1000);
  const coverage=health.length>0&&fresh.length===health.length&&fresh.every(h=>h.complete&&h.id!=='PAA_MEASUREMENTS')?'COMPLETE_FOR_CONFIGURED_SCOPE':fresh.length?'PARTIAL':'UNAVAILABLE';
