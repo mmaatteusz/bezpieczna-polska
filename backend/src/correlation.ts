@@ -17,9 +17,17 @@ function kind(e:Event){
 const regionKey=(e:Event)=>[...new Set(e.regions)].sort().join(',');
 function interval(e:Event):[number,number]|null{
  const start=e.validFrom??e.publishedAt,end=e.validTo;
- if(!start)return null; // a publication date without time is insufficient
- const a=Date.parse(start),b=end?Date.parse(end):a+6*3600000;
- return Number.isFinite(a)&&Number.isFinite(b)&&b>=a?[a,b]:null;
+ if(start){
+  const a=Date.parse(start),b=end?Date.parse(end):a+6*3600000;
+  return Number.isFinite(a)&&Number.isFinite(b)&&b>=a?[a,b]:null;
+ }
+ // Keep publicationDate date-only on the Event. A whole-day window is used
+ // only as coarse correlation evidence and never exposed as a source timestamp.
+ if(e.publicationDate){
+  const a=Date.parse(e.publicationDate+'T00:00:00Z');
+  return Number.isFinite(a)?[a,a+86400000]:null;
+ }
+ return null;
 }
 function tokens(e:Event){return new Set(normalize(e.title+' '+e.description).split(' ').filter(w=>w.length>2&&!['alert','rcb','rso','wczk','ostrzezenie','uwaga','komunikat','wojewodztwo'].includes(w)));}
 function similarity(a:Set<string>,b:Set<string>){const common=[...a].filter(t=>b.has(t)).length;return common/(a.size+b.size-common||1);}
@@ -53,6 +61,8 @@ export function canCorrelate(a:Event,b:Event):boolean{
  if(Math.abs(ai[0]-bi[0])>12*3600000)return false;
  const al=normalize(a.locationText??''),bl=normalize(b.locationText??'');
  if(al&&bl&&al!==bl)return false;
+ const coarseA=!a.validFrom&&!a.publishedAt&&!!a.publicationDate,coarseB=!b.validFrom&&!b.publishedAt&&!!b.publicationDate;
+ if((coarseA||coarseB)&&(!al||!bl||al!==bl))return false;
  // A common city is not enough: different numbers/streets/incident details veto.
  if(numbers(a)!==numbers(b))return false;
  if(a.geometry&&b.geometry&&JSON.stringify(a.geometry)!==JSON.stringify(b.geometry))return false;
