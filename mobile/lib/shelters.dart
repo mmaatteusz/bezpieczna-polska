@@ -45,6 +45,7 @@ class ShelterPoint {
     DateTime.parse(m['sourceUpdatedAt'] as String);
     return ShelterPoint._(m);
   }
+  String get id => data['id'] as String;
   String get address => data['address'] as String;
   String get availability => switch (data['availability']) {
     '24H' => 'Całodobowa wg źródła',
