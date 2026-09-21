@@ -56,8 +56,7 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          dart format lib/main.dart
-          git diff -- lib/main.dart
+          dart format --output=none --set-exit-if-changed lib test
           flutter analyze --no-pub
           flutter test --no-pub
       - name: Build Android preview
