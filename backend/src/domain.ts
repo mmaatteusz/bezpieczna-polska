@@ -14,7 +14,7 @@ export const eventSchema=z.object({
  radiationAssessment:z.object({state:z.enum(['WARNING','ENDED','INFORMATION','UNDETERMINED']),evidence:z.string().nullable()}).optional(),
  securityLevel:securityLevelSchema.optional(),
  id:z.string().min(1).max(150),title:z.string().min(1).max(350),description:z.string().max(40000),
- eventType:z.enum(['AIR','BORDER','CYBER','RADIATION','FIRE','EVACUATION','OUTAGE','WEATHER','OTHER']),
+ eventType:z.enum(['AIR','BORDER','CYBER','RADIATION','FIRE','EXPLOSION','HAZMAT','RESCUE','PUBLIC_SAFETY','EVACUATION','OUTAGE','WEATHER','OTHER']),
  severity:z.enum(['CRITICAL','HIGH','NORMAL','INFORMATIONAL']),
  verification:z.enum(['CONFIRMED','PROBABLE','UNVERIFIED','REFUTED','DISPUTED']),
  lifecycle:z.enum(['SCHEDULED','ACTIVE','ENDED','CANCELLED','EXPIRED','UNKNOWN']),
@@ -36,7 +36,7 @@ export type Health={checkedEventIds?:string[];regionId?:string;implementation?:s
 export function computeStatus(events:Event[],health:Health[],region:string,now=new Date(),incidents?:Incident[]){
  const ms=now.getTime();
  // Facilities are reference data, never evidence of the absence of hazards.
- health=health.filter(h=>!['SHELTERS','CERT','CSIRT_GOV','SG'].includes(h.id)&&h.coverage!=='FACILITY_CATALOG'&&(!h.regionId||region==='PL'||h.regionId===region));
+ health=health.filter(h=>!['SHELTERS','CERT','CSIRT_GOV','SG','POLICE','PSP_INCIDENTS'].includes(h.id)&&h.coverage!=='FACILITY_CATALOG'&&(!h.regionId||region==='PL'||h.regionId===region));
  const relevant=events.filter(e=>!e.isDemo&&e.officialWarning&&e.messageContext==='ACTUAL'&&e.verification==='CONFIRMED'&&e.sources.some(s=>s.tier===1)&&(region==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(region)));
  const fresh=health.filter(h=>h.state==='HEALTHY'&&h.lastSuccess&&Date.parse(h.lastSuccess)<=ms+30000&&ms-Date.parse(h.lastSuccess)<h.maxAgeSeconds*1000);
  const coverage=health.length>0&&fresh.length===health.length&&fresh.every(h=>h.complete&&h.id!=='PAA_MEASUREMENTS')?'COMPLETE_FOR_CONFIGURED_SCOPE':fresh.length?'PARTIAL':'UNAVAILABLE';
