@@ -79,9 +79,10 @@ void main() {
     expect(find.text('Zdarzenia służb'),findsOneWidget);
     expect(find.textContaining('nie podnosi automatycznie statusu'),findsOneWidget);
 
-    await tester.tap(find.text('Alerty').last);
+    await tester.tap(find.byIcon(Icons.campaign_outlined).last);
     await tester.pumpAndSettle();
-    final dropdowns=find.byType(DropdownButtonFormField<String>);
+    expect(find.text('Centrum alertów'),findsOneWidget);
+    final dropdowns=find.byWidgetPredicate((w)=>w is DropdownButtonFormField<String>);
     expect(dropdowns,findsNWidgets(2));
     await tester.tap(dropdowns.last);
     await tester.pumpAndSettle();
