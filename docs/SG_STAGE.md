@@ -67,3 +67,5 @@ Workflow alpha.9 sprawdza:
 - żywą stronę Aktualności SG i parser aktualnych artykułów.
 
 Moduł nie importuje wszystkich wiadomości SG i nie próbuje automatycznie oceniać zagrożenia na podstawie działalności operacyjnej służby.
+
+Tymczasowy workflow użyty do rozpoznania publicznych kanałów SG został usunięty. Właściwy test kontraktu źródła pozostaje częścią głównego workflow preview alpha.9.
