@@ -97,7 +97,7 @@ test('SG source failure keeps last-known-good event and health',async()=>{
  await store.init();
  try{
   await initializeSources(store);
-  const good={...sgAdapter,sync:async()=>({events:[parseSgArticle(operational,opUrl,now)!],complete:false,coverage:'RECENT_PUBLICATIONS' as const,pagesFetched:2})};
+  const good={...sgAdapter,minSyncIntervalSeconds:0,sync:async()=>({events:[parseSgArticle(operational,opUrl,now)!],complete:false,coverage:'RECENT_PUBLICATIONS' as const,pagesFetched:2})};
   await ingest(store,[good],async()=>{throw new Error('UNUSED');});
   const first=(await store.health()).find(h=>h.id==='SG')!;
   assert.equal(first.state,'HEALTHY');
