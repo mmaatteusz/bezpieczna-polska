@@ -11,7 +11,7 @@ const policeUrl='https://policja.pl/pol/aktualnosci/20001,Duzy-pozar-magazynu.ht
 const pspUrl='https://www.gov.pl/web/kgpsp/sokolniki-suche---wypadek-kolejowy';
 const rss=(title:string,description:string,url=policeUrl,pub='Mon, 21 Sep 2026 10:00:00 +0200')=>`<?xml version="1.0"?><rss version="2.0"><channel><title>Policja</title><item><title><![CDATA[${title}]]></title><description><![CDATA[${description}]]></description><link>${url}</link><pubDate>${pub}</pubDate></item></channel></rss>`;
 const pspArticle=(title:string,body:string,date='21.09.2026')=>`<main><article><h2>${title}</h2><div class="event-date">${date}</div><div class="editor-content"><p>${body}</p></div></article></main>`;
-const pspIndex=(url=pspUrl)=>`<main><article><h2>Aktualności</h2><div class="art-prev"><ul><li><span class="date">21.09.2026</span><span class="title"><a href="${new URL(url).pathname}">Zdarzenie</a></span></li></ul></div></article></main>`;
+const pspIndex=(url=pspUrl)=>`<main><article><h2>Aktualności</h2><div class="art-prev"><div class="event"><span class="date">21.09.2026</span></div><div class="title"><a href="${new URL(url).pathname}">Zdarzenie</a></div></div></article></main>`;
 
 test('large industrial fire is imported',async()=>{
  const batch=await policeAdapter.sync({now,fetchText:async u=>{assert.equal(u,POLICE_RSS);return rss('Duży pożar magazynu w mieście','Płonie magazyn. Ewakuowano 40 osób, na miejscu działa wiele zastępów.');}});
