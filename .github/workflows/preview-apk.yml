@@ -43,6 +43,9 @@ jobs:
       - name: Backend build and tests
         working-directory: backend
         run: npm ci && npm run build && npm test
+      - name: Live Police and PSP incident contract check
+        working-directory: backend
+        run: node scripts/live-service-incidents.mjs ../output/service-incidents-live.json
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -74,9 +77,6 @@ jobs:
       - name: Live Straż Graniczna contract check
         working-directory: backend
         run: node scripts/live-sg.mjs ../output/sg-live.json
-      - name: Live Police and PSP incident contract check
-        working-directory: backend
-        run: node scripts/live-service-incidents.mjs ../output/service-incidents-live.json
       - name: Prepare artifact
         shell: bash
         run: |
