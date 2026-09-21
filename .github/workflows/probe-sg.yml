@@ -33,6 +33,18 @@ jobs:
                           print('LINK',h)
                   for m in re.finditer(r'(?i)rss|feed',text):
                       print('SNIP',re.sub(r'\s+',' ',text[max(0,m.start()-180):m.end()+350])[:650])
+          articles=[
+            'https://www.strazgraniczna.pl/pl/aktualnosci/16204,Auto-odzyskane-na-przejsciu-granicznym-w-Budomierzu.html',
+            'https://www.strazgraniczna.pl/pl/aktualnosci/5554,Utrudnienia-w-ruchu-na-drogowych-przejsciach-granicznych.html',
+          ]
+          for url in articles:
+              req=urllib.request.Request(url,headers={'User-Agent':'BezpiecznaPolska-source-contract-probe/0.2'})
+              with urllib.request.urlopen(req,timeout=20) as r:
+                  text=r.read(800000).decode('utf-8','replace')
+                  print('\\n=== ARTICLE',url,'===')
+                  for needle in ['class="subRight"','class="naglowek"','article-date','data-pub','<h2','<h3']:
+                      i=text.find(needle)
+                      if i>=0: print('AROUND',needle,re.sub(r'\\s+',' ',text[max(0,i-300):i+2600])[:3000])
           candidates=[
             'https://www.strazgraniczna.pl/pl/rss/aktualnosci.xml',
             'https://www.strazgraniczna.pl/pl/rss.xml',
