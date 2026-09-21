@@ -1,3 +1,4 @@
+import {radiationMeasurementSchema,type RadiationMeasurement} from './radiation.js';
 import {correlate,type Incident} from './correlation.js';
 import {DatabaseSync} from 'node:sqlite';
 import {createHash} from 'node:crypto';
@@ -41,6 +42,7 @@ export class Store{
   await this.db.run('CREATE TABLE IF NOT EXISTS event_revisions(event_id TEXT NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL, content_hash TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT NOT NULL, recorded_at TEXT NOT NULL, PRIMARY KEY(event_id,revision))');
   await this.db.run('CREATE TABLE IF NOT EXISTS incident_revisions(incident_id TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,content_hash TEXT NOT NULL,recorded_at TEXT NOT NULL,PRIMARY KEY(incident_id,revision))');
   await this.db.run('CREATE TABLE IF NOT EXISTS source_health(id TEXT PRIMARY KEY,payload TEXT NOT NULL)');
+  await this.db.run('CREATE TABLE IF NOT EXISTS radiation_measurements(station_id TEXT PRIMARY KEY,payload TEXT NOT NULL)');
   await this.db.run('CREATE TABLE IF NOT EXISTS shelters(id TEXT PRIMARY KEY,region_id TEXT NOT NULL,search_text TEXT NOT NULL,payload TEXT NOT NULL)');
   await this.db.run('CREATE INDEX IF NOT EXISTS shelter_region_idx ON shelters(region_id,id)');
   if(this.db.kind==='postgres'){
@@ -62,7 +64,7 @@ export class Store{
   const rows=await this.db.all('SELECT r.payload FROM event_revisions r JOIN (SELECT event_id,MAX(revision) AS rev FROM event_revisions GROUP BY event_id) last ON r.event_id=last.event_id AND r.revision=last.rev');
   return rows.map(r=>eventSchema.parse(JSON.parse(r.payload as string))).sort((a,b)=>(b.publishedAt??b.publicationDate??'').localeCompare(a.publishedAt??a.publicationDate??'')||a.id.localeCompare(b.id));
  }
- async snapshot(){return this.db.transaction(async db=>{const s=new Store(db);const events=await s.events();return {events,health:await s.health(),incidents:await s.incidents()};});}
+ async snapshot(){return this.db.transaction(async db=>{const s=new Store(db);const events=await s.events();return {events,health:await s.health(),incidents:await s.incidents(),radiationMeasurements:await s.radiationMeasurements()};});}
  async get(id:string){const r=await this.db.all('SELECT payload FROM event_revisions WHERE event_id=? ORDER BY revision DESC LIMIT 1',[id]);return r.length?eventSchema.parse(JSON.parse(r[0].payload as string)):null;}
  async put(input:Event,actor='adapter',reason='Source content updated',expectedRevision?:number){
   return this.db.transaction(async db=>{const s=new Store(db);const changed=await s.putRecord(input,actor,reason,expectedRevision);if(changed)await s.reconcileIncidents(await s.events());return changed;});
@@ -178,6 +180,17 @@ export class Store{
   return rows.sort((a,b)=>String(a.recorded_at).localeCompare(String(b.recorded_at))||a.payload.id.localeCompare(b.payload.id)||a.payload.revision-b.payload.revision);
  }
  async incidentHistory(id:string){return (await this.db.all('SELECT payload,recorded_at FROM incident_revisions WHERE incident_id=? ORDER BY revision',[id])).map(r=>({...r,payload:JSON.parse(r.payload as string)}));}
+ async radiationMeasurements():Promise<RadiationMeasurement[]>{return (await this.db.all('SELECT payload FROM radiation_measurements ORDER BY station_id')).map(r=>radiationMeasurementSchema.parse(JSON.parse(r.payload as string)));}
+ async applyRadiationSync(items:RadiationMeasurement[],health:Health){
+  if(health.id!=='PAA_MEASUREMENTS'||!items.length)throw new Error('PAA_MEASUREMENTS_EMPTY');
+  const rows=items.map(p=>radiationMeasurementSchema.parse(p));
+  if(new Set(rows.map(p=>p.stationId)).size!==rows.length)throw new Error('PAA_DUPLICATE_STATION');
+  await this.db.transaction(async db=>{const s=new Store(db),old=await s.radiationMeasurements();
+   for(const p of rows){const prev=old.find(v=>v.stationId===p.stationId);if(prev&&(Date.parse(p.measuredAt)<Date.parse(prev.measuredAt)||Date.parse(p.sourceUpdatedAt)<Date.parse(prev.sourceUpdatedAt)))throw new Error('PAA_MEASUREMENT_REGRESSION');}
+   await db.run('DELETE FROM radiation_measurements');
+   for(const p of rows)await db.run('INSERT INTO radiation_measurements(station_id,payload) VALUES(?,?)',[p.stationId,JSON.stringify(p)]);await s.setHealth(health);
+  });
+ }
  async health():Promise<Health[]>{return (await this.db.all('SELECT payload FROM source_health ORDER BY id')).map(r=>JSON.parse(r.payload as string) as Health);}
  async setHealth(h:Health){await this.db.run('INSERT INTO source_health(id,payload) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',[h.id,JSON.stringify(h)]);}
 }

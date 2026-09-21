@@ -1,3 +1,4 @@
+import {paaAdapter} from './paa-adapter.js';
 import {wczkAdapters,WCZK_PODKARPACKIE} from './wczk-adapter.js';
 import {securityLevelsAdapter} from './security-level-adapter.js';
 import * as cheerio from 'cheerio';
@@ -63,7 +64,7 @@ export async function fetchPublicBytes(url:string):Promise<Uint8Array>{
 }
 // Sharing the same coordinator prevents timer/admin overlap on this Store.
 const running = new WeakMap<Store, Promise<void>>();
-export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
+export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters,paaAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
  const existing=running.get(store);if(existing)return existing;
  const task=syncSources(store,adapters,fetchText,fetchBytes).finally(()=>running.delete(store));
  running.set(store,task);return task;
@@ -76,11 +77,11 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
   const begin=Date.now(),lastAttempt=new Date(begin).toISOString();
   if(adapter.minSyncIntervalSeconds&&previous.lastSuccess&&previous.state==='HEALTHY'&&begin-Date.parse(previous.lastSuccess)>=0&&begin-Date.parse(previous.lastSuccess)<adapter.minSyncIntervalSeconds*1000)continue;
   try{
-   const batch=await adapter.sync({now:new Date(begin),fetchText,fetchBytes});
+   const batch=await adapter.sync({now:new Date(begin),fetchText,fetchBytes,previousEvents:adapter.id==='PAA'?await store.events():undefined});
    const items=batch.events.map(e=>eventSchema.parse(e));
    if(items.some(e=>e.isDemo||!e.sources.some(s=>s.id===adapter.id)))throw new Error('SOURCE_INVALID_EVENT');
    const published=items.map(e=>e.publishedAt??(e.securityLevel?.publishedAt?e.securityLevel.publishedAt:null)).filter((v):v is string=>v!==null).sort();
-   const health:Health={...previous,...batch.metadata,enabled:true,state:'HEALTHY',lastAttempt,lastSuccess:new Date().toISOString(),lastItemTime:batch.metadata?.sourceUpdatedAt??published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:batch.complete,coverage:batch.coverage,pagesFetched:batch.pagesFetched,itemCount:batch.shelters?.length??items.length,errorCode:null,adapterVersion:adapter.version};
+   const health:Health={...previous,...batch.metadata,...(adapter.id==='PAA'?{checkedEventIds:items.map(e=>e.id)}:{}),enabled:true,state:'HEALTHY',lastAttempt,lastSuccess:new Date().toISOString(),lastItemTime:batch.metadata?.sourceUpdatedAt??published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:batch.complete,coverage:batch.coverage,pagesFetched:batch.pagesFetched,itemCount:batch.shelters?.length??items.length,errorCode:null,adapterVersion:adapter.version};
    if(batch.shelters){
     if(adapter.id!=='SHELTERS'||items.length||batch.coverage!=='FACILITY_CATALOG'||!batch.complete||!batch.metadata)throw new Error('SOURCE_INVALID_BATCH');
     if(previous.sourceUpdatedAt&&Date.parse(batch.metadata.sourceUpdatedAt)<Date.parse(previous.sourceUpdatedAt))throw new Error('SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD');

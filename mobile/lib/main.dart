@@ -1,3 +1,4 @@
+import 'radiation.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -399,6 +400,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     return [
       statusCard(true),
       statusCard(false),
+      RadiationPanel(snapshot: snapshot, online: online, openSource: openLink),
       SecurityLevelsPanel(
         snapshot: snapshot,
         online: online,
@@ -415,7 +417,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ),
       const SizedBox(height: 12),
       notice(
-        'Wersja rozwojowa 0.1.0-alpha.5 • Powiadomienia push nie są aktywne.',
+        'Wersja rozwojowa 0.1.0-alpha.7 • Powiadomienia push nie są aktywne.',
         Icons.science_outlined,
       ),
       heading('Od ostatniej wizyty'),
@@ -572,6 +574,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       'RCB',
       'RSO',
       'WCZK',
+      'PAA',
       ...events.expand((e) => e.sources.map((s) => s['id'].toString())),
     }.toList();
     final typeOptions = <String>{
@@ -690,6 +693,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ),
     const SizedBox(height: 12),
     ShelterMap(
+      radiation: snapshot?.data['radiation'],
+      radiationOnline: online,
       key: ValueKey(
         'map:${widget.repository.api}:$region:$ukraine:${widget.repository.dataGeneration}',
       ),
@@ -887,7 +892,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       },
                     ),
                   const Text(
-                    '0.1.0-alpha.5 • Push nieaktywny • GPS tylko na żądanie',
+                    '0.1.0-alpha.7 • Push nieaktywny • GPS tylko na żądanie',
                   ),
                 ],
               ),

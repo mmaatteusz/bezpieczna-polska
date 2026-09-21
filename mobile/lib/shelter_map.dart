@@ -1,3 +1,4 @@
+import 'radiation.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -10,9 +11,13 @@ class ShelterMap extends StatefulWidget {
   final DataRepository repository;
   final String region;
   final bool ukraine;
+  final Map<String, dynamic>? radiation;
+  final bool radiationOnline;
   final void Function(String) openLink;
   const ShelterMap({
     super.key,
+    this.radiation,
+    this.radiationOnline = false,
     required this.repository,
     required this.region,
     required this.ukraine,
@@ -25,6 +30,7 @@ class ShelterMap extends StatefulWidget {
 class _ShelterMapState extends State<ShelterMap> {
   MapLibreMapController? controller;
   Timer? debounce, clock;
+  bool showRadiation = false;
   bool ready = false, loading = false, online = false;
   int ticket = 0;
   String availability = 'ALL', message = 'Przygotowywanie mapy…';
@@ -51,6 +57,12 @@ class _ShelterMapState extends State<ShelterMap> {
     final c = controller;
     if (c == null) return;
     try {
+      await c.addSource('radiation', GeojsonSourceProperties(data: empty));
+      await c.addCircleLayer(
+        'radiation',
+        'radiation-points',
+        const CircleLayerProperties(circleColor: '#7563b8', circleRadius: 7),
+      );
       await c.addSource('shelters', GeojsonSourceProperties(data: empty));
       await c.addCircleLayer(
         'shelters',
@@ -134,6 +146,48 @@ class _ShelterMapState extends State<ShelterMap> {
       if (west >= east || south >= north) {
         throw const FormatException('Obszar poza zakresem');
       }
+      if (showRadiation) {
+        final data = widget.radiation == null
+            ? null
+            : RadiationData.parse(widget.radiation);
+        final items = (data?.data['measurements'] as List? ?? []).cast<Map>();
+        final visible = items
+            .where(
+              (p) =>
+                  p['latitude'] is num &&
+                  p['longitude'] is num &&
+                  p['longitude'] >= west &&
+                  p['longitude'] <= east &&
+                  p['latitude'] >= south &&
+                  p['latitude'] <= north,
+            )
+            .toList();
+        await c.setGeoJsonSource('shelters', empty);
+        await c.setGeoJsonSource('radiation', {
+          'type': 'FeatureCollection',
+          'features': visible
+              .map(
+                (p) => {
+                  'type': 'Feature',
+                  'geometry': {
+                    'type': 'Point',
+                    'coordinates': [p['longitude'], p['latitude']],
+                  },
+                  'properties': Map<String, dynamic>.from(p),
+                },
+              )
+              .toList(),
+        });
+        if (!mounted || current != ticket) return;
+        setState(() {
+          viewport = null;
+          message =
+              data?.measurementText(DateTime.now(), widget.radiationOnline) ??
+              'PAA: brak danych pomiarowych';
+        });
+        return;
+      }
+      await c.setGeoJsonSource('radiation', empty);
       request = MapRequest(
         [west, south, east, north],
         (c.cameraPosition?.zoom ?? 5).clamp(0, 22).toDouble(),
@@ -173,6 +227,28 @@ class _ShelterMapState extends State<ShelterMap> {
     final c = controller;
     if (c == null || !ready) return;
     try {
+      if (showRadiation) {
+        final points = await c.queryRenderedFeatures(point, [
+          'radiation-points',
+        ], null);
+        if (points.isEmpty || !mounted) return;
+        final p = (points.first as Map)['properties'] as Map;
+        final data = widget.radiation == null
+            ? null
+            : RadiationData.parse(widget.radiation);
+        await showModalBottomSheet<void>(
+          context: context,
+          builder: (_) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text(
+                '${p['name']}\n${p['value']} ${p['unit']}\nPomiar: ${stamp(p['measuredAt'])}\n${data?.measurementText(DateTime.now(), widget.radiationOnline) ?? 'STALE'}\nPomiar nie jest alarmem.',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
       final hits = await c.queryRenderedFeatures(point, [
         'shelter-points',
         'shelter-clusters',
@@ -256,6 +332,16 @@ class _ShelterMapState extends State<ShelterMap> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (!widget.ukraine)
+          SwitchListTile(
+            title: const Text('Radiacja / PAA'),
+            subtitle: const Text('Pomiary oddzielone od komunikatów'),
+            value: showRadiation,
+            onChanged: (value) {
+              setState(() => showRadiation = value);
+              refresh();
+            },
+          ),
+        if (!widget.ukraine && !showRadiation)
           DropdownButton<String>(
             isExpanded: true,
             value: availability,
@@ -338,7 +424,18 @@ class _ShelterMapState extends State<ShelterMap> {
             ),
           ),
         ),
-        if (!widget.ukraine) ...[
+        if (!widget.ukraine && showRadiation) ...[
+          Text(message),
+          const Text(
+            'Komunikaty PAA są dostępne w Statusie i Alert Center. Brak punktów na mapie nie oznacza braku zagrożenia.',
+          ),
+          TextButton(
+            onPressed: () =>
+                widget.openLink('https://monitoring.paa.gov.pl/maps-portal/'),
+            child: const Text('Oficjalna mapa PAA'),
+          ),
+        ],
+        if (!widget.ukraine && !showRadiation) ...[
           if (viewport != null)
             Text(
               '${fresh ? 'Dane pobrane z PSP' : 'Ostatnie zapisane dane — aktualność niepotwierdzona'}\nData danych: ${meta?['dataDate'] ?? 'Nie podano'} • Aktualność: ${stamp(meta?['health']?['lastSuccess'])}\nPunkty w widocznym obszarze: ${meta?['total']}',

@@ -1,3 +1,4 @@
+import 'radiation.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -253,6 +254,11 @@ class Snapshot {
     }
     for (final raw in m['nationalSecurityLevels'] as List? ?? []) {
       SecurityLevel.parse(raw);
+    }
+    if (m['radiation'] != null) {
+      final radiation = RadiationData.parse(m['radiation']);
+      if (radiation.data['regionId'] != m['regionId'])
+        throw const FormatException('Błędny region PAA');
     }
     if (m['shelterPage'] != null) {
       final page = ShelterPage.parse(m['shelterPage']);

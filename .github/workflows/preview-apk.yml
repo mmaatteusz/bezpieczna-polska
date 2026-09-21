@@ -1,7 +1,7 @@
-name: Build WCZK correlation preview APK
+name: Build PAA radiation preview APK
 on:
   push:
-    branches: [stage/wczk-dedup]
+    branches: [stage/paa-radiation]
     paths:
       - 'backend/**'
       - 'mobile/**'
@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: preview-apk-wczk-dedup
+  group: preview-apk-paa-radiation
   cancel-in-progress: true
 env:
   CI: 'true'
@@ -64,18 +64,21 @@ jobs:
       - name: Live WCZK contract check
         working-directory: backend
         run: node scripts/live-wczk.mjs ../output/wczk-live.json
+      - name: Live PAA communication contract check
+        working-directory: backend
+        run: node scripts/live-paa.mjs ../output/paa-live.json
       - name: Prepare artifact
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p output
-          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.6-preview-arm64.apk
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk > output/signature-check.txt
+          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.7-preview-arm64.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
-          sha256sum output/*.apk > output/SHA256SUMS.txt
+          sha256sum output/*.apk | tee output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: Bezpieczna_Polska_0.1.0-alpha.6-preview-arm64
+          name: Bezpieczna_Polska_0.1.0-alpha.7-preview-arm64
           path: output/
           if-no-files-found: error
           retention-days: 30
