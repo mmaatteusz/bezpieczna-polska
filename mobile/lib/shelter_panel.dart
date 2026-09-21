@@ -136,7 +136,8 @@ class _ShelterPanelState extends State<ShelterPanel> {
       if (permission == LocationPermission.denied) {
         if (mounted) {
           setState(
-            () => nearestMessage = 'Bez zgody na lokalizację nie można policzyć odległości. Możesz nadal wyszukiwać po adresie.',
+            () => nearestMessage =
+                'Bez zgody na lokalizację nie można policzyć odległości. Możesz nadal wyszukiwać po adresie.',
           );
         }
         return;
@@ -144,7 +145,8 @@ class _ShelterPanelState extends State<ShelterPanel> {
       if (permission == LocationPermission.deniedForever) {
         if (mounted) {
           setState(
-            () => nearestMessage = 'Dostęp do lokalizacji jest zablokowany w ustawieniach Androida. Możesz nadal wyszukiwać po adresie.',
+            () => nearestMessage =
+                'Dostęp do lokalizacji jest zablokowany w ustawieniach Androida. Możesz nadal wyszukiwać po adresie.',
           );
         }
         return;
@@ -177,7 +179,8 @@ class _ShelterPanelState extends State<ShelterPanel> {
     } on TimeoutException {
       if (mounted) {
         setState(
-          () => nearestMessage = 'Nie udało się ustalić lokalizacji w wymaganym czasie. Spróbuj ponownie na zewnątrz lub wyszukaj adres ręcznie.',
+          () => nearestMessage =
+              'Nie udało się ustalić lokalizacji w wymaganym czasie. Spróbuj ponownie na zewnątrz lub wyszukaj adres ręcznie.',
         );
       }
     } catch (error) {
