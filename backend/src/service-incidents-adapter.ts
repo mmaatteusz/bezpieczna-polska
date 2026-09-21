@@ -110,7 +110,7 @@ export const policeAdapter:SourceAdapter={id:'POLICE',version:POLICE_VERSION,min
 }};
 
 export function parsePspIndex(html:string,url=PSP_INCIDENTS_INDEX){
-  const $=cheerio.load(html),article=$('main article'),rows=article.find('.art-prev > ul > li');
+  const $=cheerio.load(html),article=$('main article'),rows=article.find('.art-prev');
   if(article.length!==1||clean(article.find('h2').first().text())!=='Aktualności'||!rows.length||rows.length>50)throw new Error('PSP_INCIDENTS_INDEX_CONTRACT_CHANGED');
   const urls:string[]=[];
   rows.each((_,row)=>{
