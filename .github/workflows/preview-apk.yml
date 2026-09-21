@@ -1,7 +1,7 @@
 name: Build Police + PSP incidents preview APK
 on:
-  push:
-    branches: [stage/police-psp-incidents]
+  pull_request:
+    branches: [stage/sg-border]
     paths:
       - 'backend/**'
       - 'mobile/**'
