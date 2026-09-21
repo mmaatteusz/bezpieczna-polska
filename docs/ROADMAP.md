@@ -36,7 +36,7 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 | 28 | Timeline komunikatu w UI | ✅ |
 | 29 | PAA | 🟡 |
 | 30 | CERT Polska / CSIRT GOV | 🟡 |
-| 31 | Straż Graniczna | ❌ |
+| 31 | Straż Graniczna | ✅ |
 | 32 | Istotne zdarzenia Policji / PSP | ❌ |
 | 33 | Obserwowane lokalizacje | ❌ |
 | 34 | „Co dzieje się wokół mnie?” | 🟡 |
@@ -49,16 +49,15 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 
 ## Najbliższa kolejność
 
-1. Straż Graniczna.
-2. Istotne zdarzenia Policji / PSP.
-3. Obserwowane lokalizacje i szersze „wokół mnie”.
-4. Alarmy Ukrainy.
-5. NEPTUN.
-6. Push.
-7. Pełniejsze offline.
-8. Publiczny backend, monitoring, backup, podpisane wydanie.
+1. Istotne zdarzenia Policji / PSP.
+2. Obserwowane lokalizacje i szersze „wokół mnie”.
+3. Alarmy Ukrainy.
+4. NEPTUN.
+5. Push.
+6. Pełniejsze offline.
+7. Publiczny backend, monitoring, backup, podpisane wydanie.
 
-Uwagi do częściowych etapów: WCZK ma jeden niezależny adapter oraz integrację RSO dla pozostałych publikacji; PAA ma komunikaty, ale pomiary pozostają zablokowane przez brak zweryfikowanego publicznego kontraktu; CERT Polska działa z oficjalnego RSS, natomiast publiczna lista RSS CSIRT GOV jest obecnie pusta. „Wokół mnie” obejmuje już najbliższe schronienia, ale nie pełny agregator zdarzeń w promieniu.
+Uwagi do częściowych etapów: WCZK ma jeden niezależny adapter oraz integrację RSO dla pozostałych publikacji; PAA ma komunikaty, ale pomiary pozostają zablokowane przez brak zweryfikowanego publicznego kontraktu; CERT Polska działa z oficjalnego RSS, publiczna lista RSS CSIRT GOV jest obecnie pusta, a Straż Graniczna korzysta z oficjalnych Aktualności z konserwatywnym filtrem komunikatów operacyjnych (publiczna lista RSS KGSG jest pusta). „Wokół mnie” obejmuje już najbliższe schronienia, ale nie pełny agregator zdarzeń w promieniu.
 
 ## Zasady
 
