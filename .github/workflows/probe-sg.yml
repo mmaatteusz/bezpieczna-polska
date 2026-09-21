@@ -1,0 +1,52 @@
+name: Probe official Straż Graniczna feeds
+on:
+  push:
+    branches: [stage/sg-border]
+    paths: ['.github/workflows/probe-sg.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Discover official SG RSS channels
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import re, urllib.request
+          pages=[
+            'https://www.strazgraniczna.pl/pl/rss',
+            'https://www.strazgraniczna.pl/pl/aktualnosci',
+            'https://www.strazgraniczna.pl/pl/niezbednik-podroznego/przekraczanie-granic',
+          ]
+          for url in pages:
+              print('\n=== PAGE',url,'===')
+              req=urllib.request.Request(url,headers={'User-Agent':'BezpiecznaPolska-source-contract-probe/0.1','Accept':'text/html,application/xml;q=0.9,*/*;q=0.1'})
+              with urllib.request.urlopen(req,timeout=20) as r:
+                  raw=r.read(2_000_000); text=raw.decode('utf-8','replace')
+                  print('status',r.status,'final',r.geturl(),'ct',r.headers.get('content-type'),'bytes',len(raw))
+                  hrefs=re.findall(r'''(?:href|src)=["']([^"']+)["']''',text,re.I)
+                  for h in hrefs:
+                      if re.search(r'rss|feed|xml|aktual|komunik|granic|utrudn|przejsc',h,re.I):
+                          print('LINK',h)
+                  for m in re.finditer(r'(?i)rss|feed',text):
+                      print('SNIP',re.sub(r'\s+',' ',text[max(0,m.start()-180):m.end()+350])[:650])
+          candidates=[
+            'https://www.strazgraniczna.pl/pl/rss/aktualnosci.xml',
+            'https://www.strazgraniczna.pl/pl/rss.xml',
+            'https://www.strazgraniczna.pl/pl/rss/1.xml',
+            'https://www.strazgraniczna.pl/pl/rss/aktualnosci',
+            'https://www.strazgraniczna.pl/pl/feed',
+            'https://www.strazgraniczna.pl/pl/feed.xml',
+          ]
+          for url in candidates:
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'BezpiecznaPolska-source-contract-probe/0.1','Accept':'application/rss+xml,application/xml,text/xml,text/html;q=0.8'})
+                  with urllib.request.urlopen(req,timeout=15) as r:
+                      raw=r.read(400000)
+                      print('\nCANDIDATE',url,'->',r.status,r.geturl(),r.headers.get('content-type'),'bytes',len(raw),'prefix',raw[:300].decode('utf-8','replace').replace('\n',' '))
+              except Exception as e:
+                  print('\nCANDIDATE',url,'ERROR',type(e).__name__,str(e)[:240])
+          PY
