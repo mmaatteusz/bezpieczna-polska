@@ -1,7 +1,7 @@
-name: Build CERT CSIRT preview APK
+name: Build Straż Graniczna preview APK
 on:
   push:
-    branches: [stage/cert-csirt]
+    branches: [stage/sg-border]
     paths:
       - 'backend/**'
       - 'mobile/**'
@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: preview-apk-cert-csirt
+  group: preview-apk-sg-border
   cancel-in-progress: true
 env:
   CI: 'true'
@@ -70,18 +70,21 @@ jobs:
       - name: Live CERT and CSIRT GOV contract check
         working-directory: backend
         run: node scripts/live-cyber.mjs ../output/cyber-live.json
+      - name: Live Straż Graniczna contract check
+        working-directory: backend
+        run: node scripts/live-sg.mjs ../output/sg-live.json
       - name: Prepare artifact
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p output
-          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.8-preview-arm64.apk
+          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.9-preview-arm64.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
           sha256sum output/*.apk | tee output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: Bezpieczna_Polska_0.1.0-alpha.8-preview-arm64
+          name: Bezpieczna_Polska_0.1.0-alpha.9-preview-arm64
           path: output/
           if-no-files-found: error
           retention-days: 30
