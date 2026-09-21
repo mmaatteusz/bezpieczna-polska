@@ -30,6 +30,6 @@ export const SOURCES = [
   {id: 'PAA_MEASUREMENTS', name: 'PAA — pomiary (format niezweryfikowany)', url: 'https://monitoring.paa.gov.pl/maps-portal/', enabled: false, implementation:'BLOCKED_SOURCE_VERIFICATION', integrationNote:'Portal zwrócił blokadę WAF. Nie zweryfikowano formatu stacji i pomiarów; brak integracji zamiast domyślonego API.'},
   {id: 'CERT', name: 'CERT Polska — komunikaty bezpieczeństwa', url: 'https://moje.cert.pl/komunikaty/', enabled: true},
   {id: 'CSIRT_GOV', name: 'CSIRT GOV — ostrzeżenia publiczne', url: 'https://www.csirt.gov.pl/cer/rss', enabled: false, implementation:'RSS_CHANNEL_LIST_EMPTY', integrationNote:'Oficjalna strona usługi RSS działa, ale publiczna lista kanałów jest obecnie pusta. Nie importujemy raportów historycznych jako bieżących ostrzeżeń.'},
-  {id: 'SG', name: 'Straż Graniczna', url: 'https://www.strazgraniczna.pl/', enabled: false},
+  {id: 'SG', name: 'Straż Graniczna — operacyjne informacje graniczne', url: 'https://www.strazgraniczna.pl/pl/aktualnosci', enabled: true, implementation:'OFFICIAL_NEWS_OPERATIONAL_FILTER', integrationNote:'Publiczna lista RSS KGSG jest pusta. Integracja używa oficjalnych Aktualności z konserwatywnym filtrem zamknięć, ograniczeń, kontroli i utrudnień granicznych.'},
   {id: 'UA', name: 'Oficjalne alarmy Ukrainy — integracja oczekuje', url: 'https://dsns.gov.ua/', enabled: false},
 ];
