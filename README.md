@@ -1,6 +1,6 @@
 # Bezpieczna Polska
 
-Flutter + backend TypeScript/PostgreSQL. **0.1.0-alpha.9 — wersja rozwojowa, nie pełne MVP.**
+Flutter + backend TypeScript/PostgreSQL. **0.1.0-alpha.10 — wersja rozwojowa, nie pełne MVP.**
 
 ## Uruchomienie
 
@@ -39,10 +39,10 @@ Bez backendu aplikacja pokazuje brak danych. Nie korzysta bezpośrednio z API os
 - WCZK: rejestr 16 centrów, działający adapter Podkarpackiego oraz korelacja/deduplikacja RCB–RSO–WCZK z zachowaniem oryginalnych komunikatów.
 - PAA: oficjalne komunikaty radiacyjne są podłączone; pomiary stacji pozostają wyłączone, dopóki nie ma zweryfikowanego stabilnego publicznego kontraktu danych.
 - CERT Polska: oficjalny RSS komunikatów bezpieczeństwa działa jako osobna kategoria CYBER. Publiczna lista RSS CSIRT GOV jest obecnie pusta, więc integracja pozostaje NOT_CONFIGURED.
-- Straż Graniczna: oficjalne Aktualności są filtrowane konserwatywnie do operacyjnych informacji o zamknięciach, ograniczeniach, kontrolach i utrudnieniach granicznych; zwykłe newsy służbowe są odrzucane.
+- Straż Graniczna: oficjalne Aktualności są filtrowane konserwatywnie do operacyjnych informacji o zamknięciach, ograniczeniach, kontrolach i utrudnieniach granicznych; zwykłe newsy służbowe są odrzucane.\n- Policja / PSP: oficjalny RSS Aktualności Policji oraz centralne Aktualności KG PSP są filtrowane do istotnych zdarzeń sytuacyjnych (m.in. duże pożary, eksplozje, HAZMAT, rozległe ratownictwo i poważne bezpieczeństwo publiczne). Publikacje służb są osobną warstwą informacyjną i nie podnoszą automatycznie statusu całego regionu.
 - Źródła zachowują oryginalną treść. Niepewna interpretacja nie podnosi automatycznie statusu.
 - Historia wersji, korekty, widoczny timeline komunikatu, wyjaśnienie „Dlaczego taki status?”, stan źródeł, deterministyczne statusy, kopie offline, mapa MapLibre z zapytaniami bbox i klastrami PostGIS, systemowy Share Sheet dla „Jestem bezpieczny” oraz 112 wymagające działania użytkownika.
-- Brakuje: istotnych zdarzeń Policji/PSP, pełnych obserwowanych lokalizacji i „wokół mnie”, alarmów Ukrainy, NEPTUN, push FCM/APNs, RLS, panelu administratora z MFA i wdrożenia produkcyjnego.
+- Brakuje: pełnych obserwowanych lokalizacji i „wokół mnie”, alarmów Ukrainy, NEPTUN, push FCM/APNs, RLS, panelu administratora z MFA i wdrożenia produkcyjnego.
 
 Aktualny zakres i wdrożenie: [etap RCB](docs/RCB_STAGE.md). Hosting HTTPS nie został jeszcze uruchomiony.
 
