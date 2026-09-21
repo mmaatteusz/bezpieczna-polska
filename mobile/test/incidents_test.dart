@@ -106,6 +106,7 @@ void main() {
             },
           ]),
           200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
         );
       }),
     );
@@ -125,6 +126,7 @@ void main() {
           (request) async => http.Response(
             jsonEncode(request.url.path.endsWith('/timeline') ? [] : raw),
             200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
           ),
         ),
       );
@@ -132,7 +134,16 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Alerty').last);
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('Komunikaty z 3 źródeł'), 200);
+      await tester.scrollUntilVisible(
+        find.text('Komunikaty z 3 źródeł'),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ListView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       expect(find.text('Komunikaty z 3 źródeł'), findsOneWidget);
       expect(find.text('Powódź — fixture'), findsOneWidget);
       await tester.pumpWidget(
