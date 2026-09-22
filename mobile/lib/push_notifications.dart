@@ -405,6 +405,15 @@ class PushManager extends ChangeNotifier {
     }
   }
 
+  Future<void> refreshForSettings() async {
+    await initializeWithoutPrompt();
+    if (_state.registered) {
+      try {
+        await refreshStatus();
+      } catch (_) {}
+    }
+  }
+
   Future<void> enable() async {
     if (adapter == null || !adapter!.supported) {
       _setState(
@@ -607,7 +616,7 @@ class _NotificationSettingsScreenState
   void initState() {
     super.initState();
     widget.manager.addListener(_changed);
-    unawaited(widget.manager.initializeWithoutPrompt());
+    unawaited(widget.manager.refreshForSettings());
   }
 
   @override
