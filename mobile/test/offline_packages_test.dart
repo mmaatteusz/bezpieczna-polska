@@ -232,6 +232,31 @@ void main() {
     expect((await restarted.offlinePackage('04'))?.regionId, '04');
   });
 
+  test('corrupted refresh falls back to previous validated LKG', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final store = OfflinePackageStore(prefs);
+    final first = package(createdAt: DateTime.parse('2026-09-22T10:01:00Z'));
+    final second = package(createdAt: DateTime.parse('2026-09-22T10:02:00Z'));
+    await store.commit(first);
+    await store.commit(second);
+
+    final activeKey = prefs.getKeys().singleWhere(
+      (key) => key.startsWith('offline_package_active_v1:04'),
+    );
+    final pointer = prefs.getString(activeKey)!;
+    final decoded =
+        jsonDecode(prefs.getString(pointer)!) as Map<String, dynamic>;
+    final manifest = Map<String, dynamic>.from(decoded['manifest'] as Map);
+    manifest['checksum'] = {'algorithm': 'CRC32', 'value': '00000000'};
+    decoded['manifest'] = manifest;
+    await prefs.setString(pointer, jsonEncode(decoded));
+
+    final listed = await store.list();
+    expect(listed.single.state, OfflinePackageState.corrupted);
+    final recovered = await store.load('04');
+    expect(recovered?.createdAt, first.createdAt);
+  });
+
   test('corrupted package is marked and never returned as usable', () async {
     final prefs = await SharedPreferences.getInstance();
     final store = OfflinePackageStore(prefs);
