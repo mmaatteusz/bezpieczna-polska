@@ -404,6 +404,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     return [
       statusCard(true),
       statusCard(false),
+      if (widget.repository.api.isEmpty)
+        notice(
+          'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
+          Icons.cloud_off,
+        ),
       OutlinedButton.icon(
         onPressed: () => setState(() {
           page = 1;
@@ -446,11 +451,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           ),
         ),
       ),
-      if (widget.repository.api.isEmpty)
-        notice(
-          'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
-          Icons.cloud_off,
-        ),
       RadiationPanel(snapshot: snapshot, online: online, openSource: openLink),
       SecurityLevelsPanel(
         snapshot: snapshot,
