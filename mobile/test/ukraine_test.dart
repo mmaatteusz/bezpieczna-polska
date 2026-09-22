@@ -56,6 +56,13 @@ Map<String, dynamic> ua(DateTime now) => {
   'revisions': <dynamic>[],
   'map': {'type': 'FeatureCollection', 'features': <dynamic>[]},
 };
+
+http.Response jsonResponse(Object value, int status) => http.Response.bytes(
+  utf8.encode(jsonEncode(value)),
+  status,
+  headers: const {'content-type': 'application/json; charset=utf-8'},
+);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final now = DateTime.utc(2026, 9, 22, 12);
@@ -134,14 +141,14 @@ void main() {
         prefs,
         client: MockClient((r) async {
           expect(r.url.path, '/v1/ukraine');
-          return http.Response(jsonEncode(ua(now)), 200);
+          return jsonResponse(ua(now), 200);
         }),
         buildApi: 'https://example.test',
       );
       await repository.refreshUkraine();
       final restarted = DataRepository(
         prefs,
-        client: MockClient((_) async => http.Response('{}', 503)),
+        client: MockClient((_) async => jsonResponse({}, 503)),
         buildApi: 'https://example.test',
       );
       expect(restarted.cachedUkraine(), isNotNull);
@@ -160,7 +167,7 @@ void main() {
       final repository = DataRepository(
         prefs,
         client: MockClient(
-          (_) async => http.Response(jsonEncode(bad ? {} : ua(now)), 200),
+          (_) async => jsonResponse(bad ? {} : ua(now), 200),
         ),
         buildApi: 'https://example.test',
       );
@@ -182,7 +189,7 @@ void main() {
         prefs,
         client: MockClient(
           (_) async =>
-              http.Response(jsonEncode(ua(DateTime.now().toUtc())), 200),
+              jsonResponse(ua(DateTime.now().toUtc()), 200),
         ),
         buildApi: 'https://example.test',
       );
