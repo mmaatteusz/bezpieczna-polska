@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
+
 import 'model.dart';
 import 'offline_repository.dart';
 import 'shelters.dart';
@@ -132,16 +134,18 @@ class ShelterMapProvider implements MapLayerProvider {
   Future<MapViewport?> offline(MapRequest q) async {
     final package = await repository.offlinePackage(q.region);
     if (package == null) return null;
-    final visible = package.shelters.where((item) {
-      final lon = (item['longitude'] as num).toDouble();
-      final lat = (item['latitude'] as num).toDouble();
-      return lon >= q.bbox[0] &&
-          lon <= q.bbox[2] &&
-          lat >= q.bbox[1] &&
-          lat <= q.bbox[3] &&
-          (q.availability == 'ALL' ||
-              item['availability'] == q.availability);
-    }).toList(growable: false);
+    final visible = package.shelters
+        .where((item) {
+          final lon = (item['longitude'] as num).toDouble();
+          final lat = (item['latitude'] as num).toDouble();
+          return lon >= q.bbox[0] &&
+              lon <= q.bbox[2] &&
+              lat >= q.bbox[1] &&
+              lat <= q.bbox[3] &&
+              (q.availability == 'ALL' ||
+                  item['availability'] == q.availability);
+        })
+        .toList(growable: false);
 
     final features = <Map<String, dynamic>>[];
     if (visible.length <= 500) {
@@ -198,9 +202,9 @@ class ShelterMapProvider implements MapLayerProvider {
         });
       }
     }
-    final source = (package.snapshot['sources'] as List)
-        .whereType<Map>()
-        .where((item) => item['id'] == 'SHELTERS');
+    final source = (package.snapshot['sources'] as List).whereType<Map>().where(
+      (item) => item['id'] == 'SHELTERS',
+    );
     final originalHealth = source.isEmpty
         ? null
         : Map<String, dynamic>.from(source.first);

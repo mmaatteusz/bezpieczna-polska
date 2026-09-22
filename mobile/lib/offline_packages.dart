@@ -173,9 +173,8 @@ class OfflineRegionPackage {
     }
     final region = manifest['regionId'] as String;
     if (region != 'PL' &&
-        !RegExp(
-          r'^(02|04|06|08|10|12|14|16|18|20|22|24|26|28|30|32)$',
-        ).hasMatch(region)) {
+        !RegExp(r'^(02|04|06|08|10|12|14|16|18|20|22|24|26|28|30|32)$')
+            .hasMatch(region)) {
       throw const OfflinePackageException('INVALID_REGION');
     }
     try {
@@ -480,7 +479,10 @@ class OfflinePackageStore {
           final previousPackage = OfflineRegionPackage.parse(previousRaw);
           if (previousPackage.regionId == package.regionId) {
             newBackupKey = previousKey;
-            if (!await prefs.setString(_backup(package.regionId), previousKey)) {
+            if (!await prefs.setString(
+              _backup(package.regionId),
+              previousKey,
+            )) {
               throw const OfflinePackageException('BACKUP_POINTER_FAILED');
             }
           }
@@ -521,14 +523,13 @@ class OfflinePackageStore {
     var packages = await list();
     while ((packages.length > maxPackages || _storedBytes() > maxTotalBytes) &&
         packages.length > 1) {
-      final candidates = packages
-          .where((item) => item.regionId != protectedRegion)
-          .toList()
-        ..sort((a, b) {
-          final aa = prefs.getInt(_access(a.regionId)) ?? 0;
-          final bb = prefs.getInt(_access(b.regionId)) ?? 0;
-          return aa.compareTo(bb);
-        });
+      final candidates =
+          packages.where((item) => item.regionId != protectedRegion).toList()
+            ..sort((a, b) {
+              final aa = prefs.getInt(_access(a.regionId)) ?? 0;
+              final bb = prefs.getInt(_access(b.regionId)) ?? 0;
+              return aa.compareTo(bb);
+            });
       if (candidates.isEmpty) break;
       await delete(candidates.first.regionId);
       packages = await list();
@@ -553,10 +554,11 @@ class OfflinePackageStore {
     await prefs.remove(_backup(region));
     await prefs.remove(_staging(region));
     await prefs.remove(_access(region));
-    for (final key in prefs
-        .getKeys()
-        .where((key) => key.startsWith('$_dataPrefix$region:'))
-        .toList()) {
+    for (final key
+        in prefs
+            .getKeys()
+            .where((key) => key.startsWith('$_dataPrefix$region:'))
+            .toList()) {
       await prefs.remove(key);
     }
   }
@@ -564,10 +566,11 @@ class OfflinePackageStore {
   Future<int> usedBytes() async => _storedBytes();
 
   Future<void> discardStaging() async {
-    for (final key in prefs
-        .getKeys()
-        .where((key) => key.startsWith(_stagingPrefix))
-        .toList()) {
+    for (final key
+        in prefs
+            .getKeys()
+            .where((key) => key.startsWith(_stagingPrefix))
+            .toList()) {
       await prefs.remove(key);
     }
   }
@@ -599,7 +602,5 @@ String _crc32Hex(List<int> bytes) {
       crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xedb88320 : crc >> 1;
     }
   }
-  return ((crc ^ 0xffffffff) & 0xffffffff)
-      .toRadixString(16)
-      .padLeft(8, '0');
+  return ((crc ^ 0xffffffff) & 0xffffffff).toRadixString(16).padLeft(8, '0');
 }

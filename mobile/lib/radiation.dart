@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'model.dart';
 
 class RadiationData {
@@ -106,9 +107,8 @@ class RadiationData {
                       .difference(DateTime.parse(p['measuredAt'] as String))
                       .inSeconds <
                   900 &&
-              !DateTime.parse(
-                p['measuredAt'] as String,
-              ).isAfter(now.add(const Duration(seconds: 30))),
+              !DateTime.parse(p['measuredAt'] as String)
+                  .isAfter(now.add(const Duration(seconds: 30))),
         );
     return fresh
         ? 'Dane pomiarowe aktualne'

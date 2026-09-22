@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -10,9 +11,9 @@ import 'package:bezpieczna_polska/map_layers.dart';
 
 final request = MapRequest([17.8, 53, 18.3, 53.3], 10, '04');
 Map<String, dynamic> fixture(MapRequest q) {
-  final shelter =
-      jsonDecode(File('test/fixtures/shelters.json').readAsStringSync())
-          as Map<String, dynamic>;
+  final shelter = jsonDecode(
+    File('test/fixtures/shelters.json').readAsStringSync(),
+  ) as Map<String, dynamic>;
   return {
     'type': 'FeatureCollection',
     'metadata': {
@@ -51,56 +52,47 @@ http.Response response(Map<String, dynamic> data) => http.Response(
 );
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
-  test(
-    'real PSP fixture: bounded viewport, health expiry, invalid region and incomplete clusters',
-    () {
-      final data = fixture(request),
-          v = MapViewport.parse(jsonEncode(data), request);
-      expect(v.data['features'].length, 3);
-      expect(v.freshAt(DateTime.parse('2026-09-19T12:30:00Z')), isTrue);
-      expect(v.freshAt(DateTime.parse('2026-09-22T12:30:00Z')), isFalse);
-      expect(
-        () => MapViewport.parse(
-          jsonEncode(data),
-          MapRequest(request.bbox, 10, '02'),
-        ),
-        throwsFormatException,
-      );
-      data['metadata']['total'] = 4;
-      expect(
-        () => MapViewport.parse(jsonEncode(data), request),
-        throwsFormatException,
-      );
-    },
-  );
-  test(
-    'backend bbox/filter sent automatically; offline retains last known good only for same viewport',
-    () async {
-      var fail = false;
-      final repo = DataRepository(
-        await SharedPreferences.getInstance(),
-        buildApi: 'https://build.example',
-        client: MockClient((r) async {
-          expect(r.url.path, '/v1/map/shelters');
-          expect(r.url.queryParameters, request.query);
-          if (fail) throw Exception('offline');
-          return response(fixture(request));
-        }),
-      );
-      final provider = ShelterMapProvider(repo);
-      await provider.fetch(request);
-      fail = true;
-      await expectLater(provider.fetch(request), throwsException);
-      expect(provider.cached(request), isNotNull);
-      expect(provider.cached(MapRequest([18, 53, 19, 54], 10, '04')), isNull);
-      expect(
-        provider.cached(MapRequest(request.bbox, 10, '04', '24H')),
-        isNull,
-      );
-      await repo.clearData();
-      expect(provider.cached(request), isNull);
-    },
-  );
+  test('real PSP fixture: bounded viewport, health expiry, invalid region and incomplete clusters', () {
+    final data = fixture(request),
+        v = MapViewport.parse(jsonEncode(data), request);
+    expect(v.data['features'].length, 3);
+    expect(v.freshAt(DateTime.parse('2026-09-19T12:30:00Z')), isTrue);
+    expect(v.freshAt(DateTime.parse('2026-09-22T12:30:00Z')), isFalse);
+    expect(
+      () => MapViewport.parse(
+        jsonEncode(data),
+        MapRequest(request.bbox, 10, '02'),
+      ),
+      throwsFormatException,
+    );
+    data['metadata']['total'] = 4;
+    expect(
+      () => MapViewport.parse(jsonEncode(data), request),
+      throwsFormatException,
+    );
+  });
+  test('backend bbox/filter sent automatically; offline retains last known good only for same viewport', () async {
+    var fail = false;
+    final repo = DataRepository(
+      await SharedPreferences.getInstance(),
+      buildApi: 'https://build.example',
+      client: MockClient((r) async {
+        expect(r.url.path, '/v1/map/shelters');
+        expect(r.url.queryParameters, request.query);
+        if (fail) throw Exception('offline');
+        return response(fixture(request));
+      }),
+    );
+    final provider = ShelterMapProvider(repo);
+    await provider.fetch(request);
+    fail = true;
+    await expectLater(provider.fetch(request), throwsException);
+    expect(provider.cached(request), isNotNull);
+    expect(provider.cached(MapRequest([18, 53, 19, 54], 10, '04')), isNull);
+    expect(provider.cached(MapRequest(request.bbox, 10, '04', '24H')), isNull);
+    await repo.clearData();
+    expect(provider.cached(request), isNull);
+  });
   test(
     'bad response keeps valid cache and cache is bounded to four viewports',
     () async {

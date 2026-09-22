@@ -156,9 +156,8 @@ extension OfflineRepository on DataRepository {
     final package = OfflineRegionPackage.create(
       regionId: regionId,
       createdAt: DateTime.now().toUtc(),
-      snapshotTimestamp: DateTime.parse(
-        snapshot.data['serverTime'] as String,
-      ).toUtc(),
+      snapshotTimestamp: DateTime.parse(snapshot.data['serverTime'] as String)
+          .toUtc(),
       snapshot: snapshot.data,
       shelters: shelters,
       watchedLocations: watchedLocations.map((item) => item.toJson()).toList(),
@@ -202,29 +201,32 @@ extension OfflineRepository on DataRepository {
     final package = await offlinePackage(regionId);
     if (package == null) return null;
     final normalized = query.trim().toLowerCase();
-    final matches = package.shelters.where((item) {
-      if (normalized.isEmpty) return true;
-      final text = [
-        item['address'],
-        item['municipality'],
-        item['county'],
-      ].whereType<String>().join(' ').toLowerCase();
-      return text.contains(normalized);
-    }).toList(growable: false);
+    final matches = package.shelters
+        .where((item) {
+          if (normalized.isEmpty) return true;
+          final text = [
+            item['address'],
+            item['municipality'],
+            item['county'],
+          ].whereType<String>().join(' ').toLowerCase();
+          return text.contains(normalized);
+        })
+        .toList(growable: false);
     if (offset < 0 || offset > matches.length || limit < 1 || limit > 500) {
       throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
     final end = math.min(offset + limit, matches.length).toInt();
-    final source = (package.snapshot['sources'] as List)
-        .whereType<Map>()
-        .where((item) => item['id'] == 'SHELTERS');
+    final source = (package.snapshot['sources'] as List).whereType<Map>().where(
+      (item) => item['id'] == 'SHELTERS',
+    );
     final originalHealth = source.isEmpty
         ? null
         : Map<String, dynamic>.from(source.first);
     final health = <String, dynamic>{
       'id': 'SHELTERS',
       'name': originalHealth?['name'] ?? 'Punkty schronienia PSP',
-      'url': originalHealth?['url'] ??
+      'url':
+          originalHealth?['url'] ??
           'https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce',
       'state': 'STALE',
       'healthStatus': 'STALE',
@@ -267,20 +269,20 @@ extension OfflineRepository on DataRepository {
         limit > 10) {
       throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
-    final rows = package.shelters.map((item) {
-      final distance = _distanceMeters(
-        latitude,
-        longitude,
-        (item['latitude'] as num).toDouble(),
-        (item['longitude'] as num).toDouble(),
-      );
-      return {'point': item, 'distanceMeters': distance};
-    }).toList()
-      ..sort(
-        (a, b) => (a['distanceMeters'] as int).compareTo(
-          b['distanceMeters'] as int,
-        ),
-      );
+    final rows =
+        package.shelters.map((item) {
+          final distance = _distanceMeters(
+            latitude,
+            longitude,
+            (item['latitude'] as num).toDouble(),
+            (item['longitude'] as num).toDouble(),
+          );
+          return {'point': item, 'distanceMeters': distance};
+        }).toList()..sort(
+          (a, b) => (a['distanceMeters'] as int).compareTo(
+            b['distanceMeters'] as int,
+          ),
+        );
     final health = {
       'id': 'SHELTERS',
       'state': 'STALE',
@@ -342,9 +344,8 @@ extension OfflineRepository on DataRepository {
       }
     }
     nearby.sort(
-      (a, b) => (a['distanceMeters'] as int).compareTo(
-        b['distanceMeters'] as int,
-      ),
+      (a, b) =>
+          (a['distanceMeters'] as int).compareTo(b['distanceMeters'] as int),
     );
     final nearest = await offlineNearestShelters(
       latitude,
@@ -364,7 +365,8 @@ extension OfflineRepository on DataRepository {
       'nearbyEvents': nearby.take(50).toList(),
       'regionalEvents': regional.take(50).toList(),
       'nearestShelters': {
-        'items': nearest?.items
+        'items':
+            nearest?.items
                 .map(
                   (item) => {
                     'point': item.point.data,
@@ -435,11 +437,9 @@ int _distanceMeters(double lat1, double lon1, double lat2, double lon2) {
   final p2 = lat2 * math.pi / 180;
   final dLat = (lat2 - lat1) * math.pi / 180;
   final dLon = (lon2 - lon1) * math.pi / 180;
-  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-      math.cos(p1) *
-          math.cos(p2) *
-          math.sin(dLon / 2) *
-          math.sin(dLon / 2);
+  final a =
+      math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(p1) * math.cos(p2) * math.sin(dLon / 2) * math.sin(dLon / 2);
   final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   return (radius * c).round();
 }

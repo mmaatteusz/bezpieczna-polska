@@ -1,8 +1,11 @@
 import 'radiation.dart';
+
 import 'dart:async';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
+
 import 'map_layers.dart';
 import 'model.dart';
 import 'shelters.dart';
@@ -79,15 +82,13 @@ class _ShelterMapState extends State<ShelterMap> {
         await c.setStyle(offlineStyle);
         if (mounted) {
           setState(
-            () => message =
-                'OFFLINE MAPA • podkład sieciowy nie odpowiedział. Uruchomiono lokalne płótno dla zapisanych overlayów.',
+            () => message = 'OFFLINE MAPA • podkład sieciowy nie odpowiedział. Uruchomiono lokalne płótno dla zapisanych overlayów.',
           );
         }
       } catch (_) {
         if (mounted) {
           setState(
-            () => message =
-                'Nie udało się uruchomić ani podkładu online, ani lokalnego płótna mapy.',
+            () => message = 'Nie udało się uruchomić ani podkładu online, ani lokalnego płótna mapy.',
           );
         }
       }
@@ -493,9 +494,8 @@ class _ShelterMapState extends State<ShelterMap> {
           Text(
             widget.radiation == null
                 ? message
-                : RadiationData.parse(
-                    widget.radiation,
-                  ).measurementText(DateTime.now(), widget.radiationOnline),
+                : RadiationData.parse(widget.radiation)
+                      .measurementText(DateTime.now(), widget.radiationOnline),
           ),
           const Text(
             'Komunikaty PAA są dostępne w Statusie i Alert Center. Brak punktów na mapie nie oznacza braku zagrożenia.',
@@ -515,7 +515,11 @@ class _ShelterMapState extends State<ShelterMap> {
             ),
           if (viewport != null)
             Text(
-              '${fresh ? 'LIVE • dane pobrane z PSP' : meta?['offlinePackageTimestamp'] != null ? 'OFFLINE • LAST KNOWN GOOD • snapshot ${stamp(meta?['offlinePackageTimestamp'])}' : 'Ostatnie zapisane dane — aktualność niepotwierdzona'}\nData danych: ${meta?['dataDate'] ?? 'Nie podano'} • Aktualność źródła: ${stamp(meta?['health']?['lastSuccess'])}\nPunkty w widocznym obszarze: ${meta?['total']}',
+              '${fresh
+                  ? 'LIVE • dane pobrane z PSP'
+                  : meta?['offlinePackageTimestamp'] != null
+                  ? 'OFFLINE • LAST KNOWN GOOD • snapshot ${stamp(meta?['offlinePackageTimestamp'])}'
+                  : 'Ostatnie zapisane dane — aktualność niepotwierdzona'}\nData danych: ${meta?['dataDate'] ?? 'Nie podano'} • Aktualność źródła: ${stamp(meta?['health']?['lastSuccess'])}\nPunkty w widocznym obszarze: ${meta?['total']}',
             ),
           if (message.isNotEmpty) Text(message),
           Wrap(

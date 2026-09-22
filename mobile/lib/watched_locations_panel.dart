@@ -51,8 +51,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
   Future<Position?> _position() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       setState(
-        () => message =
-            'Lokalizacja w telefonie jest wyłączona. Możesz dodać miejsce ręcznie.',
+        () => message = 'Lokalizacja w telefonie jest wyłączona. Możesz dodać miejsce ręcznie.',
       );
       return null;
     }
@@ -62,15 +61,13 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
     }
     if (permission == LocationPermission.denied) {
       setState(
-        () => message =
-            'Bez zgody na lokalizację nie można użyć „Wokół mnie”. Możesz dodać miejsce ręcznie.',
+        () => message = 'Bez zgody na lokalizację nie można użyć „Wokół mnie”. Możesz dodać miejsce ręcznie.',
       );
       return null;
     }
     if (permission == LocationPermission.deniedForever) {
       setState(
-        () => message =
-            'Dostęp do lokalizacji jest zablokowany w ustawieniach systemu. Możesz dodać miejsce ręcznie.',
+        () => message = 'Dostęp do lokalizacji jest zablokowany w ustawieniach systemu. Możesz dodać miejsce ręcznie.',
       );
       return null;
     }
@@ -83,8 +80,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
       );
     } on TimeoutException {
       setState(
-        () => message =
-            'Nie udało się ustalić pozycji w wymaganym czasie. Spróbuj ponownie lub dodaj miejsce ręcznie.',
+        () => message = 'Nie udało się ustalić pozycji w wymaganym czasie. Spróbuj ponownie lub dodaj miejsce ręcznie.',
       );
       return null;
     }

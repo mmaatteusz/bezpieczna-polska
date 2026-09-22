@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -123,9 +124,8 @@ void main() {
       final restarted = DataRepository(prefs, buildApi: 'https://example.org');
       final cached = restarted.cached('04')!;
       expect(
-        RadiationData.parse(
-          cached.data['radiation'],
-        ).communicationText(now, false),
+        RadiationData.parse(cached.data['radiation'])
+            .communicationText(now, false),
         contains('STALE'),
       );
       expect(restarted.cached('02'), isNull);

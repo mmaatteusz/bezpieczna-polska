@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -34,27 +35,24 @@ void main() {
   test(
     'stale data never presents current green',
     () => expect(
-      Snapshot.parse(
-        jsonEncode(data()),
-      ).statusText(DateTime.parse('2026-09-18T10:02:00Z'), online: true),
+      Snapshot.parse(jsonEncode(data()))
+          .statusText(DateTime.parse('2026-09-18T10:02:00Z'), online: true),
       'Brak bieżącej oceny sytuacji',
     ),
   );
   test(
     'offline immediately invalidates current status',
     () => expect(
-      Snapshot.parse(
-        jsonEncode(data()),
-      ).statusText(DateTime.parse('2026-09-18T10:00:10Z'), online: false),
+      Snapshot.parse(jsonEncode(data()))
+          .statusText(DateTime.parse('2026-09-18T10:00:10Z'), online: false),
       'Brak bieżącej oceny sytuacji',
     ),
   );
   test(
     'future server clock is not trusted',
     () => expect(
-      Snapshot.parse(
-        jsonEncode(data()),
-      ).freshAt(DateTime.parse('2026-09-17T10:00:00Z')),
+      Snapshot.parse(jsonEncode(data()))
+          .freshAt(DateTime.parse('2026-09-17T10:00:00Z')),
       false,
     ),
   );

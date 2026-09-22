@@ -11,12 +11,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const version = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const version =
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
-Map<String, dynamic> source({
-  String id = 'RCB',
-  String state = 'HEALTHY',
-}) => {
+Map<String, dynamic> source({String id = 'RCB', String state = 'HEALTHY'}) => {
   'id': id,
   'name': id == 'SHELTERS' ? 'Punkty schronienia PSP' : id,
   'url': 'https://example.invalid/$id',
@@ -127,28 +125,27 @@ http.Response ok(Object body) => http.Response(
   headers: {'content-type': 'application/json'},
 );
 
-MockClient downloadClient({String sourceState = 'HEALTHY'}) =>
-    MockClient((request) async {
-      switch (request.url.path) {
-        case '/v1/snapshot':
-          return ok(
-            snapshot(
-              region: request.url.queryParameters['regionId'] ?? '04',
-              sourceState: sourceState,
-            ),
-          );
-        case '/healthz':
-          return ok({'ok': true, 'version': '0.1.0-alpha.15'});
-        case '/v1/shelters':
-          return ok(
-            shelterPage(
-              region: request.url.queryParameters['regionId'] ?? '04',
-            ),
-          );
-        default:
-          return http.Response('{}', 404);
-      }
-    });
+MockClient downloadClient({String sourceState = 'HEALTHY'}) => MockClient((
+  request,
+) async {
+  switch (request.url.path) {
+    case '/v1/snapshot':
+      return ok(
+        snapshot(
+          region: request.url.queryParameters['regionId'] ?? '04',
+          sourceState: sourceState,
+        ),
+      );
+    case '/healthz':
+      return ok({'ok': true, 'version': '0.1.0-alpha.15'});
+    case '/v1/shelters':
+      return ok(
+        shelterPage(region: request.url.queryParameters['regionId'] ?? '04'),
+      );
+    default:
+      return http.Response('{}', 404);
+  }
+});
 
 Future<DataRepository> repoWithDownload({
   SharedPreferences? prefs,
@@ -172,10 +169,7 @@ OfflineRegionPackage package({
   shelters: [shelter(region: region)],
   watchedLocations: const [],
   sourceTimestamps: {
-    'RCB': {
-      'state': sourceState,
-      'lastSuccess': '2026-09-22T10:00:00Z',
-    },
+    'RCB': {'state': sourceState, 'lastSuccess': '2026-09-22T10:00:00Z'},
   },
   components: const [
     'status',
@@ -273,7 +267,10 @@ void main() {
     await prefs.setString(pointer, jsonEncode(envelope));
     final listed = await store.list();
     expect(listed.single.state, OfflinePackageState.corrupted);
-    await expectLater(store.load('04'), throwsA(isA<OfflinePackageException>()));
+    await expectLater(
+      store.load('04'),
+      throwsA(isA<OfflinePackageException>()),
+    );
   });
 
   test('checksum mismatch is rejected', () {
@@ -293,21 +290,24 @@ void main() {
     );
   });
 
-  test('unsupported schema requires refresh instead of migration guess', () async {
-    final prefs = await SharedPreferences.getInstance();
-    final store = OfflinePackageStore(prefs);
-    await store.commit(package());
-    final activeKey = prefs.getKeys().singleWhere(
-      (key) => key.startsWith('offline_package_active_v1:04'),
-    );
-    final pointer = prefs.getString(activeKey)!;
-    final decoded =
-        jsonDecode(prefs.getString(pointer)!) as Map<String, dynamic>
-          ..['schemaVersion'] = 99;
-    await prefs.setString(pointer, jsonEncode(decoded));
-    final listed = await store.list();
-    expect(listed.single.state, OfflinePackageState.refreshRequired);
-  });
+  test(
+    'unsupported schema requires refresh instead of migration guess',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final store = OfflinePackageStore(prefs);
+      await store.commit(package());
+      final activeKey = prefs.getKeys().singleWhere(
+        (key) => key.startsWith('offline_package_active_v1:04'),
+      );
+      final pointer = prefs.getString(activeKey)!;
+      final decoded =
+          jsonDecode(prefs.getString(pointer)!) as Map<String, dynamic>
+            ..['schemaVersion'] = 99;
+      await prefs.setString(pointer, jsonEncode(decoded));
+      final listed = await store.list();
+      expect(listed.single.state, OfflinePackageState.refreshRequired);
+    },
+  );
 
   test('incomplete active package is fail-closed', () async {
     final prefs = await SharedPreferences.getInstance();
@@ -327,10 +327,7 @@ void main() {
     );
     final parsed = Snapshot.parse(jsonEncode(p.snapshot));
     expect(
-      parsed.statusText(
-        DateTime.parse('2026-09-22T10:01:00Z'),
-        online: false,
-      ),
+      parsed.statusText(DateTime.parse('2026-09-22T10:01:00Z'), online: false),
       'Brak bieżącej oceny sytuacji',
     );
   });
@@ -367,10 +364,7 @@ void main() {
     final repo = await repoWithDownload(prefs: prefs);
     await repo.downloadOfflinePackage('04');
     final restarted = DataRepository(prefs);
-    final page = await restarted.offlineShelterPage(
-      '04',
-      query: 'Bydgoszcz',
-    );
+    final page = await restarted.offlineShelterPage('04', query: 'Bydgoszcz');
     expect(page?.items.single.address, contains('Testowa'));
     expect(page?.health?['healthStatus'], 'STALE');
   });
@@ -389,37 +383,36 @@ void main() {
     expect(result?.health?['healthStatus'], 'STALE');
   });
 
-  test('around offline uses package timestamp and no network request', () async {
-    final prefs = await SharedPreferences.getInstance();
-    final repo = await repoWithDownload(prefs: prefs);
-    await repo.downloadOfflinePackage('04');
-    var requests = 0;
-    final offline = DataRepository(
-      prefs,
-      buildApi: 'https://api.example',
-      client: MockClient((_) async {
-        requests++;
-        throw http.ClientException('must not be called');
-      }),
-    );
-    final result = await offline.offlineAround(
-      53.12,
-      18.01,
-      regionId: '04',
-    );
-    expect(requests, 0);
-    expect(result?.nearbyEvents.single.event.id, 'offline-event');
-    expect(result?.data['offlineSnapshotTimestamp'], isNotNull);
-    expect(
-      prefs.getKeys().where(
-        (key) =>
-            key.contains('gps_history') ||
-            key.contains('last_position') ||
-            key.contains('track_history'),
-      ),
-      isEmpty,
-    );
-  });
+  test(
+    'around offline uses package timestamp and no network request',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final repo = await repoWithDownload(prefs: prefs);
+      await repo.downloadOfflinePackage('04');
+      var requests = 0;
+      final offline = DataRepository(
+        prefs,
+        buildApi: 'https://api.example',
+        client: MockClient((_) async {
+          requests++;
+          throw http.ClientException('must not be called');
+        }),
+      );
+      final result = await offline.offlineAround(53.12, 18.01, regionId: '04');
+      expect(requests, 0);
+      expect(result?.nearbyEvents.single.event.id, 'offline-event');
+      expect(result?.data['offlineSnapshotTimestamp'], isNotNull);
+      expect(
+        prefs.getKeys().where(
+          (key) =>
+              key.contains('gps_history') ||
+              key.contains('last_position') ||
+              key.contains('track_history'),
+        ),
+        isEmpty,
+      );
+    },
+  );
 
   test('Ukraine data cannot enter Poland offline package', () {
     final bad = snapshot();
@@ -457,7 +450,10 @@ void main() {
   test('NEPTUN payload is not part of region package contract', () {
     final p = package();
     expect(p.payload.containsKey('neptun'), isFalse);
-    expect(p.components.any((item) => item.toLowerCase().contains('neptun')), isFalse);
+    expect(
+      p.components.any((item) => item.toLowerCase().contains('neptun')),
+      isFalse,
+    );
   });
 
   test('push preferences survive package commit and offline restart', () async {
@@ -504,6 +500,9 @@ void main() {
     await tester.pumpWidget(SafetyApp(repository: repo));
     await tester.pumpAndSettle();
     expect(find.textContaining('OFFLINE • LAST KNOWN GOOD'), findsWidgets);
-    expect(find.textContaining('Brak nowych danych nie oznacza bezpieczeństwa'), findsWidgets);
+    expect(
+      find.textContaining('Brak nowych danych nie oznacza bezpieczeństwa'),
+      findsWidgets,
+    );
   });
 }

@@ -66,10 +66,8 @@ class _OfflineDataScreenState extends State<OfflineDataScreen> {
       if (!mounted) return;
       setState(() {
         message = switch (error.code) {
-          'PACKAGE_TOO_LARGE' || 'SIZE_BOUNDS' =>
-            'Pakiet przekracza bezpieczny limit urządzenia. Cała Polska może wymagać osobnego rozwiązania z większym magazynem.',
-          'STORAGE_LIMIT' || 'STORAGE_LIMIT_PRESERVE_LKG' =>
-            'Brak miejsca w limicie pakietów offline. Zachowano poprzedni last-known-good.',
+          'PACKAGE_TOO_LARGE' || 'SIZE_BOUNDS' => 'Pakiet przekracza bezpieczny limit urządzenia. Cała Polska może wymagać osobnego rozwiązania z większym magazynem.',
+          'STORAGE_LIMIT' || 'STORAGE_LIMIT_PRESERVE_LKG' => 'Brak miejsca w limicie pakietów offline. Zachowano poprzedni last-known-good.',
           _ =>
             'Pakiet nie został aktywowany (${error.code}). Poprzedni last-known-good pozostał bez zmian.',
         };
@@ -158,7 +156,7 @@ class _OfflineDataScreenState extends State<OfflineDataScreen> {
                         .toList(),
                     onChanged: busyRegion == null
                         ? (value) =>
-                            setState(() => selectedRegion = value ?? '04')
+                              setState(() => selectedRegion = value ?? '04')
                         : null,
                   ),
                   const SizedBox(height: 12),
@@ -183,10 +181,7 @@ class _OfflineDataScreenState extends State<OfflineDataScreen> {
           Text(
             'Zajęte miejsce: ${formatOfflineBytes(usedBytes)} / ${formatOfflineBytes(OfflinePackageStore.maxTotalBytes)} • maks. ${OfflinePackageStore.maxPackages} pakietów',
           ),
-          if (message != null) ...[
-            const SizedBox(height: 8),
-            Text(message!),
-          ],
+          if (message != null) ...[const SizedBox(height: 8), Text(message!)],
           const SizedBox(height: 16),
           if (loading) const LinearProgressIndicator(),
           if (!loading && packages.isEmpty)
@@ -218,7 +213,9 @@ class _OfflineDataScreenState extends State<OfflineDataScreen> {
                       ? Icons.schedule
                       : Icons.warning_amber_outlined,
                 ),
-                title: Text(regions[descriptor.regionId] ?? descriptor.regionId),
+                title: Text(
+                  regions[descriptor.regionId] ?? descriptor.regionId,
+                ),
                 subtitle: Text(
                   '${offlinePackageStateLabel(state)} • ${formatOfflineBytes(descriptor.sizeBytes)}\nPobrano: ${stamp(descriptor.createdAt?.toIso8601String())} • wiek: ${formatOfflineAge(descriptor.createdAt, now)}',
                 ),
@@ -245,9 +242,7 @@ class _OfflineDataScreenState extends State<OfflineDataScreen> {
                     ),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Warstwy: ${package.layers.join(', ')}',
-                      ),
+                      child: Text('Warstwy: ${package.layers.join(', ')}'),
                     ),
                     Align(
                       alignment: Alignment.centerLeft,
@@ -257,9 +252,7 @@ class _OfflineDataScreenState extends State<OfflineDataScreen> {
                     ),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Checksum: ${manifest?['checksum']}',
-                      ),
+                      child: Text('Checksum: ${manifest?['checksum']}'),
                     ),
                     const SizedBox(height: 10),
                     const Align(
@@ -269,14 +262,16 @@ class _OfflineDataScreenState extends State<OfflineDataScreen> {
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
-                    ...sourceRows.take(20).map(
-                      (entry) => Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '${entry.key}: ${entry.value is Map ? entry.value['state'] : 'UNKNOWN'} • ${entry.value is Map ? stamp(entry.value['lastSuccess']) : 'Nie podano'}',
+                    ...sourceRows
+                        .take(20)
+                        .map(
+                          (entry) => Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '${entry.key}: ${entry.value is Map ? entry.value['state'] : 'UNKNOWN'} • ${entry.value is Map ? stamp(entry.value['lastSuccess']) : 'Nie podano'}',
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
                   ] else
                     Align(
                       alignment: Alignment.centerLeft,
