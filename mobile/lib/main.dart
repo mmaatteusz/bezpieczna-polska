@@ -454,7 +454,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     return [
       if (!online && offlinePackageData != null)
         notice(
-          'OFFLINE • LAST KNOWN GOOD z ${stamp(offlinePackageData!.snapshotTimestamp.toIso8601String())}. Wiek pakietu: ${formatOfflineAge(offlinePackageData!.createdAt, DateTime.now().toUtc())}. Stan źródeł pochodzi z chwili snapshotu; brak nowych danych nie oznacza bezpieczeństwa.',
+          'OFFLINE • LAST KNOWN GOOD z ${stamp(offlinePackageData!.snapshotTimestamp.toIso8601String())}. Wiek pakietu: ${formatOfflineAge(offlinePackageData!.createdAt, DateTime.now().toUtc())}. Stan źródeł pochodzi z chwili snapshotu. Brak nowych danych nie oznacza bezpieczeństwa.',
           Icons.offline_pin_outlined,
         ),
       statusCard(true),
