@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'model.dart';
+import 'offline_repository.dart';
 
 class WatchedLocationsScreen extends StatelessWidget {
   final DataRepository repository;
@@ -89,6 +90,40 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
     }
   }
 
+  Future<AroundResult> _aroundWithOffline(
+    double latitude,
+    double longitude, {
+    required double radiusKm,
+    String? regionId,
+  }) async {
+    try {
+      if (widget.repository.api.isEmpty) {
+        throw const ApiFailure(ApiFailureKind.notConfigured);
+      }
+      return await widget.repository.around(
+        latitude,
+        longitude,
+        radiusKm: radiusKm,
+        regionId: regionId,
+      );
+    } catch (error) {
+      final local = await widget.repository.offlineAround(
+        latitude,
+        longitude,
+        radiusKm: radiusKm,
+        regionId: regionId,
+      );
+      if (local == null) rethrow;
+      if (mounted) {
+        setState(
+          () => message =
+              'OFFLINE • wynik policzono wyłącznie z lokalnego pakietu z ${stamp(local.data['offlineSnapshotTimestamp'])}. Współrzędnych nie wysłano. Brak nowych danych nie oznacza bezpieczeństwa.',
+        );
+      }
+      return local;
+    }
+  }
+
   Future<void> _check({
     required String label,
     required double latitude,
@@ -102,7 +137,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
       message = null;
     });
     try {
-      final value = await widget.repository.around(
+      final value = await _aroundWithOffline(
         latitude,
         longitude,
         radiusKm: radiusKm,
@@ -129,7 +164,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
     try {
       final p = await _position();
       if (p == null || !mounted) return;
-      final value = await widget.repository.around(
+      final value = await _aroundWithOffline(
         p.latitude,
         p.longitude,
         radiusKm: 20,
