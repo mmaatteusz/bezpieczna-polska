@@ -136,7 +136,7 @@ class _ShelterPanelState extends State<ShelterPanel> {
       nearestMessage = null;
     });
     try {
-       if (!await Geolocator.isLocationServiceEnabled()) {
+      if (!await Geolocator.isLocationServiceEnabled()) {
         if (mounted) {
           setState(
             () => nearestMessage =
