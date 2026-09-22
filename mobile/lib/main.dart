@@ -1096,7 +1096,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       }
                       if (sheet.mounted) Navigator.pop(sheet);
                     },
-                    child: const Text('Usuń zapisane komunikaty'),
+                    child: const Text('Usuń lekki cache (pakiety offline bez zmian)'),
                   ),
                   ListTile(
                     title: const Text('Dane offline'),
