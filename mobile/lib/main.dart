@@ -469,7 +469,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             MaterialPageRoute(
               builder: (_) => WatchedLocationsScreen(
                 repository: widget.repository,
-                onPreferencesChanged: widget.pushManager?.syncCurrentPreferences,
+                onPreferencesChanged:
+                    widget.pushManager?.syncCurrentPreferences,
               ),
             ),
           ),
