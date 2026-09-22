@@ -7,21 +7,36 @@ import 'model.dart';
 
 class WatchedLocationsScreen extends StatelessWidget {
   final DataRepository repository;
-  const WatchedLocationsScreen({super.key, required this.repository});
+  final Future<void> Function()? onPreferencesChanged;
+  const WatchedLocationsScreen({
+    super.key,
+    required this.repository,
+    this.onPreferencesChanged,
+  });
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Wokół mnie')),
     body: ListView(
       padding: const EdgeInsets.all(20),
-      children: [WatchedLocationsPanel(repository: repository)],
+      children: [
+        WatchedLocationsPanel(
+          repository: repository,
+          onPreferencesChanged: onPreferencesChanged,
+        ),
+      ],
     ),
   );
 }
 
 class WatchedLocationsPanel extends StatefulWidget {
   final DataRepository repository;
-  const WatchedLocationsPanel({super.key, required this.repository});
+  final Future<void> Function()? onPreferencesChanged;
+  const WatchedLocationsPanel({
+    super.key,
+    required this.repository,
+    this.onPreferencesChanged,
+  });
 
   @override
   State<WatchedLocationsPanel> createState() => _WatchedLocationsPanelState();
@@ -249,6 +264,8 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                     radiusKm: ra,
                     regionId: selectedRegion.isEmpty ? null : selectedRegion,
                   );
+                  final sync = widget.onPreferencesChanged;
+                  if (sync != null) unawaited(sync());
                   if (dialogContext.mounted) {
                     Navigator.pop(dialogContext, true);
                   }
@@ -309,6 +326,8 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
     );
     if (yes == true) {
       await widget.repository.removeWatchedLocation(location.id);
+      final sync = widget.onPreferencesChanged;
+      if (sync != null) unawaited(sync());
       if (mounted) setState(() {});
     }
   }
