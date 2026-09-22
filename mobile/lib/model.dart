@@ -510,8 +510,9 @@ class DataRepository {
       final list = jsonDecode(raw);
       if (list is! List || list.length > 20) return const [];
       final items = list.map(WatchedLocation.parse).toList();
-      if (items.map((e) => e.id).toSet().length != items.length)
+      if (items.map((e) => e.id).toSet().length != items.length) {
         return const [];
+      }
       return items;
     } catch (_) {
       return const [];
@@ -805,7 +806,7 @@ class DataRepository {
       'latitude': latitude,
       'longitude': longitude,
       'radiusKm': radiusKm,
-      if (regionId != null) 'regionId': regionId,
+      'regionId': ?regionId,
     });
     if (response.statusCode != 200) _responseFailure(response);
     if (response.bodyBytes.length > 4 * 1024 * 1024) {
