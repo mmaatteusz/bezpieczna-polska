@@ -1,0 +1,141 @@
+name: Build Offline alpha.15 preview APK
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: preview-apk-offline-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgis:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: disposable_ci_only
+          POSTGRES_DB: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://test:disposable_ci_only@localhost:5432/test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Backend build and full tests
+        working-directory: backend
+        run: npm ci && npm run build && npm test
+      - name: Seed persistent PostGIS state
+        working-directory: backend
+        run: node scripts/ua-postgis-restart.mjs seed
+      - name: Restart actual PostGIS service
+        run: |
+          docker restart ${{ job.services.postgis.id }}
+          for i in $(seq 1 30); do
+            if docker exec ${{ job.services.postgis.id }} pg_isready -U test -d test; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify persistence after database and backend process restart
+        working-directory: backend
+        run: node scripts/ua-postgis-restart.mjs verify
+
+      - name: Live RCB contract check
+        working-directory: backend
+        run: node scripts/live-rcb.mjs ../output/rcb
+      - name: Live Ukraine source contract
+        working-directory: backend
+        env:
+          UKRAINE_ALARM_API_KEY: ${{ secrets.UKRAINE_ALARM_API_KEY }}
+        run: node scripts/live-ukraine.mjs ../output/ukraine-live.json
+      - name: Live Police and PSP incident contract check
+        working-directory: backend
+        run: node scripts/live-service-incidents.mjs ../output/service-incidents-live.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Flutter format, analyze and full tests
+        working-directory: mobile
+        run: |
+          flutter pub get
+          dart format lib test
+          mkdir -p ../output/formatter
+          cp lib/offline_packages.dart lib/offline_repository.dart lib/offline_data_screen.dart test/offline_packages_test.dart pubspec.lock ../output/formatter/
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Assert offline package contract
+        working-directory: mobile
+        run: flutter test --no-pub test/offline_packages_test.dart
+      - name: Assert NEPTUN historical safety contract
+        working-directory: backend
+        run: node --import tsx --test test/neptun.test.ts
+      - name: Assert push notification contract
+        working-directory: backend
+        run: node --import tsx --test test/push.test.ts
+      - name: Build Android preview
+        working-directory: mobile
+        run: flutter build apk --debug --split-per-abi --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=true
+
+      - name: Live WCZK contract check
+        working-directory: backend
+        run: node scripts/live-wczk.mjs ../output/wczk-live.json
+      - name: Live PAA communication contract check
+        working-directory: backend
+        run: node scripts/live-paa.mjs ../output/paa-live.json
+      - name: Live CERT and CSIRT GOV contract check
+        working-directory: backend
+        run: node scripts/live-cyber.mjs ../output/cyber-live.json
+      - name: Live Straż Graniczna contract check
+        working-directory: backend
+        run: node scripts/live-sg.mjs ../output/sg-live.json
+
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          cp mobile/pubspec.lock output/pubspec.lock.resolved
+          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.15-preview-arm64.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
+          grep -F "native-code: 'arm64-v8a'" output/package-info.txt
+          if grep -E "native-code:.*(armeabi-v7a|x86_64)" output/package-info.txt; then
+            echo "Unexpected non-arm64 native libraries in arm64 preview APK" >&2
+            exit 1
+          fi
+          grep -F "versionName='0.1.0-alpha.15'" output/package-info.txt
+          grep -F "versionCode='2015'" output/package-info.txt
+          grep -F "name='pl.bezpiecznapolska.preview'" output/package-info.txt
+          grep -F "sdkVersion:'24'" output/package-info.txt
+          grep -F "targetSdkVersion:'36'" output/package-info.txt
+          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" output/signature-check.txt
+          sha256sum output/*.apk | tee output/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Bezpieczna_Polska_0.1.0-alpha.15-preview-arm64
+          path: output/
+          if-no-files-found: error
+          retention-days: 30
