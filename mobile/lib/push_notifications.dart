@@ -327,7 +327,7 @@ class PushManager extends ChangeNotifier {
     String secret, {
     Object? body,
   }) async {
-    final request = await switch (method) {
+    final future = switch (method) {
       'POST' => repository.client.post(
         uri,
         headers: _headers(secret),
@@ -340,11 +340,12 @@ class PushManager extends ChangeNotifier {
       ),
       'DELETE' => repository.client.delete(uri, headers: _headers(secret)),
       _ => repository.client.get(uri, headers: _headers(secret)),
-    }.timeout(const Duration(seconds: 8));
+    };
+    final request = await future.timeout(const Duration(seconds: 8));
     if (request.statusCode < 200 || request.statusCode >= 300) {
       throw ApiFailure(
         request.statusCode == 503
-            ? ApiFailureKind.unavailable
+            ? ApiFailureKind.server
             : request.statusCode == 401
             ? ApiFailureKind.invalidResponse
             : ApiFailureKind.network,
