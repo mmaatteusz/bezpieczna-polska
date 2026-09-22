@@ -59,7 +59,8 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          dart format --output=none --set-exit-if-changed lib/main.dart lib/model.dart lib/watched_locations_panel.dart test/model_test.dart test/widget_test.dart test/watched_locations_test.dart
+          dart format lib/main.dart lib/model.dart lib/watched_locations_panel.dart test/model_test.dart test/widget_test.dart test/watched_locations_test.dart
+          git diff --exit-code -- lib/main.dart lib/model.dart lib/watched_locations_panel.dart test/watched_locations_test.dart
           flutter analyze --no-pub
           flutter test --no-pub
       - name: Build Android preview
