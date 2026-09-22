@@ -179,6 +179,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   Future<void> changeRegion(String value) async {
     ++generation;
     await widget.repository.setRegion(value);
+    if (widget.pushManager != null) {
+      unawaited(widget.pushManager!.syncCurrentPreferences());
+    }
     if (!mounted) return;
     setState(() {
       region = value;
@@ -465,7 +468,12 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) =>
-                  WatchedLocationsScreen(repository: widget.repository),
+                  WatchedLocationsScreen(
+                    repository: widget.repository,
+                    onPreferencesChanged: widget.pushManager == null
+                        ? null
+                        : widget.pushManager!.syncCurrentPreferences,
+                  ),
             ),
           ),
         ),
