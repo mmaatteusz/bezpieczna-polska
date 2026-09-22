@@ -222,7 +222,7 @@ class PushManager extends ChangeNotifier {
   static const _preferencesKey = 'push_preferences_v1';
   static const _appVersion = String.fromEnvironment(
     'APP_VERSION',
-    defaultValue: '0.1.0-alpha.14',
+    defaultValue: '0.1.0-alpha.15',
   );
 
   final DataRepository repository;
