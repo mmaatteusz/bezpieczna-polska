@@ -1,4 +1,5 @@
 import 'ukraine.dart';
+import 'neptun.dart';
 import 'radiation.dart';
 
 import 'dart:async';
@@ -413,6 +414,24 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ),
       Card(
         child: ListTile(
+          leading: const Icon(Icons.timeline_outlined),
+          title: const Text('NEPTUN • historyczny przebieg'),
+          subtitle: const Text(
+            'Zakończone ślady OSINT, timeline i źródła. Bez aktywnych dokładnych pozycji.',
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => NeptunScreen(
+                repository: widget.repository,
+                openSource: openLink,
+              ),
+            ),
+          ),
+        ),
+      ),
+      Card(
+        child: ListTile(
           leading: const Icon(Icons.radar_outlined),
           title: const Text('Wokół mnie'),
           subtitle: const Text(
@@ -493,7 +512,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ],
       const SizedBox(height: 12),
       notice(
-        'Wersja rozwojowa 0.1.0-alpha.11 • Powiadomienia push nie są aktywne.',
+        'Wersja rozwojowa 0.1.0-alpha.13 • Powiadomienia push nie są aktywne.',
         Icons.science_outlined,
       ),
       heading('Od ostatniej wizyty'),
@@ -1028,7 +1047,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       },
                     ),
                   const Text(
-                    '0.1.0-alpha.11 • Push nieaktywny • GPS tylko na żądanie',
+                    '0.1.0-alpha.13 • Push nieaktywny • GPS tylko na żądanie',
                   ),
                 ],
               ),
