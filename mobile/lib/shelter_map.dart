@@ -219,14 +219,22 @@ class _ShelterMapState extends State<ShelterMap> {
     } catch (failure) {
       if (!mounted || current != ticket) return;
       final cached = request == null ? null : provider.cached(request);
-      if (cached != null) await c.setGeoJsonSource('shelters', cached.data);
+      final offline = cached == null && request != null
+          ? await provider.offline(request)
+          : null;
+      final fallback = cached ?? offline;
+      if (fallback != null) {
+        await c.setGeoJsonSource('shelters', fallback.data);
+      }
       if (!mounted || current != ticket) return;
       setState(() {
-        viewport = cached;
+        viewport = fallback;
         online = false;
-        message = cached == null
+        message = fallback == null
             ? apiFailureMessage(failure)
-            : 'Pokazano zapisaną kopię. ${apiFailureMessage(failure)}';
+            : offline != null
+            ? 'OFFLINE • lokalny overlay schronień z pakietu z ${stamp(offline.metadata['offlinePackageTimestamp'])}. Podkład bazowy OpenFreeMap nie jest częścią pakietu i może być niedostępny. Brak nowych danych nie oznacza bezpieczeństwa.'
+            : 'Pokazano zapisaną kopię viewportu. ${apiFailureMessage(failure)}';
       });
     } finally {
       if (mounted && current == ticket) setState(() => loading = false);
@@ -454,7 +462,7 @@ class _ShelterMapState extends State<ShelterMap> {
         if (!widget.ukraine && !showRadiation) ...[
           if (viewport != null)
             Text(
-              '${fresh ? 'Dane pobrane z PSP' : 'Ostatnie zapisane dane — aktualność niepotwierdzona'}\nData danych: ${meta?['dataDate'] ?? 'Nie podano'} • Aktualność: ${stamp(meta?['health']?['lastSuccess'])}\nPunkty w widocznym obszarze: ${meta?['total']}',
+              '${fresh ? 'LIVE • dane pobrane z PSP' : meta?['offlinePackageTimestamp'] != null ? 'OFFLINE • LAST KNOWN GOOD • snapshot ${stamp(meta?['offlinePackageTimestamp'])}' : 'Ostatnie zapisane dane — aktualność niepotwierdzona'}\nData danych: ${meta?['dataDate'] ?? 'Nie podano'} • Aktualność źródła: ${stamp(meta?['health']?['lastSuccess'])}\nPunkty w widocznym obszarze: ${meta?['total']}',
             ),
           if (message.isNotEmpty) Text(message),
           Wrap(
