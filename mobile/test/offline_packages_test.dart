@@ -253,14 +253,9 @@ void main() {
 
   test('checksum mismatch is rejected', () {
     final decoded = jsonDecode(package().encode()) as Map<String, dynamic>;
-    (decoded['payload'] as Map)['watchedLocations'] = [
-      {
-        'id': 'loc-1',
-        'label': 'Dom',
-        'latitude': 53.1,
-        'longitude': 18.0,
-      },
-    ];
+    final manifest = Map<String, dynamic>.from(decoded['manifest'] as Map);
+    manifest['checksum'] = {'algorithm': 'CRC32', 'value': '00000000'};
+    decoded['manifest'] = manifest;
     expect(
       () => OfflineRegionPackage.parse(jsonEncode(decoded)),
       throwsA(
@@ -468,7 +463,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Dane offline'), findsOneWidget);
-    await tester.tap(find.text('Kujawsko-pomorskie').first);
+    await tester.tap(find.byType(ExpansionTile).first);
     await tester.pumpAndSettle();
     expect(find.textContaining('Snapshot danych:'), findsOneWidget);
     expect(find.textContaining('Checksum:'), findsOneWidget);
