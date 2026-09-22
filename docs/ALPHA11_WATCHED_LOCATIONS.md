@@ -7,14 +7,14 @@ Dodać lokalny, prywatnościowy kontekst miejsca bez budowania historii ruchu u�
 - GPS wyłącznie po świadomej akcji użytkownika.
 - Brak background tracking, geofencingu systemowego i historii pozycji.
 - Jednorazowa pozycja „Wokół mnie” pozostaje tylko w pamięci procesu.
-- Obserwowane lokalizacje są zapisywane wyłącznie lokalnie na urządzeniu; backend dostaje współrzędne dopiero przy ręcznym sprawdzeniu konkretnego miejsca.
+- Obserwowane lokalizacje są zapisywane wyłącznie lokalnie na urządzeniu; backend dostaje współrzędne dopiero przy ręcznym sprawdzeniu konkretnego miejsca. Współrzędne są wysyłane w ciele POST, nie w URL.
 - Odległość do Eventu jest liczona tylko wtedy, gdy Event ma wiarygodną geometrię ze źródła.
 - Brak geometrii nie oznacza braku zdarzeń w pobliżu.
 - Kontekst regionalny może być pokazany osobno tylko dla jawnego zakresu NATIONAL/PROVINCE; nie udajemy odległości.
 - Nearest shelter korzysta z istniejącego oficjalnego katalogu PSP i zachowuje jego sourceHealth/STALE.
 
 ## Plan API
-`GET /v1/around?lat=&lon=&radiusKm=&regionId=`
+`POST /v1/around` z JSON `{ latitude, longitude, radiusKm, regionId? }`
 
 Odpowiedź rozdziela:
 - `nearbyEvents` — tylko zdarzenia z geometrią i obliczoną odległością,
