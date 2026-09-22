@@ -29,14 +29,20 @@ class ShelterMap extends StatefulWidget {
 
 class _ShelterMapState extends State<ShelterMap> {
   MapLibreMapController? controller;
-  Timer? debounce, clock;
+  Timer? debounce, clock, styleFallback;
   bool showRadiation = false;
-  bool ready = false, loading = false, online = false;
+  bool ready = false, loading = false, online = false, fallbackStyle = false;
   int ticket = 0;
   String availability = 'ALL', message = 'Przygotowywanie mapy…';
   MapViewport? viewport;
   ShelterMapProvider get provider => ShelterMapProvider(widget.repository);
   static const empty = {'type': 'FeatureCollection', 'features': <dynamic>[]};
+  static const onlineStyle = String.fromEnvironment(
+    'MAP_STYLE_URL',
+    defaultValue: 'https://tiles.openfreemap.org/styles/liberty',
+  );
+  static const offlineStyle =
+      '{"version":8,"name":"Bezpieczna Polska offline","sources":{},"layers":[{"id":"offline-background","type":"background","paint":{"background-color":"#e9ecef"}}]}';
   @override
   void initState() {
     super.initState();
@@ -60,12 +66,54 @@ class _ShelterMapState extends State<ShelterMap> {
     ticket++;
     debounce?.cancel();
     clock?.cancel();
+    styleFallback?.cancel();
     super.dispose();
+  }
+
+  void armStyleFallback(MapLibreMapController c) {
+    styleFallback?.cancel();
+    styleFallback = Timer(const Duration(seconds: 4), () async {
+      if (!mounted || ready || controller != c) return;
+      try {
+        fallbackStyle = true;
+        await c.setStyle(offlineStyle);
+        if (mounted) {
+          setState(
+            () => message =
+                'OFFLINE MAPA • podkład sieciowy nie odpowiedział. Uruchomiono lokalne płótno dla zapisanych overlayów.',
+          );
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(
+            () => message =
+                'Nie udało się uruchomić ani podkładu online, ani lokalnego płótna mapy.',
+          );
+        }
+      }
+    });
+  }
+
+  Future<void> retryOnlineStyle() async {
+    final c = controller;
+    if (c == null) return;
+    setState(() {
+      ready = false;
+      fallbackStyle = false;
+      message = 'Ładowanie podkładu online…';
+    });
+    armStyleFallback(c);
+    try {
+      await c.setStyle(onlineStyle);
+    } catch (_) {
+      // Timer above switches to the local style without claiming live map data.
+    }
   }
 
   Future<void> styled() async {
     final c = controller;
     if (c == null) return;
+    styleFallback?.cancel();
     try {
       await c.addSource('radiation', GeojsonSourceProperties(data: empty));
       await c.addCircleLayer(
@@ -396,11 +444,7 @@ class _ShelterMapState extends State<ShelterMap> {
             child: Stack(
               children: [
                 MapLibreMap(
-                  styleString: const String.fromEnvironment(
-                    'MAP_STYLE_URL',
-                    defaultValue:
-                        'https://tiles.openfreemap.org/styles/liberty',
-                  ),
+                  styleString: onlineStyle,
                   initialCameraPosition: CameraPosition(
                     target: widget.ukraine
                         ? const LatLng(49, 31)
@@ -409,7 +453,10 @@ class _ShelterMapState extends State<ShelterMap> {
                   ),
                   trackCameraPosition: true,
                   minMaxZoomPreference: const MinMaxZoomPreference(0, 22),
-                  onMapCreated: (c) => controller = c,
+                  onMapCreated: (c) {
+                    controller = c;
+                    armStyleFallback(c);
+                  },
                   onStyleLoadedCallback: styled,
                   onCameraIdle: idle,
                   onMapClick: tapped,
@@ -460,6 +507,12 @@ class _ShelterMapState extends State<ShelterMap> {
           ),
         ],
         if (!widget.ukraine && !showRadiation) ...[
+          if (fallbackStyle)
+            FilledButton.tonalIcon(
+              onPressed: retryOnlineStyle,
+              icon: const Icon(Icons.map_outlined),
+              label: const Text('Spróbuj ponownie podkład online'),
+            ),
           if (viewport != null)
             Text(
               '${fresh ? 'LIVE • dane pobrane z PSP' : meta?['offlinePackageTimestamp'] != null ? 'OFFLINE • LAST KNOWN GOOD • snapshot ${stamp(meta?['offlinePackageTimestamp'])}' : 'Ostatnie zapisane dane — aktualność niepotwierdzona'}\nData danych: ${meta?['dataDate'] ?? 'Nie podano'} • Aktualność źródła: ${stamp(meta?['health']?['lastSuccess'])}\nPunkty w widocznym obszarze: ${meta?['total']}',
