@@ -217,11 +217,15 @@ function pointInRing(lon:number,lat:number,ring:[number,number][]){
  }
  return inside;
 }
+function polygonContains(lon:number,lat:number,rings:[number,number][][]){
+ if(!rings.length||!pointInRing(lon,lat,rings[0]))return false;
+ return !rings.slice(1).some(ring=>pointInRing(lon,lat,ring));
+}
 function pointInGeometry(lon:number,lat:number,geometry:Event['geometry']){
  if(!geometry)return false;
  if(geometry.type==='Point')return geometry.coordinates[0]===lon&&geometry.coordinates[1]===lat;
- if(geometry.type==='Polygon')return geometry.coordinates.length>0&&pointInRing(lon,lat,geometry.coordinates[0]);
- return geometry.coordinates.some(poly=>poly.length>0&&pointInRing(lon,lat,poly[0]));
+ if(geometry.type==='Polygon')return polygonContains(lon,lat,geometry.coordinates);
+ return geometry.coordinates.some(poly=>polygonContains(lon,lat,poly));
 }
 function distanceMeters(lat1:number,lon1:number,lat2:number,lon2:number){
  const rad=(v:number)=>v*Math.PI/180,dLat=rad(lat2-lat1),dLon=rad(lon2-lon1);
@@ -232,8 +236,9 @@ function locationMatches(e:Event,p:PushPreferences){
  return p.locations.some(l=>{
   if(e.geometry?.type==='Point'){
    const [lon,lat]=e.geometry.coordinates;
-   if(distanceMeters(l.latitude,l.longitude,lat,lon)<=l.radiusKm*1000)return true;
-  }else if(e.geometry&&pointInGeometry(l.longitude,l.latitude,e.geometry))return true;
+   return distanceMeters(l.latitude,l.longitude,lat,lon)<=l.radiusKm*1000;
+  }
+  if(e.geometry)return pointInGeometry(l.longitude,l.latitude,e.geometry);
   return !!l.regionId&&e.regions.includes(l.regionId);
  });
 }
