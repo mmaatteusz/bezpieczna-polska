@@ -5,6 +5,20 @@ import 'package:geolocator/geolocator.dart';
 
 import 'model.dart';
 
+class WatchedLocationsScreen extends StatelessWidget {
+  final DataRepository repository;
+  const WatchedLocationsScreen({super.key, required this.repository});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Wokół mnie')),
+    body: ListView(
+      padding: const EdgeInsets.all(20),
+      children: [WatchedLocationsPanel(repository: repository)],
+    ),
+  );
+}
+
 class WatchedLocationsPanel extends StatefulWidget {
   final DataRepository repository;
   const WatchedLocationsPanel({super.key, required this.repository});
