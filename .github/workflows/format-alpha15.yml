@@ -1,0 +1,35 @@
+name: Format alpha.15 Dart sources
+on:
+  push:
+    branches: [stage/offline-packages]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: stage/offline-packages
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Canonical Dart format
+        working-directory: mobile
+        run: dart format lib/main.dart lib/shelter_panel.dart
+      - name: Commit formatter-only changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- mobile/lib/main.dart mobile/lib/shelter_panel.dart; then
+            echo "Already formatted"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile/lib/main.dart mobile/lib/shelter_panel.dart
+          git commit -m "Format alpha.15 Dart sources"
+          git push origin HEAD:stage/offline-packages
