@@ -300,6 +300,7 @@ class OfflinePackageStore {
   static const maxTotalBytes = 32 * 1024 * 1024;
   static const _activePrefix = 'offline_package_active_v1:';
   static const _dataPrefix = 'offline_package_data_v1:';
+  static const _backupPrefix = 'offline_package_backup_v1:';
   static const _stagingPrefix = 'offline_package_staging_v1:';
   static const _accessPrefix = 'offline_package_access_v1:';
 
@@ -307,6 +308,7 @@ class OfflinePackageStore {
   OfflinePackageStore(this.prefs);
 
   String _active(String region) => '$_activePrefix$region';
+  String _backup(String region) => '$_backupPrefix$region';
   String _staging(String region) => '$_stagingPrefix$region';
   String _access(String region) => '$_accessPrefix$region';
   String _data(String region, DateTime createdAt) =>
@@ -392,19 +394,46 @@ class OfflinePackageStore {
   }
 
   Future<OfflineRegionPackage?> load(String region) async {
-    final pointer = prefs.getString(_active(region));
-    if (pointer == null) return null;
-    final raw = prefs.getString(pointer);
-    if (raw == null) return null;
-    final package = OfflineRegionPackage.parse(raw);
-    if (package.regionId != region) {
-      throw const OfflinePackageException('ACTIVE_REGION_MISMATCH');
+    final activePointer = prefs.getString(_active(region));
+    OfflinePackageException? activeError;
+    if (activePointer != null) {
+      final raw = prefs.getString(activePointer);
+      if (raw != null) {
+        try {
+          final package = OfflineRegionPackage.parse(raw);
+          if (package.regionId != region) {
+            throw const OfflinePackageException('ACTIVE_REGION_MISMATCH');
+          }
+          await prefs.setInt(
+            _access(region),
+            DateTime.now().toUtc().millisecondsSinceEpoch,
+          );
+          return package;
+        } on OfflinePackageException catch (error) {
+          activeError = error;
+        }
+      } else {
+        activeError = const OfflinePackageException('MISSING_PACKAGE_DATA');
+      }
     }
-    await prefs.setInt(
-      _access(region),
-      DateTime.now().toUtc().millisecondsSinceEpoch,
-    );
-    return package;
+
+    final backupPointer = prefs.getString(_backup(region));
+    if (backupPointer != null) {
+      final raw = prefs.getString(backupPointer);
+      if (raw != null) {
+        final package = OfflineRegionPackage.parse(raw);
+        if (package.regionId != region) {
+          throw const OfflinePackageException('BACKUP_REGION_MISMATCH');
+        }
+        await prefs.setInt(
+          _access(region),
+          DateTime.now().toUtc().millisecondsSinceEpoch,
+        );
+        return package;
+      }
+    }
+    if (activeError != null) throw activeError;
+    return null;
   }
 
   Future<void> commit(OfflineRegionPackage package) async {
@@ -429,6 +458,7 @@ class OfflinePackageStore {
     final stagingKey = _staging(package.regionId);
     final candidateKey = _data(package.regionId, package.createdAt);
     final previousKey = prefs.getString(_active(package.regionId));
+    final oldBackupKey = prefs.getString(_backup(package.regionId));
     if (!await prefs.setString(stagingKey, encoded)) {
       throw const OfflinePackageException('STAGING_WRITE_FAILED');
     }
@@ -441,6 +471,25 @@ class OfflinePackageStore {
       throw const OfflinePackageException('COMMIT_WRITE_FAILED');
     }
     OfflineRegionPackage.parse(prefs.getString(candidateKey)!);
+
+    String? newBackupKey = oldBackupKey;
+    if (previousKey != null && previousKey != candidateKey) {
+      final previousRaw = prefs.getString(previousKey);
+      if (previousRaw != null) {
+        try {
+          final previousPackage = OfflineRegionPackage.parse(previousRaw);
+          if (previousPackage.regionId == package.regionId) {
+            newBackupKey = previousKey;
+            if (!await prefs.setString(_backup(package.regionId), previousKey)) {
+              throw const OfflinePackageException('BACKUP_POINTER_FAILED');
+            }
+          }
+        } on OfflinePackageException {
+          // Never promote a broken active package over an existing valid backup.
+        }
+      }
+    }
+
     if (!await prefs.setString(_active(package.regionId), candidateKey)) {
       throw const OfflinePackageException('ACTIVATION_FAILED');
     }
@@ -449,17 +498,28 @@ class OfflinePackageStore {
       DateTime.now().toUtc().millisecondsSinceEpoch,
     );
     await prefs.remove(stagingKey);
-    if (previousKey != null && previousKey != candidateKey) {
-      await prefs.remove(previousKey);
+    if (oldBackupKey != null &&
+        oldBackupKey != newBackupKey &&
+        oldBackupKey != candidateKey) {
+      await prefs.remove(oldBackupKey);
     }
     await _enforceLimits(protectedRegion: package.regionId);
   }
 
+  int _storedBytes() {
+    final keys = prefs
+        .getKeys()
+        .where((key) => key.startsWith(_dataPrefix))
+        .toSet();
+    return keys.fold<int>(
+      0,
+      (sum, key) => sum + utf8.encode(prefs.getString(key) ?? '').length,
+    );
+  }
+
   Future<void> _enforceLimits({required String protectedRegion}) async {
     var packages = await list();
-    int total() =>
-        packages.fold<int>(0, (sum, item) => sum + item.sizeBytes);
-    while ((packages.length > maxPackages || total() > maxTotalBytes) &&
+    while ((packages.length > maxPackages || _storedBytes() > maxTotalBytes) &&
         packages.length > 1) {
       final candidates = packages
           .where((item) => item.regionId != protectedRegion)
@@ -473,7 +533,15 @@ class OfflinePackageStore {
       await delete(candidates.first.regionId);
       packages = await list();
     }
-    if (packages.length > maxPackages || total() > maxTotalBytes) {
+
+    if (_storedBytes() > maxTotalBytes) {
+      final backupKey = prefs.getString(_backup(protectedRegion));
+      if (backupKey != null) {
+        await prefs.remove(backupKey);
+        await prefs.remove(_backup(protectedRegion));
+      }
+    }
+    if (packages.length > maxPackages || _storedBytes() > maxTotalBytes) {
       throw const OfflinePackageException('STORAGE_LIMIT');
     }
   }
@@ -482,6 +550,7 @@ class OfflinePackageStore {
     final pointer = prefs.getString(_active(region));
     if (pointer != null) await prefs.remove(pointer);
     await prefs.remove(_active(region));
+    await prefs.remove(_backup(region));
     await prefs.remove(_staging(region));
     await prefs.remove(_access(region));
     for (final key in prefs
@@ -492,10 +561,7 @@ class OfflinePackageStore {
     }
   }
 
-  Future<int> usedBytes() async => (await list()).fold<int>(
-    0,
-    (sum, item) => sum + item.sizeBytes,
-  );
+  Future<int> usedBytes() async => _storedBytes();
 
   Future<void> discardStaging() async {
     for (final key in prefs
