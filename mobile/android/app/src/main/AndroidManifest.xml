@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <application android:usesCleartextTraffic="false" android:allowBackup="false"
-        android:label="Bezpieczna Polska α"
+        android:label="Bezpieczna Polska"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
