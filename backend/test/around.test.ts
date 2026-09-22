@@ -45,8 +45,8 @@ test('around endpoint requires PostGIS and validates coordinates',async()=>{
  const store=new Store(openDb(undefined,':memory:'));await store.init();
  const app=await buildApp(store);
  try{
-  assert.equal((await app.inject('/v1/around?lat=53.1&lon=18.0')).statusCode,503);
-  assert.equal((await app.inject('/v1/around?lat=999&lon=18.0')).statusCode,400);
+  assert.equal((await app.inject({method:'POST',url:'/v1/around',payload:{latitude:53.1,longitude:18.0}})).statusCode,503);
+  assert.equal((await app.inject({method:'POST',url:'/v1/around',payload:{latitude:999,longitude:18.0}})).statusCode,400);
  }finally{await app.close();await store.db.close();}
 });
 
@@ -62,7 +62,7 @@ test('PostGIS around keeps distance and regional relevance separate',{skip:!proc
   await store.put(event('exercise',{messageContext:'EXERCISE'}));
   const app=await buildApp(store);
   try{
-   const response=await app.inject('/v1/around?lat=53.12&lon=18.01&radiusKm=5&regionId=04');
+   const response=await app.inject({method:'POST',url:'/v1/around',payload:{latitude:53.12,longitude:18.01,radiusKm:5,regionId:'04'}});
    assert.equal(response.statusCode,200);
    const body=response.json();
    assert.equal(body.schemaVersion,1);
@@ -79,13 +79,13 @@ test('PostGIS around keeps distance and regional relevance separate',{skip:!proc
    assert.ok(Array.isArray(body.nearestShelters.items));
    assert.ok('health' in body.nearestShelters);
 
-   const noRegion=(await app.inject('/v1/around?lat=53.12&lon=18.01&radiusKm=5')).json();
+   const noRegion=(await app.inject({method:'POST',url:'/v1/around',payload:{latitude:53.12,longitude:18.01,radiusKm:5}})).json();
    assert.deepEqual(noRegion.regionalEvents,[]);
    assert.equal(noRegion.coverage.regional,'NOT_REQUESTED');
 
-   assert.equal((await app.inject('/v1/around?lat=91&lon=18.01')).statusCode,400);
-   assert.equal((await app.inject('/v1/around?lat=53.12&lon=18.01&radiusKm=101')).statusCode,400);
-   assert.equal((await app.inject('/v1/around?lat=53.12&lon=18.01&regionId=XX')).statusCode,400);
+   assert.equal((await app.inject({method:'POST',url:'/v1/around',payload:{latitude:91,longitude:18.01}})).statusCode,400);
+   assert.equal((await app.inject({method:'POST',url:'/v1/around',payload:{latitude:53.12,longitude:18.01,radiusKm:101}})).statusCode,400);
+   assert.equal((await app.inject({method:'POST',url:'/v1/around',payload:{latitude:53.12,longitude:18.01,regionId:'XX'}})).statusCode,400);
   }finally{await app.close();}
  }finally{
   for(const id of ids)await db.run('DELETE FROM event_revisions WHERE event_id=?',['around-fixture-'+id]);
