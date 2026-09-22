@@ -1,0 +1,100 @@
+name: Verify PSP shelter stage
+on:
+  push:
+    branches: [main, stage/shelters-psp]
+    paths: ['backend/**', 'mobile/**', '.github/workflows/shelters-stage.yml']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      check_live_source:
+        description: Run strict live PSP connectivity/import check (GitHub runners currently receive 403)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: shelters-stage-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgis:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: disposable_ci_only
+          POSTGRES_DB: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CI: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+      TEST_DATABASE_URL: postgresql://test:disposable_ci_only@localhost:5432/test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Backend and real PostGIS tests
+        working-directory: backend
+        run: npm ci && npm run build && npm test
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Mobile verification
+        working-directory: mobile
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib/main.dart lib/model.dart test/model_test.dart test/widget_test.dart lib/shelters.dart lib/shelter_panel.dart test/shelters_test.dart
+          flutter analyze --no-pub
+          flutter test --no-pub
+  live-source:
+    if: github.event_name == 'workflow_dispatch' && inputs.check_live_source
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgis:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: disposable_ci_only
+          POSTGRES_DB: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CI: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+      TEST_DATABASE_URL: postgresql://test:disposable_ci_only@localhost:5432/test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Compile backend
+        working-directory: backend
+        run: npm ci && npm run build
+      - name: Fetch real PSP catalog into PostGIS
+        working-directory: backend
+        run: node scripts/live-shelters.mjs "$RUNNER_TEMP/psp-validation"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shelters-live-observation
+          path: ${{ runner.temp }}/psp-validation/*.json
+          if-no-files-found: warn
+          retention-days: 30

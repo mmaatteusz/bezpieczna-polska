@@ -1,0 +1,53 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ns2:datasets xmlns:ns2="urn:otwarte-dane:harvester:1.13" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dataset status="published">
+    <extIdent>ps-gdziesieukryc-001</extIdent>
+    <title>
+      <polish>Punkty schronienia w Polsce</polish>
+      <english>Shelter points in Poland</english>
+    </title>
+    <description>
+      <polish>Zbiór danych o 3 punktach schronienia na terenie Rzeczypospolitej Polskiej, zgodnie z ustawą o ochronie ludności i obronie cywilnej z 2024 r. Zawiera lokalizację, rodzaj obiektu, dostępność oraz dane adresowe.</polish>
+      <english>Dataset of 3 shelter points in Poland, per the 2024 Civil Protection Act. Includes location, facility type, availability and address data.</english>
+    </description>
+    <url>https://gdziesieukryc.pl</url>
+    <updateFrequency>weekly</updateFrequency>
+    <categories>
+      <category>JUST</category>
+      <category>REGI</category>
+    </categories>
+    <conditions>
+      <source>true</source>
+      <modification>true</modification>
+      <dbOrCopyrighted>Ponowne wykorzystywanie informacji sektora publicznego spełniających cechy utworu lub stanowiących bazę danych odbywa się na warunkach licencji CC BY 4.0.</dbOrCopyrighted>
+      <dbOrCopyrightedLicenseChosen>CC BY 4.0</dbOrCopyrightedLicenseChosen>
+    </conditions>
+    <resources>
+      <resource status="published">
+        <extIdent>ps-csv-001</extIdent>
+        <url>https://gdziesieukryc.pl/PS_XML/punkty_schronienia.csv</url>
+        <title>
+          <polish>Punkty schronienia — dane CSV</polish>
+          <english>Shelter points — CSV data</english>
+        </title>
+        <description>
+          <polish>Plik CSV (UTF-8 z BOM) zawierający 3 rekordów punktów schronienia z lokalizacją, rodzajem obiektu i danymi adresowymi.</polish>
+          <english>CSV file (UTF-8 with BOM) containing 3 shelter point records with location, facility type and address data.</english>
+        </description>
+        <availability>remote</availability>
+        <dataDate>2026-09-19</dataDate>
+        <lastUpdateDate>2026-09-19T08:24:06+02:00</lastUpdateDate>
+      </resource>
+    </resources>
+    <tags>
+      <tag lang="pl">punkty schronienia</tag>
+      <tag lang="pl">ochrona ludności</tag>
+      <tag lang="pl">obrona cywilna</tag>
+      <tag lang="pl">bezpieczeństwo publiczne</tag>
+      <tag lang="en">shelter points</tag>
+      <tag lang="en">civil protection</tag>
+      <tag lang="en">public safety</tag>
+    </tags>
+    <lastUpdateDate>2026-09-19T08:24:06+02:00</lastUpdateDate>
+  </dataset>
+</ns2:datasets>

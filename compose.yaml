@@ -1,6 +1,6 @@
 services:
   database:
-    image: postgres:17
+    image: postgis/postgis:17-3.5
     environment:
       POSTGRES_DB: bezpieczna
       POSTGRES_USER: bezpieczna

@@ -1,6 +1,6 @@
 # Bezpieczna Polska — projekt techniczny i plan realizacji
 
-Wersja 0.1 • 17 września 2026 • Dokument projektowy, nie działająca aplikacja.
+Wersja 0.1 • aktualizacja 21 września 2026 • Dokument architektury. Rdzeń aplikacji działa, a pozostałe sekcje opisują stan docelowy i kolejne etapy.
 
 Podstawa: wymagania przekazane przez Mateusza, punkty 1–79. Punkt 79 urywa się w dostarczonym tekście. Przyjęta reguła: trzy relacje nie stanowią automatycznie trzech niezależnych potwierdzeń. Nie dopisano nieznanych dalszych wymagań.
 

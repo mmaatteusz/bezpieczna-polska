@@ -1,29 +1,213 @@
+import {radiationMeasurementSchema,type RadiationMeasurement} from './radiation.js';
+import {correlate,type Incident} from './correlation.js';
 import {DatabaseSync} from 'node:sqlite';
 import {createHash} from 'node:crypto';
 import pg from 'pg';
 import {eventSchema,type Event,type Health} from './domain.js';
+import {shelterSchema,searchText,type Shelter,type ShelterFilter} from './shelter.js';
 type Row=Record<string,unknown>;
-export interface Db {all(sql:string,params?:unknown[]):Promise<Row[]>;run(sql:string,params?:unknown[]):Promise<void>;close():Promise<void>;}
+export interface Db {
+ kind:'postgres'|'sqlite';
+ all(sql:string,params?:unknown[]):Promise<Row[]>;
+ run(sql:string,params?:unknown[]):Promise<void>;
+ transaction<T>(work:(db:Db)=>Promise<T>):Promise<T>;
+ close():Promise<void>;
+}
 export function openDb(url?:string,path='bezpieczna.db'):Db{
- if(url){const p=new pg.Pool({connectionString:url,max:5});const convert=(s:string)=>{let i=0;return s.replace(/\?/g,()=>`$${++i}`);};return {all:async(s,v=[])=>{return (await p.query(convert(s),v)).rows as Row[];},run:async(s,v=[])=>{await p.query(convert(s),v);},close:async()=>p.end()};}
- const d=new DatabaseSync(path);d.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;');return {all:async(s,v=[])=>d.prepare(s).all(...v as (string|number|null)[]) as Row[],run:async(s,v=[])=>{d.prepare(s).run(...v as (string|number|null)[]);},close:async()=>d.close()};
+ if(url){
+  const pool=new pg.Pool({connectionString:url,max:5});
+  const convert=(s:string)=>{let i=0;return s.replace(/\?/g,()=>`$${++i}`);};
+  const handle=(client:pg.Pool|pg.PoolClient):Db=>({kind:'postgres',
+   all:async(s,v=[]) => (await client.query(convert(s),v)).rows as Row[],
+   run:async(s,v=[])=>{await client.query(convert(s),v);},
+   transaction:async work=>{
+    const c=await pool.connect();
+    try{await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ');const result=await work(handle(c));await c.query('COMMIT');return result;}
+    catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+   },close:async()=>pool.end(),
+  });return handle(pool);
+ }
+ const d=new DatabaseSync(path);d.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;');
+ const raw:Db={kind:'sqlite',all:async(s,v=[])=>d.prepare(s).all(...v as (string|number|null)[]) as Row[],run:async(s,v=[])=>{d.prepare(s).run(...v as (string|number|null)[]);},transaction:async()=>{throw new Error('NESTED_TRANSACTION_UNSUPPORTED');},close:async()=>d.close()};
+ let tail:Promise<unknown>=Promise.resolve();
+ const queued=<T>(job:()=>Promise<T>)=>{const result=tail.then(job);tail=result.catch(()=>{});return result;};
+ return {...raw,all:(s,v)=>queued(()=>raw.all(s,v)),run:(s,v)=>queued(()=>raw.run(s,v)),close:()=>queued(()=>raw.close()),transaction:work=>queued(async()=>{
+  d.exec('BEGIN');try{const result=await work(raw);d.exec('COMMIT');return result;}catch(e){d.exec('ROLLBACK');throw e;}
+ })};
 }
 export class Store{
  constructor(readonly db:Db){}
- async init(){await this.db.run('CREATE TABLE IF NOT EXISTS event_revisions(event_id TEXT NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL, content_hash TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT NOT NULL, recorded_at TEXT NOT NULL, PRIMARY KEY(event_id,revision))');await this.db.run('CREATE TABLE IF NOT EXISTS source_health(id TEXT PRIMARY KEY,payload TEXT NOT NULL)');}
- async events():Promise<Event[]>{const rows=await this.db.all('SELECT r.payload FROM event_revisions r JOIN (SELECT event_id,MAX(revision) AS rev FROM event_revisions GROUP BY event_id) last ON r.event_id=last.event_id AND r.revision=last.rev');return rows.map(r=>eventSchema.parse(JSON.parse(r.payload as string)));}
+ async init(){
+  if(this.db.kind==='postgres')await this.db.run('CREATE EXTENSION IF NOT EXISTS postgis');
+  await this.db.run('CREATE TABLE IF NOT EXISTS event_revisions(event_id TEXT NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL, content_hash TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT NOT NULL, recorded_at TEXT NOT NULL, PRIMARY KEY(event_id,revision))');
+  await this.db.run('CREATE TABLE IF NOT EXISTS incident_revisions(incident_id TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,content_hash TEXT NOT NULL,recorded_at TEXT NOT NULL,PRIMARY KEY(incident_id,revision))');
+  await this.db.run('CREATE TABLE IF NOT EXISTS source_health(id TEXT PRIMARY KEY,payload TEXT NOT NULL)');
+  await this.db.run('CREATE TABLE IF NOT EXISTS radiation_measurements(station_id TEXT PRIMARY KEY,payload TEXT NOT NULL)');
+  await this.db.run('CREATE TABLE IF NOT EXISTS shelters(id TEXT PRIMARY KEY,region_id TEXT NOT NULL,search_text TEXT NOT NULL,payload TEXT NOT NULL)');
+  await this.db.run('CREATE INDEX IF NOT EXISTS shelter_region_idx ON shelters(region_id,id)');
+  if(this.db.kind==='postgres'){
+   // An indexed generated column keeps geometry and the audited event payload
+   // in the same atomic write, including existing events during migration.
+   await this.db.run(`ALTER TABLE event_revisions ADD COLUMN IF NOT EXISTS geom geometry(Geometry,4326) GENERATED ALWAYS AS (
+    CASE WHEN payload::jsonb->'geometry' IS NOT NULL AND payload::jsonb->'geometry' <> 'null'::jsonb
+     THEN ST_SetSRID(ST_GeomFromGeoJSON(payload::jsonb->'geometry'),4326)
+     WHEN payload::jsonb->>'longitude' IS NOT NULL AND payload::jsonb->>'latitude' IS NOT NULL
+     THEN ST_SetSRID(ST_MakePoint((payload::jsonb->>'longitude')::double precision,(payload::jsonb->>'latitude')::double precision),4326)
+     ELSE NULL END) STORED CHECK (geom IS NULL OR ST_IsValid(geom))`);
+   await this.db.run('CREATE INDEX IF NOT EXISTS event_geometry_gist ON event_revisions USING GIST (geom)');
+   await this.db.run(`ALTER TABLE shelters ADD COLUMN IF NOT EXISTS geom geometry(Point,4326) GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint((payload::jsonb->>'longitude')::double precision,(payload::jsonb->>'latitude')::double precision),4326)) STORED`);
+   await this.db.run('CREATE INDEX IF NOT EXISTS shelter_geometry_gist ON shelters USING GIST (geom)');
+  }
+  await this.db.transaction(async db=>{const s=new Store(db);await s.reconcileIncidents(await s.events());});
+ }
+ async events():Promise<Event[]>{
+  const rows=await this.db.all('SELECT r.payload FROM event_revisions r JOIN (SELECT event_id,MAX(revision) AS rev FROM event_revisions GROUP BY event_id) last ON r.event_id=last.event_id AND r.revision=last.rev');
+  return rows.map(r=>eventSchema.parse(JSON.parse(r.payload as string))).sort((a,b)=>(b.publishedAt??b.publicationDate??'').localeCompare(a.publishedAt??a.publicationDate??'')||a.id.localeCompare(b.id));
+ }
+ async snapshot(){return this.db.transaction(async db=>{const s=new Store(db);const events=await s.events();return {events,health:await s.health(),incidents:await s.incidents(),radiationMeasurements:await s.radiationMeasurements()};});}
  async get(id:string){const r=await this.db.all('SELECT payload FROM event_revisions WHERE event_id=? ORDER BY revision DESC LIMIT 1',[id]);return r.length?eventSchema.parse(JSON.parse(r[0].payload as string)):null;}
  async put(input:Event,actor='adapter',reason='Source content updated',expectedRevision?:number){
+  return this.db.transaction(async db=>{const s=new Store(db);const changed=await s.putRecord(input,actor,reason,expectedRevision);if(changed)await s.reconcileIncidents(await s.events());return changed;});
+ }
+ private async putRecord(input:Event,actor='adapter',reason='Source content updated',expectedRevision?:number){
   const e=eventSchema.parse(input);const previous=await this.get(e.id);
   if(expectedRevision!==undefined&&(previous?.revision??0)!==expectedRevision)throw new Error('REVISION_CONFLICT');
   if(actor==='adapter'&&previous?.reviewed)return false;
-  const hash=(v:Event)=>{const {retrievedAt,revision,...stable}=v;return createHash('sha256').update(JSON.stringify(stable)).digest('hex');};
+  // Formatting changes in upstream HTML must not generate user-facing alerts.
+  const hash=(v:Event)=>{const {retrievedAt,revision,sourceContentHash,...stable}=v;if(stable.securityLevel){stable.securityLevel={...stable.securityLevel,isActive:false};if(stable.lifecycle!=='CANCELLED')stable.lifecycle='SCHEDULED';}return createHash('sha256').update(JSON.stringify(stable)).digest('hex');};
   if(previous&&hash(previous)===hash(e))return false;
   const next={...e,revision:(previous?.revision??0)+1};
-  try{await this.db.run('INSERT INTO event_revisions(event_id,revision,payload,content_hash,actor,reason,recorded_at) VALUES(?,?,?,?,?,?,?)',[next.id,next.revision,JSON.stringify(next),hash(next),actor,reason,new Date().toISOString()]);}catch(err){if(err instanceof Error&&/unique|constraint|duplicate/i.test(err.message))throw new Error('REVISION_CONFLICT');throw err;}
+  try{await this.db.run('INSERT INTO event_revisions(event_id,revision,payload,content_hash,actor,reason,recorded_at) VALUES(?,?,?,?,?,?,?)',[next.id,next.revision,JSON.stringify(next),hash(next),actor,reason,new Date().toISOString()]);}catch(err){if(err instanceof Error&&/unique|duplicate/i.test(err.message))throw new Error('REVISION_CONFLICT');throw err;}
   return true;
  }
- async timeline(id:string){return (await this.db.all('SELECT payload,actor,reason,recorded_at FROM event_revisions WHERE event_id=? ORDER BY revision',[id])).map(r=>({...r,payload:JSON.parse(r.payload as string)}));}
- async health():Promise<Health[]>{return (await this.db.all('SELECT payload FROM source_health')).map(r=>JSON.parse(r.payload as string) as Health);}
+ async applySync(events:Event[],health:Health){
+  await this.db.transaction(async db=>{const s=new Store(db);for(const e of events)await s.putRecord(e);await s.reconcileIncidents(await s.events());await s.setHealth(health);});
+ }
+ async applyShelterSync(items:Shelter[],health:Health){
+  if(health.id!=='SHELTERS'||health.coverage!=='FACILITY_CATALOG'||!health.complete||!items.length||items.length!==health.itemCount||!health.sourceContentHash)throw new Error('SHELTER_INVALID_BATCH');
+  // Validate everything before beginning replacement. A failed transaction keeps
+  // the entire previous national package and its previous success timestamp.
+  const rows=items.map(s=>shelterSchema.parse(s));
+  if(new Set(rows.map(s=>s.id)).size!==rows.length)throw new Error('SHELTER_DUPLICATE_ID');
+  await this.db.transaction(async db=>{
+   const scoped=new Store(db),previous=(await scoped.health()).find(h=>h.id==='SHELTERS');
+   if(previous?.sourceContentHash!==health.sourceContentHash||previous?.sourceUpdatedAt!==health.sourceUpdatedAt||previous?.dataDate!==health.dataDate){
+    await db.run('DELETE FROM shelters');
+    for(let i=0;i<rows.length;i+=200){
+     const batch=rows.slice(i,i+200),params=batch.flatMap(s=>[s.id,s.regionId,searchText(`${s.municipality} ${s.county} ${s.address}`),JSON.stringify(s)]);
+     await db.run(`INSERT INTO shelters(id,region_id,search_text,payload) VALUES ${batch.map(()=>'(?,?,?,?)').join(',')}`,params);
+    }
+   }
+   await scoped.setHealth(health);
+  });
+ }
+ async shelterPage(filter:ShelterFilter){
+  return this.db.transaction(db=>new Store(db).readShelterPage(filter));
+ }
+ private async readShelterPage({regionId,q,limit,offset,version,bbox}:ShelterFilter){
+  const health=(await this.health()).find(h=>h.id==='SHELTERS')??null;
+  if(version&&health?.sourceContentHash!==version)throw new Error('SHELTER_VERSION_CHANGED');
+  const conditions:string[]=[],params:unknown[]=[];
+  if(regionId!=='PL'){conditions.push('region_id=?');params.push(regionId);}
+  if(q){conditions.push("search_text LIKE ? ESCAPE '!'");params.push('%'+searchText(q).replace(/[!%_]/g,s=>'!'+s)+'%');}
+  if(bbox){
+   if(this.db.kind!=='postgres')throw new Error('POSTGIS_REQUIRED');
+   conditions.push('ST_Intersects(geom,ST_MakeEnvelope(?,?,?,?,4326))');params.push(...bbox);
+  }
+  const where=conditions.length?' WHERE '+conditions.join(' AND '):'';
+  const total=Number((await this.db.all('SELECT COUNT(*) AS total FROM shelters'+where,params))[0].total);
+  const rows=await this.db.all('SELECT payload FROM shelters'+where+' ORDER BY id LIMIT ? OFFSET ?',[...params,limit,offset]);
+  return {items:rows.map(r=>shelterSchema.parse(JSON.parse(r.payload as string))),total,offset,limit,hasMore:offset+rows.length<total,version:health?.sourceContentHash??null,health,regionId,query:q};
+ }
+ async nearestShelters(latitude:number,longitude:number,limit:number){
+  if(this.db.kind==='postgres'){
+   const candidates=Math.max(100,Math.min(1000,limit*25));
+   const rows=await this.db.all(`WITH p AS (SELECT ST_SetSRID(ST_MakePoint(?,?),4326) AS g),
+    c AS (SELECT s.payload,s.geom FROM shelters s CROSS JOIN p ORDER BY s.geom <-> p.g LIMIT ?)
+    SELECT c.payload,ST_DistanceSphere(c.geom,p.g) AS distance_m FROM c CROSS JOIN p ORDER BY distance_m LIMIT ?`,[longitude,latitude,candidates,limit]);
+   return rows.map(r=>({point:shelterSchema.parse(JSON.parse(r.payload as string)),distanceMeters:Math.round(Number(r.distance_m))}));
+  }
+  const rad=(v:number)=>v*Math.PI/180;
+  const distance=(s:Shelter)=>{
+   const dLat=rad(s.latitude-latitude),dLon=rad(s.longitude-longitude),a=Math.sin(dLat/2)**2+Math.cos(rad(latitude))*Math.cos(rad(s.latitude))*Math.sin(dLon/2)**2;
+   return 6371008.8*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  };
+  const rows=(await this.db.all('SELECT payload FROM shelters')).map(r=>shelterSchema.parse(JSON.parse(r.payload as string)));
+  return rows.map(point=>({point,distanceMeters:Math.round(distance(point))})).sort((a,b)=>a.distanceMeters-b.distanceMeters||a.point.id.localeCompare(b.point.id)).slice(0,limit);
+ }
+ async spatialEvents(bbox?:[number,number,number,number]){
+  if(this.db.kind==='postgres'){
+   const rows=await this.db.all(`SELECT r.payload FROM event_revisions r JOIN (SELECT event_id,MAX(revision) AS rev FROM event_revisions GROUP BY event_id) last ON r.event_id=last.event_id AND r.revision=last.rev WHERE r.geom IS NOT NULL${bbox?' AND ST_Intersects(r.geom,ST_MakeEnvelope(?,?,?,?,4326))':''} ORDER BY r.event_id`,bbox);
+   return rows.map(r=>eventSchema.parse(JSON.parse(r.payload as string)));
+  }
+  if(bbox)throw new Error('POSTGIS_REQUIRED');
+  return (await this.events()).filter(e=>e.geometry!==null);
+ }
+ async nearbyEvents(latitude:number,longitude:number,radiusMeters:number,limit=50){
+  if(this.db.kind!=='postgres')throw new Error('POSTGIS_REQUIRED');
+  const rows=await this.db.all(`WITH p AS (
+      SELECT ST_SetSRID(ST_MakePoint(?,?),4326) AS g
+    ), latest AS (
+      SELECT DISTINCT ON (event_id) event_id,payload,geom
+      FROM event_revisions
+      ORDER BY event_id,revision DESC
+    )
+    SELECT latest.payload,ST_DistanceSphere(latest.geom,p.g) AS distance_m
+    FROM latest CROSS JOIN p
+    WHERE latest.geom IS NOT NULL
+      AND ST_DWithin(latest.geom::geography,p.g::geography,?)
+    ORDER BY distance_m,latest.event_id
+    LIMIT ?`,[longitude,latitude,radiusMeters,limit]);
+  return rows.map(r=>({event:eventSchema.parse(JSON.parse(r.payload as string)),distanceMeters:Math.max(0,Math.round(Number(r.distance_m)))}));
+ }
+ async timeline(id:string){
+  const rows=(await this.db.all('SELECT payload,actor,reason,recorded_at FROM event_revisions WHERE event_id=? ORDER BY revision',[id])).map(r=>({...r,actor:String(r.actor),reason:String(r.reason),recorded_at:String(r.recorded_at),payload:eventSchema.parse(JSON.parse(r.payload as string))}));
+  let previous:Event|null=null;
+  return rows.map(row=>{
+   const current=row.payload,changes:{field:string;from:unknown;to:unknown}[]=[];
+   if(!previous)changes.push({field:'CREATED',from:null,to:current.revision});
+   else{
+    for(const field of ['title','description','lifecycle','verification','validFrom','validTo','correction','regions'] as const){
+     const from=previous[field],to=current[field];
+     if(JSON.stringify(from)!==JSON.stringify(to))changes.push({field,from,to});
+    }
+   }
+   previous=current;
+   return {...row,changes};
+  });
+ }
+ async incidents():Promise<Incident[]>{
+  const rows=await this.db.all('SELECT r.payload FROM incident_revisions r JOIN (SELECT incident_id,MAX(revision) AS rev FROM incident_revisions GROUP BY incident_id) last ON r.incident_id=last.incident_id AND r.revision=last.rev');
+  return rows.map(r=>JSON.parse(r.payload as string) as Incident).sort((a,b)=>a.id.localeCompare(b.id));
+ }
+ private async reconcileIncidents(events:Event[]){
+  const previous=await this.incidents(),byId=new Map(events.map(e=>[e.id,e]));
+  for(const incident of correlate(events,previous)){
+   const old=(await this.db.all('SELECT revision,content_hash FROM incident_revisions WHERE incident_id=? ORDER BY revision DESC LIMIT 1',[incident.id]))[0];
+   const {revision,...stable}=incident;
+   const hash=createHash('sha256').update(JSON.stringify({ ...stable,eventRevisions:incident.relatedEventIds.map(id=>[id,byId.get(id)!.revision])})).digest('hex');
+   if(old?.content_hash===hash)continue;
+   const next={...incident,revision:Number(old?.revision??0)+1};
+   await this.db.run('INSERT INTO incident_revisions(incident_id,revision,payload,content_hash,recorded_at) VALUES(?,?,?,?,?)',[next.id,next.revision,JSON.stringify(next),hash,new Date().toISOString()]);
+  }
+ }
+ async incidentTimeline(id:string){
+  const incident=(await this.incidents()).find(i=>i.id===id);if(!incident)return [];
+  const rows=(await Promise.all(incident.relatedEventIds.map(eventId=>this.timeline(eventId)))).flat();
+  return rows.sort((a,b)=>String(a.recorded_at).localeCompare(String(b.recorded_at))||a.payload.id.localeCompare(b.payload.id)||a.payload.revision-b.payload.revision);
+ }
+ async incidentHistory(id:string){return (await this.db.all('SELECT payload,recorded_at FROM incident_revisions WHERE incident_id=? ORDER BY revision',[id])).map(r=>({...r,payload:JSON.parse(r.payload as string)}));}
+ async radiationMeasurements():Promise<RadiationMeasurement[]>{return (await this.db.all('SELECT payload FROM radiation_measurements ORDER BY station_id')).map(r=>radiationMeasurementSchema.parse(JSON.parse(r.payload as string)));}
+ async applyRadiationSync(items:RadiationMeasurement[],health:Health){
+  if(health.id!=='PAA_MEASUREMENTS'||!items.length)throw new Error('PAA_MEASUREMENTS_EMPTY');
+  const rows=items.map(p=>radiationMeasurementSchema.parse(p));
+  if(new Set(rows.map(p=>p.stationId)).size!==rows.length)throw new Error('PAA_DUPLICATE_STATION');
+  await this.db.transaction(async db=>{const s=new Store(db),old=await s.radiationMeasurements();
+   for(const p of rows){const prev=old.find(v=>v.stationId===p.stationId);if(prev&&(Date.parse(p.measuredAt)<Date.parse(prev.measuredAt)||Date.parse(p.sourceUpdatedAt)<Date.parse(prev.sourceUpdatedAt)))throw new Error('PAA_MEASUREMENT_REGRESSION');}
+   await db.run('DELETE FROM radiation_measurements');
+   for(const p of rows)await db.run('INSERT INTO radiation_measurements(station_id,payload) VALUES(?,?)',[p.stationId,JSON.stringify(p)]);await s.setHealth(health);
+  });
+ }
+ async health():Promise<Health[]>{return (await this.db.all('SELECT payload FROM source_health ORDER BY id')).map(r=>JSON.parse(r.payload as string) as Health);}
  async setHealth(h:Health){await this.db.run('INSERT INTO source_health(id,payload) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',[h.id,JSON.stringify(h)]);}
 }

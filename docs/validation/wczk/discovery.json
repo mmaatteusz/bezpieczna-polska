@@ -1,0 +1,223 @@
+[
+  {
+    "name": "Lubuski Urząd Wojewódzki w Gorzowie Wielkopolskim",
+    "url": "https://www.lubuskie.uw.gov.pl/",
+    "error": "Command failed: curl -fLsS --max-time 15 --max-redirs 3 https://www.lubuskie.uw.gov.pl/ -o /workspace/scratch/180724b61067/research-wczk/3.html -w %{url_effective}\ncurl: (22) The requested URL returned error: 502\n"
+  },
+  {
+    "name": "Lubelski Urząd Wojewódzki w Lublinie",
+    "url": "https://www.lublin.uw.gov.pl/",
+    "finalUrl": "https://www.lublin.uw.gov.pl/",
+    "links": []
+  },
+  {
+    "name": "Kujawsko-Pomorski Urząd Wojewódzki w Bydgoszczy",
+    "url": "https://www.gov.pl/web/uw-kujawsko-pomorski",
+    "finalUrl": "https://www.gov.pl/web/uw-kujawsko-pomorski",
+    "links": [
+      {
+        "name": "Przejdź do sekcji Ostrzeżenia",
+        "url": "https://www.gov.pl/web/uw-kujawsko-pomorski#Ostrzezenia"
+      },
+      {
+        "name": "Zarządzanie Kryzysowe",
+        "url": "https://www.gov.pl/web/uw-kujawsko-pomorski/zarzadzanie-kryzysowe"
+      },
+      {
+        "name": "Sygnały alarmowe i komunikaty ostrzegawcze",
+        "url": "https://www.gov.pl/web/uw-kujawsko-pomorski/sygnaly-alarmowe-i-komunikaty-ostrzegawcze"
+      },
+      {
+        "name": "Praktyczna wiedza i gotowość na kryzys. Akademia OLiOC w Białych Błotach za nami",
+        "url": "https://www.gov.pl/web/uw-kujawsko-pomorski/praktyczna-wiedza-i-gotowosc-na-kryzys-akademia-olioc-w-bialych-blotach-za-nami"
+      }
+    ]
+  },
+  {
+    "name": "Dolnośląski Urząd Wojewódzki we Wrocławiu",
+    "url": "https://www.duw.pl/",
+    "finalUrl": "https://www.gov.pl/web/dolnoslaski-uw",
+    "links": [
+      {
+        "name": "Przejdź do sekcji Ostrzeżenia",
+        "url": "https://www.gov.pl/web/dolnoslaski-uw#Ostrzezenia"
+      },
+      {
+        "name": "Zarządzanie Kryzysowe",
+        "url": "https://www.gov.pl/web/dolnoslaski-uw/zarzadzanie-kryzysowe"
+      },
+      {
+        "name": "Bezpieczeństwo i zarządzanie kryzysowe",
+        "url": "https://www.gov.pl/web/dolnoslaski-uw/zarzadzanie-kryzysowe111"
+      }
+    ]
+  },
+  {
+    "name": "Małopolski Urząd Wojewódzki w Krakowie",
+    "url": "https://www.malopolska.uw.gov.pl/",
+    "error": "Command failed: curl -fLsS --max-time 15 --max-redirs 3 https://www.malopolska.uw.gov.pl/ -o /workspace/scratch/180724b61067/research-wczk/5.html -w %{url_effective}\ncurl: (22) The requested URL returned error: 502\n"
+  },
+  {
+    "name": "Mazowiecki Urząd Wojewódzki w Warszawie",
+    "url": "https://www.gov.pl/web/uw-mazowiecki",
+    "finalUrl": "https://www.gov.pl/web/uw-mazowiecki",
+    "links": [
+      {
+        "name": "Przejdź do sekcji Ostrzeżenia",
+        "url": "https://www.gov.pl/web/uw-mazowiecki#Ostrzezenia"
+      },
+      {
+        "name": "Bezpieczeństwo i zarządzanie kryzysowe",
+        "url": "https://www.gov.pl/web/uw-mazowiecki/bezpieczenstwo-i-zarzadzanie-kryzysowe"
+      }
+    ]
+  },
+  {
+    "name": "Łódzki Urząd Wojewódzki w Łodzi",
+    "url": "https://www.gov.pl/web/uw-lodzki",
+    "finalUrl": "https://www.gov.pl/web/uw-lodzki",
+    "links": [
+      {
+        "name": "Przejdź do sekcji Ostrzeżenia",
+        "url": "https://www.gov.pl/web/uw-lodzki#Ostrzezenia"
+      },
+      {
+        "name": "Zarządzanie kryzysowe",
+        "url": "https://www.gov.pl/web/uw-lodzki/zarzadzanie-kryzysowe"
+      }
+    ]
+  },
+  {
+    "name": "Opolski Urząd Wojewódzki w Opolu",
+    "url": "https://www.gov.pl/web/uw-opolski",
+    "finalUrl": "https://www.gov.pl/web/uw-opolski",
+    "links": [
+      {
+        "name": "Przejdź do sekcji Ostrzeżenia",
+        "url": "https://www.gov.pl/web/uw-opolski#Ostrzezenia"
+      },
+      {
+        "name": "Bezpieczeństwo i zarządzanie kryzysowe",
+        "url": "https://www.gov.pl/web/uw-opolski/zarzadzanie-kryzysowe"
+      },
+      {
+        "name": "Ostrzeżenia meteorologiczne dla województwa opolskiego",
+        "url": "https://www.gov.pl/web/uw-opolski/ostrzezenia-meteorologiczne-dla-wojewodztwa-opolskiego"
+      },
+      {
+        "name": "Ostrzeżenie meteorologiczne dla części województwa opolskiego",
+        "url": "https://www.gov.pl/web/uw-opolski/ostrzezenie-meteorologiczne-dla-czesci-wojewodztwa-opolskiego"
+      }
+    ]
+  },
+  {
+    "name": "Śląski Urząd Wojewódzki w Katowicach",
+    "url": "https://www.katowice.uw.gov.pl/",
+    "error": "Command failed: curl -fLsS --max-time 15 --max-redirs 3 https://www.katowice.uw.gov.pl/ -o /workspace/scratch/180724b61067/research-wczk/11.html -w %{url_effective}\ncurl: (22) The requested URL returned error: 502\n"
+  },
+  {
+    "name": "Podkarpacki Urząd Wojewódzki w Rzeszowie",
+    "url": "https://www.rzeszow.uw.gov.pl/",
+    "finalUrl": "https://www.rzeszow.uw.gov.pl/",
+    "links": [
+      {
+        "name": "Wydział Bezpieczeństwa i Zarządzania Kryzysowego",
+        "url": "https://rzeszow.uw.gov.pl/urzad/wydzialy/wydzial-bezpieczenstwa-i-zarzadzania-kryzysowego"
+      },
+      {
+        "name": "",
+        "url": "https://rzeszow.uw.gov.pl/wczk/ostrzezenia"
+      },
+      {
+        "name": "18 września 2026  r.\n\t\t\t\t\n\t\t\t\t\t\t\t\t\n\t\t\t\t\tSpecjalne treningi dla mieszkańców, jak reagować na sygnały alarmowe i komunikaty ostrzegawcze\n\t\t\t\t\tW sobotę (19 września) na terenie województw: podkarpackiego i lubelskiego odbędą się specjalne treningi reagowania na sygnały alarmowe i komunikaty ostrzegawcze. Akcję organizuje Ministerstwo Spraw Wewnętrznych i Administracji, we współpracy z Państwową Strażą Pożarną, Ochotniczymi Strażami Pożarnymi oraz samorządami lokalnymi. Strażacy zapraszają mieszkańców do swoich jednostek w godzinach 11-14.",
+        "url": "https://rzeszow.uw.gov.pl/aktualnosci/specjalne-treningi-dla-mieszkancow-jak-reagowac-na-sygnaly-alarmowe-i-komunikaty-ostrzegawcze"
+      },
+      {
+        "name": "Zobacz wszystkie",
+        "url": "https://www.rzeszow.uw.gov.pl/wczk/ostrzezenia"
+      },
+      {
+        "name": "",
+        "url": "https://rzeszow.uw.gov.pl/wczk"
+      },
+      {
+        "name": "",
+        "url": "https://rzeszow.uw.gov.pl/wczk/infolinia-987"
+      }
+    ]
+  },
+  {
+    "name": "Podlaski Urząd Wojewódzki w Białymstoku",
+    "url": "https://www.gov.pl/web/uw-podlaski",
+    "finalUrl": "https://www.gov.pl/web/uw-podlaski",
+    "links": [
+      {
+        "name": "Przejdź do sekcji Ostrzeżenia",
+        "url": "https://www.gov.pl/web/uw-podlaski#Ostrzezenia"
+      },
+      {
+        "name": "Bezpieczeństwo i zarządzanie kryzysowe",
+        "url": "https://www.gov.pl/web/uw-podlaski/bezpieczenstwo-i-zarzadzanie-kryzysowe"
+      },
+      {
+        "name": "Ostrzeżenia",
+        "url": "https://www.gov.pl/web/uw-podlaski/ostrzezenia1"
+      },
+      {
+        "name": "Regionalny System Ostrzegania",
+        "url": "http://komunikaty.tvp.pl/komunikaty/podlaskie/wszystkie"
+      }
+    ]
+  },
+  {
+    "name": "Pomorski Urząd Wojewódzki w Gdańsku",
+    "url": "https://www.gdansk.uw.gov.pl/",
+    "error": "Command failed: curl -fLsS --max-time 15 --max-redirs 3 https://www.gdansk.uw.gov.pl/ -o /workspace/scratch/180724b61067/research-wczk/10.html -w %{url_effective}\ncurl: (28) Operation timed out after 5837 milliseconds wi"
+  },
+  {
+    "name": "Zachodniopomorski Urząd Wojewódzki w Szczecinie",
+    "url": "https://www.szczecin.uw.gov.pl/",
+    "error": "Command failed: curl -fLsS --max-time 15 --max-redirs 3 https://www.szczecin.uw.gov.pl/ -o /workspace/scratch/180724b61067/research-wczk/15.html -w %{url_effective}\ncurl: (22) The requested URL returned error: 502\n"
+  },
+  {
+    "name": "Wielkopolski Urząd Wojewódzki w Poznaniu",
+    "url": "https://www.poznan.uw.gov.pl/",
+    "finalUrl": "https://www.poznan.uw.gov.pl/",
+    "links": [
+      {
+        "name": "Akcja Zima\n\tPomoc osobom w kryzysie bezdomności",
+        "url": "https://www.poznan.uw.gov.pl/programy-i-konkursy/akcja-zima-pomoc-osobom-w-kryzysie-bezdomnosci"
+      }
+    ]
+  },
+  {
+    "name": "Warmińsko-Mazurski Urząd Wojewódzki w Olsztynie",
+    "url": "https://www.gov.pl/web/uw-warminsko-mazurski",
+    "finalUrl": "https://www.gov.pl/web/uw-warminsko-mazurski",
+    "links": [
+      {
+        "name": "Przejdź do sekcji Ostrzeżenia",
+        "url": "https://www.gov.pl/web/uw-warminsko-mazurski#Ostrzezenia"
+      },
+      {
+        "name": "Bezpieczeństwo i zarządzanie kryzysowe",
+        "url": "https://www.gov.pl/web/uw-warminsko-mazurski/bezpieczenstwo-i-zarzadzanie-kryzysowe"
+      },
+      {
+        "name": "Regionalny System Ostrzegania",
+        "url": "https://www.gov.pl/web/uw-warminsko-mazurski/regionalny-system-ostrzegania"
+      }
+    ]
+  },
+  {
+    "name": "Świętokrzyski Urząd Wojewódzki w Kielcach",
+    "url": "https://www.kielce.uw.gov.pl/",
+    "finalUrl": "https://www.gov.pl/web/uw-swietokrzyski/",
+    "links": [
+      {
+        "name": "Przejdź do sekcji Ostrzeżenie",
+        "url": "https://www.gov.pl/web/uw-swietokrzyski/#Ostrzezenie"
+      }
+    ]
+  }
+]

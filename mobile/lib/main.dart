@@ -1,11 +1,20 @@
+import 'radiation.dart';
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+
 import 'model.dart';
-import 'safety_map.dart';
+import 'shelter_map.dart';
+import 'security_levels.dart';
+import 'shelter_panel.dart';
+import 'event_details.dart';
+import 'status_explanation.dart';
+import 'source_status.dart';
+import 'watched_locations_panel.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,8 +69,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   late String region;
   Snapshot? snapshot;
   String? error;
-  Timer? timer;
-  String filter = 'Wszystkie', query = '';
+  Timer? timer, refreshTimer;
+  String statusFilter = 'Wszystkie',
+      sourceFilter = 'Wszystkie',
+      typeFilter = 'Wszystkie',
+      query = '';
   Map<String, int> seen = {};
   @override
   void initState() {
@@ -74,6 +86,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       if (mounted) setState(() {});
     });
     if (widget.repository.api.isNotEmpty) unawaited(refresh());
+    refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted &&
+          !loading &&
+          widget.repository.api.isNotEmpty &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        unawaited(refresh());
+      }
+    });
   }
 
   void loadSeen() {
@@ -95,6 +115,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   @override
   void dispose() {
     timer?.cancel();
+    refreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -121,12 +142,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           online = true;
         });
       }
-    } catch (_) {
+    } catch (failure) {
       if (mounted && ticket == generation) {
         setState(() {
           online = false;
-          error =
-              'Nie udało się odświeżyć danych. Zachowano ostatnią poprawną kopię.';
+          error = apiFailureMessage(failure);
         });
       }
     } finally {
@@ -149,7 +169,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     if (widget.repository.api.isNotEmpty) await refresh();
   }
 
-  List<SafetyEvent> get events => snapshot?.events ?? [];
+  List<SafetyEvent> get events => snapshot?.alertEvents ?? [];
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -166,7 +186,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             [
               'Twoje bezpieczeństwo',
               'Mapa bezpieczeństwa',
-              'Komunikaty RCB',
+              'Centrum alertów',
               'Znajdź schronienie',
               'Pomoc i przygotowanie',
             ][page],
@@ -217,7 +237,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 ),
                 IconButton(
                   tooltip: 'Odśwież',
-                  onPressed: loading ? null : refresh,
+                  onPressed: loading || widget.repository.api.isEmpty
+                      ? null
+                      : refresh,
                   icon: loading
                       ? const SizedBox(
                           width: 20,
@@ -263,7 +285,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Mapa'),
         NavigationDestination(
           icon: Icon(Icons.campaign_outlined),
-          label: 'RCB',
+          label: 'Alerty',
         ),
         NavigationDestination(
           icon: Icon(Icons.home_work_outlined),
@@ -364,6 +386,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               'Dane: ${stamp(snapshot?.data['serverTime'])}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            if (status is Map)
+              StatusExplanation(status: status, events: snapshot?.events ?? []),
           ],
         ),
       ),
@@ -377,15 +401,89 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     return [
       statusCard(true),
       statusCard(false),
-      if (widget.repository.api.isEmpty)
-        FilledButton.icon(
-          onPressed: settings,
-          icon: const Icon(Icons.settings_ethernet),
-          label: const Text('Skonfiguruj serwer danych'),
+      Card(
+        child: ListTile(
+          leading: const Icon(Icons.radar_outlined),
+          title: const Text('Wokół mnie'),
+          subtitle: const Text(
+            'Jednorazowy GPS lub zapisane miejsca. Bez ciągłego śledzenia i bez historii ruchu.',
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  WatchedLocationsScreen(repository: widget.repository),
+            ),
+          ),
         ),
+      ),
+      if (widget.repository.api.isEmpty)
+        notice(
+          'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
+          Icons.cloud_off,
+        ),
+      RadiationPanel(snapshot: snapshot, online: online, openSource: openLink),
+      SecurityLevelsPanel(
+        snapshot: snapshot,
+        online: online,
+        openSource: openLink,
+      ),
+      if (events.any((e) => e.data['eventType'] == 'CYBER')) ...[
+        heading('Cyberbezpieczeństwo'),
+        notice(
+          'Komunikaty cyber są prezentowane osobno i nie podnoszą automatycznie statusu zagrożenia fizycznego.',
+          Icons.security_outlined,
+        ),
+        ...events
+            .where((e) => e.data['eventType'] == 'CYBER')
+            .take(3)
+            .map(eventCard),
+      ],
+      if (events.any(
+        (e) =>
+            e.data['eventType'] == 'BORDER' &&
+            e.sources.any((s) => s['id'] == 'SG'),
+      )) ...[
+        heading('Granice • Straż Graniczna'),
+        notice(
+          'Pokazujemy wyłącznie operacyjne informacje o zamknięciach, ograniczeniach, kontrolach i utrudnieniach granicznych. Taki komunikat nie podnosi automatycznie głównego statusu zagrożenia.',
+          Icons.travel_explore_outlined,
+        ),
+        ...events
+            .where(
+              (e) =>
+                  e.data['eventType'] == 'BORDER' &&
+                  e.sources.any((s) => s['id'] == 'SG'),
+            )
+            .take(3)
+            .map(eventCard),
+      ],
+      if (events.any(
+        (e) => e.sources.any(
+          (s) => s['id'] == 'POLICE' || s['id'] == 'PSP_INCIDENTS',
+        ),
+      )) ...[
+        heading('Zdarzenia służb'),
+        notice(
+          'Pokazujemy tylko zdarzenia Policji i PSP istotne sytuacyjnie. Pojedyncza publikacja służby nie podnosi automatycznie statusu całego województwa.',
+          Icons.local_fire_department_outlined,
+        ),
+        ...events
+            .where(
+              (e) => e.sources.any(
+                (s) => s['id'] == 'POLICE' || s['id'] == 'PSP_INCIDENTS',
+              ),
+            )
+            .take(5)
+            .map(eventCard),
+      ],
+      if (events.any((e) => e.isRso)) ...[
+        heading('Regionalny System Ostrzegania'),
+        ...events.where((e) => e.isRso).take(5).map(eventCard),
+      ],
       const SizedBox(height: 12),
       notice(
-        'Wersja rozwojowa 0.1.0 • Powiadomienia push nie są aktywne.',
+        'Wersja rozwojowa 0.1.0-alpha.11 • Powiadomienia push nie są aktywne.',
         Icons.science_outlined,
       ),
       heading('Od ostatniej wizyty'),
@@ -415,29 +513,32 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           'RCB, RSO i pozostałe kategorie pokażą swój stan po synchronizacji.',
           Icons.hub_outlined,
         ),
-      ...?(snapshot?.data['sources'] as List?)?.map((raw) {
+      ...?((snapshot?.data['sources'] as List?)?.take(4).map((raw) {
         final s = raw as Map;
-        final last = DateTime.tryParse(s['lastSuccess'] as String? ?? '');
-        final healthy =
-            online &&
-            s['state'] == 'HEALTHY' &&
-            last != null &&
-            !last.isAfter(DateTime.now()) &&
-            DateTime.now().difference(last).inSeconds <
-                (s['maxAgeSeconds'] as num);
+        final state = (s['healthStatus'] ?? s['state'] ?? 'UNKNOWN').toString();
         return Card(
           child: ListTile(
             leading: Icon(
-              healthy ? Icons.check_circle_outline : Icons.info_outline,
+              state == 'HEALTHY'
+                  ? Icons.check_circle_outline
+                  : state == 'STALE'
+                  ? Icons.schedule_outlined
+                  : Icons.info_outline,
             ),
             title: Text(s['name'] as String),
+            trailing: state == 'STALE' ? badge('STALE') : null,
             subtitle: Text(
-              '${healthy ? 'Dane pobrane' : 'Brak aktualnego połączenia'}\n${stamp(s['lastSuccess'])}',
+              '${sourceStateLabel(state)}\nOstatnia poprawna synchronizacja: ${stamp(s['lastSuccess'])}',
             ),
-            onTap: () => openLink(s['url'] as String),
           ),
         );
-      }),
+      })),
+      if (snapshot != null)
+        OutlinedButton.icon(
+          onPressed: openSources,
+          icon: const Icon(Icons.hub_outlined),
+          label: const Text('Pokaż wszystkie źródła i diagnostykę'),
+        ),
       heading('Zapisane komunikaty regionu'),
       ...events.take(30).map(eventCard),
     ];
@@ -458,6 +559,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 badge(e.sources.first['name'] as String),
                 badge(e.badge),
                 badge(e.provenance),
+                if (e.sourceSummary != null) badge(e.sourceSummary!),
+                if (e.hasConflictingReports)
+                  badge('RÓŻNICE MIĘDZY KOMUNIKATAMI'),
+                if (eventSourceState(e) == 'STALE')
+                  badge('STALE • DANE NIEAKTUALNE'),
               ],
             ),
             const SizedBox(height: 12),
@@ -470,32 +576,122 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   ? 'Obszar nieustalony — sprawdź treść'
                   : e.areas.map((r) => regions[r] ?? r).join(', '),
             ),
-            Text('Publikacja: ${stamp(e.data['publishedAt'])}'),
+            Text(
+              'Publikacja: ${e.data['publishedAt'] == null ? (e.data['publicationDate'] ?? 'Nie podano') : stamp(e.data['publishedAt'])}',
+            ),
+            if (e.data['locationText'] != null)
+              Text('Obszar według źródła: ${e.data['locationText']}'),
             Text('Pobrano: ${stamp(e.data['retrievedAt'])}'),
           ],
         ),
       ),
     ),
   );
+  bool alertStatusMatches(SafetyEvent e) {
+    final lifecycle = e.data['lifecycle'] as String;
+    final correction = e.data['correction'];
+    final expired =
+        DateTime.tryParse(
+          e.data['validTo'] as String? ?? '',
+        )?.isBefore(DateTime.now()) ??
+        false;
+    return switch (statusFilter) {
+      'Aktywne' => lifecycle == 'ACTIVE' && !expired,
+      'Zakończone' =>
+        ['ENDED', 'CANCELLED', 'EXPIRED'].contains(lifecycle) || expired,
+      'Nieustalone' => lifecycle == 'UNKNOWN',
+      'Korekty' =>
+        correction != null ||
+            e.revision > 1 ||
+            ['REFUTED', 'DISPUTED'].contains(e.data['verification']),
+      _ => true,
+    };
+  }
+
+  String eventSourceState(SafetyEvent e) {
+    final sources = snapshot?.data['sources'];
+    if (sources is! List) return 'UNKNOWN';
+    for (final eventSource in e.sources) {
+      for (final raw in sources) {
+        if (raw is Map && raw['id'] == eventSource['id']) {
+          return (raw['healthStatus'] ?? raw['state'] ?? 'UNKNOWN').toString();
+        }
+      }
+    }
+    return 'UNKNOWN';
+  }
+
+  String eventTypeLabel(String value) => switch (value) {
+    'AIR' => 'Powietrzne',
+    'BORDER' => 'Granica',
+    'CYBER' => 'Cyber',
+    'RADIATION' => 'Radiacja',
+    'FIRE' => 'Pożar',
+    'EXPLOSION' => 'Wybuch',
+    'HAZMAT' => 'Zagrożenie chemiczne',
+    'RESCUE' => 'Ratownictwo',
+    'PUBLIC_SAFETY' => 'Bezpieczeństwo publiczne',
+    'EVACUATION' => 'Ewakuacja',
+    'OUTAGE' => 'Awarie',
+    'WEATHER' => 'Pogoda',
+    'OTHER' => 'Inne',
+    _ => value,
+  };
+
+  String sourceLabel(String value) => switch (value) {
+    'POLICE' => 'Policja',
+    'PSP_INCIDENTS' => 'PSP',
+    'CSIRT_GOV' => 'CSIRT GOV',
+    _ => value,
+  };
+
   List<Widget> rcbPage() {
-    final list = events
-        .where(
-          (e) =>
-              e.isRcb &&
-              ('${e.title} ${e.description}').toLowerCase().contains(
-                query.toLowerCase(),
-              ) &&
-              (filter == 'Wszystkie' ||
-                  filter == 'Aktywne' && e.badge == 'AKTYWNE WG ŹRÓDŁA' ||
-                  filter == 'Zakończone' &&
-                      ['ZAKOŃCZONE', 'TERMIN MINĄŁ'].contains(e.badge) ||
-                  filter == 'Nieustalone' && e.badge == 'WAŻNOŚĆ NIEUSTALONA'),
-        )
-        .toList();
+    final sourceOptions = <String>{
+      'Wszystkie',
+      'RCB',
+      'RSO',
+      'WCZK',
+      'PAA',
+      'CERT',
+      'CSIRT_GOV',
+      'SG',
+      'POLICE',
+      'PSP_INCIDENTS',
+      ...events.expand((e) => e.sources.map((s) => s['id'].toString())),
+    }.toList();
+    final typeOptions = <String>{
+      'Wszystkie',
+      'FIRE',
+      'EXPLOSION',
+      'RESCUE',
+      'HAZMAT',
+      'PUBLIC_SAFETY',
+      ...events.map((e) => e.data['eventType'].toString()),
+    }.toList();
+    if (!sourceOptions.contains(sourceFilter)) sourceFilter = 'Wszystkie';
+    if (!typeOptions.contains(typeFilter)) typeFilter = 'Wszystkie';
+    final normalized = query.trim().toLowerCase();
+    final list = events.where((e) {
+      final text = e.reports
+          .map((r) => '${r.title} ${r.description}')
+          .join(' ')
+          .toLowerCase();
+      final sourceOk =
+          sourceFilter == 'Wszystkie' ||
+          (sourceFilter == 'WCZK' && e.isWczk) ||
+          e.sources.any((s) => s['id'] == sourceFilter);
+      final typeOk =
+          typeFilter == 'Wszystkie' ||
+          e.reports.any((r) => r.data['eventType'] == typeFilter);
+      return text.contains(normalized) &&
+          sourceOk &&
+          typeOk &&
+          e.reports.any(alertStatusMatches);
+    }).toList();
     return [
       TextField(
         decoration: const InputDecoration(
-          labelText: 'Szukaj w komunikatach',
+          labelText: 'Szukaj w alertach',
           prefixIcon: Icon(Icons.search),
         ),
         onChanged: (v) => setState(() => query = v),
@@ -503,28 +699,104 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       const SizedBox(height: 12),
       Wrap(
         spacing: 8,
-        children: ['Wszystkie', 'Aktywne', 'Zakończone', 'Nieustalone']
-            .map(
-              (s) => ChoiceChip(
-                label: Text(s),
-                selected: filter == s,
-                onSelected: (_) => setState(() => filter = s),
-              ),
-            )
-            .toList(),
+        runSpacing: 8,
+        children:
+            ['Wszystkie', 'Aktywne', 'Zakończone', 'Nieustalone', 'Korekty']
+                .map(
+                  (s) => ChoiceChip(
+                    label: Text(s),
+                    selected: statusFilter == s,
+                    onSelected: (_) => setState(() => statusFilter = s),
+                  ),
+                )
+                .toList(),
       ),
       const SizedBox(height: 12),
+      Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              initialValue: sourceFilter,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Źródło'),
+              items: sourceOptions
+                  .map(
+                    (s) =>
+                        DropdownMenuItem(value: s, child: Text(sourceLabel(s))),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() => sourceFilter = v ?? 'Wszystkie'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              initialValue: typeFilter,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Kategoria'),
+              items: typeOptions
+                  .map(
+                    (s) => DropdownMenuItem(
+                      value: s,
+                      child: Text(s == 'Wszystkie' ? s : eventTypeLabel(s)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() => typeFilter = v ?? 'Wszystkie'),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      Text('Pokazano ${list.length} z ${events.length} zapisanych alertów'),
       if (list.isEmpty)
         empty(
-          'Brak zapisanych komunikatów w tym widoku',
-          'Sprawdź synchronizację i wybrany filtr.',
+          'Brak alertów dla tych filtrów',
+          'Zmień filtr lub sprawdź stan synchronizacji źródeł.',
           Icons.campaign_outlined,
         ),
       ...list.map(eventCard),
-      OutlinedButton.icon(
-        onPressed: () => openLink('https://www.gov.pl/web/rcb'),
-        icon: const Icon(Icons.open_in_new),
-        label: const Text('Oficjalna strona RCB'),
+      Wrap(
+        spacing: 8,
+        children: [
+          OutlinedButton.icon(
+            onPressed: () => openLink('https://www.gov.pl/web/rcb'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('RCB'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => openLink('https://komunikaty.tvp.pl/'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('RSO'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => openLink('https://moje.cert.pl/komunikaty/'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('CERT Polska'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => openLink('https://www.csirt.gov.pl/cer/rss'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('CSIRT GOV'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () =>
+                openLink('https://www.strazgraniczna.pl/pl/aktualnosci'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Straż Graniczna'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => openLink('https://policja.pl/pol/aktualnosci'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Policja'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () =>
+                openLink('https://www.gov.pl/web/kgpsp/aktualnosci'),
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('PSP'),
+          ),
+        ],
       ),
     ];
   }
@@ -539,43 +811,36 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       onSelectionChanged: (v) => setState(() => ukraine = v.first),
     ),
     const SizedBox(height: 12),
-    SizedBox(
-      height: 350,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: SafetyMap(events: ukraine ? [] : events, ukraine: ukraine),
+    ShelterMap(
+      radiation: snapshot?.data['radiation'],
+      radiationOnline: online,
+      key: ValueKey(
+        'map:${widget.repository.api}:$region:$ukraine:${widget.repository.dataGeneration}',
       ),
+      repository: widget.repository,
+      region: region,
+      ukraine: ukraine,
+      openLink: openLink,
     ),
-    const SizedBox(height: 12),
-    const Text('Mapa poglądowa offline • Natural Earth, domena publiczna'),
     const SizedBox(height: 12),
     notice(
       ukraine
           ? 'Alarmy Ukrainy nie są podłączone. Brak oznaczeń nie oznacza braku alarmów.'
-          : 'Punkty pokazują zapisane komunikaty, również zakończone i o nieznanej ważności. Nie oznaczają aktywnego zagrożenia. Ostrzeżenia obszarowe znajdziesz na liście. Mapa nie służy do nawigacji.',
+          : 'Mapa pokazuje punkty schronienia wg PSP. Liczby grupują punkty w widocznym obszarze. Przybliż mapę, aby wybrać punkt. Mapa nie potwierdza bieżącej dostępności i nie służy do nawigacji. Offline dostępne są tylko zapisane obszary; podkład mapy wymaga internetu lub wcześniejszego cache.',
       Icons.info_outline,
     ),
     if (!ukraine) ...events.where((e) => e.hasPoint).take(20).map(eventCard),
   ];
   List<Widget> shelterPage() => [
-    empty(
-      'Brak zweryfikowanego pakietu schronienia',
-      'Nie można wskazać najbliższego obiektu bez danych o jego rodzaju i dostępności.',
-      Icons.home_work_outlined,
-    ),
-    heading('Rozróżniaj rodzaje obiektów'),
-    notice(
-      'Schron • Ukrycie • Miejsce doraźnego schronienia\nTo różne kategorie ochrony.',
-      Icons.shield_outlined,
-    ),
-    OutlinedButton.icon(
-      onPressed: () => openLink('https://gdziesieukryc.pl/'),
-      icon: const Icon(Icons.open_in_new),
-      label: const Text('Otwórz serwis PSP'),
-    ),
-    heading('Tryb offline'),
-    const Text(
-      'Po synchronizacji dostępne są zapisane komunikaty i statusy z datą pobrania. Mapa poglądowa działa bez internetu. Pakietów punktów schronienia jeszcze nie ma.',
+    ShelterPanel(
+      key: ValueKey(
+        '${widget.repository.api}:$region:${widget.repository.dataGeneration}',
+      ),
+      repository: widget.repository,
+      region: region,
+      initial: snapshot?.shelters,
+      online: online,
+      openLink: openLink,
     ),
   ];
   List<Widget> helpPage() => [
@@ -586,28 +851,25 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ),
     heading('Jestem bezpieczny'),
     const Text(
-      'Wiadomość skopiujesz i wyślesz samodzielnie. Lokalizacja nie jest dołączana.',
+      'Udostępnij krótką wiadomość przez wybraną aplikację. Lokalizacja nie jest dołączana.',
     ),
     OutlinedButton.icon(
       onPressed: () async {
-        await Clipboard.setData(
-          const ClipboardData(text: 'Jestem bezpieczny.'),
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Skopiowano „Jestem bezpieczny.”')),
-          );
-        }
+        await SharePlus.instance.share(ShareParams(text: 'Jestem bezpieczny.'));
       },
-      icon: const Icon(Icons.copy),
-      label: const Text('Skopiuj wiadomość'),
+      icon: const Icon(Icons.share_outlined),
+      label: const Text('Udostępnij „Jestem bezpieczny”'),
     ),
     heading('Oficjalne informacje'),
     ...[
       ('Rządowe Centrum Bezpieczeństwa', 'https://www.gov.pl/web/rcb'),
       ('Regionalny System Ostrzegania', 'https://komunikaty.tvp.pl/'),
       ('Państwowa Agencja Atomistyki', 'https://www.gov.pl/web/paa'),
-      ('CERT Polska', 'https://cert.pl/'),
+      ('CERT Polska', 'https://moje.cert.pl/komunikaty/'),
+      ('CSIRT GOV', 'https://www.csirt.gov.pl/cer/rss'),
+      ('Straż Graniczna', 'https://www.strazgraniczna.pl/pl/aktualnosci'),
+      ('Policja', 'https://policja.pl/pol/aktualnosci'),
+      ('Państwowa Straż Pożarna', 'https://www.gov.pl/web/kgpsp/aktualnosci'),
     ].map(
       (e) => Card(
         child: ListTile(
@@ -619,7 +881,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ),
     heading('Prywatność'),
     const Text(
-      'Konto jest niewymagane. Aplikacja nie pobiera GPS. Region, ustawienia i kopie komunikatów pozostają na urządzeniu. Serwer przy odświeżaniu poznaje wybrany region i dane połączenia. Linki otwierają zewnętrzną przeglądarkę.',
+      'Konto jest niewymagane. GPS jest używany wyłącznie po naciśnięciu „Znajdź najbliższe schronienie”; pozycja nie jest zapisywana ani śledzona w tle. Region, ustawienia i kopie komunikatów pozostają na urządzeniu. Serwer przy odświeżaniu poznaje wybrany region i dane połączenia. Przy wyszukiwaniu najbliższego schronienia serwer otrzymuje jednorazowo współrzędne potrzebne do obliczenia odległości. Linki otwierają zewnętrzną przeglądarkę.',
     ),
     const SizedBox(height: 16),
     notice(
@@ -675,138 +937,168 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     }
   }
 
+  void openSources() {
+    final raw = snapshot?.data['sources'];
+    final sources = raw is List
+        ? raw.whereType<Map>().map((s) => Map<String, dynamic>.from(s)).toList()
+        : <Map<String, dynamic>>[];
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => SourceStatusPage(sources: sources, openLink: openLink),
+      ),
+    );
+  }
+
   void details(SafetyEvent e) {
     Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (c) => Scaffold(
-          appBar: AppBar(title: const Text('Szczegóły komunikatu')),
-          body: ListView(
-            padding: const EdgeInsets.all(22),
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [badge(e.badge), badge(e.provenance)],
-              ),
-              const SizedBox(height: 20),
-              Text(e.title, style: Theme.of(c).textTheme.headlineSmall),
-              const SizedBox(height: 16),
-              SelectableText(e.description),
-              const SizedBox(height: 20),
-              if (e.data['correction'] != null)
-                notice(
-                  e.data['correction'] as String,
-                  Icons.fact_check_outlined,
-                ),
-              Text('Publikacja: ${stamp(e.data['publishedAt'])}'),
-              Text('Pobrano: ${stamp(e.data['retrievedAt'])}'),
-              Text('Od: ${stamp(e.data['validFrom'])}'),
-              Text('Do: ${stamp(e.data['validTo'])}'),
-              Text('Wersja: ${e.revision}'),
-              ...e.sources.map(
-                (s) => OutlinedButton.icon(
-                  onPressed: () => openLink(s['url'] as String),
-                  icon: const Icon(Icons.open_in_new),
-                  label: Text(s['name'] as String),
-                ),
-              ),
-            ],
-          ),
+        builder: (_) => EventDetailsPage(
+          event: e,
+          repository: widget.repository,
+          openLink: openLink,
         ),
       ),
     );
   }
 
   Future<void> settings() async {
-    final controller = TextEditingController(text: widget.repository.api);
-    String? validation;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (sheet) => StatefulBuilder(
-        builder: (sheet, update) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            22,
-            22,
-            22,
-            MediaQuery.viewInsetsOf(sheet).bottom + 22,
+        builder: (sheet, update) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Ustawienia',
+                    style: Theme.of(sheet).textTheme.titleLarge,
+                  ),
+                  SwitchListTile(
+                    title: const Text('Tryb ciemny'),
+                    value: widget.repository.dark,
+                    onChanged: (v) async {
+                      await widget.repository.prefs.setBool('dark', v);
+                      widget.onTheme();
+                      update(() {});
+                    },
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      ++generation;
+                      await widget.repository.clearData();
+                      if (mounted) {
+                        setState(() {
+                          snapshot = null;
+                          online = false;
+                          loading = false;
+                          seen = {};
+                        });
+                      }
+                      if (sheet.mounted) Navigator.pop(sheet);
+                    },
+                    child: const Text('Usuń zapisane komunikaty'),
+                  ),
+                  if (widget.repository.developerSettingsEnabled)
+                    ListTile(
+                      title: const Text('Developer Settings'),
+                      leading: const Icon(Icons.developer_mode),
+                      onTap: () {
+                        Navigator.pop(sheet);
+                        unawaited(developerSettings());
+                      },
+                    ),
+                  const Text(
+                    '0.1.0-alpha.11 • Push nieaktywny • GPS tylko na żądanie',
+                  ),
+                ],
+              ),
+            ),
           ),
-          child: SingleChildScrollView(
+        ),
+      ),
+    );
+  }
+
+  Future<void> developerSettings() async {
+    if (!widget.repository.developerSettingsEnabled) return;
+    final controller = TextEditingController(
+      text: widget.repository.developerApi,
+    );
+    String? validation;
+    await showDialog<void>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (dialog, update) => AlertDialog(
+          title: const Text('Developer Settings'),
+          content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Ustawienia', style: Theme.of(sheet).textTheme.titleLarge),
-                SwitchListTile(
-                  title: const Text('Tryb ciemny'),
-                  value: widget.repository.dark,
-                  onChanged: (v) async {
-                    await widget.repository.prefs.setBool('dark', v);
-                    widget.onTheme();
-                    update(() {});
-                  },
+                Text(
+                  'Adres z buildu: ${widget.repository.buildApi.isEmpty ? "brak" : widget.repository.buildApi}',
                 ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: controller,
                   keyboardType: TextInputType.url,
                   autocorrect: false,
                   decoration: InputDecoration(
-                    labelText: 'Adres serwera danych HTTPS',
+                    labelText: 'Backend URL (HTTPS)',
+                    helperText: 'Puste pole przywraca konfigurację buildu.',
                     errorText: validation,
                     border: const OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Wersja rozwojowa wymaga backendu. Nie wpisuj haseł ani tokenów w adresie.',
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    try {
-                      ++generation;
-                      await widget.repository.setApi(controller.text);
-                      if (sheet.mounted) Navigator.pop(sheet);
-                      if (mounted) {
-                        setState(() {
-                          snapshot = widget.repository.cached(region);
-                          online = false;
-                          loading = false;
-                          loadSeen();
-                        });
-                        if (widget.repository.api.isNotEmpty) await refresh();
-                      }
-                    } catch (_) {
-                      update(
-                        () => validation = 'Wymagany poprawny adres HTTPS.',
-                      );
-                    }
-                  },
-                  child: const Text('Zapisz i połącz'),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    ++generation;
-                    await widget.repository.clearData();
-                    if (mounted) {
-                      setState(() {
-                        snapshot = null;
-                        online = false;
-                        loading = false;
-                        seen = {};
-                      });
-                    }
-                    if (sheet.mounted) Navigator.pop(sheet);
-                  },
-                  child: const Text('Usuń zapisane komunikaty'),
-                ),
-                const Text('0.1.0-alpha.2 • Push nieaktywny • Bez GPS'),
               ],
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog),
+              child: const Text('Anuluj'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                try {
+                  ++generation;
+                  await widget.repository.setDeveloperApi(controller.text);
+                  if (dialog.mounted) Navigator.pop(dialog);
+                  if (mounted) {
+                    setState(() {
+                      snapshot = widget.repository.cached(region);
+                      online = false;
+                      loading = false;
+                      loadSeen();
+                    });
+                    if (widget.repository.api.isNotEmpty) await refresh();
+                  }
+                } catch (_) {
+                  update(() => validation = 'Wymagany poprawny adres HTTPS.');
+                }
+              },
+              child: const Text('Zapisz i połącz'),
+            ),
+          ],
         ),
       ),
     );
     controller.dispose();
   }
 }
+
+String sourceStateLabel(String state) => switch (state) {
+  'NOT_CONFIGURED' => 'Integracja oczekuje',
+  'HEALTHY' => 'Dane aktualne',
+  'BROKEN' => 'Błąd synchronizacji',
+  'STALE' => 'STALE • dane nieaktualne',
+  'DEGRADED' => 'Niepełne dane',
+  _ => 'Brak aktualnego połączenia',
+};

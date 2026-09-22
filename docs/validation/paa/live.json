@@ -1,0 +1,56 @@
+{
+  "retrievedAt": "2026-09-21T16:25:59.513Z",
+  "officialCommunicationSource": "https://www.gov.pl/web/paa/aktualnosci2",
+  "officialMeasurementPortal": "https://monitoring.paa.gov.pl/maps-portal/",
+  "measurementIntegration": "NOT_IMPLEMENTED_WAF_FORMAT_UNVERIFIED",
+  "adapterVersion": "paa-html/1.0.0",
+  "pagesFetched": 3,
+  "complete": false,
+  "eventCount": 1,
+  "events": [
+    {
+      "radiationAssessment": {
+        "state": "INFORMATION",
+        "evidence": null
+      },
+      "id": "PAA-72374e7d954864f677a835c3",
+      "title": "Sytuacja radiacyjna w normie - nie ma zagrożenia",
+      "description": "W związku z informacjami na temat pożaru, jaki wybuchł w Czarnobylskiej strefie wykluczenia Państwowa Agencja Atomistyki informuje, że odczyty ze stacji monitoringu radiacyjnego w Polsce są w normie.\n\nJak informuje ukraiński dozór jądrowy pożar, który wybuchł w strefie ochronnej wokół elektrowni w Czarnobylu rozprzestrzenia się na tereny leśne. Akcja gaśnicza jest w trakcie. W związku z pożarem, ani ukraiński, ani polski system monitoringu radiacyjnego nie odnotował przekroczeń normalnych wartości mocy dawki promieniowania jonizującego.\n\nPaństwowa Agencja Atomistyki na bieżąco monitoruje sytuację radiacyjną w kraju. Jest ona w normie. Odczyty stacji pomiarowych nie wskazują żadnych niepokojących wartości.\n\nDane z monitoringu można śledzić na bieżąco na stronie internetowej PAA pod linkiem: https://monitoring.paa.gov.pl/maps-portal/\n\nObecnie na terenie całego kraju działa 65 stacji wczesnego wykrywania skażeń promieniotwórczych. Stanowią one trzon polskiego systemu monitoringu radiacyjnego. Uzupełnia go dodatkowo 13 wysokoczułych stacji zarządzanych przez Centralne Laboratorium Ochrony Radiologicznej, 9 stacji Instytutu Meteorologii i Gospodarki Wodnej oraz 13 stacji pomiarowych, które należą do Ministerstwa Obrony Narodowej.\n\nDo 2033 roku w Polsce będzie funkcjonować co najmniej 145 stacji pomiarowych.",
+      "eventType": "RADIATION",
+      "severity": "INFORMATIONAL",
+      "verification": "CONFIRMED",
+      "lifecycle": "UNKNOWN",
+      "messageContext": "ACTUAL",
+      "regions": [
+        "PL"
+      ],
+      "geographicScope": "NATIONAL",
+      "publishedAt": null,
+      "retrievedAt": "2026-09-21T16:25:59.513Z",
+      "validFrom": null,
+      "validTo": null,
+      "sources": [
+        {
+          "id": "PAA",
+          "name": "Państwowa Agencja Atomistyki",
+          "url": "https://www.gov.pl/web/paa/sytuacja-radiacyjna-w-normie--nie-ma-zagrozenia",
+          "tier": 1
+        }
+      ],
+      "instructions": [],
+      "officialWarning": false,
+      "reviewed": false,
+      "revision": 1,
+      "publicationDate": "2026-05-08",
+      "locationText": "W związku z informacjami na temat pożaru, jaki wybuchł w Czarnobylskiej strefie wykluczenia Państwowa Agencja Atomistyki informuje, że odczyty ze stacji monitoringu radiacyjnego w Polsce są w normie.",
+      "areaPrecision": "COUNTRY",
+      "geometry": null,
+      "adapterVersion": "paa-html/1.0.0",
+      "sourceContentHash": "8cf4d15d40d59a684e600b75981c0bce7ecc96f31f35b2ae64079ebd8d43cd78",
+      "correction": null,
+      "latitude": null,
+      "longitude": null,
+      "isDemo": false
+    }
+  ]
+}

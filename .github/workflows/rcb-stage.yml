@@ -1,0 +1,64 @@
+name: Verify RCB stage
+on:
+  push:
+    branches: [main, stage/rcb-live]
+    paths: ['backend/**', 'mobile/**', '.github/workflows/rcb-stage.yml']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rcb-stage-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgis:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: disposable_ci_only
+          POSTGRES_DB: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CI: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+      TEST_DATABASE_URL: postgresql://test:disposable_ci_only@localhost:5432/test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Backend and real PostGIS tests
+        working-directory: backend
+        run: npm ci && npm run build && npm test
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Mobile verification
+        working-directory: mobile
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib/main.dart lib/model.dart test/model_test.dart test/widget_test.dart
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Fetch real RCB publications into PostGIS
+        working-directory: backend
+        run: node scripts/live-rcb.mjs ../docs/validation/rcb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rcb-live-validation
+          path: docs/validation/rcb/rcb-live.json
+          if-no-files-found: error
+          retention-days: 30

@@ -79,7 +79,7 @@ void main() {
           return response(data());
         }),
       );
-      await r.setApi('https://api.example');
+      await r.setDeveloperApi('https://api.example');
       await r.refresh('04');
       expect(r.cached('04')?.region, '04');
       expect(r.cached('06'), null);
@@ -91,7 +91,7 @@ void main() {
       p,
       client: MockClient((_) async => http.Response('{}', 200)),
     );
-    await r.setApi('https://api.example');
+    await r.setDeveloperApi('https://api.example');
     await p.setString(r.cacheKey('04'), jsonEncode(data()));
     await expectLater(r.refresh('04'), throwsA(anything));
     expect(r.cached('04'), isNotNull);
@@ -102,16 +102,16 @@ void main() {
       p,
       client: MockClient((_) async => response(data(region: '06'))),
     );
-    await r.setApi('https://api.example');
+    await r.setDeveloperApi('https://api.example');
     await expectLater(r.refresh('04'), throwsFormatException);
     expect(r.cached('04'), null);
   });
   test('server changes do not reuse another server cache', () async {
     final p = await SharedPreferences.getInstance();
     final r = DataRepository(p);
-    await r.setApi('https://one.example');
+    await r.setDeveloperApi('https://one.example');
     await p.setString(r.cacheKey('04'), jsonEncode(data()));
-    await r.setApi('https://two.example');
+    await r.setDeveloperApi('https://two.example');
     expect(r.cached('04'), null);
   });
   test('corrupt disk cache fails closed', () async {
@@ -134,7 +134,7 @@ void main() {
       await SharedPreferences.getInstance(),
       client: MockClient((_) => pending.future),
     );
-    await r.setApi('https://api.example');
+    await r.setDeveloperApi('https://api.example');
     final rejected = expectLater(r.refresh('04'), throwsStateError);
     await r.clearData();
     pending.complete(response(data()));
@@ -145,4 +145,51 @@ void main() {
     final d = data()..['nationalStatus'] = {'displayText': 12};
     expect(() => Snapshot.parse(jsonEncode(d)), throwsFormatException);
   });
+
+  test(
+    'production uses build URL and ignores all persisted overrides',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'api': 'https://legacy.example',
+        'developer_api': 'https://debug.example',
+      });
+      final r = DataRepository(
+        await SharedPreferences.getInstance(),
+        buildApi: 'https://build.example/',
+        developerSettingsEnabled: false,
+      );
+      expect(r.api, 'https://build.example');
+      await expectLater(
+        r.setDeveloperApi('https://override.example'),
+        throwsStateError,
+      );
+    },
+  );
+  test('developer override can be reset to build URL', () async {
+    final r = DataRepository(
+      await SharedPreferences.getInstance(),
+      buildApi: 'https://build.example',
+      developerSettingsEnabled: true,
+    );
+    await r.setDeveloperApi('https://override.example');
+    expect(r.api, 'https://override.example');
+    await r.setDeveloperApi('');
+    expect(r.api, 'https://build.example');
+  });
+  test(
+    'build URL retrieves real API contract without setting preferences',
+    () async {
+      final r = DataRepository(
+        await SharedPreferences.getInstance(),
+        buildApi: 'https://build.example',
+        developerSettingsEnabled: false,
+        client: MockClient((request) async {
+          expect(request.url.host, 'build.example');
+          expect(request.url.path, '/v1/snapshot');
+          return response(data());
+        }),
+      );
+      expect((await r.refresh('04')).region, '04');
+    },
+  );
 }
