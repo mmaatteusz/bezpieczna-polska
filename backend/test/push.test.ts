@@ -16,7 +16,8 @@ const now=new Date('2026-09-22T12:00:00Z');
 class FakeProvider implements PushProvider{
  sent:{platform:PushPlatform;token:string;title:string}[]=[];
  results:PushSendResult[]=[];
- ready(){return true;}
+ isReady=true;
+ ready(){return this.isReady;}
  async send(platform:PushPlatform,token:string,message:{title:string}){
   this.sent.push({platform,token,title:message.title});
   return this.results.shift()??{kind:'SUCCESS',code:'OK'};
@@ -73,12 +74,14 @@ test('device registration encrypts token and authenticated update rotates it',as
  }finally{await db.close();}
 });
 
-test('unregister scrubs provider token and disables future delivery',async()=>{
- const {db,push}=await setup();
+test('unregister scrubs provider token and permanently closes pending delivery',async()=>{
+ const {db,store,push}=await setup();
  try{
   const token='fcm_token_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';await push.register(registerBody(deviceA,token),secret,now);
+  await store.put(event('unregister'));
   await push.unregister(deviceA,secret,new Date(+now+1000));const row=await device(db);
   assert.equal(Number(row.enabled),0);assert.equal(row.token_ciphertext,'revoked');assert.equal(String(row.token_hash).includes(token),false);
+  assert.equal((await outbox(db))[0].state,'PERMANENT_FAILURE');assert.equal((await outbox(db))[0].last_error_code,'USER_UNREGISTERED');
  }finally{await db.close();}
 });
 
@@ -99,6 +102,15 @@ test('retry is persisted and eventually delivers exactly once',async()=>{
   assert.equal(await push.dispatchDue(now),1);let row=(await outbox(db))[0];assert.equal(row.state,'RETRY');assert.equal(Number(row.attempt_count),1);
   assert.equal(await push.dispatchDue(new Date(+now+31000)),1);row=(await outbox(db))[0];assert.equal(row.state,'DELIVERED');assert.equal(Number(row.attempt_count),2);assert.equal(provider.sent.length,2);
   assert.equal(await push.dispatchDue(new Date(+now+62000)),0);
+ }finally{await db.close();}
+});
+
+test('provider configuration outage does not consume retry budget',async()=>{
+ const {db,store,push,provider}=await setup();
+ try{
+  await push.register(registerBody(deviceA),secret,now);await store.put(event('provider-not-ready'));provider.isReady=false;
+  for(let i=0;i<8;i++)await push.dispatchDue(new Date(+now+i*5*60000));
+  const row=(await outbox(db))[0];assert.equal(row.state,'RETRY');assert.equal(Number(row.attempt_count),0);assert.equal(row.last_error_code,'PROVIDER_NOT_READY');assert.equal(provider.sent.length,0);
  }finally{await db.close();}
 });
 
