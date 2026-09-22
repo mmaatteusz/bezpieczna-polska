@@ -36,7 +36,9 @@ Map<String, dynamic> fixture(DateTime now) {
         'observations': [
           {
             'id': 'obs-1',
-            'observedAt': started.add(const Duration(minutes: 15)).toIso8601String(),
+            'observedAt': started
+                .add(const Duration(minutes: 15))
+                .toIso8601String(),
             'latitude': 52.1,
             'longitude': 21.0,
             'precisionKm': 20,
@@ -54,7 +56,9 @@ Map<String, dynamic> fixture(DateTime now) {
           },
           {
             'id': 'obs-2',
-            'observedAt': ended.subtract(const Duration(minutes: 10)).toIso8601String(),
+            'observedAt': ended
+                .subtract(const Duration(minutes: 10))
+                .toIso8601String(),
             'latitude': 52.5,
             'longitude': 21.4,
             'precisionKm': 25,
@@ -126,42 +130,50 @@ void main() {
     expect(() => NeptunData.parse(exact), throwsFormatException);
 
     final recent = fixture(now);
-    recent['tracks'][0]['endedAt'] =
-        now.subtract(const Duration(hours: 2)).toIso8601String();
+    recent['tracks'][0]['endedAt'] = now
+        .subtract(const Duration(hours: 2))
+        .toIso8601String();
     expect(() => NeptunData.parse(recent), throwsFormatException);
   });
 
-  test('NEPTUN last-known-good survives failure and clear removes it', () async {
+  test(
+    'NEPTUN last-known-good survives failure and clear removes it',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final repository = DataRepository(
+        prefs,
+        client: MockClient((r) async {
+          expect(r.url.path, '/v1/neptun');
+          return jsonResponse(fixture(now), 200);
+        }),
+        buildApi: 'https://example.test',
+      );
+      await repository.refreshNeptun();
+      expect(repository.cachedNeptun()?.tracks.length, 1);
+
+      final restarted = DataRepository(
+        prefs,
+        client: MockClient((_) async => jsonResponse({}, 503)),
+        buildApi: 'https://example.test',
+      );
+      await expectLater(restarted.refreshNeptun(), throwsA(isA<ApiFailure>()));
+      expect(restarted.cachedNeptun()?.tracks.length, 1);
+      await restarted.clearData();
+      expect(restarted.cachedNeptun(), isNull);
+    },
+  );
+
+  testWidgets('NEPTUN screen is explicitly historical and shows sources', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final repository = DataRepository(
       prefs,
-      client: MockClient((r) async {
-        expect(r.url.path, '/v1/neptun');
-        return jsonResponse(fixture(now), 200);
-      }),
-      buildApi: 'https://example.test',
-    );
-    await repository.refreshNeptun();
-    expect(repository.cachedNeptun()?.tracks.length, 1);
-
-    final restarted = DataRepository(
-      prefs,
-      client: MockClient((_) async => jsonResponse({}, 503)),
-      buildApi: 'https://example.test',
-    );
-    await expectLater(restarted.refreshNeptun(), throwsA(isA<ApiFailure>()));
-    expect(restarted.cachedNeptun()?.tracks.length, 1);
-    await restarted.clearData();
-    expect(restarted.cachedNeptun(), isNull);
-  });
-
-  testWidgets('NEPTUN screen is explicitly historical and shows sources', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
-    final repository = DataRepository(
-      prefs,
-      client: MockClient((_) async => jsonResponse(fixture(DateTime.now().toUtc()), 200)),
+      client: MockClient(
+        (_) async => jsonResponse(fixture(DateTime.now().toUtc()), 200),
+      ),
       buildApi: 'https://example.test',
     );
     await tester.pumpWidget(
@@ -174,8 +186,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('Historyczny przebieg zdarzeń OSINT'), findsOneWidget);
-    expect(find.textContaining('nie pokazuje aktywnych dokładnych pozycji'), findsOneWidget);
+    expect(
+      find.textContaining('Historyczny przebieg zdarzeń OSINT'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('nie pokazuje aktywnych dokładnych pozycji'),
+      findsOneWidget,
+    );
     expect(find.text('Historyczny ślad testowy'), findsOneWidget);
     expect(find.text('Timeline i źródła'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
