@@ -11,7 +11,9 @@ import {openDb,Store,type Db} from '../src/store.js';
 
 const key=Buffer.alloc(32,7);
 const secret='bp_push_'+ 'A'.repeat(43);
-const now=new Date('2026-09-22T12:00:00Z');
+// Keep the dispatch clock safely after wall-clock queue insertion times. The
+// production outbox is queued with its actual current timestamp.
+const now=new Date('2030-01-01T12:00:00Z');
 
 class FakeProvider implements PushProvider{
  sent:{platform:PushPlatform;token:string;title:string}[]=[];
@@ -28,7 +30,7 @@ const basePreferences=(patch:Record<string,unknown>={})=>({
  regionId:'04',locations:[],...patch
 });
 const registerBody=(id:string,token='fcm_token_'+id.replace(/-/g,''),patch:Record<string,unknown>={})=>({
- installationId:id,platform:'ANDROID',token,appVersion:'0.1.0-alpha.14',language:'pl-PL',preferences:basePreferences(),...patch
+ installationId:id,platform:'ANDROID',token,appVersion:'0.1.0-alpha.15',language:'pl-PL',preferences:basePreferences(),...patch
 });
 const deviceA='11111111-1111-4111-8111-111111111111';
 const deviceB='22222222-2222-4222-8222-222222222222';

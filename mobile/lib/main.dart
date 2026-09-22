@@ -19,6 +19,9 @@ import 'status_explanation.dart';
 import 'source_status.dart';
 import 'watched_locations_panel.dart';
 import 'push_notifications.dart';
+import 'offline_packages.dart';
+import 'offline_repository.dart';
+import 'offline_data_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -87,6 +90,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   bool online = false, loading = false, ukraine = false;
   late String region;
   Snapshot? snapshot;
+  OfflineRegionPackage? offlinePackageData;
   String? error;
   Timer? timer, refreshTimer;
   String statusFilter = 'Wszystkie',
@@ -103,6 +107,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     }
     region = widget.repository.region;
     snapshot = widget.repository.cached(region);
+    unawaited(loadOffline());
     loadSeen();
     timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
@@ -150,6 +155,24 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> loadOffline() async {
+    final target = region;
+    final package = await widget.repository.offlinePackage(target);
+    Snapshot? fallback;
+    if (package != null) {
+      try {
+        fallback = Snapshot.parse(jsonEncode(package.snapshot));
+      } catch (_) {
+        fallback = null;
+      }
+    }
+    if (!mounted || target != region) return;
+    setState(() {
+      offlinePackageData = package;
+      if (!online && fallback != null) snapshot = fallback;
+    });
+  }
+
   Future<void> refresh() async {
     final ticket = ++generation, target = region;
     setState(() {
@@ -170,6 +193,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           online = false;
           error = apiFailureMessage(failure);
         });
+        await loadOffline();
       }
     } finally {
       if (mounted && ticket == generation) setState(() => loading = false);
@@ -186,11 +210,13 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     setState(() {
       region = value;
       snapshot = widget.repository.cached(value);
+      offlinePackageData = null;
       online = false;
       loading = false;
       error = null;
       loadSeen();
     });
+    await loadOffline();
     if (widget.repository.api.isNotEmpty) await refresh();
   }
 
@@ -392,12 +418,15 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 14),
             Text(
-              snapshot?.statusText(
-                    DateTime.now(),
-                    online: online,
-                    national: national,
-                  ) ??
-                  'Brak bieżącej oceny sytuacji',
+              fresh
+                  ? snapshot!.statusText(
+                      DateTime.now(),
+                      online: true,
+                      national: national,
+                    )
+                  : !online && offlinePackageData != null && status is Map
+                  ? 'OFFLINE • LAST KNOWN GOOD: ${status['displayText']}'
+                  : 'Brak bieżącej oceny sytuacji',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
@@ -408,7 +437,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 12),
             Text(
-              'Dane: ${stamp(snapshot?.data['serverTime'])}',
+              !online && offlinePackageData != null
+                  ? 'Snapshot: ${stamp(offlinePackageData!.snapshotTimestamp.toIso8601String())} • pobrano: ${stamp(offlinePackageData!.createdAt.toIso8601String())}'
+                  : 'Dane: ${stamp(snapshot?.data['serverTime'])}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             if (status is Map)
@@ -424,6 +455,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         .where((e) => e.revision > (seen[e.id] ?? 0))
         .toList();
     return [
+      if (!online && offlinePackageData != null)
+        notice(
+          'OFFLINE • LAST KNOWN GOOD z ${stamp(offlinePackageData!.snapshotTimestamp.toIso8601String())}. Wiek pakietu: ${formatOfflineAge(offlinePackageData!.createdAt, DateTime.now().toUtc())}. Stan źródeł pochodzi z chwili snapshotu. Brak nowych danych nie oznacza bezpieczeństwa.',
+          Icons.offline_pin_outlined,
+        ),
       statusCard(true),
       statusCard(false),
       if (widget.repository.api.isEmpty)
@@ -537,7 +573,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ],
       const SizedBox(height: 12),
       notice(
-        'Wersja rozwojowa 0.1.0-alpha.13 • Powiadomienia push nie są aktywne.',
+        'Wersja rozwojowa 0.1.0-alpha.15 • pakiety offline • push pozostaje opt-in.',
         Icons.science_outlined,
       ),
       heading('Od ostatniej wizyty'),
@@ -938,7 +974,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ),
     heading('Prywatność'),
     const Text(
-      'Konto jest niewymagane. GPS jest używany wyłącznie po naciśnięciu „Znajdź najbliższe schronienie”; pozycja nie jest zapisywana ani śledzona w tle. Region, ustawienia i kopie komunikatów pozostają na urządzeniu. Serwer przy odświeżaniu poznaje wybrany region i dane połączenia. Przy wyszukiwaniu najbliższego schronienia serwer otrzymuje jednorazowo współrzędne potrzebne do obliczenia odległości. Linki otwierają zewnętrzną przeglądarkę.',
+      'Konto jest niewymagane. GPS jest używany wyłącznie po wyraźnej akcji użytkownika; pozycja nie jest zapisywana ani śledzona w tle. Region, ustawienia, cache i pakiety offline pozostają na urządzeniu. Przy działającym połączeniu serwer może otrzymać jednorazowo współrzędne potrzebne do obliczenia odległości. Gdy używany jest fallback pakietu offline, nearest shelter i „Wokół mnie” są liczone lokalnie i współrzędne nie są wysyłane. Linki otwierają zewnętrzną przeglądarkę.',
     ),
     const SizedBox(height: 16),
     notice(
@@ -1060,7 +1096,28 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       }
                       if (sheet.mounted) Navigator.pop(sheet);
                     },
-                    child: const Text('Usuń zapisane komunikaty'),
+                    child: const Text(
+                      'Usuń lekki cache (pakiety offline bez zmian)',
+                    ),
+                  ),
+                  ListTile(
+                    title: const Text('Dane offline'),
+                    subtitle: const Text(
+                      'Pobierz, odśwież lub usuń pakiety regionów',
+                    ),
+                    leading: const Icon(Icons.offline_pin_outlined),
+                    onTap: () {
+                      Navigator.pop(sheet);
+                      Navigator.of(context)
+                          .push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => OfflineDataScreen(
+                                repository: widget.repository,
+                              ),
+                            ),
+                          )
+                          .then((_) => loadOffline());
+                    },
                   ),
                   if (widget.pushManager != null)
                     ListTile(
@@ -1092,7 +1149,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       },
                     ),
                   const Text(
-                    '0.1.0-alpha.14 • Push opt-in • GPS tylko na żądanie',
+                    '0.1.0-alpha.15 • Offline packages • Push opt-in • GPS tylko na żądanie',
                   ),
                 ],
               ),

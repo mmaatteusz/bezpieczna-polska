@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -7,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bezpieczna_polska/model.dart';
 import 'package:bezpieczna_polska/security_levels.dart';
+
 import 'model_test.dart' show data, response;
 
 Map<String, dynamic> levelsData() {

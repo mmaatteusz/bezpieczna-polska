@@ -76,32 +76,32 @@ class FirebasePushPlatformAdapter implements PushPlatformAdapter {
     );
   }
 
-  PushPermissionState _permission(AuthorizationStatus status) => switch (status) {
-    AuthorizationStatus.authorized => PushPermissionState.authorized,
-    AuthorizationStatus.provisional => PushPermissionState.provisional,
-    AuthorizationStatus.denied => PushPermissionState.denied,
-    AuthorizationStatus.deniedPermanently => PushPermissionState.denied,
-    AuthorizationStatus.notDetermined => PushPermissionState.notDetermined,
-  };
+  PushPermissionState _permission(AuthorizationStatus status) =>
+      switch (status) {
+        AuthorizationStatus.authorized => PushPermissionState.authorized,
+        AuthorizationStatus.provisional => PushPermissionState.provisional,
+        AuthorizationStatus.denied => PushPermissionState.denied,
+        AuthorizationStatus.deniedPermanently => PushPermissionState.denied,
+        AuthorizationStatus.notDetermined => PushPermissionState.notDetermined,
+      };
 
   @override
   bool get supported => true;
 
   @override
-  Future<PushPermissionState> permissionState() async =>
-      _permission((await messaging.getNotificationSettings()).authorizationStatus);
+  Future<PushPermissionState> permissionState() async => _permission(
+    (await messaging.getNotificationSettings()).authorizationStatus,
+  );
 
   @override
   Future<PushPermissionState> requestPermission() async => _permission(
-    (
-      await messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-        provisional: false,
-        criticalAlert: false,
-      )
-    ).authorizationStatus,
+    (await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+      criticalAlert: false,
+    )).authorizationStatus,
   );
 
   @override
@@ -111,8 +111,9 @@ class FirebasePushPlatformAdapter implements PushPlatformAdapter {
   @override
   Stream<String> get tokenChanges => FirebaseMessaging.instance.onTokenRefresh
       .asyncMap(
-        (fcmToken) async =>
-            platform == 'IOS' ? (await messaging.getAPNSToken()) ?? '' : fcmToken,
+        (fcmToken) async => platform == 'IOS'
+            ? (await messaging.getAPNSToken()) ?? ''
+            : fcmToken,
       )
       .where((value) => value.isNotEmpty);
 }
@@ -222,7 +223,7 @@ class PushManager extends ChangeNotifier {
   static const _preferencesKey = 'push_preferences_v1';
   static const _appVersion = String.fromEnvironment(
     'APP_VERSION',
-    defaultValue: '0.1.0-alpha.14',
+    defaultValue: '0.1.0-alpha.15',
   );
 
   final DataRepository repository;
@@ -274,13 +275,15 @@ class PushManager extends ChangeNotifier {
   Future<({String id, String secret})> _identity() async {
     var id = repository.prefs.getString(_installationKey);
     var secret = repository.prefs.getString(_secretKey);
-    final validId = id != null &&
+    final validId =
+        id != null &&
         RegExp(
           r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
           caseSensitive: false,
         ).hasMatch(id);
     final validSecret =
-        secret != null && RegExp(r'^bp_push_[A-Za-z0-9_-]{43}$').hasMatch(secret);
+        secret != null &&
+        RegExp(r'^bp_push_[A-Za-z0-9_-]{43}$').hasMatch(secret);
     if (!validId || !validSecret) {
       id = _randomId();
       secret = _randomSecret();
@@ -296,7 +299,11 @@ class PushManager extends ChangeNotifier {
       throw const ApiFailure(ApiFailureKind.notConfigured);
     }
     final base = DataRepository.validateApi(repository.api);
-    return base.replace(path: '${base.path}$suffix', query: null, fragment: null);
+    return base.replace(
+      path: '${base.path}$suffix',
+      query: null,
+      fragment: null,
+    );
   }
 
   Map<String, dynamic> _apiPreferences(PushPreferences prefs) => {
@@ -463,14 +470,12 @@ class PushManager extends ChangeNotifier {
         await _jsonRequest(
               update ? 'PUT' : 'POST',
               _uri(
-                update
-                    ? '/v1/push/devices/${identity.id}'
-                    : '/v1/push/devices',
+                update ? '/v1/push/devices/${identity.id}' : '/v1/push/devices',
               ),
               identity.secret,
               body: update
                   ? (Map<String, dynamic>.from(payload)
-                    ..remove('installationId'))
+                      ..remove('installationId'))
                   : payload,
             )
             as Map,
@@ -534,7 +539,10 @@ class PushManager extends ChangeNotifier {
   }
 
   Future<void> setPreferences(PushPreferences value) async {
-    await repository.prefs.setString(_preferencesKey, jsonEncode(value.toJson()));
+    await repository.prefs.setString(
+      _preferencesKey,
+      jsonEncode(value.toJson()),
+    );
     notifyListeners();
     if (!_state.registered) return;
     final identity = await _identity();
@@ -743,8 +751,7 @@ class _NotificationSettingsScreenState
             value: prefs.criticalPoland,
             onChanged: busy
                 ? null
-                : (value) =>
-                      _update(prefs.copyWith(criticalPoland: value)),
+                : (value) => _update(prefs.copyWith(criticalPoland: value)),
           ),
           SwitchListTile(
             title: const Text('Alerty obserwowanego województwa'),
@@ -762,8 +769,7 @@ class _NotificationSettingsScreenState
             value: prefs.watchedLocations,
             onChanged: busy
                 ? null
-                : (value) =>
-                      _update(prefs.copyWith(watchedLocations: value)),
+                : (value) => _update(prefs.copyWith(watchedLocations: value)),
           ),
           SwitchListTile(
             title: const Text('Cyber'),
