@@ -40,8 +40,8 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 | 32 | Istotne zdarzenia Policji / PSP | ✅ |
 | 33 | Obserwowane lokalizacje | ✅ |
 | 34 | „Co dzieje się wokół mnie?” | ✅ |
-| 35 | Alarmy Ukrainy | ❌ |
-| 36 | NEPTUN jako osobna warstwa OSINT | ❌ |
+| 35 | Alarmy Ukrainy | ✅ |
+| 36 | NEPTUN jako osobna warstwa OSINT | ✅ |
 | 37 | Push FCM/APNs | ❌ |
 | 38 | „Jestem bezpieczny” przez systemowy Share Sheet | ✅ |
 | 39 | Panel administratora + MFA | ❌ |
@@ -49,11 +49,9 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 
 ## Najbliższa kolejność
 
-1. Alarmy Ukrainy.
-2. NEPTUN.
-3. Push.
-4. Pełniejsze offline.
-5. Publiczny backend, monitoring, backup, podpisane wydanie.
+1. Push FCM/APNs.
+2. Pełniejsze offline.
+3. Publiczny backend, monitoring, backup, podpisane wydanie.
 
 Uwagi do częściowych etapów: WCZK ma jeden niezależny adapter oraz integrację RSO dla pozostałych publikacji; PAA ma komunikaty, ale pomiary pozostają zablokowane przez brak zweryfikowanego publicznego kontraktu; CERT Polska działa z oficjalnego RSS, publiczna lista RSS CSIRT GOV jest obecnie pusta, a Straż Graniczna korzysta z oficjalnych Aktualności z konserwatywnym filtrem komunikatów operacyjnych (publiczna lista RSS KGSG jest pusta). Alpha.11 dodaje lokalne obserwowane miejsca oraz zapytania „Wokół mnie”: odległość jest liczona tylko dla Eventów z geometrią, a jawny zakres krajowy/wojewódzki jest prezentowany osobno bez udawania bliskości.
 
@@ -66,4 +64,8 @@ Brak danych nie oznacza bezpieczeństwa. Źródła oficjalne, agregatory i OSINT
 
 Oficjalny adapter UkraineAlarm v3, cykle i korekty, niezależność statusu PL, PostGIS i bounded offline snapshot, moduł Ukraina + administracyjna warstwa MapLibre. Live wymaga klucza. Szczegóły: [ALPHA12_UKRAINE.md](ALPHA12_UKRAINE.md).
 
-Następny etap: alpha.13 NEPTUN — nie rozpoczęto.
+## Alpha.13 — NEPTUN
+
+Osobny historyczny moduł OSINT: zakończone ślady, obserwacje, timeline, provenance, semantyczna weryfikacja, korekty i zgrubna mapa. Publiczne API wymusza co najmniej 24 h opóźnienia oraz minimum 10 km deklarowanej dokładności geometrii. Brak automatycznego feedu — nie publikujemy aktywnych dokładnych pozycji. Szczegóły: [ALPHA13_NEPTUN.md](ALPHA13_NEPTUN.md).
+
+Następny etap: push FCM/APNs.

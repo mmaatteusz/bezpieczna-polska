@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 import pg from 'pg';
 import {eventSchema,type Event,type Health} from './domain.js';
 import {shelterSchema,searchText,type Shelter,type ShelterFilter} from './shelter.js';
+import {neptunTrackSchema,type NeptunTrack} from './neptun.js';
 type Row=Record<string,unknown>;
 export interface Db {
  kind:'postgres'|'sqlite';
@@ -42,6 +43,7 @@ export class Store{
   await this.db.run('CREATE TABLE IF NOT EXISTS event_revisions(event_id TEXT NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL, content_hash TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT NOT NULL, recorded_at TEXT NOT NULL, PRIMARY KEY(event_id,revision))');
   await this.db.run('CREATE TABLE IF NOT EXISTS incident_revisions(incident_id TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,content_hash TEXT NOT NULL,recorded_at TEXT NOT NULL,PRIMARY KEY(incident_id,revision))');
   await this.db.run('CREATE TABLE IF NOT EXISTS source_health(id TEXT PRIMARY KEY,payload TEXT NOT NULL)');
+  await this.db.run('CREATE TABLE IF NOT EXISTS neptun_track_revisions(track_id TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,content_hash TEXT NOT NULL,actor TEXT NOT NULL,reason TEXT NOT NULL,recorded_at TEXT NOT NULL,PRIMARY KEY(track_id,revision))');
   await this.db.run('CREATE TABLE IF NOT EXISTS radiation_measurements(station_id TEXT PRIMARY KEY,payload TEXT NOT NULL)');
   await this.db.run('CREATE TABLE IF NOT EXISTS shelters(id TEXT PRIMARY KEY,region_id TEXT NOT NULL,search_text TEXT NOT NULL,payload TEXT NOT NULL)');
   await this.db.run('CREATE INDEX IF NOT EXISTS shelter_region_idx ON shelters(region_id,id)');
@@ -197,6 +199,37 @@ export class Store{
   return rows.sort((a,b)=>String(a.recorded_at).localeCompare(String(b.recorded_at))||a.payload.id.localeCompare(b.payload.id)||a.payload.revision-b.payload.revision);
  }
  async incidentHistory(id:string){return (await this.db.all('SELECT payload,recorded_at FROM incident_revisions WHERE incident_id=? ORDER BY revision',[id])).map(r=>({...r,payload:JSON.parse(r.payload as string)}));}
+ async neptunTracks():Promise<NeptunTrack[]>{
+  const rows=await this.db.all('SELECT r.payload FROM neptun_track_revisions r JOIN (SELECT track_id,MAX(revision) AS rev FROM neptun_track_revisions GROUP BY track_id) last ON r.track_id=last.track_id AND r.revision=last.rev ORDER BY r.track_id');
+  return rows.map(r=>neptunTrackSchema.parse(JSON.parse(r.payload as string)));
+ }
+ async neptunTrack(id:string){
+  const rows=await this.db.all('SELECT payload FROM neptun_track_revisions WHERE track_id=? ORDER BY revision DESC LIMIT 1',[id]);
+  return rows.length?neptunTrackSchema.parse(JSON.parse(rows[0].payload as string)):null;
+ }
+ async putNeptunTrack(input:NeptunTrack,actor='operator',reason='Historical OSINT track reviewed',expectedRevision?:number){
+  const t=neptunTrackSchema.parse(input),previous=await this.neptunTrack(t.id);
+  if(expectedRevision!==undefined&&(previous?.revision??0)!==expectedRevision)throw new Error('REVISION_CONFLICT');
+  const stable=(v:NeptunTrack)=>{const {revision,...rest}=v;return rest;};
+  const hash=(v:NeptunTrack)=>createHash('sha256').update(JSON.stringify(stable(v))).digest('hex');
+  if(previous&&hash(previous)===hash(t))return false;
+  const next={...t,reviewed:true,revision:(previous?.revision??0)+1};
+  try{await this.db.run('INSERT INTO neptun_track_revisions(track_id,revision,payload,content_hash,actor,reason,recorded_at) VALUES(?,?,?,?,?,?,?)',[next.id,next.revision,JSON.stringify(next),hash(next),actor,reason,new Date().toISOString()]);}
+  catch(err){if(err instanceof Error&&/unique|duplicate/i.test(err.message))throw new Error('REVISION_CONFLICT');throw err;}
+  return true;
+ }
+ async neptunTimeline(id:string){
+  const rows=await this.db.all('SELECT payload,actor,reason,recorded_at FROM neptun_track_revisions WHERE track_id=? ORDER BY revision',[id]);
+  let previous:NeptunTrack|null=null;
+  return rows.map(r=>{
+   const current=neptunTrackSchema.parse(JSON.parse(r.payload as string)),changes:{field:string;from:unknown;to:unknown}[]=[];
+   if(!previous)changes.push({field:'CREATED',from:null,to:current.revision});
+   else for(const field of ['title','description','verification','startedAt','endedAt','directionText','observations'] as const){
+    if(JSON.stringify(previous[field])!==JSON.stringify(current[field]))changes.push({field,from:previous[field],to:current[field]});
+   }
+   previous=current;return {actor:String(r.actor),reason:String(r.reason),recorded_at:String(r.recorded_at),payload:current,changes};
+  });
+ }
  async radiationMeasurements():Promise<RadiationMeasurement[]>{return (await this.db.all('SELECT payload FROM radiation_measurements ORDER BY station_id')).map(r=>radiationMeasurementSchema.parse(JSON.parse(r.payload as string)));}
  async applyRadiationSync(items:RadiationMeasurement[],health:Health){
   if(health.id!=='PAA_MEASUREMENTS'||!items.length)throw new Error('PAA_MEASUREMENTS_EMPTY');

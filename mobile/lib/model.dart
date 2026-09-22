@@ -1,4 +1,5 @@
 import 'ukraine.dart';
+import 'neptun.dart';
 import 'radiation.dart';
 
 import 'dart:async';
@@ -685,6 +686,39 @@ class DataRepository {
     return result;
   }
 
+  String get neptunCacheKey => 'neptun:$api';
+  NeptunData? cachedNeptun() {
+    try {
+      final raw = prefs.getString(neptunCacheKey);
+      return raw == null ? null : NeptunData.parse(jsonDecode(raw));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<NeptunData> refreshNeptun() async {
+    final ticket = _generation, key = neptunCacheKey, u = _apiUri();
+    final response = await _get(u.replace(path: '${u.path}/v1/neptun'));
+    if (response.statusCode != 200) _responseFailure(response);
+    if (response.bodyBytes.length > 4 * 1024 * 1024) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+    NeptunData result;
+    try {
+      result = NeptunData.parse(jsonDecode(utf8.decode(response.bodyBytes)));
+    } catch (_) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+    if (ticket != _generation) throw StateError('Konfiguracja zmieniona');
+    for (final other in prefs.getKeys().where(
+      (k) => k.startsWith('neptun:') && k != key,
+    )) {
+      await prefs.remove(other);
+    }
+    await prefs.setString(key, jsonEncode(result.data));
+    return result;
+  }
+
   String cacheKey(String r) => 'snapshot:$api:$r';
   Snapshot? cached(String r) {
     try {
@@ -907,6 +941,7 @@ class DataRepository {
             .where(
               (k) =>
                   k.startsWith('ukraine:') ||
+                  k.startsWith('neptun:') ||
                   k.startsWith('snapshot:') ||
                   k.startsWith('seen:') ||
                   k.startsWith('shelters:') ||

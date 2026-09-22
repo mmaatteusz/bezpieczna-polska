@@ -8,7 +8,7 @@ export const mapLayers=[
  {id:'shelters',sourceId:'SHELTERS',authority:'OFFICIAL_PL',enabled:true},
  ...['RCB','WCZK','RSO_WCZK','border','police_PSP'].map(id=>({id,sourceId:id,authority:'OFFICIAL_PL',enabled:false})),
  {id:'Ukraine_alerts',sourceId:'UA',authority:'OFFICIAL_FOREIGN',enabled:true,geometry:'ADMINISTRATIVE_POLYGONS_ONLY'},
- {id:'NEPTUN',sourceId:'NEPTUN',authority:'OSINT',enabled:false},
+ {id:'NEPTUN',sourceId:'NEPTUN',authority:'OSINT',enabled:true,geometry:'COARSE_HISTORICAL_LINES_ONLY',mode:'HISTORICAL_ONLY'},
 ];
 const bounds=z.tuple([z.number().min(-180).max(180),z.number().min(-85).max(85),z.number().min(-180).max(180),z.number().min(-85).max(85)]).refine(b=>b[0]<b[2]&&b[1]<b[3]);
 export const mapQuery=z.object({
