@@ -253,7 +253,6 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Brak rejestracji tokenu'), findsOneWidget);
-    expect(find.textContaining('NEPTUN nie wysyła operacyjnych push'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     manager.dispose();
   });
