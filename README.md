@@ -1,4 +1,4 @@
-> Alpha.12 — moduł Ukraina: oficjalne API UkraineAlarm v3, osobny status, historia/revisions, offline STALE i administracyjna warstwa MapLibre. Bieżące dane wymagają `UKRAINE_ALARM_API_KEY`; brak klucza jest jawnie NOT_CONFIGURED. [Kontrakt i ograniczenia](docs/ALPHA12_UKRAINE.md).
+> Alpha.13 — NEPTUN: osobny historyczny moduł OSINT z audytowanymi rewizjami, timeline obserwacji, zgrubnymi śladami i twardym zakazem publikowania aktywnych dokładnych pozycji. Publiczne dane są opóźnione co najmniej 24 h i mają deklarowaną dokładność co najmniej 10 km. [Kontrakt](docs/ALPHA13_NEPTUN.md).
 
 # Bezpieczna Polska
 
@@ -6,9 +6,9 @@
 
 Aplikacja nie jest zwykłym agregatorem newsów ani mapą wojny. Zachowuje pochodzenie komunikatów, historię korekt, stan źródeł i nie interpretuje braku danych jako braku zagrożenia.
 
-Aktualna wersja: **0.1.0-alpha.11 — wersja rozwojowa, nie pełne MVP.**
+Aktualna wersja: **0.1.0-alpha.13 — wersja rozwojowa, nie pełne MVP.**
 
-### Co działa w alpha.11
+### Co działa w alpha.13
 
 - Status Polski i status lokalny z wyjaśnieniem „Dlaczego taki status?”.
 - Oficjalne źródła i integracje: RCB, RSO, WCZK, stopnie alarmowe RP, PAA, CERT Polska, Straż Graniczna, Policja i PSP.
@@ -17,11 +17,13 @@ Aktualna wersja: **0.1.0-alpha.11 — wersja rozwojowa, nie pełne MVP.**
 - **Obserwowane lokalizacje** zapisywane lokalnie na urządzeniu.
 - **„Wokół mnie”** z jednorazowym GPS uruchamianym wyłącznie przez użytkownika — bez ciągłego śledzenia i bez historii ruchu.
 - Odległość do zdarzenia jest liczona wyłącznie wtedy, gdy źródło dostarcza wiarygodną geometrię. Brak geometrii nie jest traktowany jako brak zdarzeń w pobliżu.
+- Oficjalne alarmy Ukrainy działają jako osobny moduł z historią i administracyjną warstwą mapy.
+- **NEPTUN** pokazuje wyłącznie historyczne, zakończone i zgrubne ślady OSINT z timeline, źródłem każdej obserwacji i korektami.
 - Preview APK jest budowany jako **arm64-v8a only**.
 
 ### Najważniejsze ograniczenia
 
-- To nadal wersja alpha, bez produkcyjnego hostingu, push, Ukrainy i modułu NEPTUN.
+- To nadal wersja alpha, bez produkcyjnego hostingu i push.
 - PAA measurements pozostają wyłączone do czasu zweryfikowanego stabilnego publicznego kontraktu.
 - CSIRT GOV pozostaje jawnie `NOT_CONFIGURED`, dopóki oficjalna lista kanałów RSS jest pusta.
 - Część źródeł jest ograniczona do publikacji publicznych i nie stanowi pełnego operacyjnego rejestru zdarzeń.
@@ -67,9 +69,11 @@ Bez backendu aplikacja pokazuje brak danych. Nie korzysta bezpośrednio z API os
 - Straż Graniczna: oficjalne Aktualności są filtrowane konserwatywnie do operacyjnych informacji o zamknięciach, ograniczeniach, kontrolach i utrudnieniach granicznych; zwykłe newsy służbowe są odrzucane.
 - Policja / PSP: oficjalny RSS Aktualności Policji oraz centralne Aktualności KG PSP są filtrowane do istotnych zdarzeń sytuacyjnych (m.in. duże pożary, eksplozje, HAZMAT, rozległe ratownictwo i poważne bezpieczeństwo publiczne). Publikacje służb są osobną warstwą informacyjną i nie podnoszą automatycznie statusu całego regionu.
 - Alpha.11: obserwowane lokalizacje są zapisywane lokalnie na urządzeniu; „Wokół mnie” używa jednorazowego GPS wyłącznie po akcji użytkownika. `POST /v1/around` przyjmuje współrzędne w ciele JSON (nie w URL), liczy odległość tylko dla Eventów z geometrią źródłową, a komunikaty krajowe/wojewódzkie pokazuje osobno bez udawania odległości. Brak geometrii nie jest interpretowany jako brak zdarzeń w pobliżu.
+- Alpha.12: alarmy Ukrainy są oddzielone od statusu Polski; API i mapa zachowują historię oraz stan źródła.
+- Alpha.13: NEPTUN przechowuje osobne, append-only rewizje historycznych śladów OSINT. Publiczne API nie udostępnia śladów przed upływem 24 h od zakończenia i zgrubnia geometrię do deklarowanej niepewności co najmniej 10 km. Brak skonfigurowanego automatycznego feedu jest jawny.
 - Źródła zachowują oryginalną treść. Niepewna interpretacja nie podnosi automatycznie statusu.
 - Historia wersji, korekty, widoczny timeline komunikatu, wyjaśnienie „Dlaczego taki status?”, stan źródeł, deterministyczne statusy, kopie offline, mapa MapLibre z zapytaniami bbox i klastrami PostGIS, systemowy Share Sheet dla „Jestem bezpieczny” oraz 112 wymagające działania użytkownika.
-- Brakuje: alarmów Ukrainy, NEPTUN, push FCM/APNs, pełniejszego offline, RLS, panelu administratora z MFA i wdrożenia produkcyjnego.
+- Brakuje: push FCM/APNs, pełniejszego offline, RLS, panelu administratora z MFA i wdrożenia produkcyjnego.
 
 Aktualny zakres i wdrożenie: [etap RCB](docs/RCB_STAGE.md). Hosting HTTPS nie został jeszcze uruchomiony.
 
