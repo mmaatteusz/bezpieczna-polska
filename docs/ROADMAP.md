@@ -1,6 +1,6 @@
 # ROADMAP — Bezpieczna Polska
 
-Aktualizacja: 22.09.2026. To jest kanoniczna lista funkcji projektu. Status dotyczy aktualnego kodu w branchach etapowych, nie produkcyjnego wdrożenia.
+Aktualizacja: 22.09.2026 (alpha.14). To jest kanoniczna lista funkcji projektu. Status dotyczy aktualnego kodu w branchach etapowych, nie produkcyjnego wdrożenia.
 
 Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ do zrobienia • ⏳ później.
 
