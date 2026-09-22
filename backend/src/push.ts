@@ -330,12 +330,14 @@ export class PushService{
  }
  async update(id:string,input:unknown,secret:string,now=new Date()){
   pushDeviceIdSchema.parse(id);const value=pushUpdateSchema.parse(input),parsedSecret=authSecretSchema.parse(secret);
-  const row=await this.deviceRow(id);this.authorize(row,parsedSecret);
-  const hash=tokenHash(value.platform,value.token),sameToken=(await this.db.all('SELECT device_id FROM push_devices WHERE token_hash=?',[hash])).find(r=>String(r.device_id)!==id);
-  if(sameToken)await this.scrubDevice(this.db,String(sameToken.device_id),'TOKEN_REASSIGNED',now);
-  await this.db.run('UPDATE push_devices SET platform=?,token_ciphertext=?,token_hash=?,app_version=?,language=?,preferences=?,enabled=1,updated_at=?,last_seen_at=?,disabled_at=NULL,disabled_reason=NULL WHERE device_id=?',[
-   value.platform,encryptToken(this.encryptionKey,value.token),hash,value.appVersion,value.language,JSON.stringify(value.preferences),now.toISOString(),now.toISOString(),id
-  ]);
+  await this.db.transaction(async db=>{
+   const row=(await db.all('SELECT * FROM push_devices WHERE device_id=?',[id]))[0]??null;this.authorize(row,parsedSecret);
+   const hash=tokenHash(value.platform,value.token),sameToken=(await db.all('SELECT device_id FROM push_devices WHERE token_hash=?',[hash])).find(r=>String(r.device_id)!==id);
+   if(sameToken)await this.scrubDevice(db,String(sameToken.device_id),'TOKEN_REASSIGNED',now);
+   await db.run('UPDATE push_devices SET platform=?,token_ciphertext=?,token_hash=?,app_version=?,language=?,preferences=?,enabled=1,updated_at=?,last_seen_at=?,disabled_at=NULL,disabled_reason=NULL WHERE device_id=?',[
+    value.platform,encryptToken(this.encryptionKey,value.token),hash,value.appVersion,value.language,JSON.stringify(value.preferences),now.toISOString(),now.toISOString(),id
+   ]);
+  });
   return {registered:true,deviceId:id,platform:value.platform,providerReady:this.provider.ready(value.platform),lastSeenAt:now.toISOString()};
  }
  async preferences(id:string,input:unknown,secret:string,now=new Date()){
@@ -360,6 +362,9 @@ export class PushService{
   await db.run('UPDATE push_devices SET enabled=0,token_ciphertext=?,token_hash=?,updated_at=?,last_seen_at=?,disabled_at=?,disabled_reason=? WHERE device_id=?',[
    'revoked','revoked:'+id,now.toISOString(),now.toISOString(),now.toISOString(),reason,id
   ]);
+  await db.run("UPDATE push_outbox SET state='PERMANENT_FAILURE',last_error_code=?,next_attempt_at=? WHERE device_id=? AND state IN ('PENDING','RETRY','SENDING')",[
+   safeError(reason),now.toISOString(),id
+  ]);
  }
  private async claimDue(now:Date,limit:number){
   const stale=new Date(now.getTime()-5*60000).toISOString();
@@ -377,6 +382,11 @@ export class PushService{
    const id=String(row.id),attempt=Number(row.attempt_count??0)+1,deviceId=String(row.device_id),platform=pushPlatformSchema.safeParse(row.platform);
    if(Number(row.enabled)!==1||!platform.success){
     await this.db.run("UPDATE push_outbox SET state='PERMANENT_FAILURE',last_error_code=?,next_attempt_at=? WHERE id=?",['DEVICE_DISABLED',now.toISOString(),id]);processed++;continue;
+   }
+   if(!this.provider.ready(platform.data)){
+    const next=new Date(now.getTime()+5*60000).toISOString();
+    await this.db.run("UPDATE push_outbox SET state='RETRY',attempt_count=CASE WHEN attempt_count>0 THEN attempt_count-1 ELSE 0 END,next_attempt_at=?,last_error_code='PROVIDER_NOT_READY' WHERE id=?",[next,id]);
+    processed++;continue;
    }
    let token:string;
    try{token=decryptToken(this.encryptionKey,String(row.token_ciphertext));}
