@@ -127,12 +127,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     try {
       seen = Map<String, int>.from(
         jsonDecode(
-              widget.repository.prefs.getString(
-                    'seen:${widget.repository.api}:$region',
-                  ) ??
-                  '{}',
-            )
-            as Map,
+          widget.repository.prefs.getString(
+                'seen:${widget.repository.api}:$region',
+              ) ??
+              '{}',
+        ) as Map,
       );
     } catch (_) {
       seen = {};
@@ -229,9 +228,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         children: [
           Text(
             'BEZPIECZNA POLSKA',
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(letterSpacing: 2),
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(letterSpacing: 2),
           ),
           Text(
             [
@@ -369,9 +367,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     padding: const EdgeInsets.only(top: 22, bottom: 12),
     child: Text(
       text,
-      style: Theme.of(
-        context,
-      ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+      style: Theme.of(context).textTheme.titleLarge
+          ?.copyWith(fontWeight: FontWeight.w700),
     ),
   );
   Widget empty(String title, String text, IconData icon) => Card(
@@ -681,9 +678,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     final lifecycle = e.data['lifecycle'] as String;
     final correction = e.data['correction'];
     final expired =
-        DateTime.tryParse(
-          e.data['validTo'] as String? ?? '',
-        )?.isBefore(DateTime.now()) ??
+        DateTime.tryParse(e.data['validTo'] as String? ?? '')
+            ?.isBefore(DateTime.now()) ??
         false;
     return switch (statusFilter) {
       'Aktywne' => lifecycle == 'ACTIVE' && !expired,
