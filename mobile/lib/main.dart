@@ -14,6 +14,7 @@ import 'shelter_panel.dart';
 import 'event_details.dart';
 import 'status_explanation.dart';
 import 'source_status.dart';
+import 'watched_locations_panel.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -400,6 +401,23 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     return [
       statusCard(true),
       statusCard(false),
+      Card(
+        child: ListTile(
+          leading: const Icon(Icons.radar_outlined),
+          title: const Text('Wokół mnie'),
+          subtitle: const Text(
+            'Jednorazowy GPS lub zapisane miejsca. Bez ciągłego śledzenia i bez historii ruchu.',
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => WatchedLocationsScreen(
+                repository: widget.repository,
+              ),
+            ),
+          ),
+        ),
+      ),
       if (widget.repository.api.isEmpty)
         notice(
           'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
@@ -466,7 +484,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ],
       const SizedBox(height: 12),
       notice(
-        'Wersja rozwojowa 0.1.0-alpha.10 • Powiadomienia push nie są aktywne.',
+        'Wersja rozwojowa 0.1.0-alpha.11 • Powiadomienia push nie są aktywne.',
         Icons.science_outlined,
       ),
       heading('Od ostatniej wizyty'),
