@@ -93,7 +93,7 @@ export async function neptunSnapshot(store:Store,now=new Date()){
   serverTime:now.toISOString(),
   safetyDelayHours:NEPTUN_SAFETY_DELAY_HOURS,
   minimumPublishedPrecisionKm:NEPTUN_MIN_PRECISION_KM,
-  coverage:health?.state==='NOT_CONFIGURED'?'NO_CONFIGURED_FEED':'CURATED_HISTORY',
+  coverage:tracks.length?'CURATED_HISTORY':'NO_CONFIGURED_FEED',
   sourceHealth:health?sourceHealth([health],now)[0]:null,
   tracks,
   map:{type:'FeatureCollection' as const,features},
