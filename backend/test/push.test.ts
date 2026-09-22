@@ -189,6 +189,20 @@ test('push API validates payloads, authenticates device management and rate limi
  }finally{await app.close();await db.close();}
 });
 
+test('registration endpoint bounds record creation with per-route rate limit',async()=>{
+ const {db,store,push}=await setup();const app=await buildApp(store,undefined,push);
+ try{
+  const statuses:number[]=[];
+  for(let i=0;i<11;i++){
+   const suffix=String(i).padStart(12,'0'),id='44444444-4444-4444-8444-'+suffix;
+   const token='fcm_token_rate_limit_'+String(i).padStart(24,'0');
+   statuses.push((await app.inject({method:'POST',url:'/v1/push/devices',headers:{authorization:'Bearer '+secret},payload:registerBody(id,token)})).statusCode);
+  }
+  assert.ok(statuses.slice(0,10).every(v=>v===200));assert.equal(statuses[10],429);
+  assert.equal(Number((await db.all('SELECT COUNT(*) AS n FROM push_devices'))[0].n),10);
+ }finally{await app.close();await db.close();}
+});
+
 test('push secrets and provider tokens are absent from application logs',async()=>{
  const {db,store,push,provider}=await setup(),token='fcm_token_LOGLEAKCHECK_ABCDEFGHIJKLMNOPQRSTUVWXYZ',seen:string[]=[];
  const originalError=console.error,originalLog=console.log;console.error=(...a)=>seen.push(a.join(' '));console.log=(...a)=>seen.push(a.join(' '));
