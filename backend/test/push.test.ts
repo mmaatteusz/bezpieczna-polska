@@ -52,7 +52,7 @@ function uaEvent(id:string):Event{
   geometry:null,geometrySource:undefined
  });
 }
-async function outbox(db:Db){return db.all('SELECT * FROM push_outbox ORDER BY created_at,id');}
+async function outbox(db:Db){return db.all('SELECT * FROM push_outbox ORDER BY event_revision,created_at,id');}
 async function device(db:Db,id=deviceA){return (await db.all('SELECT * FROM push_devices WHERE device_id=?',[id]))[0];}
 async function setup(){
  const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();const provider=new FakeProvider(),push=new PushService(db,key,provider);
@@ -180,7 +180,7 @@ test('push API validates payloads, authenticates device management and rate limi
   const good=registerBody(deviceA);
   let response=await app.inject({method:'POST',url:'/v1/push/devices',headers:{authorization:'Bearer '+secret},payload:good});
   assert.equal(response.statusCode,200);assert.equal(response.body.includes(String(good.token)),false);
-  response=await app.inject({method:'GET',url:'/v1/push/devices/'+deviceA,headers:{authorization:'Bearer '+secret});
+  response=await app.inject({method:'GET',url:'/v1/push/devices/'+deviceA,headers:{authorization:'Bearer '+secret}});
   assert.equal(response.statusCode,200);assert.equal(response.body.includes(String(good.token)),false);
   assert.equal((await app.inject({method:'GET',url:'/v1/push/devices/'+deviceA,headers:{authorization:'Bearer bp_push_'+ 'Z'.repeat(43)}})).statusCode,401);
   assert.equal((await app.inject({method:'POST',url:'/v1/push/devices',headers:{authorization:'Bearer '+secret},payload:{...registerBody(deviceB),token:'bad'}})).statusCode,400);
