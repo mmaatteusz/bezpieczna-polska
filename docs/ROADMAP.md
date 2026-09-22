@@ -60,3 +60,10 @@ Uwagi do częściowych etapów: WCZK ma jeden niezależny adapter oraz integracj
 ## Zasady
 
 Brak danych nie oznacza bezpieczeństwa. Źródła oficjalne, agregatory i OSINT zachowują odrębną tożsamość. Nie publikujemy fikcyjnych danych ani nie zgadujemy geometrii. Stopnie alarmowe są informacją o gotowości administracyjnej, nie automatycznym alarmem dla mieszkańca. Aktywne dane wojskowe i lokalizacje infrastruktury operacyjnej nie są celem aplikacji.
+
+
+## Alpha.12 — Ukraina
+
+Oficjalny adapter UkraineAlarm v3, cykle i korekty, niezależność statusu PL, PostGIS i bounded offline snapshot, moduł Ukraina + administracyjna warstwa MapLibre. Live wymaga klucza. Szczegóły: [ALPHA12_UKRAINE.md](ALPHA12_UKRAINE.md).
+
+Następny etap: alpha.13 NEPTUN — nie rozpoczęto.

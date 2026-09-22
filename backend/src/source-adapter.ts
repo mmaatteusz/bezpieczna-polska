@@ -5,6 +5,7 @@ import type {Shelter} from './shelter.js';
 export type SourceContext = {now: Date; previousEvents?: Event[]; fetchText: (url: string) => Promise<string>; fetchBytes?: (url: string) => Promise<Uint8Array>};
 export type SourceBatch = {
   events: Event[];
+  uaMetadata?: NonNullable<import('./domain.js').Health['uaMetadata']>;
   shelters?: Shelter[];
   metadata?: {dataDate:string;sourceUpdatedAt:string;sourceContentHash:string;sourceUrl:string;datasetUrl:string;license:string;fallbackSelected?:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'};
   // A publication archive is never proof that there are no active warnings.
@@ -33,5 +34,5 @@ export const SOURCES = [
   {id: 'SG', name: 'Straż Graniczna — operacyjne informacje graniczne', url: 'https://www.strazgraniczna.pl/pl/aktualnosci', enabled: true, implementation:'OFFICIAL_NEWS_OPERATIONAL_FILTER', integrationNote:'Publiczna lista RSS KGSG jest pusta. Integracja używa oficjalnych Aktualności z konserwatywnym filtrem zamknięć, ograniczeń, kontroli i utrudnień granicznych.'},
   {id: 'POLICE', name: 'Policja — istotne zdarzenia', url: 'https://policja.pl/pol/aktualnosci', enabled: true, implementation:'OFFICIAL_RSS_INCIDENT_FILTER', integrationNote:'Oficjalny RSS Aktualności Policji. Importowane są wyłącznie zdarzenia o znaczeniu sytuacyjnym; zwykłe zatrzymania, kradzieże, przemyt, statystyki i materiały PR są odrzucane.'},
   {id: 'PSP_INCIDENTS', name: 'PSP — istotne zdarzenia', url: 'https://www.gov.pl/web/kgpsp/aktualnosci', enabled: true, implementation:'OFFICIAL_NEWS_INCIDENT_FILTER', integrationNote:'Centralne Aktualności KG PSP na gov.pl z konserwatywnym filtrem zdarzeń. Brak zweryfikowanego krajowego live API/RSS incydentów; lista publikacji nie oznacza pełnego pokrycia.'},
-  {id: 'UA', name: 'Oficjalne alarmy Ukrainy — integracja oczekuje', url: 'https://dsns.gov.ua/', enabled: false},
+  {id: 'UA', name: 'UkraineAlarm — oficjalne alarmy Ukrainy', url: 'https://map.ukrainealarm.com/', enabled: true, implementation:'UKRAINEALARM_V3', integrationNote:'Oficjalne API wymaga klucza. Historia źródła jest ograniczona. Alarmy UA nie wpływają na status Polski.'},
 ];

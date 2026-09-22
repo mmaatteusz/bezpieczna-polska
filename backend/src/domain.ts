@@ -11,6 +11,10 @@ export const geometrySchema=z.discriminatedUnion('type',[
  z.object({type:z.literal('MultiPolygon'),coordinates:z.array(z.array(ring).min(1)).min(1)})
 ]);
 export const eventSchema=z.object({
+ geometrySource:z.url().optional(),
+ origin:z.enum(['OFFICIAL_PL','OFFICIAL_FOREIGN','AGGREGATOR','OSINT']).optional(),
+ countryCode:z.enum(['PL','UA']).optional(),
+ ukraine:z.object({regionId:z.string().min(1).max(80),regionName:z.string().min(1).max(200),regionType:z.enum(['State','District','Community']),parentRegionId:z.string().nullable(),alertType:z.enum(['AIR','ARTILLERY','URBAN_FIGHTS','CHEMICAL','NUCLEAR','INFO']),kind:z.enum(['OFFICIAL_ALERT','OFFICIAL_INFORMATION']),sourceUpdatedAt:date.nullable()}).optional(),
  radiationAssessment:z.object({state:z.enum(['WARNING','ENDED','INFORMATION','UNDETERMINED']),evidence:z.string().nullable()}).optional(),
  securityLevel:securityLevelSchema.optional(),
  id:z.string().min(1).max(150),title:z.string().min(1).max(350),description:z.string().max(40000),
@@ -27,16 +31,18 @@ export const eventSchema=z.object({
  publicationDate:z.iso.date().nullable().default(null),locationText:z.string().max(10000).nullable().default(null),areaPrecision:z.enum(['COUNTRY','PROVINCE','PROVINCE_SUBSET','EXACT','UNKNOWN']).default('UNKNOWN'),geometry:geometrySchema.nullable().default(null),adapterVersion:z.string().max(100).nullable().default(null),sourceContentHash:z.string().regex(/^[a-f0-9]{64}$/).nullable().default(null),
  correction:z.string().max(4000).nullable(),latitude:z.number().min(-90).max(90).nullable(),longitude:z.number().min(-180).max(180).nullable(),isDemo:z.boolean().default(false)
 }).superRefine((e,ctx)=>{
+ if(e.ukraine&&(e.countryCode!=='UA'||e.origin!=='OFFICIAL_FOREIGN'||e.regions.length||!e.sources.some(s=>s.id==='UA')))ctx.addIssue({code:'custom',message:'Invalid UA scope'});
  if((e.latitude===null)!==(e.longitude===null))ctx.addIssue({code:'custom',message:'Coordinates must be paired'});
  if(e.validFrom&&e.validTo&&Date.parse(e.validTo)<=Date.parse(e.validFrom))ctx.addIssue({code:'custom',message:'Invalid validity interval'});
  if(e.geometry&&e.latitude!==null&&(e.geometry.type!=='Point'||e.geometry.coordinates[0]!==e.longitude||e.geometry.coordinates[1]!==e.latitude))ctx.addIssue({code:'custom',message:'Conflicting event geometry'});
 }).transform(e=>({...e,geometry:e.geometry??(e.latitude!==null&&e.longitude!==null?{type:'Point' as const,coordinates:[e.longitude,e.latitude] as [number,number]}:null)}));
 export type Event=z.infer<typeof eventSchema>;
-export type Health={checkedEventIds?:string[];regionId?:string;implementation?:string;integrationNote?:string;id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS'|'FACILITY_CATALOG';pagesFetched?:number;dataDate?:string;sourceUpdatedAt?:string;sourceContentHash?:string;sourceUrl?:string;datasetUrl?:string;license?:string;fallbackSelected?:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE';fallback?:{selected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'|'LAST_KNOWN_GOOD_COPY'|'NONE';secondaryStatus:'NOT_NEEDED'|'AVAILABLE_STALE'|'NOT_VERIFIED';reason:string|null}};
+export type Health={uaMetadata?:{regions:import('./ukraine-adapter.js').UaRegion[];activeEventIds:string[];lastActionIndex:number};checkedEventIds?:string[];regionId?:string;implementation?:string;integrationNote?:string;id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS'|'FACILITY_CATALOG';pagesFetched?:number;dataDate?:string;sourceUpdatedAt?:string;sourceContentHash?:string;sourceUrl?:string;datasetUrl?:string;license?:string;fallbackSelected?:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE';fallback?:{selected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'|'LAST_KNOWN_GOOD_COPY'|'NONE';secondaryStatus:'NOT_NEEDED'|'AVAILABLE_STALE'|'NOT_VERIFIED';reason:string|null}};
 export function computeStatus(events:Event[],health:Health[],region:string,now=new Date(),incidents?:Incident[]){
  const ms=now.getTime();
+ events=events.filter(e=>e.countryCode!=='UA'&&!e.ukraine&&!e.sources.some(s=>s.id==='UA'));
  // Facilities are reference data, never evidence of the absence of hazards.
- health=health.filter(h=>!['SHELTERS','CERT','CSIRT_GOV','SG','POLICE','PSP_INCIDENTS'].includes(h.id)&&h.coverage!=='FACILITY_CATALOG'&&(!h.regionId||region==='PL'||h.regionId===region));
+ health=health.filter(h=>!['UA','SHELTERS','CERT','CSIRT_GOV','SG','POLICE','PSP_INCIDENTS'].includes(h.id)&&h.coverage!=='FACILITY_CATALOG'&&(!h.regionId||region==='PL'||h.regionId===region));
  const relevant=events.filter(e=>!e.isDemo&&e.officialWarning&&e.messageContext==='ACTUAL'&&e.verification==='CONFIRMED'&&e.sources.some(s=>s.tier===1)&&(region==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(region)));
  const fresh=health.filter(h=>h.state==='HEALTHY'&&h.lastSuccess&&Date.parse(h.lastSuccess)<=ms+30000&&ms-Date.parse(h.lastSuccess)<h.maxAgeSeconds*1000);
  const coverage=health.length>0&&fresh.length===health.length&&fresh.every(h=>h.complete&&h.id!=='PAA_MEASUREMENTS')?'COMPLETE_FOR_CONFIGURED_SCOPE':fresh.length?'PARTIAL':'UNAVAILABLE';

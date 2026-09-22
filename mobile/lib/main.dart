@@ -1,4 +1,6 @@
+import 'ukraine.dart';
 import 'radiation.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -100,12 +102,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     try {
       seen = Map<String, int>.from(
         jsonDecode(
-              widget.repository.prefs.getString(
-                    'seen:${widget.repository.api}:$region',
-                  ) ??
-                  '{}',
-            )
-            as Map,
+          widget.repository.prefs.getString(
+                'seen:${widget.repository.api}:$region',
+              ) ??
+              '{}',
+        ) as Map,
       );
     } catch (_) {
       seen = {};
@@ -178,9 +179,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         children: [
           Text(
             'BEZPIECZNA POLSKA',
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(letterSpacing: 2),
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(letterSpacing: 2),
           ),
           Text(
             [
@@ -318,9 +318,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     padding: const EdgeInsets.only(top: 22, bottom: 12),
     child: Text(
       text,
-      style: Theme.of(
-        context,
-      ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+      style: Theme.of(context).textTheme.titleLarge
+          ?.copyWith(fontWeight: FontWeight.w700),
     ),
   );
   Widget empty(String title, String text, IconData icon) => Card(
@@ -401,6 +400,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     return [
       statusCard(true),
       statusCard(false),
+      OutlinedButton.icon(
+        onPressed: () => setState(() {
+          page = 1;
+          ukraine = true;
+        }),
+        icon: const Icon(Icons.public),
+        label: const Text('Ukraina • oficjalne alarmy'),
+      ),
       Card(
         child: ListTile(
           leading: const Icon(Icons.radar_outlined),
@@ -591,9 +598,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     final lifecycle = e.data['lifecycle'] as String;
     final correction = e.data['correction'];
     final expired =
-        DateTime.tryParse(
-          e.data['validTo'] as String? ?? '',
-        )?.isBefore(DateTime.now()) ??
+        DateTime.tryParse(e.data['validTo'] as String? ?? '')
+            ?.isBefore(DateTime.now()) ??
         false;
     return switch (statusFilter) {
       'Aktywne' => lifecycle == 'ACTIVE' && !expired,
@@ -811,21 +817,24 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       onSelectionChanged: (v) => setState(() => ukraine = v.first),
     ),
     const SizedBox(height: 12),
-    ShelterMap(
-      radiation: snapshot?.data['radiation'],
-      radiationOnline: online,
-      key: ValueKey(
-        'map:${widget.repository.api}:$region:$ukraine:${widget.repository.dataGeneration}',
+    if (ukraine)
+      UkrainePanel(repository: widget.repository, openSource: openLink)
+    else
+      ShelterMap(
+        radiation: snapshot?.data['radiation'],
+        radiationOnline: online,
+        key: ValueKey(
+          'map:${widget.repository.api}:$region:$ukraine:${widget.repository.dataGeneration}',
+        ),
+        repository: widget.repository,
+        region: region,
+        ukraine: ukraine,
+        openLink: openLink,
       ),
-      repository: widget.repository,
-      region: region,
-      ukraine: ukraine,
-      openLink: openLink,
-    ),
     const SizedBox(height: 12),
     notice(
       ukraine
-          ? 'Alarmy Ukrainy nie są podłączone. Brak oznaczeń nie oznacza braku alarmów.'
+          ? 'Alarmy Ukrainy są osobnym kontekstem. Brak oznaczeń nie oznacza braku alarmów.'
           : 'Mapa pokazuje punkty schronienia wg PSP. Liczby grupują punkty w widocznym obszarze. Przybliż mapę, aby wybrać punkt. Mapa nie potwierdza bieżącej dostępności i nie służy do nawigacji. Offline dostępne są tylko zapisane obszary; podkład mapy wymaga internetu lub wcześniejszego cache.',
       Icons.info_outline,
     ),

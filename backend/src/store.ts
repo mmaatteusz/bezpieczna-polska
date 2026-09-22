@@ -167,7 +167,7 @@ export class Store{
    const current=row.payload,changes:{field:string;from:unknown;to:unknown}[]=[];
    if(!previous)changes.push({field:'CREATED',from:null,to:current.revision});
    else{
-    for(const field of ['title','description','lifecycle','verification','validFrom','validTo','correction','regions'] as const){
+    for(const field of ['title','description','lifecycle','verification','validFrom','validTo','correction','regions','ukraine','geometry','geometrySource'] as const){
      const from=previous[field],to=current[field];
      if(JSON.stringify(from)!==JSON.stringify(to))changes.push({field,from,to});
     }
