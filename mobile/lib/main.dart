@@ -18,19 +18,25 @@ import 'event_details.dart';
 import 'status_explanation.dart';
 import 'source_status.dart';
 import 'watched_locations_panel.dart';
+import 'push_notifications.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final repository = DataRepository(await SharedPreferences.getInstance());
+  final pushAdapter =
+      await FirebasePushPlatformAdapter.fromBuildConfiguration();
   runApp(
     SafetyApp(
-      repository: DataRepository(await SharedPreferences.getInstance()),
+      repository: repository,
+      pushManager: PushManager(repository, pushAdapter),
     ),
   );
 }
 
 class SafetyApp extends StatefulWidget {
   final DataRepository repository;
-  const SafetyApp({super.key, required this.repository});
+  final PushManager? pushManager;
+  const SafetyApp({super.key, required this.repository, this.pushManager});
   @override
   State<SafetyApp> createState() => _SafetyAppState();
 }
@@ -54,14 +60,24 @@ class _SafetyAppState extends State<SafetyApp> {
       scaffoldBackgroundColor: const Color(0xFF101A21),
     ),
     themeMode: widget.repository.dark ? ThemeMode.dark : ThemeMode.light,
-    home: Home(repository: widget.repository, onTheme: () => setState(() {})),
+    home: Home(
+      repository: widget.repository,
+      pushManager: widget.pushManager,
+      onTheme: () => setState(() {}),
+    ),
   );
 }
 
 class Home extends StatefulWidget {
   final DataRepository repository;
+  final PushManager? pushManager;
   final VoidCallback onTheme;
-  const Home({super.key, required this.repository, required this.onTheme});
+  const Home({
+    super.key,
+    required this.repository,
+    this.pushManager,
+    required this.onTheme,
+  });
   @override
   State<Home> createState() => _HomeState();
 }
@@ -82,6 +98,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.pushManager != null) {
+      unawaited(widget.pushManager!.initializeWithoutPrompt());
+    }
     region = widget.repository.region;
     snapshot = widget.repository.cached(region);
     loadSeen();
@@ -1037,6 +1056,26 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                     },
                     child: const Text('Usuń zapisane komunikaty'),
                   ),
+                  if (widget.pushManager != null)
+                    ListTile(
+                      title: const Text('Powiadomienia'),
+                      subtitle: Text(
+                        widget.pushManager!.state.registered
+                            ? 'Urządzenie zarejestrowane'
+                            : 'Zarządzaj zgodą i kategoriami alertów',
+                      ),
+                      leading: const Icon(Icons.notifications_outlined),
+                      onTap: () {
+                        Navigator.pop(sheet);
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => NotificationSettingsScreen(
+                              manager: widget.pushManager!,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   if (widget.repository.developerSettingsEnabled)
                     ListTile(
                       title: const Text('Developer Settings'),
@@ -1047,7 +1086,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       },
                     ),
                   const Text(
-                    '0.1.0-alpha.13 • Push nieaktywny • GPS tylko na żądanie',
+                    '0.1.0-alpha.14 • Push opt-in • GPS tylko na żądanie',
                   ),
                 ],
               ),
