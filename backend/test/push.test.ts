@@ -147,6 +147,20 @@ test('Ukraine is an opt-in category and never becomes Polish push',async()=>{
  }finally{await db.close();}
 });
 
+test('cyber and border remain separate opt-in push categories',async()=>{
+ const {db,store,push}=await setup();
+ try{
+  await push.register(registerBody(deviceA),secret,now);
+  const cert=event('cert',{eventType:'CYBER',severity:'HIGH',lifecycle:'UNKNOWN',officialWarning:false,regions:[],geographicScope:'UNKNOWN',sources:[{id:'CERT',name:'CERT Polska',url:'https://example.com/cert',tier:1}]});
+  const border=event('border',{eventType:'BORDER',severity:'HIGH',lifecycle:'UNKNOWN',officialWarning:false,sources:[{id:'SG',name:'Straż Graniczna',url:'https://example.com/sg',tier:1}]});
+  const info=event('cert-info',{eventType:'CYBER',severity:'INFORMATIONAL',lifecycle:'UNKNOWN',officialWarning:false,regions:[],geographicScope:'UNKNOWN',sources:[{id:'CERT',name:'CERT Polska',url:'https://example.com/cert-info',tier:1}]});
+  await store.put(cert);await store.put(border);await store.put(info);
+  const rows=await outbox(db);
+  assert.deepEqual(rows.map(r=>r.category).sort(),['BORDER','CYBER']);
+  assert.equal(computeStatus([cert,border],[],'PL',now).hazardLevel,'UNKNOWN');
+ }finally{await db.close();}
+});
+
 test('sourceHealth-only changes never enqueue push',async()=>{
  const {db,store,push}=await setup();
  try{
