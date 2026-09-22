@@ -1,4 +1,4 @@
-name: Build NEPTUN alpha.13 preview APK
+name: Build Push alpha.14 preview APK
 on:
   pull_request:
     branches: [main]
@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: preview-apk-neptun-${{ github.ref }}
+  group: preview-apk-push-${{ github.ref }}
   cancel-in-progress: true
 env:
   CI: 'true'
@@ -75,13 +75,19 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          dart format --output=none --set-exit-if-changed lib/main.dart lib/model.dart lib/watched_locations_panel.dart lib/ukraine.dart lib/neptun.dart test/model_test.dart test/widget_test.dart test/watched_locations_test.dart test/ukraine_test.dart test/neptun_test.dart
+          dart format lib/main.dart lib/model.dart lib/watched_locations_panel.dart lib/ukraine.dart lib/neptun.dart lib/push_notifications.dart test/model_test.dart test/widget_test.dart test/watched_locations_test.dart test/ukraine_test.dart test/neptun_test.dart test/push_notifications_test.dart
+          mkdir -p ../output/formatter
+          cp lib/main.dart lib/push_notifications.dart test/push_notifications_test.dart pubspec.lock ../output/formatter/
           flutter analyze --no-pub
           flutter test --no-pub
       - name: Assert NEPTUN historical safety contract
         working-directory: backend
         run: |
           node --import tsx --test test/neptun.test.ts
+      - name: Assert push notification contract
+        working-directory: backend
+        run: |
+          node --import tsx --test test/push.test.ts
       - name: Build Android preview
         working-directory: mobile
         run: flutter build apk --debug --split-per-abi --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=true
@@ -102,7 +108,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p output
-          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.13-preview-arm64.apk
+          cp mobile/pubspec.lock output/pubspec.lock.resolved
+          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.14-preview-arm64.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
           grep -F "native-code: 'arm64-v8a'" output/package-info.txt
@@ -110,8 +117,8 @@ jobs:
             echo "Unexpected non-arm64 native libraries in arm64 preview APK" >&2
             exit 1
           fi
-          grep -F "versionName='0.1.0-alpha.13'" output/package-info.txt
-          grep -F "versionCode='2013'" output/package-info.txt
+          grep -F "versionName='0.1.0-alpha.14'" output/package-info.txt
+          grep -F "versionCode='2014'" output/package-info.txt
           grep -F "name='pl.bezpiecznapolska.preview'" output/package-info.txt
           grep -F "sdkVersion:'24'" output/package-info.txt
           grep -F "targetSdkVersion:'36'" output/package-info.txt
@@ -120,7 +127,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Bezpieczna_Polska_0.1.0-alpha.13-preview-arm64
+          name: Bezpieczna_Polska_0.1.0-alpha.14-preview-arm64
           path: output/
           if-no-files-found: error
           retention-days: 30

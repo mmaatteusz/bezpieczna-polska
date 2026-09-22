@@ -6,6 +6,7 @@ import pg from 'pg';
 import {eventSchema,type Event,type Health} from './domain.js';
 import {shelterSchema,searchText,type Shelter,type ShelterFilter} from './shelter.js';
 import {neptunTrackSchema,type NeptunTrack} from './neptun.js';
+import {initPushStore,queuePushChanges,type PushEventChange} from './push.js';
 type Row=Record<string,unknown>;
 export interface Db {
  kind:'postgres'|'sqlite';
@@ -47,6 +48,7 @@ export class Store{
   await this.db.run('CREATE TABLE IF NOT EXISTS radiation_measurements(station_id TEXT PRIMARY KEY,payload TEXT NOT NULL)');
   await this.db.run('CREATE TABLE IF NOT EXISTS shelters(id TEXT PRIMARY KEY,region_id TEXT NOT NULL,search_text TEXT NOT NULL,payload TEXT NOT NULL)');
   await this.db.run('CREATE INDEX IF NOT EXISTS shelter_region_idx ON shelters(region_id,id)');
+  await initPushStore(this.db);
   if(this.db.kind==='postgres'){
    // An indexed generated column keeps geometry and the audited event payload
    // in the same atomic write, including existing events during migration.
@@ -69,21 +71,21 @@ export class Store{
  async snapshot(){return this.db.transaction(async db=>{const s=new Store(db);const events=await s.events();return {events,health:await s.health(),incidents:await s.incidents(),radiationMeasurements:await s.radiationMeasurements()};});}
  async get(id:string){const r=await this.db.all('SELECT payload FROM event_revisions WHERE event_id=? ORDER BY revision DESC LIMIT 1',[id]);return r.length?eventSchema.parse(JSON.parse(r[0].payload as string)):null;}
  async put(input:Event,actor='adapter',reason='Source content updated',expectedRevision?:number){
-  return this.db.transaction(async db=>{const s=new Store(db);const changed=await s.putRecord(input,actor,reason,expectedRevision);if(changed)await s.reconcileIncidents(await s.events());return changed;});
+  return this.db.transaction(async db=>{const s=new Store(db);const change=await s.putRecord(input,actor,reason,expectedRevision);if(!change)return false;const events=await s.events();await s.reconcileIncidents(events);await queuePushChanges(db,[change],events,await s.incidents());return true;});
  }
  private async putRecord(input:Event,actor='adapter',reason='Source content updated',expectedRevision?:number){
   const e=eventSchema.parse(input);const previous=await this.get(e.id);
   if(expectedRevision!==undefined&&(previous?.revision??0)!==expectedRevision)throw new Error('REVISION_CONFLICT');
-  if(actor==='adapter'&&previous?.reviewed)return false;
+  if(actor==='adapter'&&previous?.reviewed)return null;
   // Formatting changes in upstream HTML must not generate user-facing alerts.
   const hash=(v:Event)=>{const {retrievedAt,revision,sourceContentHash,...stable}=v;if(stable.securityLevel){stable.securityLevel={...stable.securityLevel,isActive:false};if(stable.lifecycle!=='CANCELLED')stable.lifecycle='SCHEDULED';}return createHash('sha256').update(JSON.stringify(stable)).digest('hex');};
-  if(previous&&hash(previous)===hash(e))return false;
+  if(previous&&hash(previous)===hash(e))return null;
   const next={...e,revision:(previous?.revision??0)+1};
   try{await this.db.run('INSERT INTO event_revisions(event_id,revision,payload,content_hash,actor,reason,recorded_at) VALUES(?,?,?,?,?,?,?)',[next.id,next.revision,JSON.stringify(next),hash(next),actor,reason,new Date().toISOString()]);}catch(err){if(err instanceof Error&&/unique|duplicate/i.test(err.message))throw new Error('REVISION_CONFLICT');throw err;}
-  return true;
+  return {previous,current:next} satisfies PushEventChange;
  }
  async applySync(events:Event[],health:Health){
-  await this.db.transaction(async db=>{const s=new Store(db);for(const e of events)await s.putRecord(e);await s.reconcileIncidents(await s.events());await s.setHealth(health);});
+  await this.db.transaction(async db=>{const s=new Store(db),changes:PushEventChange[]=[];for(const e of events){const change=await s.putRecord(e);if(change)changes.push(change);}const current=await s.events();await s.reconcileIncidents(current);if(changes.length)await queuePushChanges(db,changes,current,await s.incidents());await s.setHealth(health);});
  }
  async applyShelterSync(items:Shelter[],health:Health){
   if(health.id!=='SHELTERS'||health.coverage!=='FACILITY_CATALOG'||!health.complete||!items.length||items.length!==health.itemCount||!health.sourceContentHash)throw new Error('SHELTER_INVALID_BATCH');
