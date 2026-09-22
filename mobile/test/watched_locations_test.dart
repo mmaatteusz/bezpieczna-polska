@@ -157,11 +157,18 @@ void main() {
       developerSettingsEnabled: false,
       client: MockClient((request) async {
         requests++;
+        expect(request.method, 'POST');
         expect(request.url.path, '/v1/around');
-        expect(request.url.queryParameters['lat'], '53.12');
-        expect(request.url.queryParameters['lon'], '18.01');
-        expect(request.url.queryParameters['radiusKm'], '20.0');
-        expect(request.url.queryParameters['regionId'], '04');
+        expect(request.url.query, isEmpty);
+        final body = Map<String, dynamic>.from(
+          jsonDecode(request.body) as Map,
+        );
+        expect(body, {
+          'latitude': 53.12,
+          'longitude': 18.01,
+          'radiusKm': 20.0,
+          'regionId': '04',
+        });
         return http.Response(
           jsonEncode(aroundFixture()),
           200,
