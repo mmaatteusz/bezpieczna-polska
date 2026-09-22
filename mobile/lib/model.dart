@@ -459,8 +459,10 @@ class AroundResult {
     }
     final coverage = Map<String, dynamic>.from(m['coverage'] as Map);
     if (coverage['spatial'] != 'PARTIAL_GEOMETRY_ONLY' ||
-        !['NOT_REQUESTED', 'EXPLICIT_NATIONAL_OR_PROVINCE_SCOPE_ONLY']
-            .contains(coverage['regional']) ||
+        ![
+          'NOT_REQUESTED',
+          'EXPLICIT_NATIONAL_OR_PROVINCE_SCOPE_ONLY',
+        ].contains(coverage['regional']) ||
         coverage['statement'] is! String) {
       throw const FormatException('Niepoprawne pokrycie lokalizacyjne');
     }
@@ -508,7 +510,8 @@ class DataRepository {
       final list = jsonDecode(raw);
       if (list is! List || list.length > 20) return const [];
       final items = list.map(WatchedLocation.parse).toList();
-      if (items.map((e) => e.id).toSet().length != items.length) return const [];
+      if (items.map((e) => e.id).toSet().length != items.length)
+        return const [];
       return items;
     } catch (_) {
       return const [];
@@ -798,21 +801,20 @@ class DataRepository {
       throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
     final u = _apiUri();
-    final response = await _postJson(
-      u.replace(path: '${u.path}/v1/around'),
-      {
-        'latitude': latitude,
-        'longitude': longitude,
-        'radiusKm': radiusKm,
-        if (regionId != null) 'regionId': regionId,
-      },
-    );
+    final response = await _postJson(u.replace(path: '${u.path}/v1/around'), {
+      'latitude': latitude,
+      'longitude': longitude,
+      'radiusKm': radiusKm,
+      if (regionId != null) 'regionId': regionId,
+    });
     if (response.statusCode != 200) _responseFailure(response);
     if (response.bodyBytes.length > 4 * 1024 * 1024) {
       throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
     try {
-      final result = AroundResult.parse(jsonDecode(utf8.decode(response.bodyBytes)));
+      final result = AroundResult.parse(
+        jsonDecode(utf8.decode(response.bodyBytes)),
+      );
       final q = Map<String, dynamic>.from(result.data['query'] as Map);
       if (((q['latitude'] as num).toDouble() - latitude).abs() > 1e-9 ||
           ((q['longitude'] as num).toDouble() - longitude).abs() > 1e-9 ||
