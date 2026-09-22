@@ -12,6 +12,7 @@ export const aroundQuerySchema=z.object({
 export type AroundQuery=z.infer<typeof aroundQuerySchema>;
 
 function usable(e:Event,now:Date){
+ if(e.countryCode==='UA'||e.ukraine||e.sources.some(s=>s.id==='UA'))return false;
  if(e.isDemo||e.securityLevel||e.messageContext!=='ACTUAL'||e.verification==='REFUTED')return false;
  if(['ENDED','CANCELLED','EXPIRED'].includes(e.lifecycle))return false;
  if(e.validFrom&&Date.parse(e.validFrom)>now.getTime())return false;

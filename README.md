@@ -1,3 +1,5 @@
+> Alpha.12 — moduł Ukraina: oficjalne API UkraineAlarm v3, osobny status, historia/revisions, offline STALE i administracyjna warstwa MapLibre. Bieżące dane wymagają `UKRAINE_ALARM_API_KEY`; brak klucza jest jawnie NOT_CONFIGURED. [Kontrakt i ograniczenia](docs/ALPHA12_UKRAINE.md).
+
 # Bezpieczna Polska
 
 **Bezpieczna Polska** to cywilny system świadomości sytuacyjnej dla Polski. Łączy oficjalne komunikaty i dane służb, aby odpowiedzieć użytkownikowi: **co się dzieje, czy dotyczy Polski lub jego regionu, jak aktualna i wiarygodna jest informacja, co zrobić oraz gdzie znajduje się najbliższe schronienie**.

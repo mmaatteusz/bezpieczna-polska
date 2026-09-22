@@ -1,4 +1,6 @@
+import 'ukraine.dart';
 import 'radiation.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -401,6 +403,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     return [
       statusCard(true),
       statusCard(false),
+      OutlinedButton.icon(
+        onPressed: () => setState(() {
+          page = 1;
+          ukraine = true;
+        }),
+        icon: const Icon(Icons.public),
+        label: const Text('Ukraina • oficjalne alarmy'),
+      ),
       Card(
         child: ListTile(
           leading: const Icon(Icons.radar_outlined),
@@ -811,21 +821,24 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       onSelectionChanged: (v) => setState(() => ukraine = v.first),
     ),
     const SizedBox(height: 12),
-    ShelterMap(
-      radiation: snapshot?.data['radiation'],
-      radiationOnline: online,
-      key: ValueKey(
-        'map:${widget.repository.api}:$region:$ukraine:${widget.repository.dataGeneration}',
+    if (ukraine)
+      UkrainePanel(repository: widget.repository, openSource: openLink)
+    else
+      ShelterMap(
+        radiation: snapshot?.data['radiation'],
+        radiationOnline: online,
+        key: ValueKey(
+          'map:${widget.repository.api}:$region:$ukraine:${widget.repository.dataGeneration}',
+        ),
+        repository: widget.repository,
+        region: region,
+        ukraine: ukraine,
+        openLink: openLink,
       ),
-      repository: widget.repository,
-      region: region,
-      ukraine: ukraine,
-      openLink: openLink,
-    ),
     const SizedBox(height: 12),
     notice(
       ukraine
-          ? 'Alarmy Ukrainy nie są podłączone. Brak oznaczeń nie oznacza braku alarmów.'
+          ? 'Alarmy Ukrainy są osobnym kontekstem. Brak oznaczeń nie oznacza braku alarmów.'
           : 'Mapa pokazuje punkty schronienia wg PSP. Liczby grupują punkty w widocznym obszarze. Przybliż mapę, aby wybrać punkt. Mapa nie potwierdza bieżącej dostępności i nie służy do nawigacji. Offline dostępne są tylko zapisane obszary; podkład mapy wymaga internetu lub wcześniejszego cache.',
       Icons.info_outline,
     ),

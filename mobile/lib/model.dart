@@ -1,4 +1,6 @@
+import 'ukraine.dart';
 import 'radiation.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -649,6 +651,40 @@ class DataRepository {
     await prefs.setString('region', value);
   }
 
+  String get ukraineCacheKey => 'ukraine:$api';
+  UkraineData? cachedUkraine() {
+    try {
+      final raw = prefs.getString(ukraineCacheKey);
+      return raw == null ? null : UkraineData.parse(jsonDecode(raw));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<UkraineData> refreshUkraine() async {
+    final ticket = _generation, key = ukraineCacheKey, u = _apiUri();
+    final response = await _get(u.replace(path: '${u.path}/v1/ukraine'));
+    if (response.statusCode != 200) _responseFailure(response);
+    if (response.bodyBytes.length > 4 * 1024 * 1024) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+    UkraineData result;
+    try {
+      result = UkraineData.parse(jsonDecode(utf8.decode(response.bodyBytes)));
+    } catch (_) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+    if (ticket != _generation) throw StateError('Konfiguracja zmieniona');
+    // One bounded last-known-good snapshot per selected backend.
+    for (final other in prefs.getKeys().where(
+      (k) => k.startsWith('ukraine:') && k != key,
+    )) {
+      await prefs.remove(other);
+    }
+    await prefs.setString(key, jsonEncode(result.data));
+    return result;
+  }
+
   String cacheKey(String r) => 'snapshot:$api:$r';
   Snapshot? cached(String r) {
     try {
@@ -870,6 +906,7 @@ class DataRepository {
             .getKeys()
             .where(
               (k) =>
+                  k.startsWith('ukraine:') ||
                   k.startsWith('snapshot:') ||
                   k.startsWith('seen:') ||
                   k.startsWith('shelters:') ||

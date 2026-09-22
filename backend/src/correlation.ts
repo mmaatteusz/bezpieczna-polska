@@ -6,7 +6,7 @@ export type Incident={eventRevisions:Record<string,number>;id:string;relatedEven
 export const normalize=(s:string)=>s.normalize('NFD').replace(/\p{M}/gu,'').replace(/ł/g,'l').replace(/Ł/g,'L').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 const physicalEligible=(e:Event)=>!e.isDemo&&!e.securityLevel&&e.sources.some(s=>s.id==='RCB'||s.id==='RSO'||s.id==='POLICE'||s.id==='PSP_INCIDENTS'||/^WCZK-\d{2}$/.test(s.id));
 const cyberEligible=(e:Event)=>!e.isDemo&&!e.securityLevel&&e.eventType==='CYBER'&&e.sources.some(s=>s.id==='CERT'||s.id==='CSIRT_GOV');
-const eligible=(e:Event)=>physicalEligible(e)||cyberEligible(e);
+const eligible=(e:Event)=>e.countryCode!=='UA'&&!e.ukraine&&!e.sources.some(s=>s.id==='UA')&&(physicalEligible(e)||cyberEligible(e));
 const families:(readonly [string,RegExp])[]=[['flood',/powodz|podtop|wezbran/],['wind',/siln\w* wiatr|wichur/],['storm',/burz/],['drought',/susza|suszy/],['fire',/pozar/],['explosion',/wybuch|eksplozj/],['hazmat',/hazmat|chemiczn|amoniak|chlor|skazeni/],['rescue',/ratownicz|katastrof|zawali|wypadek kolejow/],['public_safety',/strzelanin|napastnik|bombow/],['outage',/awari\w* (prad|energet)|przerw\w* w dostaw\w* (prad|energ)/],['water',/wod\w* (do spozycia|niezdatn)|zanieczyszcz\w* wod/]];
 function kind(e:Event){
  const t=normalize(e.title+' '+e.description),matches=families.filter(([,re])=>re.test(t));

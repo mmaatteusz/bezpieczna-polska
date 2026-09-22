@@ -1,3 +1,5 @@
+import {UA_BOUNDARY_QUERY} from './ukraine-geography.js';
+import {ukraineAdapter,isAllowedUaUrl,fetchUa} from './ukraine-adapter.js';
 import {policeAdapter,pspIncidentsAdapter,isAllowedPoliceUrl,} from './service-incidents-adapter.js';
 import {sgAdapter,isAllowedSgUrl} from './sg-adapter.js';
 import {certAdapter,CERT_FEED,CSIRT_GOV_RSS_PAGE} from './cyber-adapter.js';
@@ -17,9 +19,9 @@ export async function initializeSources(store:Store){
  const existing=await store.health();
  for(const s of SOURCES){
   const previous=existing.find(h=>h.id===s.id);
-  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:s.id==='SHELTERS'?172800:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
+  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:s.id==='UA'?180:s.id==='SHELTERS'?172800:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
   else if(!s.enabled)await store.setHealth({...previous,...s,state:'NOT_CONFIGURED',complete:false});
-  else await store.setHealth({...previous,...s,maxAgeSeconds:s.id==='SHELTERS'?172800:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900});
+  else await store.setHealth({...previous,...s,maxAgeSeconds:s.id==='UA'?180:s.id==='SHELTERS'?172800:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900});
  }
 }
 export function messageContext(text:string):Event['messageContext']{return /ćwicz|cwicz|exercise/i.test(text)?'EXERCISE':/test syren|test systemu/i.test(text)?'TEST':'UNKNOWN';}
@@ -47,8 +49,9 @@ export const rsoAdapter:SourceAdapter={
  }
 };
 export async function fetchPublic(url:string):Promise<string>{
+ if(isAllowedUaUrl(url))return fetchUa(url);
  const shelterMeta=[SHELTER_DATASET,SHELTER_RESOURCE].includes(url),shelterCurrent=url===SHELTER_ORIGIN_CSV,certFeed=url===CERT_FEED,csirtRssPage=url===CSIRT_GOV_RSS_PAGE,sgSource=isAllowedSgUrl(url),policeSource=isAllowedPoliceUrl(url);
- const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterMeta&&!shelterCurrent&&!certFeed&&!csirtRssPage&&!sgSource&&!policeSource&&url!==WCZK_PODKARPACKIE&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
+ const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterMeta&&!shelterCurrent&&!certFeed&&!csirtRssPage&&!sgSource&&!policeSource&&url!==UA_BOUNDARY_QUERY&&url!==WCZK_PODKARPACKIE&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
  if(shelterCurrent&&(u.hostname!=='gdziesieukryc.pl'||u.pathname!=='/PS_XML/punkty_schronienia.csv'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(certFeed&&(u.hostname!=='moje.cert.pl'||u.pathname!=='/advisory_feed/advisory/feed/'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(csirtRssPage&&(u.hostname!=='www.csirt.gov.pl'||u.pathname!=='/cer/rss'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
@@ -71,7 +74,7 @@ export async function fetchPublicBytes(url:string):Promise<Uint8Array>{
 }
 // Sharing the same coordinator prevents timer/admin overlap on this Store.
 const running = new WeakMap<Store, Promise<void>>();
-export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters,paaAdapter,certAdapter,sgAdapter,policeAdapter,pspIncidentsAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
+export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters,paaAdapter,certAdapter,sgAdapter,policeAdapter,pspIncidentsAdapter,ukraineAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
  const existing=running.get(store);if(existing)return existing;
  const task=syncSources(store,adapters,fetchText,fetchBytes).finally(()=>running.delete(store));
  running.set(store,task);return task;
@@ -84,11 +87,11 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
   const begin=Date.now(),lastAttempt=new Date(begin).toISOString();
   if(adapter.minSyncIntervalSeconds&&previous.lastSuccess&&previous.state==='HEALTHY'&&begin-Date.parse(previous.lastSuccess)>=0&&begin-Date.parse(previous.lastSuccess)<adapter.minSyncIntervalSeconds*1000)continue;
   try{
-   const batch=await adapter.sync({now:new Date(begin),fetchText,fetchBytes,previousEvents:['PAA','SG','POLICE','PSP_INCIDENTS'].includes(adapter.id)?await store.events():undefined});
+   const batch=await adapter.sync({now:new Date(begin),fetchText,fetchBytes,previousEvents:['UA','PAA','SG','POLICE','PSP_INCIDENTS'].includes(adapter.id)?await store.events():undefined});
    const items=batch.events.map(e=>eventSchema.parse(e));
    if(items.some(e=>e.isDemo||!e.sources.some(s=>s.id===adapter.id)))throw new Error('SOURCE_INVALID_EVENT');
    const published=items.map(e=>e.publishedAt??(e.securityLevel?.publishedAt?e.securityLevel.publishedAt:null)).filter((v):v is string=>v!==null).sort();
-   const health:Health={...previous,...batch.metadata,...(adapter.id==='PAA'?{checkedEventIds:items.map(e=>e.id)}:{}),enabled:true,state:'HEALTHY',lastAttempt,lastSuccess:new Date().toISOString(),lastItemTime:batch.metadata?.sourceUpdatedAt??published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:batch.complete,coverage:batch.coverage,pagesFetched:batch.pagesFetched,itemCount:batch.shelters?.length??items.length,errorCode:null,adapterVersion:adapter.version};
+   const health:Health={...previous,...batch.metadata,...(batch.uaMetadata?{uaMetadata:batch.uaMetadata}:{}),...(adapter.id==='PAA'?{checkedEventIds:items.map(e=>e.id)}:{}),enabled:true,state:'HEALTHY',lastAttempt,lastSuccess:new Date().toISOString(),lastItemTime:batch.metadata?.sourceUpdatedAt??published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:batch.complete,coverage:batch.coverage,pagesFetched:batch.pagesFetched,itemCount:batch.shelters?.length??items.length,errorCode:null,adapterVersion:adapter.version};
    if(batch.shelters){
     if(adapter.id!=='SHELTERS'||items.length||batch.coverage!=='FACILITY_CATALOG'||!batch.complete||!batch.metadata)throw new Error('SOURCE_INVALID_BATCH');
     if(previous.sourceUpdatedAt&&Date.parse(batch.metadata.sourceUpdatedAt)<Date.parse(previous.sourceUpdatedAt))throw new Error('SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD');
@@ -97,7 +100,7 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
   }catch(error){
    const message=error instanceof Error?error.message:'';
    const errorCode=/^[A-Z][A-Z0-9_]{2,100}$/.test(message)?message:'SOURCE_SYNC_FAILED';
-   await store.setHealth({...previous,enabled:true,state:'BROKEN',lastAttempt,lastFailure:new Date().toISOString(),failureCount:previous.failureCount+1,responseTime:Date.now()-begin,complete:false,errorCode,adapterVersion:adapter.version});
+   await store.setHealth({...previous,enabled:true,state:errorCode==='NOT_CONFIGURED_UA_API_KEY_MISSING'?'NOT_CONFIGURED':'BROKEN',lastAttempt,lastFailure:new Date().toISOString(),failureCount:previous.failureCount+1,responseTime:Date.now()-begin,complete:false,errorCode,adapterVersion:adapter.version});
   }
  }
 }
