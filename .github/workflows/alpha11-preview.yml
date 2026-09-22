@@ -64,7 +64,7 @@ jobs:
           flutter test --no-pub
       - name: Build Android preview
         working-directory: mobile
-        run: flutter build apk --debug --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=true
+        run: flutter build apk --debug --split-per-abi --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=true
       - name: Live WCZK contract check
         working-directory: backend
         run: node scripts/live-wczk.mjs ../output/wczk-live.json
@@ -82,9 +82,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p output
-          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.11-preview-arm64.apk
+          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.11-preview-arm64.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
+          grep -F "native-code: 'arm64-v8a'" output/package-info.txt
+          if grep -E "native-code:.*(armeabi-v7a|x86_64)" output/package-info.txt; then
+            echo "Unexpected non-arm64 native libraries in arm64 preview APK" >&2
+            exit 1
+          fi
           sha256sum output/*.apk | tee output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
