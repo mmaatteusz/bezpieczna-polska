@@ -76,6 +76,14 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(find.text('Cyberbezpieczeństwo'), findsOneWidget);
+    for (
+      var i = 0;
+      i < 4 && find.textContaining('CVE-2026-12345').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.drag(find.byType(ListView).first, const Offset(0, -180));
+      await tester.pumpAndSettle();
+    }
     expect(find.textContaining('CVE-2026-12345'), findsOneWidget);
 
     await tester.tap(find.text('Alerty').last);
