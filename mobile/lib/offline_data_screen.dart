@@ -206,7 +206,9 @@ class _OfflineDataScreenState extends State<OfflineDataScreen> {
                 ? descriptor.state
                 : package!.stateAt(now);
             final sourceMap = manifest?['sourceTimestamps'];
-            final sourceRows = sourceMap is Map ? sourceMap.entries : const [];
+            final sourceRows = sourceMap is Map
+                ? sourceMap.entries.toList()
+                : <MapEntry<dynamic, dynamic>>[];
             return Card(
               child: ExpansionTile(
                 leading: Icon(
