@@ -1016,7 +1016,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       },
                     ),
                   const Text(
-                    '0.1.0-alpha.9 • Push nieaktywny • GPS tylko na żądanie',
+                    '0.1.0-alpha.11 • Push nieaktywny • GPS tylko na żądanie',
                   ),
                 ],
               ),
