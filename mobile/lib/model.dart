@@ -577,6 +577,32 @@ class DataRepository {
     }
   }
 
+  Future<http.Response> _postJson(
+    Uri uri,
+    Object body, {
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    try {
+      return await client
+          .post(
+            uri,
+            headers: const {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(timeout);
+    } on TimeoutException {
+      throw const ApiFailure(ApiFailureKind.timeout);
+    } on http.ClientException {
+      throw const ApiFailure(ApiFailureKind.network);
+    } catch (error) {
+      if (error is ApiFailure) rethrow;
+      throw const ApiFailure(ApiFailureKind.network);
+    }
+  }
+
   Never _responseFailure(http.Response response) {
     if (response.statusCode == 429) {
       throw const ApiFailure(ApiFailureKind.rateLimited, 429);
@@ -772,16 +798,14 @@ class DataRepository {
       throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
     final u = _apiUri();
-    final response = await _get(
-      u.replace(
-        path: '${u.path}/v1/around',
-        queryParameters: {
-          'lat': '$latitude',
-          'lon': '$longitude',
-          'radiusKm': '$radiusKm',
-          if (regionId != null) 'regionId': regionId,
-        },
-      ),
+    final response = await _postJson(
+      u.replace(path: '${u.path}/v1/around'),
+      {
+        'latitude': latitude,
+        'longitude': longitude,
+        'radiusKm': radiusKm,
+        if (regionId != null) 'regionId': regionId,
+      },
     );
     if (response.statusCode != 200) _responseFailure(response);
     if (response.bodyBytes.length > 4 * 1024 * 1024) {
