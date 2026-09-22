@@ -46,7 +46,7 @@ test('around endpoint requires PostGIS and validates coordinates',async()=>{
  const app=await buildApp(store);
  try{
   assert.equal((await app.inject('/v1/around?lat=53.1&lon=18.0')).statusCode,503);
-  assert.equal((await app.inject('/v1/around?lat=999&lon=18.0')).statusCode,503,'database capability is checked before parsing on sqlite');
+  assert.equal((await app.inject('/v1/around?lat=999&lon=18.0')).statusCode,400);
  }finally{await app.close();await store.db.close();}
 });
 
