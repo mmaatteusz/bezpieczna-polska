@@ -314,7 +314,7 @@ class WatchedLocation {
     final lat = m['latitude'], lon = m['longitude'], radius = m['radiusKm'];
     final regionId = m['regionId'];
     if (id is! String ||
-        !RegExp(r'^loc-[1-9]\d* ||
+        !RegExp(r'^loc-[1-9]\d*$').hasMatch(id) ||
         label is! String ||
         label.trim().isEmpty ||
         label.trim().length > 60 ||
