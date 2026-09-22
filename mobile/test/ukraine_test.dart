@@ -77,29 +77,32 @@ void main() {
       expect(d.mapAt(now, false)['features'], isEmpty);
     },
   );
-  test('UA parser rejects changed contracts, Polish region and unsupported geometry', () {
-    expect(
-      () => UkraineData.parse({...ua(now), 'coverage': 'complete'}),
-      throwsFormatException,
-    );
-    final bad = ua(now);
-    bad['events'][0]['regions'] = ['04'];
-    expect(() => UkraineData.parse(bad), throwsFormatException);
-    final geo = ua(now);
-    geo['map']['features'] = [
-      {
-        'geometry': {
-          'type': 'Point',
-          'coordinates': [31, 49],
+  test(
+    'UA parser rejects changed contracts, Polish region and unsupported geometry',
+    () {
+      expect(
+        () => UkraineData.parse({...ua(now), 'coverage': 'complete'}),
+        throwsFormatException,
+      );
+      final bad = ua(now);
+      bad['events'][0]['regions'] = ['04'];
+      expect(() => UkraineData.parse(bad), throwsFormatException);
+      final geo = ua(now);
+      geo['map']['features'] = [
+        {
+          'geometry': {
+            'type': 'Point',
+            'coordinates': [31, 49],
+          },
+          'properties': {'eventId': 'UA-fixture'},
         },
-        'properties': {'eventId': 'UA-fixture'},
-      },
-    ];
-    expect(() => UkraineData.parse(geo), throwsFormatException);
-    final end = ua(now);
-    end['events'][0]['lifecycle'] = 'ENDED';
-    expect(() => UkraineData.parse(end), throwsFormatException);
-  });
+      ];
+      expect(() => UkraineData.parse(geo), throwsFormatException);
+      final end = ua(now);
+      end['events'][0]['lifecycle'] = 'ENDED';
+      expect(() => UkraineData.parse(end), throwsFormatException);
+    },
+  );
   test('UA map downgrades fresh polygon to STALE offline', () {
     final raw = ua(now);
     raw['map']['features'] = [
@@ -129,29 +132,32 @@ void main() {
       'STALE',
     );
   });
-  test('UA last-known-good survives restart, failed refresh and clearing removes it', () async {
-    SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
-    final repository = DataRepository(
-      prefs,
-      client: MockClient((r) async {
-        expect(r.url.path, '/v1/ukraine');
-        return jsonResponse(ua(now), 200);
-      }),
-      buildApi: 'https://example.test',
-    );
-    await repository.refreshUkraine();
-    final restarted = DataRepository(
-      prefs,
-      client: MockClient((_) async => jsonResponse({}, 503)),
-      buildApi: 'https://example.test',
-    );
-    expect(restarted.cachedUkraine(), isNotNull);
-    await expectLater(restarted.refreshUkraine(), throwsA(isA<ApiFailure>()));
-    expect(restarted.cachedUkraine()!.data['events'].length, 1);
-    await restarted.clearData();
-    expect(restarted.cachedUkraine(), isNull);
-  });
+  test(
+    'UA last-known-good survives restart, failed refresh and clearing removes it',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final repository = DataRepository(
+        prefs,
+        client: MockClient((r) async {
+          expect(r.url.path, '/v1/ukraine');
+          return jsonResponse(ua(now), 200);
+        }),
+        buildApi: 'https://example.test',
+      );
+      await repository.refreshUkraine();
+      final restarted = DataRepository(
+        prefs,
+        client: MockClient((_) async => jsonResponse({}, 503)),
+        buildApi: 'https://example.test',
+      );
+      expect(restarted.cachedUkraine(), isNotNull);
+      await expectLater(restarted.refreshUkraine(), throwsA(isA<ApiFailure>()));
+      expect(restarted.cachedUkraine()!.data['events'].length, 1);
+      await restarted.clearData();
+      expect(restarted.cachedUkraine(), isNull);
+    },
+  );
   test(
     'UA invalid response never overwrites a valid offline snapshot',
     () async {

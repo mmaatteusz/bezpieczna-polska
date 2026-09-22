@@ -82,13 +82,15 @@ class _ShelterMapState extends State<ShelterMap> {
         await c.setStyle(offlineStyle);
         if (mounted) {
           setState(
-            () => message = 'OFFLINE MAPA • podkład sieciowy nie odpowiedział. Uruchomiono lokalne płótno dla zapisanych overlayów.',
+            () => message =
+                'OFFLINE MAPA • podkład sieciowy nie odpowiedział. Uruchomiono lokalne płótno dla zapisanych overlayów.',
           );
         }
       } catch (_) {
         if (mounted) {
           setState(
-            () => message = 'Nie udało się uruchomić ani podkładu online, ani lokalnego płótna mapy.',
+            () => message =
+                'Nie udało się uruchomić ani podkładu online, ani lokalnego płótna mapy.',
           );
         }
       }
@@ -494,8 +496,9 @@ class _ShelterMapState extends State<ShelterMap> {
           Text(
             widget.radiation == null
                 ? message
-                : RadiationData.parse(widget.radiation)
-                      .measurementText(DateTime.now(), widget.radiationOnline),
+                : RadiationData.parse(
+                    widget.radiation,
+                  ).measurementText(DateTime.now(), widget.radiationOnline),
           ),
           const Text(
             'Komunikaty PAA są dostępne w Statusie i Alert Center. Brak punktów na mapie nie oznacza braku zagrożenia.',

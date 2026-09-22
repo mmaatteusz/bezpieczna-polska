@@ -16,9 +16,12 @@ class StatusExplanation extends StatelessWidget {
         'Aktywne oficjalne ostrzeżenie dotyczące tego obszaru.',
     'OFFICIAL_CAUTION':
         'Obowiązuje istotne oficjalne ostrzeżenie wymagające ostrożności.',
-    'LAST_KNOWN_WARNING': 'Było aktywne zagrożenie, a źródło nie potwierdziło jeszcze jego zakończenia.',
-    'ADMINISTRATIVE_READINESS_LEVELS': 'Obowiązują stopnie alarmowe lub CRP. To poziom gotowości administracji, nie automatyczne potwierdzenie bezpośredniego zagrożenia.',
-    'INCOMPLETE_SOURCE_COVERAGE': 'Nie wszystkie wymagane źródła dostarczają obecnie kompletne i świeże dane.',
+    'LAST_KNOWN_WARNING':
+        'Było aktywne zagrożenie, a źródło nie potwierdziło jeszcze jego zakończenia.',
+    'ADMINISTRATIVE_READINESS_LEVELS':
+        'Obowiązują stopnie alarmowe lub CRP. To poziom gotowości administracji, nie automatyczne potwierdzenie bezpośredniego zagrożenia.',
+    'INCOMPLETE_SOURCE_COVERAGE':
+        'Nie wszystkie wymagane źródła dostarczają obecnie kompletne i świeże dane.',
   };
 
   @override
@@ -51,20 +54,18 @@ class StatusExplanation extends StatelessWidget {
       title: const Text('Dlaczego taki status?'),
       subtitle: Text('Pokrycie danych: $coverage'),
       children: [
-        ...((status['supportingIncidents'] as List?) ?? [])
-            .whereType<Map>()
-            .map(
-              (i) => ListTile(
-                title: Text(
-                  'Jeden incydent • ${(i['sourceIds'] as List).join(' + ')}',
-                ),
-                subtitle: Text(
-                  i['hasConflictingReports'] == true
-                      ? 'Źródła zawierają różniące się komunikaty.'
-                      : 'Powiązane komunikaty nie zwiększają wielokrotnie oceny zagrożenia.',
-                ),
-              ),
+        ...((status['supportingIncidents'] as List?) ?? []).whereType<Map>().map(
+          (i) => ListTile(
+            title: Text(
+              'Jeden incydent • ${(i['sourceIds'] as List).join(' + ')}',
             ),
+            subtitle: Text(
+              i['hasConflictingReports'] == true
+                  ? 'Źródła zawierają różniące się komunikaty.'
+                  : 'Powiązane komunikaty nie zwiększają wielokrotnie oceny zagrożenia.',
+            ),
+          ),
+        ),
         if (reasons.isEmpty)
           const Align(
             alignment: Alignment.centerLeft,

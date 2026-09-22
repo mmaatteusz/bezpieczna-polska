@@ -86,35 +86,41 @@ void main() {
     final old = fixture()..remove('incidents');
     expect(Snapshot.parse(jsonEncode(old)).alertEvents, hasLength(3));
   });
-  test('incident timeline uses dedicated endpoint and keeps source revision payload', () async {
-    final event = (fixture()['events'] as List).first;
-    final repo = DataRepository(
-      await SharedPreferences.getInstance(),
-      buildApi: 'https://api.example',
-      client: MockClient((request) async {
-        expect(
-          request.url.path,
-          '/v1/incidents/INC-012345678901234567890123/timeline',
-        );
-        return http.Response(
-          jsonEncode([
-            {
-              'payload': event,
-              'recorded_at': DateTime.now().toUtc().toIso8601String(),
-              'reason': 'Source changed',
-              'changes': [],
-            },
-          ]),
-          200,
-          headers: {'content-type': 'application/json; charset=utf-8'},
-        );
-      }),
-    );
-    expect(
-      await repo.eventTimeline('INC-012345678901234567890123', incident: true),
-      hasLength(1),
-    );
-  });
+  test(
+    'incident timeline uses dedicated endpoint and keeps source revision payload',
+    () async {
+      final event = (fixture()['events'] as List).first;
+      final repo = DataRepository(
+        await SharedPreferences.getInstance(),
+        buildApi: 'https://api.example',
+        client: MockClient((request) async {
+          expect(
+            request.url.path,
+            '/v1/incidents/INC-012345678901234567890123/timeline',
+          );
+          return http.Response(
+            jsonEncode([
+              {
+                'payload': event,
+                'recorded_at': DateTime.now().toUtc().toIso8601String(),
+                'reason': 'Source changed',
+                'changes': [],
+              },
+            ]),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }),
+      );
+      expect(
+        await repo.eventTimeline(
+          'INC-012345678901234567890123',
+          incident: true,
+        ),
+        hasLength(1),
+      );
+    },
+  );
   testWidgets(
     'Alert Center shows one card for RCB RSO WCZK and retains details',
     (tester) async {

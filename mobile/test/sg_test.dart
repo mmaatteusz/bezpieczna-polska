@@ -39,7 +39,8 @@ void main() {
           {
             'id': 'SG',
             'name': 'Straż Graniczna',
-            'url': 'https://www.strazgraniczna.pl/pl/aktualnosci/20001,Utrudnienia-na-przejsciu-granicznym-w-Hrebennem.html',
+            'url':
+                'https://www.strazgraniczna.pl/pl/aktualnosci/20001,Utrudnienia-na-przejsciu-granicznym-w-Hrebennem.html',
             'tier': 1,
           },
         ],

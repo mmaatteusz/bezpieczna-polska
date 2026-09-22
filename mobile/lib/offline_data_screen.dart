@@ -66,8 +66,10 @@ class _OfflineDataScreenState extends State<OfflineDataScreen> {
       if (!mounted) return;
       setState(() {
         message = switch (error.code) {
-          'PACKAGE_TOO_LARGE' || 'SIZE_BOUNDS' => 'Pakiet przekracza bezpieczny limit urządzenia. Cała Polska może wymagać osobnego rozwiązania z większym magazynem.',
-          'STORAGE_LIMIT' || 'STORAGE_LIMIT_PRESERVE_LKG' => 'Brak miejsca w limicie pakietów offline. Zachowano poprzedni last-known-good.',
+          'PACKAGE_TOO_LARGE' || 'SIZE_BOUNDS' =>
+            'Pakiet przekracza bezpieczny limit urządzenia. Cała Polska może wymagać osobnego rozwiązania z większym magazynem.',
+          'STORAGE_LIMIT' || 'STORAGE_LIMIT_PRESERVE_LKG' =>
+            'Brak miejsca w limicie pakietów offline. Zachowano poprzedni last-known-good.',
           _ =>
             'Pakiet nie został aktywowany (${error.code}). Poprzedni last-known-good pozostał bez zmian.',
         };
