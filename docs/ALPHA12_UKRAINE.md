@@ -13,7 +13,7 @@ Baza: main `9c22a0625fbb89614f424ee9441d86a4f22d95bb` (integracyjny PR #12).
 - GET `/api/v3/alerts/regionHistory?regionId=...` — według kontraktu ostatnie 25 alarmów, `startDate`, `endDate`, `isContinue`, `alertType`.
 - GET `/api/v3/alerts/status` — `lastActionIndex`; sprawdzany przed i po zbiorze, zmiana indeksu odrzuca niespójny odczyt.
 - Autoryzacja: nagłówek `Authorization`, sekret `UKRAINE_ALARM_API_KEY` wyłącznie na backendzie. Brak klucza = `NOT_CONFIGURED_UA_API_KEY_MISSING`.
-- Geometria: publiczny serwis granic administracyjnych UN OCHA https://gis.unocha.org/server/rest/services/Hosted/UKR_Simplified_Boundaries/FeatureServer/1 . Tylko poligony, tylko jednoznaczne dokładne dopasowanie nazwy jednostki State. Brak dopasowania lub błąd dostawcy = geometria null; nie używamy centroidów, nazw podobnych ani poligonu rodzica miasta.
+- Geometria: publiczny serwis granic administracyjnych UN OCHA https://gis.unocha.org/server/rest/services/Hosted/UKR_Simplified_Boundaries/FeatureServer/1 . Tylko poligony, tylko jednoznaczne dokładne dopasowanie nazwy jednostki State (normalizacja jedynie jawnego sufiksu „область” i prefiksu „м.”). Brak dopasowania lub błąd dostawcy = geometria null; nie używamy centroidów, nazw podobnych ani poligonu rodzica miasta.
 
 ## Semantyka
 
@@ -43,6 +43,6 @@ Stary `build.yml` jest jawnie workflowem produkcyjnym uruchamianym ręcznie. Nad
 
 Bez autoryzowanego klucza UA dostępne są UI, cache, parser i stan NOT_CONFIGURED, ale nie bieżące alarmy. Test fixture nie zastępuje uwierzytelnionego live check. Wymagany sekret backendu i osobno sekret CI do sprawdzenia live. Nie konfigurujemy publicznego produkcyjnego wdrożenia.
 
-Historia dostawcy jest ograniczona. Granice nie mają wspólnych identyfikatorów z UkraineAlarm: dokładne dopasowania mogą nie objąć wszystkich nazw. Brak geometrii jest widoczny. Nowy nieznany typ/zmieniony kontrakt lub zmiana alarmów podczas pobierania skutkuje odrzuceniem synchronizacji i zachowaniem last-known-good.
+Historia dostawcy jest ograniczona. Granice nie mają wspólnych identyfikatorów z UkraineAlarm: dokładne dopasowania po usunięciu oznaczenia typu „область” / „м.” mogą nie objąć wszystkich nazw. Brak geometrii jest widoczny. Nowy nieznany typ/zmieniony kontrakt lub zmiana alarmów podczas pobierania skutkuje odrzuceniem synchronizacji i zachowaniem last-known-good.
 
 Alpha.13 / NEPTUN nie jest rozpoczęta.

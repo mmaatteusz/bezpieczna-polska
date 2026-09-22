@@ -97,8 +97,9 @@ class UkraineData {
         throw const FormatException('Niepoprawna warstwa UA');
       }
       void coordinates(dynamic v) {
-        if (v is! List || v.isEmpty)
+        if (v is! List || v.isEmpty) {
           throw const FormatException('Geometria UA');
+        }
         if (v.first is num) {
           if (v.length != 2 ||
               v[0] is! num ||
@@ -179,8 +180,9 @@ class _UkrainePanelState extends State<UkrainePanel>
     timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (!mounted) return;
       setState(() {});
-      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed)
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
         unawaited(refresh());
+      }
     });
   }
 
@@ -203,23 +205,26 @@ class _UkrainePanelState extends State<UkrainePanel>
     });
     try {
       final result = await widget.repository.refreshUkraine();
-      if (mounted)
+      if (mounted) {
         setState(() {
           snapshot = result;
           online = true;
           error = null;
         });
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           online = false;
           error = apiFailureMessage(e);
         });
+      }
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           loading = false;
         });
+      }
     }
   }
 
@@ -375,10 +380,11 @@ class _UkraineMapState extends State<UkraineMap> {
             {'type': 'FeatureCollection', 'features': <dynamic>[]},
       );
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           error = 'Warstwa mapy niedostępna; sprawdź listę alarmów.';
         });
+      }
     }
   }
 
@@ -413,10 +419,11 @@ class _UkraineMapState extends State<UkraineMap> {
       ready = true;
       await update();
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           error = 'Warstwa mapy niedostępna; sprawdź listę alarmów.';
         });
+      }
     }
   }
 

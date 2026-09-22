@@ -97,3 +97,10 @@ test('UA real PostGIS persistence, revisions and resync after reconnect',{skip:!
   await store.put(e);await db.close();db=openDb(process.env.TEST_DATABASE_URL);store=new Store(db);await store.init();await store.put(e);assert.equal((await store.timeline(e.id)).length,1);await store.put({...e,lifecycle:'ENDED',validTo:new Date(end).toISOString()});assert.equal((await store.timeline(e.id)).length,2);
  }finally{await db.run('DELETE FROM event_revisions WHERE event_id=?',[e.id]);await db.close();}
 });
+
+test('UA geography distinguishes Kyiv city from Kyiv oblast despite common name stem',()=>{
+ const city={id:'kyiv-city',name:'м. Київ',type:'State' as const,parentId:null},oblast={id:'kyiv-oblast',name:'Київська область',type:'State' as const,parentId:null};
+ const geometry={type:'Polygon',coordinates:[[[30,48],[31,48],[31,49],[30,48]]]};
+ const geo={type:'FeatureCollection',features:[['Київ','UA80'],['Київська','UA32']].map(([name,code])=>({type:'Feature',properties:{adm1_name:name,adm1_name1:null,adm1_name2:null,adm1_name3:null,adm1_pcode:code},geometry}))};
+ for(const r of [city,oblast]){const e={...parse(),ukraine:{...parse().ukraine!,regionId:r.id,regionName:r.name}};assert.ok(enrichUaGeometry([e],[r],geo)[0].geometry);}
+});

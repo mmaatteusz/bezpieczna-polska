@@ -31,12 +31,16 @@ String apiFailureMessage(Object error) {
     return switch (error.kind) {
       ApiFailureKind.notConfigured =>
         'Aplikacja nie ma skonfigurowanego połączenia z backendem.',
-      ApiFailureKind.timeout => 'Serwer nie odpowiedział na czas. Zachowano ostatnią poprawną kopię danych.',
-      ApiFailureKind.network => 'Brak połączenia z serwerem. Sprawdź internet; zapisane dane pozostają dostępne.',
+      ApiFailureKind.timeout =>
+        'Serwer nie odpowiedział na czas. Zachowano ostatnią poprawną kopię danych.',
+      ApiFailureKind.network =>
+        'Brak połączenia z serwerem. Sprawdź internet; zapisane dane pozostają dostępne.',
       ApiFailureKind.rateLimited =>
         'Serwer chwilowo ogranicza liczbę zapytań. Spróbuj ponownie za moment.',
-      ApiFailureKind.server => 'Usługa jest chwilowo niedostępna. Zachowano ostatnią poprawną kopię danych.',
-      ApiFailureKind.invalidResponse => 'Serwer zwrócił niepoprawne dane. Nie zastąpiono ostatniej poprawnej kopii.',
+      ApiFailureKind.server =>
+        'Usługa jest chwilowo niedostępna. Zachowano ostatnią poprawną kopię danych.',
+      ApiFailureKind.invalidResponse =>
+        'Serwer zwrócił niepoprawne dane. Nie zastąpiono ostatniej poprawnej kopii.',
     };
   }
   if (error is ShelterVersionChanged) {
@@ -87,8 +91,9 @@ class SafetyEvent {
     final items = data['_reports'] == null
         ? (data['sources'] as List).cast<Map>()
         : reports.expand((e) => (e.data['sources'] as List).cast<Map>());
-    return {for (final s in items) s['id']: Map<String, dynamic>.from(s)}.values
-        .toList();
+    return {
+      for (final s in items) s['id']: Map<String, dynamic>.from(s),
+    }.values.toList();
   }
 
   bool get isRcb => sources.any((s) => s['id'] == 'RCB');
@@ -276,8 +281,9 @@ class Snapshot {
           data[national ? 'nationalStatus' : 'status']['validUntil'] as String,
         ),
       ) &&
-      !DateTime.parse(data['serverTime'] as String)
-          .isAfter(now.add(const Duration(seconds: 30)));
+      !DateTime.parse(
+        data['serverTime'] as String,
+      ).isAfter(now.add(const Duration(seconds: 30)));
   String statusText(
     DateTime now, {
     required bool online,
@@ -659,8 +665,9 @@ class DataRepository {
     final ticket = _generation, key = ukraineCacheKey, u = _apiUri();
     final response = await _get(u.replace(path: '${u.path}/v1/ukraine'));
     if (response.statusCode != 200) _responseFailure(response);
-    if (response.bodyBytes.length > 4 * 1024 * 1024)
+    if (response.bodyBytes.length > 4 * 1024 * 1024) {
       throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
     UkraineData result;
     try {
       result = UkraineData.parse(jsonDecode(utf8.decode(response.bodyBytes)));

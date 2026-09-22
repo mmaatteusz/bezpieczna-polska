@@ -1,4 +1,4 @@
-import {sourceHealth,type Event,type Health} from './domain.js';
+import {sourceHealth,type Event} from './domain.js';
 import {Store} from './store.js';
 import {UA_MAP,UA_VERSION} from './ukraine-adapter.js';
 export const isUa=(e:Event)=>e.countryCode==='UA'||!!e.ukraine||e.sources.some(s=>s.id==='UA');

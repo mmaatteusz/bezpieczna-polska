@@ -31,6 +31,8 @@ export const eventSchema=z.object({
  publicationDate:z.iso.date().nullable().default(null),locationText:z.string().max(10000).nullable().default(null),areaPrecision:z.enum(['COUNTRY','PROVINCE','PROVINCE_SUBSET','EXACT','UNKNOWN']).default('UNKNOWN'),geometry:geometrySchema.nullable().default(null),adapterVersion:z.string().max(100).nullable().default(null),sourceContentHash:z.string().regex(/^[a-f0-9]{64}$/).nullable().default(null),
  correction:z.string().max(4000).nullable(),latitude:z.number().min(-90).max(90).nullable(),longitude:z.number().min(-180).max(180).nullable(),isDemo:z.boolean().default(false)
 }).superRefine((e,ctx)=>{
+ if((e.countryCode==='UA'||e.sources.some(s=>s.id==='UA'))&&!e.ukraine)ctx.addIssue({code:'custom',message:'Missing UA metadata'});
+ if(e.ukraine&&e.geometry&&(e.geometry.type==='Point'||!e.geometrySource))ctx.addIssue({code:'custom',message:'UA requires administrative polygon provenance'});
  if(e.ukraine&&(e.countryCode!=='UA'||e.origin!=='OFFICIAL_FOREIGN'||e.regions.length||!e.sources.some(s=>s.id==='UA')))ctx.addIssue({code:'custom',message:'Invalid UA scope'});
  if((e.latitude===null)!==(e.longitude===null))ctx.addIssue({code:'custom',message:'Coordinates must be paired'});
  if(e.validFrom&&e.validTo&&Date.parse(e.validTo)<=Date.parse(e.validFrom))ctx.addIssue({code:'custom',message:'Invalid validity interval'});
