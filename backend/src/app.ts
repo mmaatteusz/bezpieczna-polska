@@ -18,9 +18,8 @@ export async function buildApp(store:Store,adminToken?:string){
  app.get('/v1/map/shelters',async(req,reply)=>{const q=mapQuery.parse(req.query);if(store.db.kind!=='postgres')return reply.code(503).send({error:'POSTGIS_REQUIRED'});return shelterViewport(store,q);});
  app.get('/v1/radiation',async req=>{const {regionId}=regionQuery.parse(req.query),s=await store.snapshot();return radiationStatus(s.events,s.health,regionId,new Date(),s.radiationMeasurements);});
  app.get('/v1/sources',async()=>({sourceHealth:sourceHealth(await store.health())}));
- app.get('/v1/around',async(req,reply)=>{
-  const raw=z.object({lat:z.string().optional(),lon:z.string().optional(),radiusKm:z.string().optional(),regionId:z.string().optional()}).parse(req.query);
-  const q=aroundQuerySchema.parse({latitude:raw.lat,longitude:raw.lon,radiusKm:raw.radiusKm,regionId:raw.regionId});
+ app.post('/v1/around',async(req,reply)=>{
+  const q=aroundQuerySchema.parse(req.body);
   if(store.db.kind!=='postgres')return reply.code(503).send({error:'POSTGIS_REQUIRED'});
   return aroundLocation(store,q,new Date());
  });
