@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'model.dart';
+import 'offline_repository.dart';
 import 'shelters.dart';
 
 class ShelterPanel extends StatefulWidget {
@@ -28,6 +29,7 @@ class _ShelterPanelState extends State<ShelterPanel> {
   final search = TextEditingController();
   ShelterPage? page;
   bool loading = false, connected = false, nearestLoading = false;
+  bool offline = false;
   String? message, nearestMessage;
   NearestSheltersResult? nearest;
   int request = 0;
@@ -74,7 +76,11 @@ class _ShelterPanelState extends State<ShelterPanel> {
     });
     try {
       ShelterPage result;
+      var fromOffline = false;
       try {
+        if (widget.repository.api.isEmpty) {
+          throw const ApiFailure(ApiFailureKind.notConfigured);
+        }
         result = await widget.repository.refreshShelters(
           widget.region,
           query: query,
@@ -89,17 +95,33 @@ class _ShelterPanelState extends State<ShelterPanel> {
         if (mounted && ticket == request) {
           message = 'PSP zaktualizowała zbiór. Pokazano pierwszą stronę.';
         }
+      } catch (error) {
+        final local = await widget.repository.offlineShelterPage(
+          widget.region,
+          query: query,
+          offset: offset,
+          limit: page?.limit ?? 50,
+        );
+        if (local == null) rethrow;
+        result = local;
+        fromOffline = true;
+        if (mounted && ticket == request) {
+          message =
+              'OFFLINE • wyszukiwanie w pełnym lokalnym pakiecie. Snapshot: ${stamp(result.data['serverTime'])}. Brak nowych danych nie oznacza bezpieczeństwa.';
+        }
       }
       if (mounted && ticket == request) {
         setState(() {
           page = result;
-          connected = true;
+          connected = !fromOffline;
+          offline = fromOffline;
         });
       }
     } catch (error) {
       if (mounted && ticket == request) {
         setState(() {
           connected = false;
+          offline = false;
           message = apiFailureMessage(error);
         });
       }
@@ -117,10 +139,7 @@ class _ShelterPanelState extends State<ShelterPanel> {
       nearestMessage = null;
     });
     try {
-      if (widget.repository.api.isEmpty) {
-        throw const ApiFailure(ApiFailureKind.notConfigured);
-      }
-      if (!await Geolocator.isLocationServiceEnabled()) {
+       if (!await Geolocator.isLocationServiceEnabled()) {
         if (mounted) {
           setState(
             () => nearestMessage =
@@ -157,17 +176,36 @@ class _ShelterPanelState extends State<ShelterPanel> {
           timeLimit: Duration(seconds: 12),
         ),
       );
-      final result = await widget.repository.nearestShelters(
-        position.latitude,
-        position.longitude,
-        limit: 3,
-      );
+      NearestSheltersResult result;
+      var fromOffline = false;
+      try {
+        if (widget.repository.api.isEmpty) {
+          throw const ApiFailure(ApiFailureKind.notConfigured);
+        }
+        result = await widget.repository.nearestShelters(
+          position.latitude,
+          position.longitude,
+          limit: 3,
+        );
+      } catch (_) {
+        final local = await widget.repository.offlineNearestShelters(
+          position.latitude,
+          position.longitude,
+          limit: 3,
+          regionId: widget.region,
+        );
+        if (local == null) rethrow;
+        result = local;
+        fromOffline = true;
+      }
       if (mounted) {
         setState(() {
           nearest = result;
           final state =
               result.health?['healthStatus'] ?? result.health?['state'];
-          nearestMessage = result.items.isEmpty
+          nearestMessage = fromOffline
+              ? 'OFFLINE • odległość policzono wyłącznie na urządzeniu z pakietu z ${stamp(result.serverTime.toIso8601String())}. Współrzędnych nie wysłano.'
+              : result.items.isEmpty
               ? 'Brak punktów schronienia w aktualnym pakiecie danych.'
               : state == 'STALE'
               ? 'Uwaga: najbliższe punkty wyliczono z zapisanej, nieaktualnej kopii wykazu.'
@@ -339,7 +377,7 @@ class _ShelterPanelState extends State<ShelterPanel> {
         ],
         const SizedBox(height: 16),
         const Text(
-          'Offline dostępna jest zapisana strona wyników oraz pierwsza strona z ostatniej synchronizacji regionu. To nie jest pełny wykaz offline.',
+          'Po pobraniu pakietu regionu offline dostępny jest pełny lokalny katalog tego regionu, wyszukiwanie i nearest shelter. Wyniki zawsze zachowują timestamp pakietu.',
         ),
         const SizedBox(height: 12),
         const Text(
