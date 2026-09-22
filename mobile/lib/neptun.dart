@@ -12,7 +12,8 @@ class NeptunData {
   factory NeptunData.parse(dynamic input) {
     if (input is! Map) throw const FormatException('Niepoprawne dane NEPTUN');
     final m = Map<String, dynamic>.from(input);
-    final delay = m['safetyDelayHours'], minimum = m['minimumPublishedPrecisionKm'];
+    final delay = m['safetyDelayHours'],
+        minimum = m['minimumPublishedPrecisionKm'];
     if (m['schemaVersion'] != 1 ||
         m['mode'] != 'HISTORICAL_ONLY' ||
         delay is! num ||
@@ -39,7 +40,13 @@ class NeptunData {
           t['title'] is! String ||
           t['description'] is! String ||
           t['lifecycle'] != 'ENDED' ||
-          !['CONFIRMED', 'PROBABLE', 'UNVERIFIED', 'REFUTED', 'DISPUTED'].contains(t['verification']) ||
+          ![
+            'CONFIRMED',
+            'PROBABLE',
+            'UNVERIFIED',
+            'REFUTED',
+            'DISPUTED',
+          ].contains(t['verification']) ||
           t['endedAt'] is! String ||
           t['observations'] is! List ||
           (t['observations'] as List).isEmpty ||
@@ -73,15 +80,23 @@ class NeptunData {
           throw const FormatException('Obserwacja po zakończeniu śladu');
         }
         previous = observed;
-        final lat = o['latitude'], lon = o['longitude'], precision = o['precisionKm'];
+        final lat = o['latitude'],
+            lon = o['longitude'],
+            precision = o['precisionKm'];
         final hasCoordinates = lat != null || lon != null;
         if ((lat == null) != (lon == null) ||
             (hasCoordinates && precision == null) ||
             (!hasCoordinates && precision != null) ||
             (lat != null && (lat is! num || !lat.isFinite || lat.abs() > 90)) ||
-            (lon != null && (lon is! num || !lon.isFinite || lon.abs() > 180)) ||
-            (precision != null && (precision is! num || !precision.isFinite || precision < minimum))) {
-          throw const FormatException('Zbyt dokładna lub błędna geometria NEPTUN');
+            (lon != null &&
+                (lon is! num || !lon.isFinite || lon.abs() > 180)) ||
+            (precision != null &&
+                (precision is! num ||
+                    !precision.isFinite ||
+                    precision < minimum))) {
+          throw const FormatException(
+            'Zbyt dokładna lub błędna geometria NEPTUN',
+          );
         }
         final source = o['source'];
         if (source is! Map ||
@@ -200,7 +215,8 @@ class _NeptunScreenState extends State<NeptunScreen> {
               t['title'] as String,
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            if ((t['description'] as String).isNotEmpty) Text(t['description'] as String),
+            if ((t['description'] as String).isNotEmpty)
+              Text(t['description'] as String),
             const SizedBox(height: 8),
             Text('Przebieg: ${t['directionText'] ?? 'Nie ustalono'}'),
             Text('Początek: ${when(t['startedAt'])}'),
@@ -222,7 +238,8 @@ class _NeptunScreenState extends State<NeptunScreen> {
                     ),
                     trailing: IconButton(
                       tooltip: 'Otwórz źródło',
-                      onPressed: () => widget.openSource(o['source']['url'] as String),
+                      onPressed: () =>
+                          widget.openSource(o['source']['url'] as String),
                       icon: const Icon(Icons.open_in_new),
                     ),
                   ),
@@ -242,7 +259,9 @@ class _NeptunScreenState extends State<NeptunScreen> {
         title: const Text('NEPTUN • historia'),
         actions: [
           IconButton(
-            onPressed: loading || widget.repository.api.isEmpty ? null : refresh,
+            onPressed: loading || widget.repository.api.isEmpty
+                ? null
+                : refresh,
             icon: const Icon(Icons.refresh),
             tooltip: 'Odśwież NEPTUN',
           ),
