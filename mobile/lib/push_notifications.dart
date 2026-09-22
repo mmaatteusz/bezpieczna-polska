@@ -234,6 +234,7 @@ class PushManager extends ChangeNotifier {
     : _state = PushRegistrationState(
         configured: adapter?.supported ?? false,
         registered: repository.prefs.getBool(_registeredKey) ?? false,
+        backendReachable: repository.api.isNotEmpty,
       );
 
   PushRegistrationState get state => _state;
