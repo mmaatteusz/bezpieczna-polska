@@ -61,7 +61,10 @@ test('NEPTUN persistence is revisioned and snapshot is historical-only with safe
   assert.equal(snapshot.tracks.length,1);
   assert.equal(snapshot.map.features.length,1);
   assert.equal(snapshot.map.features[0].geometry.type,'LineString');
-  const recent=track({id:'NEPTUN-recent',startedAt:'2026-09-22T09:00:00Z',endedAt:'2026-09-22T10:00:00Z'});
+  const recent=track({id:'NEPTUN-recent',startedAt:'2026-09-22T09:00:00Z',endedAt:'2026-09-22T10:00:00Z',observations:[
+   {...track().observations[0],id:'recent-1',observedAt:'2026-09-22T09:10:00Z'},
+   {...track().observations[1],id:'recent-2',observedAt:'2026-09-22T09:50:00Z'}
+  ]});
   await store.putNeptunTrack(recent,'operator','Recent track retained internally but not published',0);
   assert.equal((await neptunSnapshot(store,now)).tracks.some(t=>t.id==='NEPTUN-recent'),false);
  }finally{await db.close();await rm(dir,{recursive:true,force:true});}
