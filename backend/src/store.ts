@@ -143,6 +143,23 @@ export class Store{
   if(bbox)throw new Error('POSTGIS_REQUIRED');
   return (await this.events()).filter(e=>e.geometry!==null);
  }
+ async nearbyEvents(latitude:number,longitude:number,radiusMeters:number,limit=50){
+  if(this.db.kind!=='postgres')throw new Error('POSTGIS_REQUIRED');
+  const rows=await this.db.all(`WITH p AS (
+      SELECT ST_SetSRID(ST_MakePoint(?,?),4326) AS g
+    ), latest AS (
+      SELECT DISTINCT ON (event_id) event_id,payload,geom
+      FROM event_revisions
+      ORDER BY event_id,revision DESC
+    )
+    SELECT latest.payload,ST_DistanceSphere(latest.geom,p.g) AS distance_m
+    FROM latest CROSS JOIN p
+    WHERE latest.geom IS NOT NULL
+      AND ST_DWithin(latest.geom::geography,p.g::geography,?)
+    ORDER BY distance_m,latest.event_id
+    LIMIT ?`,[longitude,latitude,radiusMeters,limit]);
+  return rows.map(r=>({event:eventSchema.parse(JSON.parse(r.payload as string)),distanceMeters:Math.max(0,Math.round(Number(r.distance_m)))}));
+ }
  async timeline(id:string){
   const rows=(await this.db.all('SELECT payload,actor,reason,recorded_at FROM event_revisions WHERE event_id=? ORDER BY revision',[id])).map(r=>({...r,actor:String(r.actor),reason:String(r.reason),recorded_at:String(r.recorded_at),payload:eventSchema.parse(JSON.parse(r.payload as string))}));
   let previous:Event|null=null;
