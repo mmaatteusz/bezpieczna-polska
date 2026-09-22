@@ -468,7 +468,8 @@ class PushManager extends ChangeNotifier {
               ),
               identity.secret,
               body: update
-                  ? Map<String, dynamic>.from(payload)..remove('installationId')
+                  ? (Map<String, dynamic>.from(payload)
+                    ..remove('installationId'))
                   : payload,
             )
             as Map,
