@@ -1,6 +1,29 @@
 # Bezpieczna Polska
 
-Flutter + backend TypeScript/PostgreSQL. **0.1.0-alpha.11 — wersja rozwojowa, nie pełne MVP.**
+**Bezpieczna Polska** to cywilny system świadomości sytuacyjnej dla Polski. Łączy oficjalne komunikaty i dane służb, aby odpowiedzieć użytkownikowi: **co się dzieje, czy dotyczy Polski lub jego regionu, jak aktualna i wiarygodna jest informacja, co zrobić oraz gdzie znajduje się najbliższe schronienie**.
+
+Aplikacja nie jest zwykłym agregatorem newsów ani mapą wojny. Zachowuje pochodzenie komunikatów, historię korekt, stan źródeł i nie interpretuje braku danych jako braku zagrożenia.
+
+Aktualna wersja: **0.1.0-alpha.11 — wersja rozwojowa, nie pełne MVP.**
+
+### Co działa w alpha.11
+
+- Status Polski i status lokalny z wyjaśnieniem „Dlaczego taki status?”.
+- Oficjalne źródła i integracje: RCB, RSO, WCZK, stopnie alarmowe RP, PAA, CERT Polska, Straż Graniczna, Policja i PSP.
+- Katalog schronień PSP/dane.gov.pl z PostGIS, wyszukiwaniem, mapą, nearest shelter i ograniczonym cache offline.
+- Alert Center, korelacja i deduplikacja zdarzeń, rewizje i historia korekt.
+- **Obserwowane lokalizacje** zapisywane lokalnie na urządzeniu.
+- **„Wokół mnie”** z jednorazowym GPS uruchamianym wyłącznie przez użytkownika — bez ciągłego śledzenia i bez historii ruchu.
+- Odległość do zdarzenia jest liczona wyłącznie wtedy, gdy źródło dostarcza wiarygodną geometrię. Brak geometrii nie jest traktowany jako brak zdarzeń w pobliżu.
+- Preview APK jest budowany jako **arm64-v8a only**.
+
+### Najważniejsze ograniczenia
+
+- To nadal wersja alpha, bez produkcyjnego hostingu, push, Ukrainy i modułu NEPTUN.
+- PAA measurements pozostają wyłączone do czasu zweryfikowanego stabilnego publicznego kontraktu.
+- CSIRT GOV pozostaje jawnie `NOT_CONFIGURED`, dopóki oficjalna lista kanałów RSS jest pusta.
+- Część źródeł jest ograniczona do publikacji publicznych i nie stanowi pełnego operacyjnego rejestru zdarzeń.
+- Brak nowych danych lub brak geometrii **nie oznacza bezpieczeństwa**.
 
 ## Uruchomienie
 
