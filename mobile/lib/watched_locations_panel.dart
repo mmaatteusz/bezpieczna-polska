@@ -229,10 +229,15 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
             ),
             FilledButton(
               onPressed: () async {
-                final la = double.tryParse(lat.text.trim().replaceAll(',', '.'));
-                final lo = double.tryParse(lon.text.trim().replaceAll(',', '.'));
-                final ra =
-                    double.tryParse(radius.text.trim().replaceAll(',', '.'));
+                final la = double.tryParse(
+                  lat.text.trim().replaceAll(',', '.'),
+                );
+                final lo = double.tryParse(
+                  lon.text.trim().replaceAll(',', '.'),
+                );
+                final ra = double.tryParse(
+                  radius.text.trim().replaceAll(',', '.'),
+                );
                 try {
                   if (la == null || lo == null || ra == null) {
                     throw const FormatException();
@@ -311,8 +316,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
   Widget _resultCard() {
     final value = result;
     if (value == null) return const SizedBox.shrink();
-    final coverage =
-        Map<String, dynamic>.from(value.data['coverage'] as Map);
+    final coverage = Map<String, dynamic>.from(value.data['coverage'] as Map);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
