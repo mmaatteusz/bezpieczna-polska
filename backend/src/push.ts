@@ -176,20 +176,30 @@ function parseDevice(row:Row):StoredDevice{
 function relevantChange(previous:Event|null,current:Event){
  if(current.isDemo||current.messageContext!=='ACTUAL'||current.verification!=='CONFIRMED')return null;
  if(current.securityLevel)return null;
- const isUa=current.countryCode==='UA'||!!current.ukraine||current.sources.some(s=>s.id==='UA');
+ const sourceIds=new Set(current.sources.map(s=>s.id));
+ const isUa=current.countryCode==='UA'||!!current.ukraine||sourceIds.has('UA');
+ const isCyber=current.eventType==='CYBER'||sourceIds.has('CERT')||sourceIds.has('CSIRT_GOV');
+ const isBorder=current.eventType==='BORDER'||sourceIds.has('SG');
+ const standaloneCategory=isCyber||isBorder;
  if(isUa){
   if(current.ukraine?.kind!=='OFFICIAL_ALERT'||!current.sources.some(s=>s.tier===1))return null;
  }else{
-  if(!current.officialWarning||!current.sources.some(s=>s.tier===1))return null;
-  if(current.sources.some(s=>s.id==='POLICE'||s.id==='PSP_INCIDENTS'))return null;
+  if(!current.sources.some(s=>s.tier===1))return null;
+  if(sourceIds.has('POLICE')||sourceIds.has('PSP_INCIDENTS'))return null;
+  if(!standaloneCategory&&!current.officialWarning)return null;
+  // Separate informational categories stay outside Status Polski, but still
+  // need a meaningful threshold so an RSS refresh does not become notification spam.
+  if(isCyber&&current.severity==='INFORMATIONAL')return null;
+  if(isBorder&&current.severity==='INFORMATIONAL'&&!['ENDED','CANCELLED','EXPIRED'].includes(current.lifecycle))return null;
  }
  const ended=['ENDED','CANCELLED','EXPIRED'].includes(current.lifecycle);
  if(!previous){
-  if(!['ACTIVE','SCHEDULED'].includes(current.lifecycle))return null;
+  if(ended&&standaloneCategory)return {kind:'ENDED' as const,isUa};
+  if(!standaloneCategory&&!['ACTIVE','SCHEDULED'].includes(current.lifecycle))return null;
   return {kind:'NEW' as const,isUa};
  }
  if(ended&&!['ENDED','CANCELLED','EXPIRED'].includes(previous.lifecycle))return {kind:'ENDED' as const,isUa};
- if(!['ACTIVE','SCHEDULED'].includes(current.lifecycle))return null;
+ if(!standaloneCategory&&!['ACTIVE','SCHEDULED'].includes(current.lifecycle))return null;
  const rank:Record<Event['severity'],number>={INFORMATIONAL:0,NORMAL:1,HIGH:2,CRITICAL:3};
  if(rank[current.severity]>rank[previous.severity])return {kind:'ESCALATED' as const,isUa};
  if(previous.lifecycle!==current.lifecycle&&current.lifecycle==='ACTIVE')return {kind:'ACTIVATED' as const,isUa};
