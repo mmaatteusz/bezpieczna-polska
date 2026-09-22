@@ -166,9 +166,7 @@ void main() {
       var bad = false;
       final repository = DataRepository(
         prefs,
-        client: MockClient(
-          (_) async => jsonResponse(bad ? {} : ua(now), 200),
-        ),
+        client: MockClient((_) async => jsonResponse(bad ? {} : ua(now), 200)),
         buildApi: 'https://example.test',
       );
       await repository.refreshUkraine();
