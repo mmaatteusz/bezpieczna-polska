@@ -214,10 +214,10 @@ extension OfflineRepository on DataRepository {
     if (offset < 0 || offset > matches.length || limit < 1 || limit > 500) {
       throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
-    final end = math.min(offset + limit, matches.length);
-    final source = (package.snapshot['sources'] as List).whereType<Map>().cast<Map>().where(
-      (item) => item['id'] == 'SHELTERS',
-    );
+    final end = math.min(offset + limit, matches.length).toInt();
+    final source = (package.snapshot['sources'] as List)
+        .whereType<Map>()
+        .where((item) => item['id'] == 'SHELTERS');
     final originalHealth = source.isEmpty
         ? null
         : Map<String, dynamic>.from(source.first);
