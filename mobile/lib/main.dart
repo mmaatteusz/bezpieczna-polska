@@ -411,9 +411,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => WatchedLocationsScreen(
-                repository: widget.repository,
-              ),
+              builder: (_) =>
+                  WatchedLocationsScreen(repository: widget.repository),
             ),
           ),
         ),
