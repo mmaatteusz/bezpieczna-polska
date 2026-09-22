@@ -1,6 +1,6 @@
 # ROADMAP — Bezpieczna Polska
 
-Aktualizacja: 21.09.2026. To jest kanoniczna lista funkcji projektu. Status dotyczy aktualnego kodu w branchach etapowych, nie produkcyjnego wdrożenia.
+Aktualizacja: 22.09.2026. To jest kanoniczna lista funkcji projektu. Status dotyczy aktualnego kodu w branchach etapowych, nie produkcyjnego wdrożenia.
 
 Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ do zrobienia • ⏳ później.
 
@@ -38,8 +38,8 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 | 30 | CERT Polska / CSIRT GOV | 🟡 |
 | 31 | Straż Graniczna | ✅ |
 | 32 | Istotne zdarzenia Policji / PSP | ✅ |
-| 33 | Obserwowane lokalizacje | ❌ |
-| 34 | „Co dzieje się wokół mnie?” | 🟡 |
+| 33 | Obserwowane lokalizacje | ✅ |
+| 34 | „Co dzieje się wokół mnie?” | ✅ |
 | 35 | Alarmy Ukrainy | ❌ |
 | 36 | NEPTUN jako osobna warstwa OSINT | ❌ |
 | 37 | Push FCM/APNs | ❌ |
@@ -49,14 +49,13 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 
 ## Najbliższa kolejność
 
-1. Obserwowane lokalizacje i szersze „wokół mnie”.
-2. Alarmy Ukrainy.
-3. NEPTUN.
-4. Push.
-5. Pełniejsze offline.
-6. Publiczny backend, monitoring, backup, podpisane wydanie.
+1. Alarmy Ukrainy.
+2. NEPTUN.
+3. Push.
+4. Pełniejsze offline.
+5. Publiczny backend, monitoring, backup, podpisane wydanie.
 
-Uwagi do częściowych etapów: WCZK ma jeden niezależny adapter oraz integrację RSO dla pozostałych publikacji; PAA ma komunikaty, ale pomiary pozostają zablokowane przez brak zweryfikowanego publicznego kontraktu; CERT Polska działa z oficjalnego RSS, publiczna lista RSS CSIRT GOV jest obecnie pusta, a Straż Graniczna korzysta z oficjalnych Aktualności z konserwatywnym filtrem komunikatów operacyjnych (publiczna lista RSS KGSG jest pusta). „Wokół mnie” obejmuje już najbliższe schronienia, ale nie pełny agregator zdarzeń w promieniu.
+Uwagi do częściowych etapów: WCZK ma jeden niezależny adapter oraz integrację RSO dla pozostałych publikacji; PAA ma komunikaty, ale pomiary pozostają zablokowane przez brak zweryfikowanego publicznego kontraktu; CERT Polska działa z oficjalnego RSS, publiczna lista RSS CSIRT GOV jest obecnie pusta, a Straż Graniczna korzysta z oficjalnych Aktualności z konserwatywnym filtrem komunikatów operacyjnych (publiczna lista RSS KGSG jest pusta). Alpha.11 dodaje lokalne obserwowane miejsca oraz zapytania „Wokół mnie”: odległość jest liczona tylko dla Eventów z geometrią, a jawny zakres krajowy/wojewódzki jest prezentowany osobno bez udawania bliskości.
 
 ## Zasady
 
