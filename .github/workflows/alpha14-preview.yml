@@ -108,6 +108,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p output
+          cp mobile/pubspec.lock output/pubspec.lock.resolved
           cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.14-preview-arm64.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
