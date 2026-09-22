@@ -1,7 +1,7 @@
 name: NEPTUN Dart format probe
 on:
-  push:
-    branches: [stage/neptun]
+  pull_request:
+    branches: [main]
 permissions:
   contents: read
 jobs:
