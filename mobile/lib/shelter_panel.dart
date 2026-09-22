@@ -29,7 +29,6 @@ class _ShelterPanelState extends State<ShelterPanel> {
   final search = TextEditingController();
   ShelterPage? page;
   bool loading = false, connected = false, nearestLoading = false;
-  bool offline = false;
   String? message, nearestMessage;
   NearestSheltersResult? nearest;
   int request = 0;
@@ -114,14 +113,12 @@ class _ShelterPanelState extends State<ShelterPanel> {
         setState(() {
           page = result;
           connected = !fromOffline;
-          offline = fromOffline;
         });
       }
     } catch (error) {
       if (mounted && ticket == request) {
         setState(() {
           connected = false;
-          offline = false;
           message = apiFailureMessage(error);
         });
       }
