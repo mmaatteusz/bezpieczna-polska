@@ -80,6 +80,7 @@ class FirebasePushPlatformAdapter implements PushPlatformAdapter {
     AuthorizationStatus.authorized => PushPermissionState.authorized,
     AuthorizationStatus.provisional => PushPermissionState.provisional,
     AuthorizationStatus.denied => PushPermissionState.denied,
+    AuthorizationStatus.deniedPermanently => PushPermissionState.denied,
     AuthorizationStatus.notDetermined => PushPermissionState.notDetermined,
   };
 
@@ -287,7 +288,7 @@ class PushManager extends ChangeNotifier {
       await repository.prefs.setString(_secretKey, secret);
       await repository.prefs.setBool(_registeredKey, false);
     }
-    return (id: id!, secret: secret!);
+    return (id: id, secret: secret);
   }
 
   Uri _uri(String suffix) {
