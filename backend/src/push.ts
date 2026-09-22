@@ -365,7 +365,7 @@ export class PushService{
   const stale=new Date(now.getTime()-5*60000).toISOString();
   return this.db.transaction(async db=>{
    await db.run("UPDATE push_outbox SET state='RETRY',next_attempt_at=?,last_error_code='LEASE_RECOVERED' WHERE state='SENDING' AND last_attempt_at IS NOT NULL AND last_attempt_at<?",[now.toISOString(),stale]);
-   const suffix=db.kind==='postgres'?' FOR UPDATE SKIP LOCKED':'';
+   const suffix=db.kind==='postgres'?' FOR UPDATE OF o SKIP LOCKED':'';
    const rows=await db.all(`SELECT o.*,d.platform,d.token_ciphertext,d.enabled FROM push_outbox o LEFT JOIN push_devices d ON d.device_id=o.device_id WHERE o.state IN ('PENDING','RETRY') AND o.next_attempt_at<=? ORDER BY o.created_at,o.id LIMIT ?${suffix}`,[now.toISOString(),limit]);
    for(const r of rows)await db.run("UPDATE push_outbox SET state='SENDING',attempt_count=attempt_count+1,last_attempt_at=? WHERE id=? AND state IN ('PENDING','RETRY')",[now.toISOString(),String(r.id)]);
    return rows;
