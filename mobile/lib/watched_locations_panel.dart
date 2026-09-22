@@ -189,7 +189,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: selectedRegion,
+                  initialValue: selectedRegion,
                   isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Kontekst wojewódzki — opcjonalny',
