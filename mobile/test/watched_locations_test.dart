@@ -46,7 +46,8 @@ Map<String, dynamic> eventFixture() => {
   'locationText': 'Bydgoszcz',
   'areaPrecision': 'EXACT',
   'adapterVersion': 'fixture',
-  'sourceContentHash': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  'sourceContentHash':
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   'isDemo': false,
 };
 
@@ -60,11 +61,7 @@ Map<String, dynamic> aroundFixture() => {
     'regionId': '04',
   },
   'nearbyEvents': [
-    {
-      'event': eventFixture(),
-      'distanceMeters': 350,
-      'relevance': 'NEARBY',
-    },
+    {'event': eventFixture(), 'distanceMeters': 350, 'relevance': 'NEARBY'},
   ],
   'regionalEvents': <dynamic>[],
   'nearestShelters': {'items': <dynamic>[], 'health': null},
@@ -81,53 +78,52 @@ void main() {
 
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  test('watched locations persist locally without movement history metadata', () async {
-    final prefs = await SharedPreferences.getInstance();
-    final repo = DataRepository(prefs);
+  test(
+    'watched locations persist locally without movement history metadata',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final repo = DataRepository(prefs);
 
-    final saved = await repo.addWatchedLocation(
-      label: 'Dom',
-      latitude: 53.12,
-      longitude: 18.01,
-      radiusKm: 15,
-      regionId: '04',
-    );
+      final saved = await repo.addWatchedLocation(
+        label: 'Dom',
+        latitude: 53.12,
+        longitude: 18.01,
+        radiusKm: 15,
+        regionId: '04',
+      );
 
-    expect(saved.id, 'loc-1');
-    expect(repo.watchedLocations.single.label, 'Dom');
-    expect(repo.watchedLocations.single.regionId, '04');
-    expect(
-      prefs.getKeys(),
-      containsAll(<String>[
-        DataRepository.watchedLocationsKey,
-        'watched_location_counter',
-      ]),
-    );
-    expect(
-      prefs.getKeys().where(
-        (k) =>
-            k.contains('history') ||
-            k.contains('track') ||
-            k.contains('last_position'),
-      ),
-      isEmpty,
-    );
+      expect(saved.id, 'loc-1');
+      expect(repo.watchedLocations.single.label, 'Dom');
+      expect(repo.watchedLocations.single.regionId, '04');
+      expect(
+        prefs.getKeys(),
+        containsAll(<String>[
+          DataRepository.watchedLocationsKey,
+          'watched_location_counter',
+        ]),
+      );
+      expect(
+        prefs.getKeys().where(
+          (k) =>
+              k.contains('history') ||
+              k.contains('track') ||
+              k.contains('last_position'),
+        ),
+        isEmpty,
+      );
 
-    await repo.clearData();
-    expect(repo.watchedLocations.single.label, 'Dom');
+      await repo.clearData();
+      expect(repo.watchedLocations.single.label, 'Dom');
 
-    await repo.removeWatchedLocation(saved.id);
-    expect(repo.watchedLocations, isEmpty);
-  });
+      await repo.removeWatchedLocation(saved.id);
+      expect(repo.watchedLocations, isEmpty);
+    },
+  );
 
   test('watched location validation rejects unsafe values', () async {
     final repo = DataRepository(await SharedPreferences.getInstance());
     await expectLater(
-      repo.addWatchedLocation(
-        label: '',
-        latitude: 53,
-        longitude: 18,
-      ),
+      repo.addWatchedLocation(label: '', latitude: 53, longitude: 18),
       throwsFormatException,
     );
     await expectLater(
@@ -149,53 +145,60 @@ void main() {
     );
   });
 
-  test('coordinates are sent only when around is explicitly requested', () async {
-    var requests = 0;
-    final repo = DataRepository(
-      await SharedPreferences.getInstance(),
-      buildApi: 'https://api.example',
-      developerSettingsEnabled: false,
-      client: MockClient((request) async {
-        requests++;
-        expect(request.method, 'POST');
-        expect(request.url.path, '/v1/around');
-        expect(request.url.query, isEmpty);
-        final body = Map<String, dynamic>.from(
-          jsonDecode(request.body) as Map,
-        );
-        expect(body, {
-          'latitude': 53.12,
-          'longitude': 18.01,
-          'radiusKm': 20.0,
-          'regionId': '04',
-        });
-        return http.Response(
-          jsonEncode(aroundFixture()),
-          200,
-          headers: {'content-type': 'application/json'},
-        );
-      }),
-    );
+  test(
+    'coordinates are sent only when around is explicitly requested',
+    () async {
+      var requests = 0;
+      final repo = DataRepository(
+        await SharedPreferences.getInstance(),
+        buildApi: 'https://api.example',
+        developerSettingsEnabled: false,
+        client: MockClient((request) async {
+          requests++;
+          expect(request.method, 'POST');
+          expect(request.url.path, '/v1/around');
+          expect(request.url.query, isEmpty);
+          final body = Map<String, dynamic>.from(
+            jsonDecode(request.body) as Map,
+          );
+          expect(body, {
+            'latitude': 53.12,
+            'longitude': 18.01,
+            'radiusKm': 20.0,
+            'regionId': '04',
+          });
+          return http.Response(
+            jsonEncode(aroundFixture()),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
 
-    await repo.addWatchedLocation(
-      label: 'Rodzina',
-      latitude: 53.12,
-      longitude: 18.01,
-      regionId: '04',
-    );
-    expect(requests, 0, reason: 'saving a place must not contact the backend');
+      await repo.addWatchedLocation(
+        label: 'Rodzina',
+        latitude: 53.12,
+        longitude: 18.01,
+        regionId: '04',
+      );
+      expect(
+        requests,
+        0,
+        reason: 'saving a place must not contact the backend',
+      );
 
-    final result = await repo.around(
-      53.12,
-      18.01,
-      radiusKm: 20,
-      regionId: '04',
-    );
-    expect(requests, 1);
-    expect(result.nearbyEvents.single.distanceMeters, 350);
-    expect(result.nearbyEvents.single.event.id, 'around-event');
-    expect(result.regionId, '04');
-  });
+      final result = await repo.around(
+        53.12,
+        18.01,
+        radiusKm: 20,
+        regionId: '04',
+      );
+      expect(requests, 1);
+      expect(result.nearbyEvents.single.distanceMeters, 350);
+      expect(result.nearbyEvents.single.event.id, 'around-event');
+      expect(result.regionId, '04');
+    },
+  );
 
   test('around parser rejects claimed distance without event geometry', () {
     final bad = aroundFixture();
@@ -211,28 +214,32 @@ void main() {
     expect(() => AroundResult.parse(bad), throwsFormatException);
   });
 
-  testWidgets('watched locations screen explains privacy and shows saved place', (
-    tester,
-  ) async {
-    final repo = DataRepository(await SharedPreferences.getInstance());
-    await repo.addWatchedLocation(
-      label: 'Praca',
-      latitude: 53.13,
-      longitude: 18.02,
-      radiusKm: 10,
-      regionId: '04',
-    );
+  testWidgets(
+    'watched locations screen explains privacy and shows saved place',
+    (tester) async {
+      final repo = DataRepository(await SharedPreferences.getInstance());
+      await repo.addWatchedLocation(
+        label: 'Praca',
+        latitude: 53.13,
+        longitude: 18.02,
+        radiusKm: 10,
+        regionId: '04',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(home: WatchedLocationsScreen(repository: repo)),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        MaterialApp(home: WatchedLocationsScreen(repository: repo)),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Wokół mnie'), findsWidgets);
-    expect(find.text('Praca'), findsOneWidget);
-    expect(find.textContaining('nie uruchamia ciągłego śledzenia'), findsOneWidget);
-    expect(find.text('Sprawdź wokół mnie • 20 km'), findsOneWidget);
-    expect(find.text('Dodaj miejsce ręcznie'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      expect(find.text('Wokół mnie'), findsWidgets);
+      expect(find.text('Praca'), findsOneWidget);
+      expect(
+        find.textContaining('nie uruchamia ciągłego śledzenia'),
+        findsOneWidget,
+      );
+      expect(find.text('Sprawdź wokół mnie • 20 km'), findsOneWidget);
+      expect(find.text('Dodaj miejsce ręcznie'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
