@@ -87,7 +87,7 @@ extension OfflineRepository on DataRepository {
         'q': '',
         'offset': '$offset',
         'limit': '500',
-        if (version != null) 'version': version,
+        ?'version': version,
       };
       final response = await _offlineGet(
         this,
