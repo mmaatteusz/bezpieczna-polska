@@ -188,8 +188,7 @@ void main() {
       final repository = DataRepository(
         prefs,
         client: MockClient(
-          (_) async =>
-              jsonResponse(ua(DateTime.now().toUtc()), 200),
+          (_) async => jsonResponse(ua(DateTime.now().toUtc()), 200),
         ),
         buildApi: 'https://example.test',
       );
