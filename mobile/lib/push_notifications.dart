@@ -546,6 +546,13 @@ class PushManager extends ChangeNotifier {
     }
   }
 
+  Future<void> syncCurrentPreferences() async {
+    if (!_state.registered) return;
+    try {
+      await setPreferences(preferences);
+    } catch (_) {}
+  }
+
   Future<void> unregister() async {
     if (!_state.registered) return;
     final identity = await _identity();
