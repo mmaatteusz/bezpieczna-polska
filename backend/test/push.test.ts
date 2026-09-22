@@ -147,6 +147,16 @@ test('Ukraine is an opt-in category and never becomes Polish push',async()=>{
  }finally{await db.close();}
 });
 
+test('sourceHealth-only changes never enqueue push',async()=>{
+ const {db,store,push}=await setup();
+ try{
+  await push.register(registerBody(deviceA),secret,now);
+  await store.setHealth({id:'RCB',name:'RCB',url:'https://www.gov.pl/web/rcb/',state:'HEALTHY',lastSuccess:now.toISOString(),lastFailure:null,lastItemTime:null,failureCount:0,responseTime:1,maxAgeSeconds:300,complete:false});
+  await store.setHealth({id:'RCB',name:'RCB',url:'https://www.gov.pl/web/rcb/',state:'BROKEN',lastSuccess:now.toISOString(),lastFailure:new Date(+now+1000).toISOString(),lastItemTime:null,failureCount:1,responseTime:1,maxAgeSeconds:300,complete:false});
+  assert.equal((await outbox(db)).length,0);
+ }finally{await db.close();}
+});
+
 test('watched locations use current saved points only and do not invent geometry',async()=>{
  const {db,store,push}=await setup();
  try{
