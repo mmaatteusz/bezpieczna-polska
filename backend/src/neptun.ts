@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {sourceHealth} from './domain.js';
-import {Store} from './store.js';
+import type {Store} from './store.js';
 
 const date=z.iso.datetime({offset:true});
 export const NEPTUN_SAFETY_DELAY_HOURS=24;
