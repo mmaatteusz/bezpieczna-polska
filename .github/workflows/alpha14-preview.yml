@@ -84,8 +84,6 @@ jobs:
           node --import tsx --test test/neptun.test.ts
       - name: Assert push notification contract
         working-directory: backend
-        env:
-          PUSH_TOKEN_ENCRYPTION_KEY: 0707070707070707070707070707070707070707070707070707070707070707
         run: |
           node --import tsx --test test/push.test.ts
       - name: Build Android preview
