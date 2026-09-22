@@ -177,6 +177,7 @@ test('watched locations use current saved points only and do not invent geometry
   const prefs=basePreferences({criticalPoland:false,regionAlerts:false,locations:[{id:'loc-1',label:'Dom',latitude:53.12,longitude:18.01,radiusKm:10,regionId:null}]});
   await push.register(registerBody(deviceA,undefined as never,{preferences:prefs}),secret,now);
   await store.put(event('near',{severity:'HIGH',latitude:53.123,longitude:18.008,geometry:null,areaPrecision:'EXACT'}));
+  await store.put(event('far-same-region',{severity:'HIGH',latitude:54.35,longitude:18.65,geometry:null,areaPrecision:'EXACT'}));
   await store.put(event('unknown',{severity:'HIGH',latitude:null,longitude:null,geometry:null,areaPrecision:'UNKNOWN',regions:['06']}));
   const rows=await outbox(db);assert.equal(rows.length,1);assert.equal(rows[0].category,'WATCHED_LOCATIONS');
   const stored=JSON.parse(String((await device(db)).preferences));assert.equal(stored.locations.length,1);assert.equal('history' in stored,false);
