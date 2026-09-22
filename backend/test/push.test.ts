@@ -66,9 +66,10 @@ test('device registration encrypts token and authenticated update rotates it',as
   await push.register(registerBody(deviceA,first),secret,now);
   let row=await device(db);
   assert.notEqual(row.token_ciphertext,first);assert.equal(String(row.token_ciphertext).includes(first),false);assert.equal(String(row.manage_secret_hash).includes(secret),false);
-  await push.update(deviceA,registerBody(deviceA,second),secret,new Date(+now+1000));
+  const {installationId:_,...update}=registerBody(deviceA,second);void _;
+  await push.update(deviceA,update,secret,new Date(+now+1000));
   row=await device(db);assert.notEqual(row.token_ciphertext,second);assert.notEqual(row.token_hash,null);
-  await assert.rejects(push.update(deviceA,registerBody(deviceA,second),'bp_push_'+ 'B'.repeat(43),now),/PUSH_UNAUTHORIZED/);
+  await assert.rejects(push.update(deviceA,update,'bp_push_'+ 'B'.repeat(43),now),/PUSH_UNAUTHORIZED/);
  }finally{await db.close();}
 });
 
@@ -215,7 +216,7 @@ test('PostGIS restart preserves push outbox and encrypted device token',{skip:!p
   await db.run('DELETE FROM push_outbox WHERE device_id=?',[dbId]);await db.run('DELETE FROM push_devices WHERE device_id=?',[dbId]);
   await push.register(registerBody(dbId,token),secret,now);await store.put(event(eventId));await db.close();
   db=openDb(process.env.TEST_DATABASE_URL);store=new Store(db);await store.init();provider=new FakeProvider();push=new PushService(db,key,provider);
-  assert.equal((await db.all('SELECT COUNT(*) AS n FROM push_outbox WHERE device_id=?',[dbId]))[0].n,1);
+  assert.equal(Number((await db.all('SELECT COUNT(*) AS n FROM push_outbox WHERE device_id=?',[dbId]))[0].n),1);
   await push.dispatchDue(now);assert.equal(provider.sent[0].token,token);
  }finally{
   await db.run('DELETE FROM push_outbox WHERE device_id=?',[dbId]);await db.run('DELETE FROM push_devices WHERE device_id=?',[dbId]);
