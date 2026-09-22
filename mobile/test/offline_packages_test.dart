@@ -468,6 +468,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Dane offline'), findsOneWidget);
+    await tester.tap(find.text('Kujawsko-pomorskie').first);
+    await tester.pumpAndSettle();
     expect(find.textContaining('Snapshot danych:'), findsOneWidget);
     expect(find.textContaining('Checksum:'), findsOneWidget);
     expect(find.textContaining('Podkład OpenFreeMap'), findsOneWidget);
