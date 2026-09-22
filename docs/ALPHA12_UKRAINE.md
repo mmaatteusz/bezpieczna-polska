@@ -37,7 +37,7 @@ Nowy workflow `alpha12-preview.yml` dla PR do main oraz push main: backend + rea
 
 Stary `build.yml` jest jawnie workflowem produkcyjnym uruchamianym ręcznie. Nadal wymaga `API_BASE_URL` i pozytywnego `check-backend.mjs`; nie zastępujemy bramki atrapą backendu. Jego automatyczny build main z alpha.11 był czerwony z powodu braku API_BASE_URL. Preview pozostaje oznaczone i wymaga konfiguracji adresu backendu.
 
-`0.1.0-alpha.12+2012`, `pl.bezpiecznapolska.preview`, minSdk 24, targetSdk 36, arm64-v8a. Podpis rozwojowy preview.
+`0.1.0-alpha.12+12` (APK arm64 versionCode 2012 po dodaniu offsetu ABI Flutter), `pl.bezpiecznapolska.preview`, minSdk 24, targetSdk 36, arm64-v8a. Podpis rozwojowy preview.
 
 ## Ograniczenia
 
