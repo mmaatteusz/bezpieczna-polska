@@ -91,11 +91,19 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
   return {schemaVersion:1,serverTime:new Date().toISOString(),...result,health:result.health?sourceHealth([result.health])[0]:null};
  };
  app.get('/v1/shelters',async req=>sheltersResponse(shelterQuery.parse(req.query)));
- app.get('/v1/shelters/nearest',async req=>{
-  const q=z.object({lat:z.coerce.number().min(-90).max(90),lon:z.coerce.number().min(-180).max(180),limit:z.coerce.number().int().min(1).max(10).default(3)}).parse(req.query);
-  const items=await store.nearestShelters(q.lat,q.lon,q.limit);
+ const nearestShelterBody=z.object({latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),limit:z.number().int().min(1).max(10).default(3)});
+ const nearestSheltersResponse=async(q:z.infer<typeof nearestShelterBody>)=>{
+  const items=await store.nearestShelters(q.latitude,q.longitude,q.limit);
   const health=(await store.health()).find(h=>h.id==='SHELTERS');
-  return {schemaVersion:1,serverTime:new Date().toISOString(),query:{latitude:q.lat,longitude:q.lon},items,health:health?sourceHealth([health])[0]:null};
+  return {schemaVersion:1,serverTime:new Date().toISOString(),query:{latitude:q.latitude,longitude:q.longitude},items,health:health?sourceHealth([health])[0]:null};
+ };
+ // Precise coordinates belong in the request body, not URLs/proxy access logs.
+ app.post('/v1/shelters/nearest',async req=>nearestSheltersResponse(nearestShelterBody.parse(req.body)));
+ // Temporary compatibility only. New clients must use POST above.
+ app.get('/v1/shelters/nearest',async(req,reply)=>{
+  reply.header('Deprecation','true').header('Warning','299 - "Deprecated: use POST /v1/shelters/nearest"');
+  const q=z.object({lat:z.coerce.number().min(-90).max(90),lon:z.coerce.number().min(-180).max(180),limit:z.coerce.number().int().min(1).max(10).default(3)}).parse(req.query);
+  return nearestSheltersResponse({latitude:q.lat,longitude:q.lon,limit:q.limit});
  });
  app.get('/v1/layers/shelters.geojson',async(req,reply)=>{
   const raw=z.object({bbox:z.string().optional()}).parse(req.query).bbox;
