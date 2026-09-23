@@ -31,3 +31,16 @@ Policyjna KMZB prezentuje zgłoszenia z osobnym etapem weryfikacji: https://poli
 CI przekazuje `secrets.UKRAINE_ALARM_API_KEY` do live smoke. Log przebiegu z 2026-09-23 dla alpha.18 wskazał `NOT_CONFIGURED_UA_API_KEY_MISSING`: test kontraktu przeszedł, lecz uwierzytelniony live smoke nie przeszedł. Właściciel repo musi ustawić sekret o dokładnej nazwie `UKRAINE_ALARM_API_KEY`, bez wpisywania klucza do kodu.
 
 Użyta wersja `maplibre_gl: 0.27.1` eksponuje publiczne funkcje `downloadOfflineRegion`, `getOfflineRegionStatus`, `pauseOfflineRegionDownload` i `deleteOfflineRegion` na Androidzie i iOS: https://pub.dev/documentation/maplibre_gl/latest/maplibre_gl/ . Przed włączeniem trzeba ograniczyć liczbę kafli i rozmiar, zapewnić aktualizację z poprzednim działającym regionem oraz oddzielne wersje danych bezpieczeństwa i podkładu.
+
+
+## Runtime hardening i storage offline
+
+Alpha.18 nie zmienia semantyki LAST KNOWN GOOD. Aktywny/backup/staging pozostają małymi wskaźnikami w `SharedPreferences`, natomiast właściwe payloady pakietów są zapisywane w prywatnym katalogu aplikacji. Nowe pakiety używają `SHA-256`; parser zachowuje możliwość odczytu starszych pakietów z `CRC32`, a legacy payload z `SharedPreferences` jest migrowany leniwie po poprawnej walidacji.
+
+Migracje bazy są wykonywane w kolejności jako jawne wersje, a ingest/push używają DB-backed lease, żeby wiele replik backendu nie wykonywało równolegle tej samej pracy.
+
+Precyzyjne współrzędne dla nearest shelter są wysyłane przez `POST` w body zamiast query string/URL. Endpoint legacy GET pozostaje wyłącznie jako ścieżka deprecacji.
+
+## Granica pakietu mapy offline
+
+Pakiet regionu zawiera dane bezpieczeństwa, schronienia i overlaye, ale jego manifest nadal deklaruje `basemapIncluded=false`. Publiczne API `maplibre_gl` umożliwia regiony offline, jednak samo istnienie API nie rozstrzyga źródła, licencji, limitów pobierania ani budżetu dyskowego. Pełny podkład offline pozostaje osobnym zadaniem i nie może być deklarowany jako gotowy.

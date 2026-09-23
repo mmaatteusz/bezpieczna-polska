@@ -1,4 +1,4 @@
-> Alpha.17 — oficjalne ostrzeżenia IMGW-PIB: meteorologiczne i hydrologiczne, z osobnym sourceHealth, rewizjami i bez zgadywania geometrii. [Opis etapu](docs/ALPHA17_IMGW.md).
+> Alpha.18 (branch / PR #22) — audyt kompletności źródeł i hardening runtime: jawne źródła częściowe/niepodłączone, wersjonowane migracje, lease workerów, prywatniejszy nearest shelter oraz file-backed offline storage. Merge do `main` dopiero po pełnym CI GREEN. [Audyt etapu](docs/ALPHA18_SOURCE_AUDIT.md).
 
 # Bezpieczna Polska
 
@@ -6,13 +6,13 @@
 
 Aplikacja nie jest zwykłym agregatorem newsów ani mapą wojny. Zachowuje pochodzenie komunikatów, historię korekt, stan źródeł i nie interpretuje braku danych jako braku zagrożenia.
 
-Aktualna wersja: **0.1.0-alpha.17 — wersja rozwojowa, nie pełne MVP.**
+Aktualna wersja brancha: **0.1.0-alpha.18 — wersja rozwojowa, nie pełne MVP i jeszcze nie stan `main`.**
 
-### Co działa w kodzie alpha.17
+### Co działa w kodzie alpha.18
 
 - Status Polski i status lokalny z wyjaśnieniem „Dlaczego taki status?”.
 - Oficjalne źródła i integracje: RCB, RSO, WCZK, stopnie alarmowe RP, IMGW-PIB (ostrzeżenia meteo i hydro), PAA, CERT Polska, Straż Graniczna, Policja i PSP.
-- Katalog schronień PSP/dane.gov.pl z PostGIS, wyszukiwaniem, mapą, nearest shelter i pakietami offline regionu. Dostępność bieżących danych PSP zależy od oficjalnego serwera.
+- Katalog schronień PSP/dane.gov.pl z PostGIS, wyszukiwaniem, mapą, nearest shelter i pakietami offline regionu. W alpha.18 duże payloady pakietów są przechowywane w plikach aplikacji zamiast w `SharedPreferences`; nowe pakiety używają SHA-256, a odczyt legacy CRC32/LKG pozostaje kompatybilny. Dostępność bieżących danych PSP zależy od oficjalnego serwera.
 - Alert Center, korelacja i deduplikacja zdarzeń, rewizje i historia korekt.
 - **Obserwowane lokalizacje** zapisywane lokalnie na urządzeniu.
 - **„Wokół mnie”** z jednorazowym GPS uruchamianym wyłącznie przez użytkownika — bez ciągłego śledzenia i bez historii ruchu.
@@ -37,6 +37,7 @@ Aktualna wersja: **0.1.0-alpha.17 — wersja rozwojowa, nie pełne MVP.**
 - CSIRT GOV pozostaje jawnie `NOT_CONFIGURED`, dopóki oficjalna lista kanałów RSS jest pusta.
 - Niezależny fallback PSP i pełne pokrycie WCZK wszystkich województw nadal wymagają pracy.
 - Część źródeł jest ograniczona do publikacji publicznych i nie stanowi pełnego operacyjnego rejestru zdarzeń.
+- Pakiety offline zawierają dane bezpieczeństwa i overlaye, ale nadal **nie zawierają pełnego podkładu mapowego offline**; `basemapIncluded=false` pozostaje jawne.
 - Brak nowych danych lub brak geometrii **nie oznacza bezpieczeństwa**.
 
 ## Uruchomienie

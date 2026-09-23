@@ -1,6 +1,6 @@
 # Rejestr źródeł
 
-Weryfikacja publicznych stron: 21–22.09.2026; stan integracji w kodzie: alpha.17. Brak API oznacza brak potwierdzonej dokumentacji; nie dowodzi, że nie istnieje interfejs wewnętrzny.
+Weryfikacja publicznych stron: 21–23.09.2026; stan integracji na branchu PR #22: alpha.18. `main` pozostaje na alpha.17.1 do merge. Brak API oznacza brak potwierdzonej dokumentacji; nie dowodzi, że nie istnieje interfejs wewnętrzny.
 
 | Źródło | Właściciel i URL | Interfejs / stan | Autoryzacja, częstotliwość i ryzyko |
 |---|---|---|---|
@@ -15,7 +15,7 @@ Weryfikacja publicznych stron: 21–22.09.2026; stan integracji w kodzie: alpha.
 | POLICE | Policja, https://policja.pl/pol/rss | Oficjalny RSS „Aktualności”; adapter działa z konserwatywnym filtrem zdarzeń | Publiczne; recent publications, complete=false. Zatrzymania, kradzieże, odzyskane auta, rutynowy przemyt, statystyki i PR są odrzucane. Brak geokodowania tekstu |
 | PSP_INCIDENTS | KG PSP, https://www.gov.pl/web/kgpsp/aktualnosci | Stabilny oficjalny HTML centralnych Aktualności; adapter działa z konserwatywnym filtrem zdarzeń | Nie znaleziono zweryfikowanego krajowego live API/RSS incydentów. Recent publications, complete=false; agregaty statystyczne „Interwencje PSP” nie są traktowane jako bieżące Eventy |
 | Stopnie alarmowe | RCB, https://www.gov.pl/web/rcb/stopnie-alarmowe2 | Adapter HTML działa; obsługuje PHYSICAL/CRP i wiele równoległych zakresów | Brak publicznego kontraktu API; parser waliduje daty i zakresy, a awaria zachowuje ostatnią poprawną kopię |
-| Schronienie | PSP / dane.gov.pl, https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce | Import, PostGIS/bbox/clustering i pakiety offline regionu w kodzie | Runner GitHub otrzymuje 403 z serwera PSP; brak potwierdzonego niezależnego oficjalnego fallbacku. Last-known-good jest widoczne jako stare dane, nie jako live |
+| Schronienie | PSP / dane.gov.pl, https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce | Import, PostGIS/bbox/clustering i pakiety offline regionu w kodzie | Przy 403 na bieżącym eksporcie istnieje fallback do starszego oficjalnego zasobu dane.gov.pl, ale nie jest to niezależny drugi wydawca. Last-known-good jest widoczne jako stare dane, nie jako live |
 | Ukraina | UkraineAlarm, https://api.ukrainealarm.com/ | Oficjalny adapter API v3 z alpha.12, osobny moduł, historia cykli i administracyjna mapa | Wymaga autoryzowanego `UKRAINE_ALARM_API_KEY`; bez klucza `NOT_CONFIGURED`. Pobranie live, warunki użycia i pokrycie geometrii wymagają osobnej weryfikacji. Nie wpływa na Status Polski |
 
 RSO: https://komunikaty.tvp.pl/komunikatyxml/wszystkie/wszystkie/0?_format=xml — adres udokumentowany przez operatora; 0 oznacza pełny eksport. Nie jest to nieudokumentowany endpoint wymyślony przez aplikację.

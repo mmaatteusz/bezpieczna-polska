@@ -1,6 +1,6 @@
 # ROADMAP — Bezpieczna Polska
 
-Aktualizacja: 23.09.2026 (alpha.17). To jest lista funkcji obecnych w kodzie `main`, a nie potwierdzenie wdrożenia produkcyjnego.
+Aktualizacja: 23.09.2026 (alpha.18, branch `stage/alpha18-source-completeness`, PR #22). To jest stan bieżącego brancha przed merge; `main` pozostaje na alpha.17.1 do czasu pełnego CI GREEN.
 
 Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ do zrobienia • ⏳ później.
 
@@ -28,7 +28,7 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 | 20 | MapLibre | ✅ |
 | 21 | Bbox/PostGIS dla mapy | ✅ |
 | 22 | Clustering schronień | ✅ |
-| 23 | Pełniejsze pakiety offline mapy/regionu | ✅ |
+| 23 | Pełniejsze pakiety offline danych regionu (bez basemapu) | ✅ |
 | 24 | Stabilny niezależny fallback PSP zamiast 403 | 🟡 |
 | 25 | RSO XML | ✅ |
 | 26 | WCZK per województwo | 🟡 |
@@ -60,12 +60,19 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 | 52 | Produkcyjne wysyłki FCM/APNs | ❌ |
 | 53 | Fizyczna walidacja iOS release na sprzęcie | ❌ |
 | 54 | IMGW-PIB: oficjalne ostrzeżenia meteorologiczne i hydrologiczne | ✅ |
+| 55 | Audyt kompletności źródeł i jawne PARTIAL / NOT_CONFIGURED | ✅ |
+| 56 | Wersjonowane migracje DB + lease workerów ingest/push | ✅ |
+| 57 | Nearest shelter: współrzędne w POST body zamiast URL | ✅ |
+| 58 | File-backed pakiety offline + SHA-256 + legacy LKG | ✅ |
+| 59 | Pełny podkład mapowy offline | ❌ |
+| 60 | Release/preview CI bez twardych zależności od numeru alpha | ✅ |
 
 ## Najbliższa kolejność
 
-1. Alpha.17: IMGW-PIB — oficjalne ostrzeżenia meteorologiczne i hydrologiczne, osobny sourceHealth, rewizje i status regionalny.
-2. Domknąć niezależny fallback PSP i kolejne pełne adaptery WCZK bez obniżania rygoru źródeł.
-3. Panel administratora + MFA przed produkcyjnym użyciem endpointów administracyjnych.
+1. Domknąć alpha.18: przywrócić działanie GitHub-hosted Actions, uzyskać pełny wymagany CI GREEN i dopiero wtedy merge PR #22.
+2. Rozwijać kolejne pełne adaptery WCZK / PAA / CSIRT GOV wyłącznie po potwierdzeniu stabilnego oficjalnego kontraktu; nie podnosić kompletności źródeł częściowych.
+3. Pełny basemap offline wdrażać dopiero z kontrolowanym źródłem danych/kafli, limitami rozmiaru i niezależnym lifecycle od pakietu bezpieczeństwa.
+4. Panel administratora + MFA przed produkcyjnym użyciem endpointów administracyjnych.
 
 Uwagi do częściowych etapów: WCZK ma jeden niezależny adapter oraz integrację RSO dla pozostałych publikacji; PAA ma komunikaty, ale pomiary pozostają zablokowane przez brak zweryfikowanego publicznego kontraktu; CERT Polska działa z oficjalnego RSS, publiczna lista RSS CSIRT GOV jest obecnie pusta, a Straż Graniczna korzysta z oficjalnych Aktualności z konserwatywnym filtrem komunikatów operacyjnych (publiczna lista RSS KGSG jest pusta). Alpha.11 dodaje lokalne obserwowane miejsca oraz zapytania „Wokół mnie”: odległość jest liczona tylko dla Eventów z geometrią, a jawny zakres krajowy/wojewódzki jest prezentowany osobno bez udawania bliskości.
 
@@ -98,3 +105,8 @@ W kodzie: konfiguracje trzech środowisk, produkcyjne migracje i wymaganie PostG
 ## Alpha.17 — IMGW-PIB
 
 Dwa oficjalne endpointy ostrzeżeń są włączone jako niezależne źródła. Parser waliduje TERYT/województwa, stopnie i okresy ważności, nie tworzy geometrii z tekstu i obsługuje wyłącznie dokładnie rozpoznany wariant pustej listy IMGW. Szczegóły: [ALPHA17_IMGW.md](ALPHA17_IMGW.md).
+
+
+## Alpha.18 — source completeness i runtime hardening
+
+Branch alpha.18 dodaje audyt kompletności źródeł, jawne etykiety źródeł częściowych/niepodłączonych, wersjonowane migracje, DB-backed lease dla workerów, POST dla precyzyjnych współrzędnych nearest shelter, file-backed storage pakietów offline z SHA-256 oraz wersjo-niezależne release gate. Nie dodaje pełnego basemapu offline i nie zmienia źródła częściowego w „pełne” bez zweryfikowanego kontraktu. Szczegóły: [ALPHA18_SOURCE_AUDIT.md](ALPHA18_SOURCE_AUDIT.md).
