@@ -1,6 +1,6 @@
 # ROADMAP — Bezpieczna Polska
 
-Aktualizacja: 22.09.2026 (alpha.15). To jest kanoniczna lista funkcji projektu. Status dotyczy aktualnego kodu w branchach etapowych, nie produkcyjnego wdrożenia.
+Aktualizacja: 23.09.2026 (alpha.16). To jest lista funkcji obecnych w kodzie `main`, a nie potwierdzenie wdrożenia produkcyjnego.
 
 Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ do zrobienia • ⏳ później.
 
@@ -42,15 +42,29 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 | 34 | „Co dzieje się wokół mnie?” | ✅ |
 | 35 | Alarmy Ukrainy | ✅ |
 | 36 | NEPTUN jako osobna warstwa OSINT | ✅ |
-| 37 | Push FCM/APNs | ✅ |
+| 37 | Push FCM/APNs: kod, opt-in i outbox | ✅ |
 | 38 | „Jestem bezpieczny” przez systemowy Share Sheet | ✅ |
 | 39 | Panel administratora + MFA | ❌ |
 | 40 | Publiczny backend HTTPS + release APK | ❌ |
+| 41 | Konfiguracje development / preview / production | ✅ |
+| 42 | Migracje produkcyjne, idempotencja i wymaganie PostGIS | ✅ |
+| 43 | `/health`, `/ready`, sourceHealth i STALE | ✅ |
+| 44 | Skrypt backup, restore i smoke test na oddzielnej bazie | ✅ |
+| 45 | Monitoring/metrics i logi aplikacji | ✅ |
+| 46 | Szablon Compose z Caddy gotowy do HTTPS | ✅ |
+| 47 | Release gate z kontrolą backendu i wersji | ✅ |
+| 48 | Pipeline podpisanego Android AAB/APK | ✅ |
+| 49 | Prawdziwa domena i publiczny hosting | ❌ |
+| 50 | Realne sekrety produkcyjne i klucz właściciela do podpisu | ❌ |
+| 51 | Wygenerowany właścicielskim kluczem podpisany release | ❌ |
+| 52 | Produkcyjne wysyłki FCM/APNs | ❌ |
+| 53 | Fizyczna walidacja iOS release na sprzęcie | ❌ |
 
 ## Najbliższa kolejność
 
-1. Publiczny backend, monitoring, backup, podpisane wydanie.
-2. Panel administratora + MFA.
+1. Alpha.16.1: spójność wersji, dokumentacji i workflowów bez nowych funkcji.
+2. Następny etap funkcjonalny wybrać po zielonym CI i przeglądzie ograniczeń źródeł; wdrożenie na rzeczywistym hoście wymaga osobnych zasobów i sekretów właściciela.
+3. Panel administratora + MFA przed produkcyjnym użyciem endpointów administracyjnych.
 
 Uwagi do częściowych etapów: WCZK ma jeden niezależny adapter oraz integrację RSO dla pozostałych publikacji; PAA ma komunikaty, ale pomiary pozostają zablokowane przez brak zweryfikowanego publicznego kontraktu; CERT Polska działa z oficjalnego RSS, publiczna lista RSS CSIRT GOV jest obecnie pusta, a Straż Graniczna korzysta z oficjalnych Aktualności z konserwatywnym filtrem komunikatów operacyjnych (publiczna lista RSS KGSG jest pusta). Alpha.11 dodaje lokalne obserwowane miejsca oraz zapytania „Wokół mnie”: odległość jest liczona tylko dla Eventów z geometrią, a jawny zakres krajowy/wojewódzki jest prezentowany osobno bez udawania bliskości.
 
@@ -75,4 +89,6 @@ Szyfrowana rejestracja urządzeń, rotacja tokenów, preferencje, trwały outbox
 
 Atomowe pakiety województwa z manifestem/integrity, pełnym lokalnym katalogiem schronień, lokalnym nearest/search/Wokół mnie oraz overlayami mapy. Offline jest zawsze jawnie LAST KNOWN GOOD, bez udawania aktualności i bez fałszywego offline tilesetu. Szczegóły: [ALPHA15_OFFLINE.md](ALPHA15_OFFLINE.md).
 
-Następny etap: publiczny backend HTTPS, monitoring, backup i podpisane wydanie.
+## Alpha.16 — infrastruktura wydania
+
+W kodzie: konfiguracje trzech środowisk, produkcyjne migracje i wymaganie PostGIS, readiness/health, backup i restore smoke test, metryki, szablon Caddy/HTTPS, release gate oraz pipeline Android signing. Weryfikacja CI nie zastępuje wdrożenia. Nadal brak hostingu i domeny, realnych sekretów, właścicielskiego podpisanego artefaktu, produkcyjnego FCM/APNs i fizycznej walidacji wydania iOS. Szczegóły: [PRODUCTION_RUNBOOK.md](PRODUCTION_RUNBOOK.md).

@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'model.dart';
+import 'app_version.dart';
 
 enum PushPermissionState { notDetermined, denied, authorized, provisional }
 
@@ -221,10 +222,7 @@ class PushManager extends ChangeNotifier {
   static const _secretKey = 'push_manage_secret_v1';
   static const _registeredKey = 'push_registered_v1';
   static const _preferencesKey = 'push_preferences_v1';
-  static const _appVersion = String.fromEnvironment(
-    'APP_VERSION',
-    defaultValue: '0.1.0-alpha.15',
-  );
+  static const _appVersion = appVersion;
 
   final DataRepository repository;
   final PushPlatformAdapter? adapter;

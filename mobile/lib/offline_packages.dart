@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'shelters.dart';
+import 'app_version.dart' as build;
 
 enum OfflinePackageState {
   current,
@@ -31,7 +32,7 @@ class OfflineRegionPackage {
   static const schemaVersion = 1;
   static const maxSingleBytes = 12 * 1024 * 1024;
   static const maxShelters = 50000;
-  static const appVersion = '0.1.0-alpha.15';
+  static const appVersion = build.appVersion;
 
   final Map<String, dynamic> data;
   final int encodedBytes;

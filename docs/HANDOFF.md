@@ -1,4 +1,8 @@
-# Stan kontynuacji — etap PSP/dane.gov.pl
+# HISTORYCZNY HANDOFF — etap PSP/dane.gov.pl (alpha.3)
+
+Ten plik opisuje stan z 20.09.2026 i **nie jest aktualnym źródłem prawdy**.
+Aktualny punkt przekazania: [HANDOFF_ALPHA16.md](HANDOFF_ALPHA16.md).
+Przed rozpoczęciem zmian zawsze sprawdź zdalny `main`, PR-y i GitHub Actions.
 
 Repozytorium prywatne: https://github.com/mmaatteusz/bezpieczna-polska.
 Alpha.2 została zbudowana: Actions run 35398119623 zakończony sukcesem.

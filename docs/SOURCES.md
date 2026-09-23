@@ -1,11 +1,12 @@
 # Rejestr źródeł
 
-Weryfikacja publicznych stron i stanu integracji: 21.09.2026. Brak API oznacza brak potwierdzonej dokumentacji; nie dowodzi, że nie istnieje interfejs wewnętrzny.
+Weryfikacja publicznych stron: 21–22.09.2026; stan integracji w kodzie: alpha.16. Brak API oznacza brak potwierdzonej dokumentacji; nie dowodzi, że nie istnieje interfejs wewnętrzny.
 
 | Źródło | Właściciel i URL | Interfejs / stan | Autoryzacja, częstotliwość i ryzyko |
 |---|---|---|---|
 | RCB | RCB, https://www.gov.pl/web/rcb | HTML strony głównej i artykułów; adapter działa, lista niepełna | Publiczne; interwał 5 min; brak potwierdzonego SLA/limitu. Wysokie ryzyko zmiany selektorów. Brak automatycznego źródła zapasowego |
 | RSO | MSWiA/TVP, https://komunikaty.tvp.pl/Info/Integration | Publiczny pełny eksport XML; adapter XML włączony | XML bez tokena; interwał 5 min; kontrola deklarowanej liczby rekordów i fail-closed przy zmianie struktury. Treści RSO nie są automatycznie uznawane za bezpośrednie zagrożenie |
+| WCZK | Wojewódzkie centra zarządzania kryzysowego; rejestr źródeł w adapterach | Rejestr 16 centrów, niezależny adapter Podkarpackiego i deduplikacja RCB–RSO–WCZK | Nie wszystkie województwa mają niezależny pełny adapter; obecności publikacji RSO nie należy mylić z pełnym pokryciem WCZK |
 | CERT Polska | NASK / CERT Polska, https://moje.cert.pl/komunikaty/ | Oficjalny RSS komunikatów bezpieczeństwa; adapter działa | Publiczne; recent publications, complete=false; komunikaty CYBER nie zmieniają automatycznie głównego statusu fizycznego |
 | CSIRT GOV | CSIRT GOV, https://www.csirt.gov.pl/cer/rss | Oficjalna strona RSS działa, ale lista publicznych kanałów jest obecnie pusta; NOT_CONFIGURED | Nie importujemy raportów historycznych ani nie zgadujemy prywatnego feedu |
 | PAA | PAA, https://www.gov.pl/web/paa/aktualnosci2 | Oficjalne komunikaty HTML; adapter działa. Pomiary stacji pozostają niepodłączone | Komunikat i pomiar są rozdzielone. Same wartości pomiarowe nigdy nie podnoszą automatycznie statusu; portal pomiarowy wymaga ponownej weryfikacji kontraktu |
@@ -13,8 +14,8 @@ Weryfikacja publicznych stron i stanu integracji: 21.09.2026. Brak API oznacza b
 | POLICE | Policja, https://policja.pl/pol/rss | Oficjalny RSS „Aktualności”; adapter działa z konserwatywnym filtrem zdarzeń | Publiczne; recent publications, complete=false. Zatrzymania, kradzieże, odzyskane auta, rutynowy przemyt, statystyki i PR są odrzucane. Brak geokodowania tekstu |
 | PSP_INCIDENTS | KG PSP, https://www.gov.pl/web/kgpsp/aktualnosci | Stabilny oficjalny HTML centralnych Aktualności; adapter działa z konserwatywnym filtrem zdarzeń | Nie znaleziono zweryfikowanego krajowego live API/RSS incydentów. Recent publications, complete=false; agregaty statystyczne „Interwencje PSP” nie są traktowane jako bieżące Eventy |
 | Stopnie alarmowe | RCB, https://www.gov.pl/web/rcb/stopnie-alarmowe2 | Adapter HTML działa; obsługuje PHYSICAL/CRP i wiele równoległych zakresów | Brak publicznego kontraktu API; parser waliduje daty i zakresy, a awaria zachowuje ostatnią poprawną kopię |
-| Schronienie | PSP / dane.gov.pl, https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce | Pełny import działa, PostGIS/bbox/clustering/offline cache | Runner GitHub otrzymuje 403 z serwera PSP; produkcja korzysta z last-known-good do czasu potwierdzenia niezależnego oficjalnego fallbacku |
-| Ukraina | alerts.in.ua, https://devs.alerts.in.ua/ | Dokumentacja dostawcy, adapter niezaimplementowany | Nie traktować agregatora jako ukraińskiego organu państwowego. Token, licencja i pochodzenie danych wymagają sprawdzenia |
+| Schronienie | PSP / dane.gov.pl, https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce | Import, PostGIS/bbox/clustering i pakiety offline regionu w kodzie | Runner GitHub otrzymuje 403 z serwera PSP; brak potwierdzonego niezależnego oficjalnego fallbacku. Last-known-good jest widoczne jako stare dane, nie jako live |
+| Ukraina | UkraineAlarm, https://api.ukrainealarm.com/ | Oficjalny adapter API v3 z alpha.12, osobny moduł, historia cykli i administracyjna mapa | Wymaga autoryzowanego `UKRAINE_ALARM_API_KEY`; bez klucza `NOT_CONFIGURED`. Pobranie live, warunki użycia i pokrycie geometrii wymagają osobnej weryfikacji. Nie wpływa na Status Polski |
 
 RSO: https://komunikaty.tvp.pl/komunikatyxml/wszystkie/wszystkie/0?_format=xml — adres udokumentowany przez operatora; 0 oznacza pełny eksport. Nie jest to nieudokumentowany endpoint wymyślony przez aplikację.
 

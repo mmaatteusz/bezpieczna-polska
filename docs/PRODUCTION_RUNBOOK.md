@@ -7,7 +7,7 @@ Stan: repozytorium przygotowane do wdrożenia. Hosting, domena, klucze podpisu i
 - `APP_ENV=production`, `NODE_ENV=production`, `TRUST_PROXY=true`, `BUILD_SHA` (pełne 40 znaków commita), `PUBLIC_BASE_URL=https://<własna domena API>`.
 - `DATABASE_URL` — prywatny PostgreSQL/PostGIS 17 (URI z zakodowanymi znakami specjalnymi hasła), `PG_POOL_MAX` domyślnie 10, `ADMIN_TOKEN` co najmniej 32 losowe znaki.
 - Compose: `POSTGRES_PASSWORD`, `API_DOMAIN`, `DATABASE_URL`, `ADMIN_TOKEN`, `BUILD_SHA`; `DATABASE_URL` musi kierować na kontener `database:5432/bezpieczna`.
-- Opcjonalnie `PUSH_TOKEN_ENCRYPTION_KEY` (32 bajty hex/base64), `FCM_SERVICE_ACCOUNT_JSON`, komplet `APNS_KEY_ID`/`APNS_TEAM_ID`/`APNS_BUNDLE_ID`/`APNS_PRIVATE_KEY_P8`. Bez providerów push pozostaje jawnie niedostępny.
+- Opcjonalnie `UKRAINE_ALARM_API_KEY` dla live UkraineAlarm oraz `PUSH_TOKEN_ENCRYPTION_KEY` (32 bajty hex/base64), `FCM_SERVICE_ACCOUNT_JSON`, komplet `APNS_KEY_ID`/`APNS_TEAM_ID`/`APNS_BUNDLE_ID`/`APNS_PRIVATE_KEY_P8` dla push. Bez klucza UkraineAlarm źródło UA jest `NOT_CONFIGURED`; bez providerów push pozostaje jawnie niedostępny. Obecny `compose.yaml` **nie przekazuje tych opcjonalnych zmiennych** do `api` automatycznie: operator musi dostarczyć je przez bezpieczny override/konfigurację usługi poza repo. Zmienne powłoki same w sobie nie włączają integracji w kontenerze.
 - `ENABLE_INGESTION=false` wstrzymuje harmonogram; nie usuwa ostatniej poprawnej kopii. Sekrety przekazuj przez menedżer sekretów lub plik poza repo, nigdy przez commit.
 
 ## Wdrożenie
@@ -25,7 +25,7 @@ curl -fsS https://<własna domena API>/ready
 
 ## Backup i restore
 
-`backup` wykonuje pierwszy backup przy starcie i następny co 24 h. `pg_dump -Fc --compress=6` zapisuje `bezpieczna-*.dump` z `*.sha256` na osobnym wolumenie `backups-data`, retencja 14 dni. Zadbaj dodatkowo o szyfrowaną kopię poza hostem: sam wolumen nie chroni przed awarią serwera. Monitoruj, czy pojawiają się nowe pliki i czy odtwarzanie nadal przechodzi.
+`backup` wykonuje pierwszy backup przy starcie i następny po 24 h od zakończenia poprzedniego uruchomienia. `pg_dump -Fc --compress=6` zapisuje `bezpieczna-*.dump` z `*.sha256` na osobnym wolumenie `backups-data`, retencja plików starszych niż 14 dni. Zadbaj dodatkowo o szyfrowaną kopię poza hostem: sam wolumen nie chroni przed awarią serwera. Monitoruj, czy pojawiają się nowe pliki i czy odtwarzanie nadal przechodzi.
 
 Odzyskanie: zatrzymaj zapis do starej bazy, skopiuj plik i jego `.sha256`, utwórz **nową pustą bazę**, następnie:
 
