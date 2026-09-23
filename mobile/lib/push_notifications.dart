@@ -131,7 +131,7 @@ class PushPreferences {
   const PushPreferences({
     this.criticalPoland = true,
     this.regionAlerts = true,
-    this.watchedLocations = true,
+    this.watchedLocations = false,
     this.cyber = true,
     this.border = true,
     this.ukraine = false,
@@ -160,7 +160,7 @@ class PushPreferences {
     return PushPreferences(
       criticalPoland: read('criticalPoland', true),
       regionAlerts: read('regionAlerts', true),
-      watchedLocations: read('watchedLocations', true),
+      watchedLocations: read('watchedLocations', false),
       cyber: read('cyber', true),
       border: read('border', true),
       ukraine: read('ukraine', false),
@@ -580,6 +580,8 @@ class PushManager extends ChangeNotifier {
         identity.secret,
       );
       await repository.prefs.setBool(_registeredKey, false);
+      await repository.prefs.remove(_installationKey);
+      await repository.prefs.remove(_secretKey);
       _setState(
         _state.copyWith(
           registered: false,
