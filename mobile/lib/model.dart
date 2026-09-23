@@ -833,11 +833,7 @@ class DataRepository {
     final u = _apiUri();
     final response = await _postJson(
       u.replace(path: '${u.path}/v1/shelters/nearest'),
-      {
-        'latitude': latitude,
-        'longitude': longitude,
-        'limit': limit,
-      },
+      {'latitude': latitude, 'longitude': longitude, 'limit': limit},
     );
     if (response.statusCode != 200) _responseFailure(response);
     if (response.bodyBytes.length > 2 * 1024 * 1024) {
