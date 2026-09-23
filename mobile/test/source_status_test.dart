@@ -30,12 +30,7 @@ void main() {
       final sources = [
         source('PARTIAL', state: 'HEALTHY', enabled: true, complete: false),
         source('FULL', state: 'HEALTHY', enabled: true, complete: true),
-        source(
-          'OFF',
-          state: 'NOT_CONFIGURED',
-          enabled: false,
-          complete: false,
-        ),
+        source('OFF', state: 'NOT_CONFIGURED', enabled: false, complete: false),
         source('BROKEN', state: 'BROKEN', enabled: true, complete: false),
       ];
 
