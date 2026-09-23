@@ -1,4 +1,4 @@
-name: Alpha.16 production infrastructure and release gate
+name: Production infrastructure and release gate
 on:
   pull_request:
     branches: [main]
