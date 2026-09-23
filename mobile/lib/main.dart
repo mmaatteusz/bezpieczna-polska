@@ -739,9 +739,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     _ => value,
   };
 
-  bool isImgwEvent(SafetyEvent e) => e.sources.any(
-    (s) => s['id'] == 'IMGW_METEO' || s['id'] == 'IMGW_HYDRO',
-  );
+  bool isImgwEvent(SafetyEvent e) =>
+      e.sources.any((s) => s['id'] == 'IMGW_METEO' || s['id'] == 'IMGW_HYDRO');
 
   String sourceLabel(String value) => switch (value) {
     'POLICE' => 'Policja',
