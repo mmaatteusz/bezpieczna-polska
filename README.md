@@ -1,4 +1,4 @@
-> Alpha.14 — Push FCM/APNs: opt-in powiadomienia jako osobny transport nad istniejącym Event/Incident, z szyfrowanymi tokenami, trwałym outboxem, deduplikacją, retry i osobnymi kategoriami. [Kontrakt](docs/ALPHA14_PUSH.md).
+> Alpha.16 — infrastruktura wydania: konfiguracja produkcji, migracje, HTTPS, backup z testem restore, monitoring i bramki podpisanego Androida. [Runbook](docs/PRODUCTION_RUNBOOK.md).
 
 # Bezpieczna Polska
 
@@ -6,7 +6,7 @@
 
 Aplikacja nie jest zwykłym agregatorem newsów ani mapą wojny. Zachowuje pochodzenie komunikatów, historię korekt, stan źródeł i nie interpretuje braku danych jako braku zagrożenia.
 
-Aktualna wersja: **0.1.0-alpha.14 — wersja rozwojowa, nie pełne MVP.**
+Aktualna wersja: **0.1.0-alpha.16 — wersja rozwojowa, nie pełne MVP.**
 
 ### Co działa w alpha.14
 

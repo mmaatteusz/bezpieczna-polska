@@ -1,4 +1,4 @@
-name: Build Offline alpha.15 preview APK
+name: Build alpha.16 preview APK and offline regression
 on:
   pull_request:
     branches: [main]
@@ -117,7 +117,7 @@ jobs:
           set -euo pipefail
           mkdir -p output
           cp mobile/pubspec.lock output/pubspec.lock.resolved
-          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.15-preview-arm64.apk
+          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.16-preview-arm64.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
           grep -F "native-code: 'arm64-v8a'" output/package-info.txt
@@ -125,8 +125,8 @@ jobs:
             echo "Unexpected non-arm64 native libraries in arm64 preview APK" >&2
             exit 1
           fi
-          grep -F "versionName='0.1.0-alpha.15'" output/package-info.txt
-          grep -F "versionCode='2015'" output/package-info.txt
+          grep -F "versionName='0.1.0-alpha.16'" output/package-info.txt
+          grep -F "versionCode='2016'" output/package-info.txt
           grep -F "name='pl.bezpiecznapolska.preview'" output/package-info.txt
           grep -F "sdkVersion:'24'" output/package-info.txt
           grep -F "targetSdkVersion:'36'" output/package-info.txt
@@ -135,7 +135,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Bezpieczna_Polska_0.1.0-alpha.15-preview-arm64
+          name: Bezpieczna_Polska_0.1.0-alpha.16-preview-arm64
           path: output/
           if-no-files-found: error
           retention-days: 30
