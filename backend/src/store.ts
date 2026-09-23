@@ -62,7 +62,7 @@ export class Store{
    await this.db.run(`ALTER TABLE shelters ADD COLUMN IF NOT EXISTS geom geometry(Point,4326) GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint((payload::jsonb->>'longitude')::double precision,(payload::jsonb->>'latitude')::double precision),4326)) STORED`);
    await this.db.run('CREATE INDEX IF NOT EXISTS shelter_geometry_gist ON shelters USING GIST (geom)');
   }
-  if(options.reconcileIncidents!==false)
+  if(options.reconcile!==false)
    await this.db.transaction(async db=>{const s=new Store(db);await s.reconcileIncidents(await s.events());});
  }
  async events():Promise<Event[]>{
