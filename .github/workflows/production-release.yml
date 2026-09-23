@@ -98,6 +98,8 @@ jobs:
       - name: Live official-source smoke checks (external availability is advisory)
         working-directory: backend
         continue-on-error: true
+        env:
+          UKRAINE_ALARM_API_KEY: ${{ secrets.UKRAINE_ALARM_API_KEY }}
         run: |
           for source in rcb wczk imgw paa cyber sg service-incidents ukraine; do
             node "scripts/live-$source.mjs" "../output/$source.json" || echo "$source unavailable: adapter fallback/STALE must remain safe"
