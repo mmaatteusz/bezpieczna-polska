@@ -90,9 +90,10 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          dart format --output=none --set-exit-if-changed lib test
+          dart format lib test
           mkdir -p ../output/formatter
-          cp lib/offline_packages.dart lib/offline_repository.dart lib/offline_data_screen.dart test/offline_packages_test.dart pubspec.lock ../output/formatter/
+          cp lib/push_notifications.dart test/push_notifications_test.dart lib/offline_packages.dart lib/offline_repository.dart lib/offline_data_screen.dart test/offline_packages_test.dart pubspec.lock ../output/formatter/
+          git diff --exit-code -- lib test pubspec.lock
           flutter analyze --no-pub
           flutter test --no-pub
       - name: Assert offline package contract
