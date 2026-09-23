@@ -39,7 +39,7 @@ export function openDb(url?:string,path='bezpieczna.db'):Db{
 }
 export class Store{
  constructor(readonly db:Db){}
- async init(){
+ async init(options:{reconcile?:boolean}={}){
   if(this.db.kind==='postgres')await this.db.run('CREATE EXTENSION IF NOT EXISTS postgis');
   await this.db.run('CREATE TABLE IF NOT EXISTS event_revisions(event_id TEXT NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL, content_hash TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT NOT NULL, recorded_at TEXT NOT NULL, PRIMARY KEY(event_id,revision))');
   await this.db.run('CREATE TABLE IF NOT EXISTS incident_revisions(incident_id TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,content_hash TEXT NOT NULL,recorded_at TEXT NOT NULL,PRIMARY KEY(incident_id,revision))');
