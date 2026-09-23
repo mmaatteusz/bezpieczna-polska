@@ -69,13 +69,18 @@ jobs:
           flutter-version: '3.47.4'
           channel: stable
           cache: true
-      - name: Flutter analyze and tests
+      - name: Flutter dependencies
         working-directory: mobile
-        run: |
-          flutter pub get
-          dart format --output=none --set-exit-if-changed lib test
-          flutter analyze --no-pub
-          flutter test --no-pub
+        run: flutter pub get
+      - name: Flutter format check
+        working-directory: mobile
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Flutter analyze
+        working-directory: mobile
+        run: flutter analyze --no-pub
+      - name: Flutter tests
+        working-directory: mobile
+        run: flutter test --no-pub --reporter expanded
       - name: Build Android preview
         working-directory: mobile
         run: flutter build apk --debug --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=true
