@@ -91,7 +91,7 @@ jobs:
       - name: Fetch real PSP catalog into PostGIS
         working-directory: backend
         run: node scripts/live-shelters.mjs "$RUNNER_TEMP/psp-validation"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: shelters-live-observation
