@@ -521,25 +521,13 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         online: online,
         openSource: openLink,
       ),
-      if (events.any(
-        (e) => e.sources.any(
-          (s) => s['id'] == 'IMGW_METEO' || s['id'] == 'IMGW_HYDRO',
-        ),
-      )) ...[
+      if (events.any(isImgwEvent)) ...[
         heading('Ostrzeżenia IMGW'),
         notice(
           'Źródłem pochodzenia danych jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane Instytutu Meteorologii i Gospodarki Wodnej – Państwowego Instytutu Badawczego zostały przetworzone.',
           Icons.cloud_outlined,
         ),
-        ...events
-            .where(
-              (e) => e.sources.any(
-                (s) =>
-                    s['id'] == 'IMGW_METEO' || s['id'] == 'IMGW_HYDRO',
-              ),
-            )
-            .take(5)
-            .map(eventCard),
+        ...events.where(isImgwEvent).take(5).map(eventCard),
       ],
       if (events.any((e) => e.data['eventType'] == 'CYBER')) ...[
         heading('Cyberbezpieczeństwo'),
@@ -750,6 +738,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     'OTHER' => 'Inne',
     _ => value,
   };
+
+  bool isImgwEvent(SafetyEvent e) => e.sources.any(
+    (s) => s['id'] == 'IMGW_METEO' || s['id'] == 'IMGW_HYDRO',
+  );
 
   String sourceLabel(String value) => switch (value) {
     'POLICE' => 'Policja',
