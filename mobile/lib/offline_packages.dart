@@ -328,7 +328,445 @@ class OfflinePackageStore {
 
   Future<String> _namespace() async {
     final existing = prefs.getString(_namespaceKey);
-    if (existing != null && RegExp(r'^[A-Za-z0-9._-]{8,80}$').hasMatch(existing)) {
+    if (existing != null &&
+        RegExp(r'^[A-Za-z0-9._-]{8,80}
+      return existing;
+    }
+    final created = 'v2-$pid-${DateTime.now().toUtc().microsecondsSinceEpoch}';
+    if (!await prefs.setString(_namespaceKey, created)) {
+      throw const OfflinePackageException('STORAGE_NAMESPACE_FAILED');
+    }
+    return created;
+  }
+
+  Future<Directory> _root() async {
+    Directory base;
+    if (rootDirectoryProvider != null) {
+      base = await rootDirectoryProvider!();
+    } else if (Platform.isAndroid || Platform.isIOS) {
+      base = await getApplicationSupportDirectory();
+    } else {
+      base = Directory(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}bezpieczna_polska_tests',
+      );
+    }
+    final namespace = await _namespace();
+    final root = Directory(
+      '${base.path}${Platform.pathSeparator}offline-packages'
+      '${Platform.pathSeparator}$namespace',
+    );
+    if (!await root.exists()) await root.create(recursive: true);
+    return root;
+  }
+
+  String _safeKey(String key) =>
+      key.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+
+  Future<File> _fileFor(String key) async {
+    final root = await _root();
+    return File('${root.path}${Platform.pathSeparator}${_safeKey(key)}.json');
+  }
+
+  Future<String?> _readBlob(String key) async {
+    final file = await _fileFor(key);
+    if (await file.exists()) {
+      return file.readAsString();
+    }
+    // Alpha.15-17 compatibility: large payloads used to live directly
+    // in SharedPreferences. They remain readable until lazily migrated.
+    return prefs.getString(key);
+  }
+
+  Future<void> _writeBlob(String key, String raw) async {
+    final file = await _fileFor(key);
+    final temp = File(
+      '${file.path}.tmp-$pid-${DateTime.now().toUtc().microsecondsSinceEpoch}',
+    );
+    try {
+      await temp.writeAsString(raw, flush: true);
+      try {
+        await temp.rename(file.path);
+      } on FileSystemException {
+        if (await file.exists()) await file.delete();
+        await temp.rename(file.path);
+      }
+      // A successful file write supersedes any legacy SharedPreferences blob.
+      await prefs.remove(key);
+    } catch (_) {
+      if (await temp.exists()) await temp.delete();
+      rethrow;
+    }
+  }
+
+  Future<void> _deleteBlob(String key) async {
+    final file = await _fileFor(key);
+    if (await file.exists()) await file.delete();
+    await prefs.remove(key);
+  }
+
+  Future<void> _migrateLegacyBlob(String key, String raw) async {
+    if (prefs.getString(key) == null) return;
+    await _writeBlob(key, raw);
+  }
+
+  Future<List<OfflinePackageDescriptor>> list() async {
+    final result = <OfflinePackageDescriptor>[];
+    final keys = prefs
+        .getKeys()
+        .where((key) => key.startsWith(_activePrefix))
+        .toList();
+    for (final key in keys) {
+      final region = key.substring(_activePrefix.length);
+      final pointer = prefs.getString(key);
+      if (pointer == null || pointer.isEmpty) {
+        result.add(
+          OfflinePackageDescriptor(
+            regionId: region,
+            state: OfflinePackageState.incomplete,
+            sizeBytes: 0,
+            errorCode: 'MISSING_ACTIVE_POINTER',
+          ),
+        );
+        continue;
+      }
+      final raw = await _readBlob(pointer);
+      if (raw == null) {
+        result.add(
+          OfflinePackageDescriptor(
+            regionId: region,
+            state: OfflinePackageState.incomplete,
+            sizeBytes: 0,
+            errorCode: 'MISSING_PACKAGE_DATA',
+          ),
+        );
+        continue;
+      }
+      try {
+        final package = OfflineRegionPackage.parse(raw);
+        if (package.regionId != region) {
+          throw const OfflinePackageException('ACTIVE_REGION_MISMATCH');
+        }
+        result.add(
+          OfflinePackageDescriptor(
+            regionId: region,
+            state: package.stateAt(DateTime.now().toUtc()),
+            sizeBytes: package.encodedBytes,
+            createdAt: package.createdAt,
+            snapshotTimestamp: package.snapshotTimestamp,
+            package: package,
+          ),
+        );
+      } on OfflinePackageException catch (error) {
+        result.add(
+          OfflinePackageDescriptor(
+            regionId: region,
+            state: error.code == 'UNSUPPORTED_SCHEMA_VERSION'
+                ? OfflinePackageState.refreshRequired
+                : error.code == 'INCOMPLETE'
+                ? OfflinePackageState.incomplete
+                : OfflinePackageState.corrupted,
+            sizeBytes: utf8.encode(raw).length,
+            errorCode: error.code,
+          ),
+        );
+      } catch (_) {
+        result.add(
+          OfflinePackageDescriptor(
+            regionId: region,
+            state: OfflinePackageState.corrupted,
+            sizeBytes: utf8.encode(raw).length,
+            errorCode: 'READ_FAILED',
+          ),
+        );
+      }
+    }
+    result.sort((a, b) {
+      final aa = prefs.getInt(_access(a.regionId)) ?? 0;
+      final bb = prefs.getInt(_access(b.regionId)) ?? 0;
+      return bb.compareTo(aa);
+    });
+    return result;
+  }
+
+  Future<OfflineRegionPackage?> load(String region) async {
+    final activePointer = prefs.getString(_active(region));
+    OfflinePackageException? activeError;
+    if (activePointer != null) {
+      final raw = await _readBlob(activePointer);
+      if (raw != null) {
+        try {
+          final package = OfflineRegionPackage.parse(raw);
+          if (package.regionId != region) {
+            throw const OfflinePackageException('ACTIVE_REGION_MISMATCH');
+          }
+          await _migrateLegacyBlob(activePointer, raw);
+          await prefs.setInt(
+            _access(region),
+            DateTime.now().toUtc().millisecondsSinceEpoch,
+          );
+          return package;
+        } on OfflinePackageException catch (error) {
+          activeError = error;
+        }
+      } else {
+        activeError = const OfflinePackageException('MISSING_PACKAGE_DATA');
+      }
+    }
+
+    final backupPointer = prefs.getString(_backup(region));
+    if (backupPointer != null) {
+      final raw = await _readBlob(backupPointer);
+      if (raw != null) {
+        final package = OfflineRegionPackage.parse(raw);
+        if (package.regionId != region) {
+          throw const OfflinePackageException('BACKUP_REGION_MISMATCH');
+        }
+        await _migrateLegacyBlob(backupPointer, raw);
+        await prefs.setInt(
+          _access(region),
+          DateTime.now().toUtc().millisecondsSinceEpoch,
+        );
+        return package;
+      }
+    }
+    if (activeError != null) throw activeError;
+    return null;
+  }
+
+  Future<void> commit(OfflineRegionPackage package) async {
+    final encoded = package.encode();
+    final validated = OfflineRegionPackage.parse(encoded);
+    if (validated.encodedBytes > OfflineRegionPackage.maxSingleBytes) {
+      throw const OfflinePackageException('PACKAGE_TOO_LARGE');
+    }
+    final before = await list();
+    final currentOther = before
+        .where((item) => item.regionId != package.regionId)
+        .toList();
+    final otherBytes = currentOther.fold<int>(
+      0,
+      (sum, item) => sum + item.sizeBytes,
+    );
+    if (currentOther.length == 1 &&
+        otherBytes + validated.encodedBytes > maxTotalBytes) {
+      throw const OfflinePackageException('STORAGE_LIMIT_PRESERVE_LKG');
+    }
+
+    final stagingKey = _staging(package.regionId);
+    final candidateKey = _data(package.regionId, package.createdAt);
+    final previousKey = prefs.getString(_active(package.regionId));
+    final oldBackupKey = prefs.getString(_backup(package.regionId));
+
+    try {
+      await _writeBlob(candidateKey, encoded);
+    } catch (_) {
+      throw const OfflinePackageException('STAGING_WRITE_FAILED');
+    }
+    final staged = await _readBlob(candidateKey);
+    if (staged == null) {
+      throw const OfflinePackageException('STAGING_MISSING');
+    }
+    OfflineRegionPackage.parse(staged);
+    if (!await prefs.setString(stagingKey, candidateKey)) {
+      await _deleteBlob(candidateKey);
+      throw const OfflinePackageException('STAGING_POINTER_FAILED');
+    }
+
+    String? newBackupKey = oldBackupKey;
+    if (previousKey != null && previousKey != candidateKey) {
+      final previousRaw = await _readBlob(previousKey);
+      if (previousRaw != null) {
+        try {
+          final previousPackage = OfflineRegionPackage.parse(previousRaw);
+          if (previousPackage.regionId == package.regionId) {
+            newBackupKey = previousKey;
+            if (!await prefs.setString(
+              _backup(package.regionId),
+              previousKey,
+            )) {
+              throw const OfflinePackageException('BACKUP_POINTER_FAILED');
+            }
+          }
+        } on OfflinePackageException {
+          // Never promote a broken active package over an existing valid backup.
+        }
+      }
+    }
+
+    if (!await prefs.setString(_active(package.regionId), candidateKey)) {
+      await prefs.remove(stagingKey);
+      await _deleteBlob(candidateKey);
+      throw const OfflinePackageException('ACTIVATION_FAILED');
+    }
+    await prefs.setInt(
+      _access(package.regionId),
+      DateTime.now().toUtc().millisecondsSinceEpoch,
+    );
+    await prefs.remove(stagingKey);
+    if (oldBackupKey != null &&
+        oldBackupKey != newBackupKey &&
+        oldBackupKey != candidateKey) {
+      await _deleteBlob(oldBackupKey);
+    }
+    await _enforceLimits(protectedRegion: package.regionId);
+  }
+
+  Future<int> _storedBytes() async {
+    var total = 0;
+    final root = await _root();
+    if (await root.exists()) {
+      await for (final entity in root.list(followLinks: false)) {
+        if (entity is File &&
+            entity.path.endsWith('.json') &&
+            !entity.path.contains('.tmp-')) {
+          total += await entity.length();
+        }
+      }
+    }
+    for (final key in prefs.getKeys().where(
+      (key) => key.startsWith(_dataPrefix),
+    )) {
+      total += utf8.encode(prefs.getString(key) ?? '').length;
+    }
+    return total;
+  }
+
+  Future<void> _enforceLimits({required String protectedRegion}) async {
+    var packages = await list();
+    var storedBytes = await _storedBytes();
+    while ((packages.length > maxPackages || storedBytes > maxTotalBytes) &&
+        packages.length > 1) {
+      final candidates =
+          packages.where((item) => item.regionId != protectedRegion).toList()
+            ..sort((a, b) {
+              final aa = prefs.getInt(_access(a.regionId)) ?? 0;
+              final bb = prefs.getInt(_access(b.regionId)) ?? 0;
+              return aa.compareTo(bb);
+            });
+      if (candidates.isEmpty) break;
+      await delete(candidates.first.regionId);
+      packages = await list();
+      storedBytes = await _storedBytes();
+    }
+
+    if (storedBytes > maxTotalBytes) {
+      final backupKey = prefs.getString(_backup(protectedRegion));
+      if (backupKey != null) {
+        await _deleteBlob(backupKey);
+        await prefs.remove(_backup(protectedRegion));
+        storedBytes = await _storedBytes();
+      }
+    }
+    if (packages.length > maxPackages || storedBytes > maxTotalBytes) {
+      throw const OfflinePackageException('STORAGE_LIMIT');
+    }
+  }
+
+  Future<void> delete(String region) async {
+    final activePointer = prefs.getString(_active(region));
+    final backupPointer = prefs.getString(_backup(region));
+    final stagingPointer = prefs.getString(_staging(region));
+    for (final pointer in {
+      activePointer,
+      backupPointer,
+      stagingPointer,
+    }.whereType<String>()) {
+      await _deleteBlob(pointer);
+    }
+
+    await prefs.remove(_active(region));
+    await prefs.remove(_backup(region));
+    await prefs.remove(_staging(region));
+    await prefs.remove(_access(region));
+
+    final filePrefix = _safeKey('$_dataPrefix$region:');
+    final root = await _root();
+    if (await root.exists()) {
+      await for (final entity in root.list(followLinks: false)) {
+        if (entity is! File) continue;
+        final name = entity.path.split(Platform.pathSeparator).last;
+        if (name.startsWith(filePrefix)) await entity.delete();
+      }
+    }
+    for (final key
+        in prefs
+            .getKeys()
+            .where((key) => key.startsWith('$_dataPrefix$region:'))
+            .toList()) {
+      await prefs.remove(key);
+    }
+  }
+
+  Future<int> usedBytes() => _storedBytes();
+
+  Future<void> discardStaging() async {
+    for (final key
+        in prefs
+            .getKeys()
+            .where((key) => key.startsWith(_stagingPrefix))
+            .toList()) {
+      final region = key.substring(_stagingPrefix.length);
+      final pointer = prefs.getString(key);
+      final active = prefs.getString(_active(region));
+      final backup = prefs.getString(_backup(region));
+      if (pointer != null && pointer != active && pointer != backup) {
+        await _deleteBlob(pointer);
+      }
+      await prefs.remove(key);
+    }
+    final root = await _root();
+    if (await root.exists()) {
+      await for (final entity in root.list(followLinks: false)) {
+        if (entity is File && entity.path.contains('.tmp-')) {
+          await entity.delete();
+        }
+      }
+    }
+  }
+
+  Future<String?> debugReadActiveRaw(String region) async {
+    final pointer = prefs.getString(_active(region));
+    return pointer == null ? null : _readBlob(pointer);
+  }
+
+  Future<void> debugOverwriteActiveRaw(String region, String raw) async {
+    final pointer = prefs.getString(_active(region));
+    if (pointer == null) {
+      throw const OfflinePackageException('MISSING_ACTIVE_POINTER');
+    }
+    await _writeBlob(pointer, raw);
+  }
+}
+
+String formatOfflineBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) {
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+}
+
+String formatOfflineAge(DateTime? timestamp, DateTime now) {
+  if (timestamp == null) return 'wiek nieznany';
+  final age = now.toUtc().difference(timestamp.toUtc());
+  if (age.isNegative) return 'czas z przyszłości — traktuj jako STALE';
+  if (age.inMinutes < 1) return 'mniej niż minutę';
+  if (age.inHours < 1) return '${age.inMinutes} min';
+  if (age.inDays < 1) return '${age.inHours} h';
+  return '${age.inDays} d';
+}
+
+String _crc32Hex(List<int> bytes) {
+  var crc = 0xffffffff;
+  for (final byte in bytes) {
+    crc ^= byte;
+    for (var i = 0; i < 8; i++) {
+      crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xedb88320 : crc >> 1;
+    }
+  }
+  return ((crc ^ 0xffffffff) & 0xffffffff).toRadixString(16).padLeft(8, '0');
+}
+).hasMatch(existing)) {
       return existing;
     }
     final created =

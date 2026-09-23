@@ -212,19 +212,22 @@ void main() {
     expect(value.manifest['checksum']['algorithm'], 'SHA-256');
   });
 
-  test('legacy SharedPreferences payload is lazily migrated without losing LKG', () async {
-    final prefs = await SharedPreferences.getInstance();
-    final legacy = package();
-    const pointer = 'offline_package_data_v1:04:legacy';
-    await prefs.setString('offline_package_active_v1:04', pointer);
-    await prefs.setString(pointer, legacy.encode());
+  test(
+    'legacy SharedPreferences payload is lazily migrated without losing LKG',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final legacy = package();
+      const pointer = 'offline_package_data_v1:04:legacy';
+      await prefs.setString('offline_package_active_v1:04', pointer);
+      await prefs.setString(pointer, legacy.encode());
 
-    final store = OfflinePackageStore(prefs);
-    final loaded = await store.load('04');
-    expect(loaded?.regionId, '04');
-    expect(prefs.getString(pointer), isNull);
-    expect(await store.debugReadActiveRaw('04'), isNotNull);
-  });
+      final store = OfflinePackageStore(prefs);
+      final loaded = await store.load('04');
+      expect(loaded?.regionId, '04');
+      expect(prefs.getString(pointer), isNull);
+      expect(await store.debugReadActiveRaw('04'), isNotNull);
+    },
+  );
 
   test('failed refresh preserves previous package', () async {
     final prefs = await SharedPreferences.getInstance();
@@ -318,7 +321,7 @@ void main() {
       await store.commit(package());
       final decoded =
           jsonDecode((await store.debugReadActiveRaw('04'))!)
-              as Map<String, dynamic>
+                as Map<String, dynamic>
             ..['schemaVersion'] = 99;
       await store.debugOverwriteActiveRaw('04', jsonEncode(decoded));
       final listed = await store.list();
