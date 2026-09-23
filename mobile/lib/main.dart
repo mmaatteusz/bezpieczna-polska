@@ -22,8 +22,10 @@ import 'push_notifications.dart';
 import 'offline_packages.dart';
 import 'offline_repository.dart';
 import 'offline_data_screen.dart';
+import 'build_config.dart';
 
 Future<void> main() async {
+  validateBuildConfiguration();
   WidgetsFlutterBinding.ensureInitialized();
   final repository = DataRepository(await SharedPreferences.getInstance());
   final pushAdapter =
@@ -573,7 +575,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ],
       const SizedBox(height: 12),
       notice(
-        'Wersja rozwojowa 0.1.0-alpha.15 • pakiety offline • push pozostaje opt-in.',
+        'Wersja rozwojowa 0.1.0-alpha.16 • pakiety offline • push pozostaje opt-in.',
         Icons.science_outlined,
       ),
       heading('Od ostatniej wizyty'),

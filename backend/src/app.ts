@@ -6,12 +6,23 @@ import {radiationStatus} from './radiation.js';
 import {mapLayers,mapQuery,shelterViewport} from './map-layers.js';
 import {securityLevelStatus} from './security-level.js';
 import Fastify from 'fastify';import rateLimit from '@fastify/rate-limit';import {timingSafeEqual} from 'node:crypto';import {z} from 'zod';
+import {APP_VERSION,type AppEnv} from './config.js';
+import {assertSchema} from './migrate.js';
 import {computeStatus,eventSchema,REGIONS,sourceHealth} from './domain.js';import {Store} from './store.js';import {initializeSources,ingest} from './adapters.js';
-export async function buildApp(store:Store,adminToken?:string,push?:PushService){
- const app=Fastify({logger:false,bodyLimit:128*1024});await app.register(rateLimit,{max:100,timeWindow:'1 minute'});
- app.addHook('onSend',async(_,r,p)=>{r.header('Cache-Control','no-store').header('X-Content-Type-Options','nosniff');return p;});
- app.setErrorHandler((e,_,r)=>{if(e instanceof z.ZodError)return r.code(400).send({error:'INVALID_REQUEST'});if(e instanceof Error&&['REVISION_CONFLICT','SHELTER_VERSION_CHANGED'].includes(e.message))return r.code(409).send({error:e.message});const status=typeof e==='object'&&e&&'statusCode'in e?Number(e.statusCode):500;return r.code(status>=400&&status<600?status:500).send({error:'REQUEST_FAILED'});});
- app.get('/healthz',async()=>({ok:true,version:'0.1.0-alpha.15'}));
+export async function buildApp(store:Store,adminToken?:string,push?:PushService,config:{stage?:AppEnv;buildSha?:string;trustProxy?:boolean}={}){
+ const production=config.stage==='production';
+ const app=Fastify({logger:production?{redact:{paths:['req.headers.authorization','req.headers.cookie','*.token','*.secret'],censor:'[redacted]'}}:false,disableRequestLogging:true,trustProxy:config.trustProxy??false,bodyLimit:128*1024,requestTimeout:30000,connectionTimeout:10000,keepAliveTimeout:5000});
+ await app.register(rateLimit,{max:600,timeWindow:'1 minute'});
+ const metrics=new Map<string,{count:number;errors:number;totalMs:number;maxMs:number}>();
+ app.addHook('onResponse',async(req,r)=>{
+  const route=req.routeOptions.url??'unmatched',key=req.method+' '+route,ms=r.elapsedTime;
+  const item=metrics.get(key)??{count:0,errors:0,totalMs:0,maxMs:0};item.count++;item.errors+=Number(r.statusCode>=500);item.totalMs+=ms;item.maxMs=Math.max(item.maxMs,ms);metrics.set(key,item);
+  if(production)req.log.info({component:'api',requestId:req.id,route,status:r.statusCode,durationMs:Math.round(ms)},'request complete');
+ });
+ app.addHook('onSend',async(req,r,p)=>{r.header('Cache-Control','no-store').header('X-Content-Type-Options','nosniff').header('X-Frame-Options','DENY').header('Referrer-Policy','no-referrer').header('X-Request-ID',String(req.id));if(production)r.header('Strict-Transport-Security','max-age=31536000; includeSubDomains');return p;});
+ app.setErrorHandler((e,req,r)=>{if(e instanceof z.ZodError)return r.code(400).send({error:'INVALID_REQUEST'});if(e instanceof Error&&['REVISION_CONFLICT','SHELTER_VERSION_CHANGED'].includes(e.message))return r.code(409).send({error:e.message});const status=typeof e==='object'&&e&&'statusCode'in e?Number(e.statusCode):500;if(status>=500)req.log.error({component:'api',requestId:req.id,errorCode:'REQUEST_FAILED'},'request failed');return r.code(status>=400&&status<600?status:500).send({error:'REQUEST_FAILED'});});
+ const health=async()=>({ok:true,version:APP_VERSION,buildSha:config.buildSha??'unknown',environment:config.stage??'development'});
+ app.get('/health',health);app.get('/healthz',health);
  const regionQuery=z.object({regionId:z.string().refine(v=>v==='PL'||v in REGIONS).default('PL')});
  app.get('/status',async req=>{
   const {regionId}=regionQuery.parse(req.query),{events,health,incidents,radiationMeasurements}=await store.snapshot(),now=new Date();
@@ -52,16 +63,27 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService)
   const {id}=z.object({id:pushDeviceIdSchema}).parse(req.params);
   return push.unregister(id,bearerSecret(req.headers.authorization));
  });
- app.post('/v1/around',async(req,reply)=>{
+ app.post('/v1/around',{config:{rateLimit:{max:120,timeWindow:'1 minute'}}},async(req,reply)=>{
   const q=aroundQuerySchema.parse(req.body);
   if(store.db.kind!=='postgres')return reply.code(503).send({error:'POSTGIS_REQUIRED'});
   return aroundLocation(store,q,new Date());
  });
+ const ready=async(_:unknown,reply:any)=>{
+  try{await store.db.all('SELECT 1 AS ok');if(production&&store.db.kind!=='postgres')throw new Error('POSTGIS_REQUIRED');
+   if(production)await assertSchema(store.db);
+   else if(store.db.kind==='postgres'&&!(await store.db.all("SELECT extname FROM pg_extension WHERE extname='postgis'")).length)throw new Error('POSTGIS_REQUIRED');
+   return reply.send({ready:true,database:store.db.kind,postgis:store.db.kind==='postgres'});
+  }catch{return reply.code(503).send({ready:false,error:'DATABASE_UNAVAILABLE'});}
+ };
+ app.get('/ready',ready);
+ // Legacy readiness contract used by existing preview checks; production probes use /ready.
  app.get('/readyz',async(_,reply)=>{
-  await store.db.all('SELECT 1 AS ok');
-  const sources=sourceHealth(await store.health()).filter(s=>s.enabled);
-  const ready=sources.length>0&&sources.every(s=>s.state==='HEALTHY');
-  return reply.code(ready?200:503).send({ready,database:store.db.kind,sourceHealth:sources});
+  try{
+   await store.db.all('SELECT 1 AS ok');
+   const sources=sourceHealth(await store.health()).filter(s=>s.enabled);
+   const synchronized=sources.length>0&&sources.every(s=>s.state==='HEALTHY');
+   return reply.code(synchronized?200:503).send({ready:synchronized,database:store.db.kind,sourceHealth:sources});
+  }catch{return reply.code(503).send({ready:false,error:'DATABASE_UNAVAILABLE'});}
  });
  const shelterQuery=z.object({regionId:z.string().refine(v=>v==='PL'||v in REGIONS).default('PL'),q:z.string().trim().max(120).default(''),limit:z.coerce.number().int().min(1).max(500).default(50),offset:z.coerce.number().int().min(0).max(500000).default(0),version:z.string().regex(/^[a-f0-9]{64}$/).optional()});
  const sheltersResponse=async(query:z.infer<typeof shelterQuery>,bbox?:[number,number,number,number])=>{
@@ -100,8 +122,10 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService)
  app.get('/v1/incidents/:id/history',async req=>store.incidentHistory(z.object({id:z.string().regex(/^INC-[a-f0-9]{24}$/)}).parse(req.params).id));
  app.get('/v1/events/:id/timeline',async req=>store.timeline(z.object({id:z.string().max(150)}).parse(req.params).id));
  const auth=(actual:string|undefined)=>{const a=Buffer.from(actual??''),b=Buffer.from(`Bearer ${adminToken??''}`);return !!adminToken&&adminToken.length>=32&&a.length===b.length&&timingSafeEqual(a,b);};
- app.post('/admin/events',async(req,r)=>{if(!auth(req.headers.authorization))return r.code(401).send({error:'UNAUTHORIZED'});const b=z.object({event:eventSchema,expectedRevision:z.number().int().nonnegative(),reason:z.string().min(10).max(1000)}).parse(req.body);await store.put({...b.event,reviewed:true},'operator',b.reason,b.expectedRevision);return {ok:true};});
- app.post('/admin/neptun',async(req,r)=>{if(!auth(req.headers.authorization))return r.code(401).send({error:'UNAUTHORIZED'});const b=z.object({track:neptunTrackSchema,expectedRevision:z.number().int().nonnegative(),reason:z.string().min(10).max(1000)}).parse(req.body);await store.putNeptunTrack({...b.track,reviewed:true},'operator',b.reason,b.expectedRevision);return {ok:true};});
- let running=false;app.post('/admin/ingest',async(req,r)=>{if(!auth(req.headers.authorization))return r.code(401).send({error:'UNAUTHORIZED'});if(running)return r.code(409).send({error:'INGEST_RUNNING'});running=true;try{await ingest(store);return {ok:true};}finally{running=false;}});
+ const adminRoute={config:{rateLimit:{max:10,timeWindow:'1 minute'}}};
+ app.get('/admin/metrics',adminRoute,async(req,r)=>{if(!auth(req.headers.authorization))return r.code(401).send({error:'UNAUTHORIZED'});return {version:APP_VERSION,requests:Object.fromEntries(metrics),sources:sourceHealth(await store.health()).map(s=>({id:s.id,state:s.state,lastSuccessfulSyncAt:s.lastSuccessfulSyncAt,errorCode:s.errorCode}))};});
+ app.post('/admin/events',adminRoute,async(req,r)=>{if(!auth(req.headers.authorization))return r.code(401).send({error:'UNAUTHORIZED'});const b=z.object({event:eventSchema,expectedRevision:z.number().int().nonnegative(),reason:z.string().min(10).max(1000)}).parse(req.body);await store.put({...b.event,reviewed:true},'operator',b.reason,b.expectedRevision);return {ok:true};});
+ app.post('/admin/neptun',adminRoute,async(req,r)=>{if(!auth(req.headers.authorization))return r.code(401).send({error:'UNAUTHORIZED'});const b=z.object({track:neptunTrackSchema,expectedRevision:z.number().int().nonnegative(),reason:z.string().min(10).max(1000)}).parse(req.body);await store.putNeptunTrack({...b.track,reviewed:true},'operator',b.reason,b.expectedRevision);return {ok:true};});
+ let running=false;app.post('/admin/ingest',adminRoute,async(req,r)=>{if(!auth(req.headers.authorization))return r.code(401).send({error:'UNAUTHORIZED'});if(running)return r.code(409).send({error:'INGEST_RUNNING'});running=true;try{await ingest(store);return {ok:true};}finally{running=false;}});
  await initializeSources(store);return app;
 }

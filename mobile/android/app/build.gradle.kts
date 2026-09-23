@@ -4,6 +4,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val bpEnv = providers.environmentVariable("BP_ENV").orElse("preview").get()
+require(bpEnv in setOf("development", "preview", "production")) { "Invalid BP_ENV" }
+val releaseKeys = listOf("ANDROID_KEYSTORE_PATH", "ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD")
+val hasReleaseKeys = releaseKeys.all { !System.getenv(it).isNullOrBlank() }
+
 android {
     namespace = "pl.bezpiecznapolska.bezpieczna_polska"
     compileSdk = flutter.compileSdkVersion
@@ -15,8 +20,11 @@ android {
     }
 
     defaultConfig {
-        // Separate package for preview builds.
-        applicationId = "pl.bezpiecznapolska.preview"
+        applicationId = when (bpEnv) {
+            "production" -> "pl.bezpiecznapolska"
+            "preview" -> "pl.bezpiecznapolska.preview"
+            else -> "pl.bezpiecznapolska.dev"
+        }
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -29,12 +37,27 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKeys) {
+            create("production") {
+                storeFile = file(System.getenv("ANDROID_KEYSTORE_PATH"))
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
-            // PREVIEW ONLY. Production requires an owner-managed signing key.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (hasReleaseKeys) signingConfig = signingConfigs.getByName("production")
         }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.name.contains("Release") } &&
+        (bpEnv != "production" || !hasReleaseKeys)) {
+        throw GradleException("Release requires BP_ENV=production and all owner-managed signing secrets")
     }
 }
 

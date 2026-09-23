@@ -1,0 +1,193 @@
+name: Alpha.16 production infrastructure and release gate
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ['v0.1.0-alpha.16-rc.*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: production-release-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgis:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: disposable_ci_only
+          POSTGRES_DB: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://test:disposable_ci_only@localhost:5432/test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Backend full suite with real PostGIS
+        working-directory: backend
+        run: npm ci && npm run build && npm test
+      - name: Version and tag consistency
+        run: node scripts/validate-release.mjs
+      - name: Production migration idempotence and schema check
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://test:disposable_ci_only@localhost:5432/test
+        run: |
+          node dist/migrate.js
+          node dist/migrate.js
+      - name: Seed restart persistence
+        working-directory: backend
+        run: node scripts/ua-postgis-restart.mjs seed
+      - name: Restart real database
+        run: |
+          docker restart ${{ job.services.postgis.id }}
+          for i in $(seq 1 30); do
+            if docker exec ${{ job.services.postgis.id }} pg_isready -U test -d test; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify restart persistence
+        working-directory: backend
+        run: node scripts/ua-postgis-restart.mjs verify
+      - name: Backup and restore actual PostGIS data in isolated databases
+        run: |
+          docker run --rm --network host -v "$PWD:/repo" -w /repo \
+            -e TEST_DATABASE_URL="$TEST_DATABASE_URL" postgis/postgis:17-3.5 \
+            bash backend/scripts/restore-smoke.sh
+      - name: Security audit report
+        working-directory: backend
+        run: npm audit --omit=dev --audit-level=high
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Flutter full shared Android/iOS regression
+        working-directory: mobile
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Assert offline, NEPTUN and push contracts
+        run: |
+          cd mobile && flutter test --no-pub test/offline_packages_test.dart test/build_config_test.dart
+          cd ../backend
+          node --import tsx --test test/neptun.test.ts test/push.test.ts
+      - name: Live official-source smoke checks (external availability is advisory)
+        working-directory: backend
+        continue-on-error: true
+        run: |
+          for source in rcb wczk paa cyber sg service-incidents ukraine; do
+            node "scripts/live-$source.mjs" "../output/$source.json" || echo "$source unavailable: adapter fallback/STALE must remain safe"
+          done
+  android-release:
+    needs: verify
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
+      APP_ENV: production
+      BP_ENV: production
+      ENABLE_DEVELOPER_SETTINGS: 'false'
+      BACKEND_SHA: ${{ vars.PRODUCTION_BACKEND_SHA }}
+      ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - working-directory: backend
+        run: npm ci && npm run build
+      - name: Detect production prerequisites without exposing values
+        id: signing
+        shell: bash
+        run: |
+          if [[ -n "$API_BASE_URL" && -n "$BACKEND_SHA" && -n "$ANDROID_KEYSTORE_B64" && -n "$ANDROID_KEYSTORE_PASSWORD" && -n "$ANDROID_KEY_ALIAS" && -n "$ANDROID_KEY_PASSWORD" ]]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'Production artifact unavailable: configure real backend and owner signing secrets.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Reject an incomplete production release after full verification
+        if: steps.signing.outputs.ready != 'true'
+        run: |
+          echo 'No signed production artifact: configure real host, deployed backend SHA and Android signing secrets.' >&2
+          exit 1
+      - name: Validate deployed production API and version
+        if: steps.signing.outputs.ready == 'true'
+        run: node scripts/validate-release.mjs --production
+      - uses: actions/setup-java@v4
+        if: steps.signing.outputs.ready == 'true'
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@v2
+        if: steps.signing.outputs.ready == 'true'
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Install signing key outside the repository
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        run: |
+          umask 077
+          echo "$ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+      - name: Build signed AAB and optional release APK
+        if: steps.signing.outputs.ready == 'true'
+        working-directory: mobile
+        run: |
+          flutter pub get
+          flutter build appbundle --release --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false
+          flutter build apk --release --split-per-abi --target-platform android-arm64 --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false
+      - name: Verify signatures, identifiers and SHA-256
+        if: steps.signing.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          cp mobile/build/app/outputs/bundle/release/app-release.aab output/Bezpieczna_Polska_0.1.0-alpha.16.aab
+          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk output/Bezpieczna_Polska_0.1.0-alpha.16-arm64.apk
+          jarsigner -verify -strict output/*.aab
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
+          grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' output/signature-check.txt
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk | tee output/package-info.txt
+          grep -F "name='pl.bezpiecznapolska'" output/package-info.txt
+          grep -F "versionName='0.1.0-alpha.16'" output/package-info.txt
+          (cd output && sha256sum *.aab *.apk > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        if: steps.signing.outputs.ready == 'true'
+        with:
+          name: Bezpieczna_Polska_alpha16_signed_release
+          path: output/
+          if-no-files-found: error
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
