@@ -27,6 +27,8 @@ export const SOURCES = [
   {id: 'SHELTERS', name: 'Punkty schronienia PSP / dane.gov.pl', url: 'https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce', enabled: true},
   {id: 'LEVELS', name: 'Stopnie alarmowe RP', url: 'https://www.gov.pl/web/rcb/komunikaty', enabled: true},
   {id: 'RSO', name: 'Regionalny System Ostrzegania / WCZK', url: 'https://komunikaty.tvp.pl/', enabled: true},
+  {id: 'IMGW_METEO', name: 'IMGW-PIB — ostrzeżenia meteorologiczne', url: 'https://danepubliczne.imgw.pl/api/data/warningsmeteo', enabled: true, implementation:'OFFICIAL_PUBLIC_WARNINGS_API', integrationNote:'Bieżący oficjalny feed ostrzeżeń. Dokładny komunikat 404 No products were found jest normalizowany do pustej listy; każdy inny błąd pozostaje błędem źródła.'},
+  {id: 'IMGW_HYDRO', name: 'IMGW-PIB — ostrzeżenia hydrologiczne', url: 'https://danepubliczne.imgw.pl/api/data/warningshydro', enabled: true, implementation:'OFFICIAL_PUBLIC_WARNINGS_API', integrationNote:'Bieżący oficjalny feed ostrzeżeń hydrologicznych; archiwum nie jest używane jako dowód bieżącego stanu.'},
   {id: 'PAA', name: 'PAA — komunikaty', url: 'https://www.gov.pl/web/paa/aktualnosci2', enabled: true},
   {id: 'PAA_MEASUREMENTS', name: 'PAA — pomiary (format niezweryfikowany)', url: 'https://monitoring.paa.gov.pl/maps-portal/', enabled: false, implementation:'BLOCKED_SOURCE_VERIFICATION', integrationNote:'Portal zwrócił blokadę WAF. Nie zweryfikowano formatu stacji i pomiarów; brak integracji zamiast domyślonego API.'},
   {id: 'CERT', name: 'CERT Polska — komunikaty bezpieczeństwa', url: 'https://moje.cert.pl/komunikaty/', enabled: true},

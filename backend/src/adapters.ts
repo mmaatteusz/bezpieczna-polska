@@ -4,6 +4,7 @@ import {policeAdapter,pspIncidentsAdapter,isAllowedPoliceUrl,} from './service-i
 import {sgAdapter,isAllowedSgUrl} from './sg-adapter.js';
 import {certAdapter,CERT_FEED,CSIRT_GOV_RSS_PAGE} from './cyber-adapter.js';
 import {paaAdapter} from './paa-adapter.js';
+import {imgwMeteoAdapter,imgwHydroAdapter,isAllowedImgwUrl} from './imgw-adapter.js';
 import {wczkAdapters,WCZK_PODKARPACKIE} from './wczk-adapter.js';
 import {securityLevelsAdapter} from './security-level-adapter.js';
 import * as cheerio from 'cheerio';
@@ -51,14 +52,22 @@ export const rsoAdapter:SourceAdapter={
 export async function fetchPublic(url:string):Promise<string>{
  if(isAllowedUaUrl(url))return fetchUa(url);
  const shelterMeta=[SHELTER_DATASET,SHELTER_RESOURCE].includes(url),shelterCurrent=url===SHELTER_ORIGIN_CSV,certFeed=url===CERT_FEED,csirtRssPage=url===CSIRT_GOV_RSS_PAGE,sgSource=isAllowedSgUrl(url),policeSource=isAllowedPoliceUrl(url);
- const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterMeta&&!shelterCurrent&&!certFeed&&!csirtRssPage&&!sgSource&&!policeSource&&url!==UA_BOUNDARY_QUERY&&url!==WCZK_PODKARPACKIE&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
+ const imgwSource=isAllowedImgwUrl(url);
+ const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterMeta&&!shelterCurrent&&!certFeed&&!csirtRssPage&&!sgSource&&!policeSource&&!imgwSource&&url!==UA_BOUNDARY_QUERY&&url!==WCZK_PODKARPACKIE&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
  if(shelterCurrent&&(u.hostname!=='gdziesieukryc.pl'||u.pathname!=='/PS_XML/punkty_schronienia.csv'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(certFeed&&(u.hostname!=='moje.cert.pl'||u.pathname!=='/advisory_feed/advisory/feed/'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(csirtRssPage&&(u.hostname!=='www.csirt.gov.pl'||u.pathname!=='/cer/rss'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(sgSource&&!isAllowedSgUrl(u.href))throw new Error('SOURCE_URL_DENIED');
  if(policeSource&&!isAllowedPoliceUrl(u.href))throw new Error('SOURCE_URL_DENIED');
  const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(shelterCurrent?90000:20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/rss+xml,application/xml,application/json,text/csv'}});
- if(!response.ok)throw new Error(`SOURCE_HTTP_${response.status}`);if(!response.body)throw new Error('SOURCE_EMPTY_BODY');
+ if(!response.ok){
+  if(imgwSource&&response.status===404){
+   const errorBody=await response.text();
+   if(errorBody.length<=1024){try{const body=JSON.parse(errorBody);if(body?.status===false&&body?.message==='No products were found')return '[]';}catch{}}
+  }
+  throw new Error(`SOURCE_HTTP_${response.status}`);
+ }
+ if(!response.body)throw new Error('SOURCE_EMPTY_BODY');
  const limit=(shelterCurrent?64:4)*1024*1024;let size=0;const chunks:Uint8Array[]=[];
  for await(const chunk of response.body){size+=chunk.length;if(size>limit)throw new Error('SOURCE_TOO_LARGE');chunks.push(chunk);}
  return new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks));
@@ -74,7 +83,7 @@ export async function fetchPublicBytes(url:string):Promise<Uint8Array>{
 }
 // Sharing the same coordinator prevents timer/admin overlap on this Store.
 const running = new WeakMap<Store, Promise<void>>();
-export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters,paaAdapter,certAdapter,sgAdapter,policeAdapter,pspIncidentsAdapter,ukraineAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
+export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters,imgwMeteoAdapter,imgwHydroAdapter,paaAdapter,certAdapter,sgAdapter,policeAdapter,pspIncidentsAdapter,ukraineAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
  const existing=running.get(store);if(existing)return existing;
  const task=syncSources(store,adapters,fetchText,fetchBytes).finally(()=>running.delete(store));
  running.set(store,task);return task;
