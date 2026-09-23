@@ -71,7 +71,6 @@ jobs:
             bash backend/scripts/restore-smoke.sh
       - name: Security audit report
         working-directory: backend
-        continue-on-error: true
         run: npm audit --omit=dev --audit-level=high
       - uses: actions/setup-java@v4
         with:
@@ -135,6 +134,11 @@ jobs:
             echo 'ready=false' >> "$GITHUB_OUTPUT"
             echo 'Production artifact unavailable: configure real backend and owner signing secrets.' >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Reject an incomplete production release after full verification
+        if: steps.signing.outputs.ready != 'true'
+        run: |
+          echo 'No signed production artifact: configure real host, deployed backend SHA and Android signing secrets.' >&2
+          exit 1
       - name: Validate deployed production API and version
         if: steps.signing.outputs.ready == 'true'
         run: node scripts/validate-release.mjs --production

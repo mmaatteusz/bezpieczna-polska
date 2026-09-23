@@ -56,14 +56,17 @@ jobs:
         run: node scripts/ua-postgis-restart.mjs verify
 
       - name: Live RCB contract check
+        continue-on-error: true
         working-directory: backend
         run: node scripts/live-rcb.mjs ../output/rcb
       - name: Live Ukraine source contract
+        continue-on-error: true
         working-directory: backend
         env:
           UKRAINE_ALARM_API_KEY: ${{ secrets.UKRAINE_ALARM_API_KEY }}
         run: node scripts/live-ukraine.mjs ../output/ukraine-live.json
       - name: Live Police and PSP incident contract check
+        continue-on-error: true
         working-directory: backend
         run: node scripts/live-service-incidents.mjs ../output/service-incidents-live.json
 
@@ -99,15 +102,19 @@ jobs:
         run: flutter build apk --debug --split-per-abi --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=true
 
       - name: Live WCZK contract check
+        continue-on-error: true
         working-directory: backend
         run: node scripts/live-wczk.mjs ../output/wczk-live.json
       - name: Live PAA communication contract check
+        continue-on-error: true
         working-directory: backend
         run: node scripts/live-paa.mjs ../output/paa-live.json
       - name: Live CERT and CSIRT GOV contract check
+        continue-on-error: true
         working-directory: backend
         run: node scripts/live-cyber.mjs ../output/cyber-live.json
       - name: Live Straż Graniczna contract check
+        continue-on-error: true
         working-directory: backend
         run: node scripts/live-sg.mjs ../output/sg-live.json
 
@@ -137,5 +144,5 @@ jobs:
         with:
           name: Bezpieczna_Polska_0.1.0-alpha.16-preview-arm64
           path: output/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30

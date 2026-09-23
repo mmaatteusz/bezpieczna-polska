@@ -10,7 +10,7 @@ test('production configuration rejects dev endpoints and missing credentials',()
   ADMIN_TOKEN:'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6',PUBLIC_BASE_URL:'https://api.real-domain.pl',
   BUILD_SHA:'a'.repeat(40),TRUST_PROXY:'true'};
  assert.equal(serverConfig(valid).production,true);
- for(const host of ['http://api.real-domain.pl','https://localhost','https://10.0.2.2','https://api-preview.domain.pl','https://api.example','https://api.domain.pl/?token=secret']){
+ for(const host of ['http://api.real-domain.pl','https://localhost','https://10.0.2.2','https://api-preview.domain.pl','https://api.example','https://api.example.org','https://api.domain.pl/?token=secret']){
   assert.throws(()=>publicHttpsUrl(host));
  }
  for(const key of ['DATABASE_URL','ADMIN_TOKEN','PUBLIC_BASE_URL','BUILD_SHA','TRUST_PROXY'] as const){

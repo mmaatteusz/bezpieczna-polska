@@ -5,7 +5,7 @@ export function publicHttpsUrl(value:string):URL{
  const host=url.hostname.toLowerCase();
  if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash||url.pathname!=='/'||
     !host.includes('.')||host==='localhost'||host.endsWith('.localhost')||
-    /(?:^|\.)(?:local|test|example|invalid)$/.test(host)||
+    /(?:^|\.)(?:local|test|example|invalid|example\.(?:com|org|net))$/.test(host)||
     /(?:^|[.-])(?:dev|development|staging|preview)(?:[.-]|$)/.test(host)||
     /^(?:127\.|10\.|192\.168\.|169\.254\.|0\.|172\.(?:1[6-9]|2\d|3[01])\.)/.test(host)||
     host.includes(':'))throw new Error('Production requires a public HTTPS backend hostname');
