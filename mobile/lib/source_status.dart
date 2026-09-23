@@ -52,9 +52,12 @@ class SourceStatusPage extends StatelessWidget {
                 (source['healthStatus'] ?? source['state'] ?? 'UNKNOWN')
                     .toString();
             final enabled = source['enabled'] != false;
-            final displayState = enabled
-                ? label(state)
-                : 'NIEAKTYWNE • POZA SKONFIGUROWANYM ZAKRESEM';
+            final complete = source['complete'] == true;
+            final displayState = !enabled
+                ? 'NIEPODŁĄCZONE • ŚWIADOMIE POZA ZAKRESEM'
+                : state == 'HEALTHY' && !complete
+                ? 'AKTYWNE • CZĘŚCIOWE'
+                : label(state);
             final fallback = source['fallback'];
             return Card(
               child: ExpansionTile(
