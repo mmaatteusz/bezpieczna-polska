@@ -1,0 +1,56 @@
+name: Hardening autofix
+
+on:
+  push:
+    branches: [stage/alpha17-1-hardening]
+    paths:
+      - 'mobile/pubspec.yaml'
+      - 'mobile/pubspec.lock'
+      - 'mobile/lib/push_notifications.dart'
+      - 'mobile/test/push_notifications_test.dart'
+      - '.github/workflows/hardening-autofix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hardening-autofix
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+
+jobs:
+  format-and-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: stage/alpha17-1-hardening
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Resolve exact dependencies and format
+        working-directory: mobile
+        run: |
+          flutter pub get
+          dart format lib/push_notifications.dart test/push_notifications_test.dart
+      - name: Commit exact generated result
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- mobile/lib/push_notifications.dart mobile/test/push_notifications_test.dart mobile/pubspec.lock; then
+            echo 'No generated changes.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add mobile/lib/push_notifications.dart mobile/test/push_notifications_test.dart mobile/pubspec.lock
+          git commit -m 'Hardening: apply Flutter formatter and resolved lockfile'
+          git push origin HEAD:stage/alpha17-1-hardening
