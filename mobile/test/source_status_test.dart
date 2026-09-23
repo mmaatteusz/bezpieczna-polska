@@ -28,38 +28,20 @@ void main() {
     'source page distinguishes active partial, disconnected and broken sources',
     (tester) async {
       final sources = [
-        source(
-          'PARTIAL',
-          state: 'HEALTHY',
-          enabled: true,
-          complete: false,
-        ),
-        source(
-          'FULL',
-          state: 'HEALTHY',
-          enabled: true,
-          complete: true,
-        ),
+        source('PARTIAL', state: 'HEALTHY', enabled: true, complete: false),
+        source('FULL', state: 'HEALTHY', enabled: true, complete: true),
         source(
           'OFF',
           state: 'NOT_CONFIGURED',
           enabled: false,
           complete: false,
         ),
-        source(
-          'BROKEN',
-          state: 'BROKEN',
-          enabled: true,
-          complete: false,
-        ),
+        source('BROKEN', state: 'BROKEN', enabled: true, complete: false),
       ];
 
       await tester.pumpWidget(
         MaterialApp(
-          home: SourceStatusPage(
-            sources: sources,
-            openLink: (_) async {},
-          ),
+          home: SourceStatusPage(sources: sources, openLink: (_) async {}),
         ),
       );
       await tester.pumpAndSettle();
