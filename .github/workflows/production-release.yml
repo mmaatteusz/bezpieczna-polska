@@ -42,7 +42,9 @@ jobs:
         working-directory: backend
         run: npm ci && npm run build && npm test
       - name: Version and tag consistency
-        run: node scripts/validate-release.mjs
+        run: |
+          node scripts/sync-mobile-version.mjs --check
+          node scripts/validate-release.mjs
       - name: Production migration idempotence and schema check
         working-directory: backend
         env:

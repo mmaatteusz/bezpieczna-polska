@@ -23,6 +23,7 @@ import 'offline_packages.dart';
 import 'offline_repository.dart';
 import 'offline_data_screen.dart';
 import 'build_config.dart';
+import 'app_version.dart';
 
 Future<void> main() async {
   validateBuildConfiguration();
@@ -575,7 +576,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ],
       const SizedBox(height: 12),
       notice(
-        'Wersja rozwojowa 0.1.0-alpha.16 • pakiety offline • push pozostaje opt-in.',
+        'Wersja rozwojowa $appVersion • pakiety offline • push pozostaje opt-in.',
         Icons.science_outlined,
       ),
       heading('Od ostatniej wizyty'),
@@ -1151,7 +1152,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       },
                     ),
                   const Text(
-                    '0.1.0-alpha.15 • Offline packages • Push opt-in • GPS tylko na żądanie',
+                    '$appVersion • Pakiety offline • Push opt-in • GPS tylko na żądanie',
                   ),
                 ],
               ),

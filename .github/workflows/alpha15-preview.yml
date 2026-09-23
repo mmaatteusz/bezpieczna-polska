@@ -40,6 +40,8 @@ jobs:
       - name: Backend build and full tests
         working-directory: backend
         run: npm ci && npm run build && npm test
+      - name: Verify displayed mobile version
+        run: node scripts/sync-mobile-version.mjs --check
       - name: Seed persistent PostGIS state
         working-directory: backend
         run: node scripts/ua-postgis-restart.mjs seed

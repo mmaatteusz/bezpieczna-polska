@@ -8,25 +8,34 @@ Aplikacja nie jest zwykłym agregatorem newsów ani mapą wojny. Zachowuje pocho
 
 Aktualna wersja: **0.1.0-alpha.16 — wersja rozwojowa, nie pełne MVP.**
 
-### Co działa w alpha.14
+### Co działa w kodzie alpha.16
 
 - Status Polski i status lokalny z wyjaśnieniem „Dlaczego taki status?”.
 - Oficjalne źródła i integracje: RCB, RSO, WCZK, stopnie alarmowe RP, PAA, CERT Polska, Straż Graniczna, Policja i PSP.
-- Katalog schronień PSP/dane.gov.pl z PostGIS, wyszukiwaniem, mapą, nearest shelter i ograniczonym cache offline.
+- Katalog schronień PSP/dane.gov.pl z PostGIS, wyszukiwaniem, mapą, nearest shelter i pakietami offline regionu. Dostępność bieżących danych PSP zależy od oficjalnego serwera.
 - Alert Center, korelacja i deduplikacja zdarzeń, rewizje i historia korekt.
 - **Obserwowane lokalizacje** zapisywane lokalnie na urządzeniu.
 - **„Wokół mnie”** z jednorazowym GPS uruchamianym wyłącznie przez użytkownika — bez ciągłego śledzenia i bez historii ruchu.
 - Odległość do zdarzenia jest liczona wyłącznie wtedy, gdy źródło dostarcza wiarygodną geometrię. Brak geometrii nie jest traktowany jako brak zdarzeń w pobliżu.
-- Oficjalne alarmy Ukrainy działają jako osobny moduł z historią i administracyjną warstwą mapy.
+- Oddzielny moduł alarmów Ukrainy z historią i administracyjną warstwą mapy; pobieranie live wymaga klucza UkraineAlarm.
 - **NEPTUN** pokazuje wyłącznie historyczne, zakończone i zgrubne ślady OSINT z timeline, źródłem każdej obserwacji i korektami.
-- **Push FCM/APNs** ma opt-in permission flow, szyfrowaną rejestrację urządzenia, preferencje kategorii oraz trwały outbox z retry; bez sekretów providera w aplikacji.
+- **Push FCM/APNs** ma opt-in permission flow, szyfrowaną rejestrację urządzenia, preferencje kategorii oraz trwały outbox z retry; wysyłka wymaga sekretów providera na backendzie i konfiguracji platform mobilnych.
+- Konfiguracje development / preview / production, produkcyjne migracje PostGIS, `/health` i `/ready`, metryki i logi, skrypty backup/restore z testem, szablon Compose + Caddy/HTTPS, release gate oraz ścieżka podpisywania Androida są przygotowane w kodzie i CI. [Runbook](docs/PRODUCTION_RUNBOOK.md).
 - Preview APK jest budowany jako **arm64-v8a only**.
 
-### Najważniejsze ograniczenia
+### Co wymaga konfiguracji
 
-- To nadal wersja alpha, bez produkcyjnego hostingu; prawdziwe wysyłki push wymagają konfiguracji sekretów providera na backendzie i konfiguracji klienta mobilnego.
+- Bieżące alarmy Ukrainy wymagają autoryzowanego `UKRAINE_ALARM_API_KEY`; brak klucza daje jawny `NOT_CONFIGURED`.
+- Wysyłki FCM/APNs wymagają kluczy providera, klucza szyfrowania tokenów oraz konfiguracji Firebase/APNs w aplikacji i urządzeniach. CI testuje kontrakty bez prawdziwych wysyłek.
+- Kandydat na podpisany Android release wymaga prawdziwego publicznego HTTPS backendu, SHA wdrożonej wersji i klucza podpisu właściciela; bez nich bramka wydania odmawia artefaktu.
+
+### Czego jeszcze nie wdrożono i ograniczenia
+
+- Nie ma publicznego hostingu, prawdziwej domeny, skonfigurowanych sekretów produkcyjnych ani wydania podpisanego kluczem właściciela. Szablon wdrożenia i zielony CI nie oznaczają działającej usługi publicznej.
+- iOS ma wspólny kod Flutter i konfigurację buildów, ale brak fizycznej walidacji podpisanego iOS release; panel administratora z MFA nie istnieje.
 - PAA measurements pozostają wyłączone do czasu zweryfikowanego stabilnego publicznego kontraktu.
 - CSIRT GOV pozostaje jawnie `NOT_CONFIGURED`, dopóki oficjalna lista kanałów RSS jest pusta.
+- Niezależny fallback PSP i pełne pokrycie WCZK wszystkich województw nadal wymagają pracy.
 - Część źródeł jest ograniczona do publikacji publicznych i nie stanowi pełnego operacyjnego rejestru zdarzeń.
 - Brak nowych danych lub brak geometrii **nie oznacza bezpieczeństwa**.
 
@@ -75,9 +84,9 @@ Bez backendu aplikacja pokazuje brak danych. Nie korzysta bezpośrednio z API os
 - Alpha.14: Push jest transportem nad wersjonowanymi Eventami/Incidentami. Tokeny są szyfrowane na backendzie, ponowna synchronizacja nie spamuje, UA jest oddzielną kategorią opt-in, a NEPTUN nie generuje operacyjnych powiadomień.
 - Źródła zachowują oryginalną treść. Niepewna interpretacja nie podnosi automatycznie statusu.
 - Historia wersji, korekty, widoczny timeline komunikatu, wyjaśnienie „Dlaczego taki status?”, stan źródeł, deterministyczne statusy, kopie offline, mapa MapLibre z zapytaniami bbox i klastrami PostGIS, systemowy Share Sheet dla „Jestem bezpieczny” oraz 112 wymagające działania użytkownika.
-- Brakuje: pełniejszego offline, RLS, panelu administratora z MFA i wdrożenia produkcyjnego.
+- Brakuje: pełnego offline tilesetu, RLS, panelu administratora z MFA i wdrożenia produkcyjnego.
 
-Aktualny zakres i wdrożenie: [etap RCB](docs/RCB_STAGE.md). Hosting HTTPS nie został jeszcze uruchomiony.
+Aktualny stan wydania: [runbook alpha.16](docs/PRODUCTION_RUNBOOK.md). Hosting HTTPS nie został jeszcze uruchomiony.
 
 Dokumentacja: [architektura](docs/ARCHITECTURE.md), [źródła](docs/SOURCES.md), [walidacja](docs/VALIDATION.md).
 APK preview ma osobny identyfikator `pl.bezpiecznapolska.preview`. Podpis debug nie jest kluczem wydania do sklepu.
