@@ -992,7 +992,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ),
     heading('Prywatność'),
     const Text(
-      'Konto jest niewymagane. GPS jest używany wyłącznie po wyraźnej akcji użytkownika; pozycja nie jest zapisywana ani śledzona w tle. Region, ustawienia, cache i pakiety offline pozostają na urządzeniu. Przy działającym połączeniu serwer może otrzymać jednorazowo współrzędne potrzebne do obliczenia odległości. Gdy używany jest fallback pakietu offline, nearest shelter i „Wokół mnie” są liczone lokalnie i współrzędne nie są wysyłane. Linki otwierają zewnętrzną przeglądarkę.',
+      'Konto jest niewymagane. GPS jest używany wyłącznie po wyraźnej akcji użytkownika; aplikacja nie zapisuje historii ruchu ani nie śledzi pozycji w tle. Region, ustawienia, cache i pakiety offline pozostają na urządzeniu. Przy ręcznym „Wokół mnie” serwer może otrzymać jednorazowo współrzędne potrzebne do obliczenia odległości. Zapisane miejsca są wysyłane do backendu tylko po osobnym włączeniu kategorii powiadomień „Obserwowane lokalizacje”; po jej wyłączeniu backend otrzymuje pustą listę, a po wyrejestrowaniu push dane lokalizacji urządzenia są usuwane z rekordu push. Przy fallbacku offline obliczenia są lokalne. Linki otwierają zewnętrzną przeglądarkę.',
     ),
     const SizedBox(height: 16),
     notice(
