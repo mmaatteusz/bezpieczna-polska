@@ -117,6 +117,10 @@ jobs:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+      FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+      FIREBASE_MESSAGING_SENDER_ID: ${{ vars.FIREBASE_MESSAGING_SENDER_ID }}
+      FIREBASE_ANDROID_APP_ID: ${{ vars.FIREBASE_ANDROID_APP_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -130,16 +134,16 @@ jobs:
         id: signing
         shell: bash
         run: |
-          if [[ -n "$API_BASE_URL" && -n "$BACKEND_SHA" && -n "$ANDROID_KEYSTORE_B64" && -n "$ANDROID_KEYSTORE_PASSWORD" && -n "$ANDROID_KEY_ALIAS" && -n "$ANDROID_KEY_PASSWORD" ]]; then
+          if [[ -n "$API_BASE_URL" && -n "$BACKEND_SHA" && -n "$ANDROID_KEYSTORE_B64" && -n "$ANDROID_KEYSTORE_PASSWORD" && -n "$ANDROID_KEY_ALIAS" && -n "$ANDROID_KEY_PASSWORD" && -n "$FIREBASE_API_KEY" && -n "$FIREBASE_PROJECT_ID" && -n "$FIREBASE_MESSAGING_SENDER_ID" && -n "$FIREBASE_ANDROID_APP_ID" ]]; then
             echo 'ready=true' >> "$GITHUB_OUTPUT"
           else
             echo 'ready=false' >> "$GITHUB_OUTPUT"
-            echo 'Production artifact unavailable: configure real backend and owner signing secrets.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Production artifact unavailable: configure real backend, Android signing and Firebase client variables.' >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Reject an incomplete production release after full verification
         if: steps.signing.outputs.ready != 'true'
         run: |
-          echo 'No signed production artifact: configure real host, deployed backend SHA and Android signing secrets.' >&2
+          echo 'No signed production artifact: configure real host, deployed backend SHA, Android signing and Firebase client variables.' >&2
           exit 1
       - name: Validate deployed production API and version
         if: steps.signing.outputs.ready == 'true'
@@ -167,8 +171,8 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          flutter build appbundle --release --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false
-          flutter build apk --release --split-per-abi --target-platform android-arm64 --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false
+          flutter build appbundle --release --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
+          flutter build apk --release --split-per-abi --target-platform android-arm64 --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
       - name: Verify signatures, identifiers and SHA-256
         if: steps.signing.outputs.ready == 'true'
         shell: bash
