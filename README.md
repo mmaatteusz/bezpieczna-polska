@@ -1,4 +1,4 @@
-> Alpha.16 — infrastruktura wydania: konfiguracja produkcji, migracje, HTTPS, backup z testem restore, monitoring i bramki podpisanego Androida. [Runbook](docs/PRODUCTION_RUNBOOK.md).
+> Alpha.17 — oficjalne ostrzeżenia IMGW-PIB: meteorologiczne i hydrologiczne, z osobnym sourceHealth, rewizjami i bez zgadywania geometrii. [Opis etapu](docs/ALPHA17_IMGW.md).
 
 # Bezpieczna Polska
 
@@ -6,12 +6,12 @@
 
 Aplikacja nie jest zwykłym agregatorem newsów ani mapą wojny. Zachowuje pochodzenie komunikatów, historię korekt, stan źródeł i nie interpretuje braku danych jako braku zagrożenia.
 
-Aktualna wersja: **0.1.0-alpha.16 — wersja rozwojowa, nie pełne MVP.**
+Aktualna wersja: **0.1.0-alpha.17 — wersja rozwojowa, nie pełne MVP.**
 
-### Co działa w kodzie alpha.16
+### Co działa w kodzie alpha.17
 
 - Status Polski i status lokalny z wyjaśnieniem „Dlaczego taki status?”.
-- Oficjalne źródła i integracje: RCB, RSO, WCZK, stopnie alarmowe RP, PAA, CERT Polska, Straż Graniczna, Policja i PSP.
+- Oficjalne źródła i integracje: RCB, RSO, WCZK, stopnie alarmowe RP, IMGW-PIB (ostrzeżenia meteo i hydro), PAA, CERT Polska, Straż Graniczna, Policja i PSP.
 - Katalog schronień PSP/dane.gov.pl z PostGIS, wyszukiwaniem, mapą, nearest shelter i pakietami offline regionu. Dostępność bieżących danych PSP zależy od oficjalnego serwera.
 - Alert Center, korelacja i deduplikacja zdarzeń, rewizje i historia korekt.
 - **Obserwowane lokalizacje** zapisywane lokalnie na urządzeniu.
@@ -74,6 +74,7 @@ Bez backendu aplikacja pokazuje brak danych. Nie korzysta bezpośrednio z API os
 - PSP/dane.gov.pl: pełny import oficjalnego wykazu, PostGIS, wyszukiwanie adresu/gminy, stronicowanie, GeoJSON i ograniczona kopia offline. Szczegóły: [etap PSP](docs/SHELTERS_STAGE.md).
 - RSO: publiczny pełny eksport XML jest podłączony do SourceAdaptera i synchronizowany co 5 minut. Komunikaty są prezentowane jako osobne źródło; aplikacja nie zgaduje, że każdy wpis RSO oznacza bezpośrednie zagrożenie.
 - WCZK: rejestr 16 centrów, działający adapter Podkarpackiego oraz korelacja/deduplikacja RCB–RSO–WCZK z zachowaniem oryginalnych komunikatów.
+- IMGW-PIB: oficjalne bieżące endpointy ostrzeżeń meteorologicznych i hydrologicznych są podłączone jako dwa niezależne źródła. TERYT/obszary są mapowane do województw bez wymyślania geometrii; stopnie 1–3 wpływają na status wyłącznie w okresie ważności. Wymagana atrybucja IMGW jest pokazana w UI.
 - PAA: oficjalne komunikaty radiacyjne są podłączone; pomiary stacji pozostają wyłączone, dopóki nie ma zweryfikowanego stabilnego publicznego kontraktu danych.
 - CERT Polska: oficjalny RSS komunikatów bezpieczeństwa działa jako osobna kategoria CYBER. Publiczna lista RSS CSIRT GOV jest obecnie pusta, więc integracja pozostaje NOT_CONFIGURED.
 - Straż Graniczna: oficjalne Aktualności są filtrowane konserwatywnie do operacyjnych informacji o zamknięciach, ograniczeniach, kontrolach i utrudnieniach granicznych; zwykłe newsy służbowe są odrzucane.
