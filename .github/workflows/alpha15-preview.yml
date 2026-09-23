@@ -85,10 +85,9 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          dart format --output=none --set-exit-if-changed lib test || {
-            git diff -- lib test
-            exit 1
-          }
+          dart format lib/main.dart lib/event_details.dart
+          git diff --exit-code -- lib/main.dart lib/event_details.dart
+          dart format --output=none --set-exit-if-changed lib test
           mkdir -p ../output/formatter
           cp lib/offline_packages.dart lib/offline_repository.dart lib/offline_data_screen.dart test/offline_packages_test.dart pubspec.lock ../output/formatter/
           flutter analyze --no-pub
