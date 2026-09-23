@@ -80,11 +80,16 @@ void main() {
           (_) async => throw StateError('network not expected'),
         ),
       );
-      final manager = PushManager(repository, adapter, secretStore: FakePushSecretStore());
+      final manager = PushManager(
+        repository,
+        adapter,
+        secretStore: FakePushSecretStore(),
+      );
       await manager.initializeWithoutPrompt();
       expect(adapter.requestCount, 0);
       expect(manager.state.permission, PushPermissionState.notDetermined);
       expect(manager.preferences.ukraine, false);
+      expect(manager.preferences.watchedLocations, false);
       await adapter.close();
       manager.dispose();
     },
@@ -113,7 +118,11 @@ void main() {
         });
       }),
     );
-    final manager = PushManager(repository, adapter, secretStore: FakePushSecretStore());
+    final manager = PushManager(
+        repository,
+        adapter,
+        secretStore: FakePushSecretStore(),
+      );
     await tester.pumpWidget(
       MaterialApp(home: NotificationSettingsScreen(manager: manager)),
     );
@@ -167,7 +176,11 @@ void main() {
           });
         }),
       );
-      final manager = PushManager(repository, adapter, secretStore: FakePushSecretStore());
+      final manager = PushManager(
+        repository,
+        adapter,
+        secretStore: FakePushSecretStore(),
+      );
       await manager.initializeWithoutPrompt();
       await manager.enable();
 
@@ -220,7 +233,11 @@ void main() {
         radiusKm: 10,
         regionId: '04',
       );
-      final manager = PushManager(repository, adapter, secretStore: FakePushSecretStore());
+      final manager = PushManager(
+        repository,
+        adapter,
+        secretStore: FakePushSecretStore(),
+      );
       await manager.enable();
       await manager.setPreferences(
         const PushPreferences(
@@ -239,7 +256,11 @@ void main() {
       expect(preferencesBody.containsKey('history'), false);
       expect(preferencesBody['ukraine'], true);
 
-      final restarted = PushManager(repository, adapter, secretStore: FakePushSecretStore());
+      final restarted = PushManager(
+        repository,
+        adapter,
+        secretStore: FakePushSecretStore(),
+      );
       expect(restarted.preferences.ukraine, true);
       expect(restarted.preferences.watchedLocations, true);
       restarted.dispose();
@@ -257,7 +278,11 @@ void main() {
         buildApi: 'https://api.example',
         client: MockClient((_) async => jsonResponse({'error': 'DOWN'}, 503)),
       );
-      final manager = PushManager(repository, adapter, secretStore: FakePushSecretStore());
+      final manager = PushManager(
+        repository,
+        adapter,
+        secretStore: FakePushSecretStore(),
+      );
       await expectLater(manager.enable(), throwsA(isA<ApiFailure>()));
       expect(manager.state.registered, false);
       expect(manager.state.backendReachable, false);
@@ -271,7 +296,11 @@ void main() {
     tester,
   ) async {
     final repository = DataRepository(await SharedPreferences.getInstance());
-    final manager = PushManager(repository, null, secretStore: FakePushSecretStore());
+    final manager = PushManager(
+      repository,
+      null,
+      secretStore: FakePushSecretStore(),
+    );
     await tester.pumpWidget(
       MaterialApp(home: NotificationSettingsScreen(manager: manager)),
     );
