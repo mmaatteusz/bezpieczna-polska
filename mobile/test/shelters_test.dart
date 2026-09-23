@@ -158,16 +158,13 @@ void main() {
         await SharedPreferences.getInstance(),
         buildApi: 'https://build.example',
         client: MockClient((request) async {
+          expect(request.method, 'POST');
           expect(request.url.path, '/v1/shelters/nearest');
-          expect(
-            request.url.queryParameters['lat'],
-            first['latitude'].toString(),
-          );
-          expect(
-            request.url.queryParameters['lon'],
-            first['longitude'].toString(),
-          );
-          expect(request.url.queryParameters['limit'], '3');
+          expect(request.url.query, isEmpty);
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['latitude'], first['latitude']);
+          expect(body['longitude'], first['longitude']);
+          expect(body['limit'], 3);
           return response(result);
         }),
       );
