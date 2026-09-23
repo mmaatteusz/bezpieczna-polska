@@ -263,7 +263,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Miejsce zostanie zapisane tylko na tym urządzeniu. Backend otrzyma jego współrzędne dopiero, gdy ręcznie wybierzesz „Sprawdź”.',
+                  'Miejsce jest zapisywane lokalnie. Współrzędne są wysyłane przy ręcznym „Sprawdź”; dodatkowo mogą być synchronizowane do backendu wyłącznie wtedy, gdy osobno włączysz kategorię „Obserwowane lokalizacje” w ustawieniach powiadomień.',
                 ),
                 if (validation != null) ...[
                   const SizedBox(height: 8),
@@ -534,7 +534,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
         _resultCard(),
         const SizedBox(height: 12),
         const Text(
-          'Obserwowane miejsca są przechowywane lokalnie. Nie są kontem, telemetrią ani historią przemieszczania. Sprawdzenie miejsca wysyła do backendu tylko jego współrzędne i promień potrzebne do bieżącego zapytania.',
+          'Obserwowane miejsca nie tworzą historii przemieszczania. Ręczne „Sprawdź” wysyła współrzędne i promień do bieżącego zapytania. Jeśli włączysz osobno powiadomienia dla obserwowanych lokalizacji, aktualna lista zapisanych punktów jest synchronizowana do backendu do czasu wyłączenia tej kategorii lub wyrejestrowania push.',
         ),
       ],
     );
