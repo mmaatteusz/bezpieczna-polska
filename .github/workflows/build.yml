@@ -59,14 +59,14 @@ jobs:
           set -euo pipefail
           test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner" || sdkmanager 'build-tools;36.0.0'
           mkdir -p output
-          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.17-preview-arm64.apk
+          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_preview_arm64.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
           cd output
           sha256sum *.apk > SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
-          name: Bezpieczna_Polska_0.1.0-alpha.17-preview-arm64
+          name: Bezpieczna_Polska_preview_arm64
           path: output/
           if-no-files-found: error
           retention-days: 30
