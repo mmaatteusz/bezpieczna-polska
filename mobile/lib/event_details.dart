@@ -127,7 +127,9 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
           Text('Do: ${stamp(e.data['validTo'])}'),
           Text('Wersja: ${e.revision}'),
           const SizedBox(height: 12),
-          if (e.sources.any((s) => s['id'] == 'IMGW_METEO' || s['id'] == 'IMGW_HYDRO'))
+          if (e.sources.any(
+            (s) => s['id'] == 'IMGW_METEO' || s['id'] == 'IMGW_HYDRO',
+          ))
             const Padding(
               padding: EdgeInsets.only(bottom: 12),
               child: Text(
