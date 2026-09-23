@@ -308,8 +308,31 @@ class PushManager extends ChangeNotifier {
     final legacySecret = repository.prefs.getString(_legacySecretKey);
     if (secret == null &&
         legacySecret != null &&
-        RegExp(r'^bp_push_[A-Za-z0-9_-]{43}
+        RegExp(r'^bp_push_[A-Za-z0-9_-]{43}$').hasMatch(legacySecret)) {
+      secret = legacySecret;
+      await secretStore.write(secret);
+      await repository.prefs.remove(_legacySecretKey);
+    }
 
+    final validId =
+        id != null &&
+        RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+          caseSensitive: false,
+        ).hasMatch(id);
+    final validSecret =
+        secret != null &&
+        RegExp(r'^bp_push_[A-Za-z0-9_-]{43}$').hasMatch(secret);
+    if (!validId || !validSecret) {
+      id = _randomId();
+      secret = _randomSecret();
+      await repository.prefs.setString(_installationKey, id);
+      await secretStore.write(secret);
+      await repository.prefs.remove(_legacySecretKey);
+      await repository.prefs.setBool(_registeredKey, false);
+    }
+    return (id: id, secret: secret);
+  }
   Uri _uri(String suffix) {
     if (repository.api.isEmpty) {
       throw const ApiFailure(ApiFailureKind.notConfigured);
