@@ -6,6 +6,7 @@ const health:Health={id:'RCB',name:'RCB',url:'https://www.gov.pl/web/rcb',state:
 test('no data is unknown',()=>assert.equal(computeStatus([],[],'04',now).hazardLevel,'UNKNOWN'));
 test('green requires complete fresh configured sources',()=>assert.equal(computeStatus([],[health],'04',now).hazardLevel,'NO_ACTIVE_WARNINGS'));
 test('partial coverage cannot turn green',()=>assert.equal(computeStatus([],[{...health,complete:false}],'04',now).hazardLevel,'UNKNOWN'));
+test('intentionally disabled source is outside configured coverage',()=>assert.equal(computeStatus([],[health,{...health,id:'WCZK-04',enabled:false,state:'NOT_CONFIGURED',complete:false}],'04',now).hazardLevel,'NO_ACTIVE_WARNINGS'));
 test('source failure cannot turn green',()=>assert.equal(computeStatus([],[{...health,state:'BROKEN'}],'04',now).hazardLevel,'UNKNOWN'));
 test('stale source cannot turn green',()=>assert.equal(computeStatus([],[{...health,lastSuccess:'2020-01-01T00:00:00Z'}],'04',now).hazardLevel,'UNKNOWN'));
 test('official critical active warning raises local status',()=>assert.equal(computeStatus([event],[health],'04',now).hazardLevel,'ACTIVE_DANGER'));
