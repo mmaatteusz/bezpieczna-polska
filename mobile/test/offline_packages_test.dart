@@ -200,6 +200,32 @@ void main() {
     expect((await repo.listOfflinePackages()).single.package, isNotNull);
   });
 
+  test('new offline payload is file-backed and uses SHA-256', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final store = OfflinePackageStore(prefs);
+    final value = package();
+    await store.commit(value);
+    final pointer = prefs.getString('offline_package_active_v1:04');
+    expect(pointer, isNotNull);
+    expect(prefs.getString(pointer!), isNull);
+    expect((await store.debugReadActiveRaw('04')), isNotNull);
+    expect(value.manifest['checksum']['algorithm'], 'SHA-256');
+  });
+
+  test('legacy SharedPreferences payload is lazily migrated without losing LKG', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final legacy = package();
+    const pointer = 'offline_package_data_v1:04:legacy';
+    await prefs.setString('offline_package_active_v1:04', pointer);
+    await prefs.setString(pointer, legacy.encode());
+
+    final store = OfflinePackageStore(prefs);
+    final loaded = await store.load('04');
+    expect(loaded?.regionId, '04');
+    expect(prefs.getString(pointer), isNull);
+    expect(await store.debugReadActiveRaw('04'), isNotNull);
+  });
+
   test('failed refresh preserves previous package', () async {
     final prefs = await SharedPreferences.getInstance();
     final good = await repoWithDownload(prefs: prefs);
@@ -234,16 +260,13 @@ void main() {
     await store.commit(first);
     await store.commit(second);
 
-    final activeKey = prefs.getKeys().singleWhere(
-      (key) => key.startsWith('offline_package_active_v1:04'),
-    );
-    final pointer = prefs.getString(activeKey)!;
     final decoded =
-        jsonDecode(prefs.getString(pointer)!) as Map<String, dynamic>;
+        jsonDecode((await store.debugReadActiveRaw('04'))!)
+            as Map<String, dynamic>;
     final manifest = Map<String, dynamic>.from(decoded['manifest'] as Map);
-    manifest['checksum'] = {'algorithm': 'CRC32', 'value': '00000000'};
+    manifest['checksum'] = {'algorithm': 'SHA-256', 'value': '00'};
     decoded['manifest'] = manifest;
-    await prefs.setString(pointer, jsonEncode(decoded));
+    await store.debugOverwriteActiveRaw('04', jsonEncode(decoded));
 
     final listed = await store.list();
     expect(listed.single.state, OfflinePackageState.corrupted);
@@ -255,16 +278,13 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     final store = OfflinePackageStore(prefs);
     await store.commit(package());
-    final activeKey = prefs.getKeys().singleWhere(
-      (key) => key.startsWith('offline_package_active_v1:04'),
-    );
-    final pointer = prefs.getString(activeKey)!;
     final envelope =
-        jsonDecode(prefs.getString(pointer)!) as Map<String, dynamic>;
+        jsonDecode((await store.debugReadActiveRaw('04'))!)
+            as Map<String, dynamic>;
     (envelope['payload'] as Map)['watchedLocations'] = [
       {'id': 'tampered'},
     ];
-    await prefs.setString(pointer, jsonEncode(envelope));
+    await store.debugOverwriteActiveRaw('04', jsonEncode(envelope));
     final listed = await store.list();
     expect(listed.single.state, OfflinePackageState.corrupted);
     await expectLater(
@@ -296,14 +316,11 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       final store = OfflinePackageStore(prefs);
       await store.commit(package());
-      final activeKey = prefs.getKeys().singleWhere(
-        (key) => key.startsWith('offline_package_active_v1:04'),
-      );
-      final pointer = prefs.getString(activeKey)!;
       final decoded =
-          jsonDecode(prefs.getString(pointer)!) as Map<String, dynamic>
+          jsonDecode((await store.debugReadActiveRaw('04'))!)
+              as Map<String, dynamic>
             ..['schemaVersion'] = 99;
-      await prefs.setString(pointer, jsonEncode(decoded));
+      await store.debugOverwriteActiveRaw('04', jsonEncode(decoded));
       final listed = await store.list();
       expect(listed.single.state, OfflinePackageState.refreshRequired);
     },
