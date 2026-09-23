@@ -127,6 +127,15 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
           Text('Do: ${stamp(e.data['validTo'])}'),
           Text('Wersja: ${e.revision}'),
           const SizedBox(height: 12),
+          if (e.sources.any(
+            (s) => s['id'] == 'IMGW_METEO' || s['id'] == 'IMGW_HYDRO',
+          ))
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Źródłem pochodzenia danych jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane Instytutu Meteorologii i Gospodarki Wodnej – Państwowego Instytutu Badawczego zostały przetworzone.',
+              ),
+            ),
           ...e.sources.map(
             (s) => OutlinedButton.icon(
               onPressed: () => widget.openLink(s['url'] as String),

@@ -1,6 +1,6 @@
 # Rejestr źródeł
 
-Weryfikacja publicznych stron: 21–22.09.2026; stan integracji w kodzie: alpha.16. Brak API oznacza brak potwierdzonej dokumentacji; nie dowodzi, że nie istnieje interfejs wewnętrzny.
+Weryfikacja publicznych stron: 21–22.09.2026; stan integracji w kodzie: alpha.17. Brak API oznacza brak potwierdzonej dokumentacji; nie dowodzi, że nie istnieje interfejs wewnętrzny.
 
 | Źródło | Właściciel i URL | Interfejs / stan | Autoryzacja, częstotliwość i ryzyko |
 |---|---|---|---|
@@ -9,6 +9,7 @@ Weryfikacja publicznych stron: 21–22.09.2026; stan integracji w kodzie: alpha.
 | WCZK | Wojewódzkie centra zarządzania kryzysowego; rejestr źródeł w adapterach | Rejestr 16 centrów, niezależny adapter Podkarpackiego i deduplikacja RCB–RSO–WCZK | Nie wszystkie województwa mają niezależny pełny adapter; obecności publikacji RSO nie należy mylić z pełnym pokryciem WCZK |
 | CERT Polska | NASK / CERT Polska, https://moje.cert.pl/komunikaty/ | Oficjalny RSS komunikatów bezpieczeństwa; adapter działa | Publiczne; recent publications, complete=false; komunikaty CYBER nie zmieniają automatycznie głównego statusu fizycznego |
 | CSIRT GOV | CSIRT GOV, https://www.csirt.gov.pl/cer/rss | Oficjalna strona RSS działa, ale lista publicznych kanałów jest obecnie pusta; NOT_CONFIGURED | Nie importujemy raportów historycznych ani nie zgadujemy prywatnego feedu |
+| IMGW_METEO / IMGW_HYDRO | IMGW-PIB, https://danepubliczne.imgw.pl/apiinfo | Oficjalne publiczne JSON API ostrzeżeń meteorologicznych i hydrologicznych; dwa niezależne adaptery ACTIVE_WARNINGS | Interwał min. 5 min. TERYT/obszary mapowane do województw, bez zgadywania geometrii. Dokładna odpowiedź 404 z komunikatem No products were found jest pustym zbiorem; każdy inny błąd fail-closed. Warunki IMGW wymagają wskazania źródła i informacji o przetworzeniu danych |
 | PAA | PAA, https://www.gov.pl/web/paa/aktualnosci2 | Oficjalne komunikaty HTML; adapter działa. Pomiary stacji pozostają niepodłączone | Komunikat i pomiar są rozdzielone. Same wartości pomiarowe nigdy nie podnoszą automatycznie statusu; portal pomiarowy wymaga ponownej weryfikacji kontraktu |
 | SG | Straż Graniczna, https://www.strazgraniczna.pl/pl/aktualnosci | Oficjalne Aktualności; adapter działa z filtrem operacyjnym | Publiczna lista RSS KGSG jest pusta. Importowane są wyłącznie zamknięcia, ograniczenia, kontrole i utrudnienia dotyczące przekraczania granicy; zwykłe newsy służbowe są odrzucane |
 | POLICE | Policja, https://policja.pl/pol/rss | Oficjalny RSS „Aktualności”; adapter działa z konserwatywnym filtrem zdarzeń | Publiczne; recent publications, complete=false. Zatrzymania, kradzieże, odzyskane auta, rutynowy przemyt, statystyki i PR są odrzucane. Brak geokodowania tekstu |

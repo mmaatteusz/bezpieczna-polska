@@ -1,6 +1,6 @@
 # ROADMAP — Bezpieczna Polska
 
-Aktualizacja: 23.09.2026 (alpha.16). To jest lista funkcji obecnych w kodzie `main`, a nie potwierdzenie wdrożenia produkcyjnego.
+Aktualizacja: 23.09.2026 (alpha.17). To jest lista funkcji obecnych w kodzie `main`, a nie potwierdzenie wdrożenia produkcyjnego.
 
 Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ do zrobienia • ⏳ później.
 
@@ -59,11 +59,12 @@ Legenda: ✅ gotowe w kodzie • 🟡 częściowo / wymaga domknięcia • ❌ d
 | 51 | Wygenerowany właścicielskim kluczem podpisany release | ❌ |
 | 52 | Produkcyjne wysyłki FCM/APNs | ❌ |
 | 53 | Fizyczna walidacja iOS release na sprzęcie | ❌ |
+| 54 | IMGW-PIB: oficjalne ostrzeżenia meteorologiczne i hydrologiczne | ✅ |
 
 ## Najbliższa kolejność
 
-1. Alpha.16.1: spójność wersji, dokumentacji i workflowów bez nowych funkcji.
-2. Następny etap funkcjonalny wybrać po zielonym CI i przeglądzie ograniczeń źródeł; wdrożenie na rzeczywistym hoście wymaga osobnych zasobów i sekretów właściciela.
+1. Alpha.17: IMGW-PIB — oficjalne ostrzeżenia meteorologiczne i hydrologiczne, osobny sourceHealth, rewizje i status regionalny.
+2. Domknąć niezależny fallback PSP i kolejne pełne adaptery WCZK bez obniżania rygoru źródeł.
 3. Panel administratora + MFA przed produkcyjnym użyciem endpointów administracyjnych.
 
 Uwagi do częściowych etapów: WCZK ma jeden niezależny adapter oraz integrację RSO dla pozostałych publikacji; PAA ma komunikaty, ale pomiary pozostają zablokowane przez brak zweryfikowanego publicznego kontraktu; CERT Polska działa z oficjalnego RSS, publiczna lista RSS CSIRT GOV jest obecnie pusta, a Straż Graniczna korzysta z oficjalnych Aktualności z konserwatywnym filtrem komunikatów operacyjnych (publiczna lista RSS KGSG jest pusta). Alpha.11 dodaje lokalne obserwowane miejsca oraz zapytania „Wokół mnie”: odległość jest liczona tylko dla Eventów z geometrią, a jawny zakres krajowy/wojewódzki jest prezentowany osobno bez udawania bliskości.
@@ -92,3 +93,8 @@ Atomowe pakiety województwa z manifestem/integrity, pełnym lokalnym katalogiem
 ## Alpha.16 — infrastruktura wydania
 
 W kodzie: konfiguracje trzech środowisk, produkcyjne migracje i wymaganie PostGIS, readiness/health, backup i restore smoke test, metryki, szablon Caddy/HTTPS, release gate oraz pipeline Android signing. Weryfikacja CI nie zastępuje wdrożenia. Nadal brak hostingu i domeny, realnych sekretów, właścicielskiego podpisanego artefaktu, produkcyjnego FCM/APNs i fizycznej walidacji wydania iOS. Szczegóły: [PRODUCTION_RUNBOOK.md](PRODUCTION_RUNBOOK.md).
+
+
+## Alpha.17 — IMGW-PIB
+
+Dwa oficjalne endpointy ostrzeżeń są włączone jako niezależne źródła. Parser waliduje TERYT/województwa, stopnie i okresy ważności, nie tworzy geometrii z tekstu i obsługuje wyłącznie dokładnie rozpoznany wariant pustej listy IMGW. Szczegóły: [ALPHA17_IMGW.md](ALPHA17_IMGW.md).

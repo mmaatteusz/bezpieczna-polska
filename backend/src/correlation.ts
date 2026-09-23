@@ -1,10 +1,10 @@
 import {createHash} from 'node:crypto';
 import type {Event} from './domain.js';
 
-export const CORRELATION_VERSION='1.1.0';
+export const CORRELATION_VERSION='1.2.0';
 export type Incident={eventRevisions:Record<string,number>;id:string;relatedEventIds:string[];primaryEventId:string;sourceIds:string[];sourceCount:number;confirmedSourceCount:number;hasConflictingReports:boolean;revision:number;rulesetVersion:string};
 export const normalize=(s:string)=>s.normalize('NFD').replace(/\p{M}/gu,'').replace(/ł/g,'l').replace(/Ł/g,'L').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-const physicalEligible=(e:Event)=>!e.isDemo&&!e.securityLevel&&e.sources.some(s=>s.id==='RCB'||s.id==='RSO'||s.id==='POLICE'||s.id==='PSP_INCIDENTS'||/^WCZK-\d{2}$/.test(s.id));
+const physicalEligible=(e:Event)=>!e.isDemo&&!e.securityLevel&&e.sources.some(s=>s.id==='RCB'||s.id==='RSO'||s.id==='IMGW_METEO'||s.id==='IMGW_HYDRO'||s.id==='POLICE'||s.id==='PSP_INCIDENTS'||/^WCZK-\d{2}$/.test(s.id));
 const cyberEligible=(e:Event)=>!e.isDemo&&!e.securityLevel&&e.eventType==='CYBER'&&e.sources.some(s=>s.id==='CERT'||s.id==='CSIRT_GOV');
 const eligible=(e:Event)=>e.countryCode!=='UA'&&!e.ukraine&&!e.sources.some(s=>s.id==='UA')&&(physicalEligible(e)||cyberEligible(e));
 const families:(readonly [string,RegExp])[]=[['flood',/powodz|podtop|wezbran/],['wind',/siln\w* wiatr|wichur/],['storm',/burz/],['drought',/susza|suszy/],['fire',/pozar/],['explosion',/wybuch|eksplozj/],['hazmat',/hazmat|chemiczn|amoniak|chlor|skazeni/],['rescue',/ratownicz|katastrof|zawali|wypadek kolejow/],['public_safety',/strzelanin|napastnik|bombow/],['outage',/awari\w* (prad|energet)|przerw\w* w dostaw\w* (prad|energ)/],['water',/wod\w* (do spozycia|niezdatn)|zanieczyszcz\w* wod/]];
