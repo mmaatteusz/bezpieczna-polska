@@ -119,10 +119,10 @@ void main() {
       }),
     );
     final manager = PushManager(
-        repository,
-        adapter,
-        secretStore: FakePushSecretStore(),
-      );
+      repository,
+      adapter,
+      secretStore: FakePushSecretStore(),
+    );
     await tester.pumpWidget(
       MaterialApp(home: NotificationSettingsScreen(manager: manager)),
     );

@@ -255,12 +255,9 @@ class PushManager extends ChangeNotifier {
   StreamSubscription<String>? _tokenSubscription;
   bool _initialized = false;
 
-  PushManager(
-    this.repository,
-    this.adapter, {
-    PushSecretStore? secretStore,
-  }) : secretStore = secretStore ?? SecurePushSecretStore(),
-       _state = PushRegistrationState(
+  PushManager(this.repository, this.adapter, {PushSecretStore? secretStore})
+    : secretStore = secretStore ?? SecurePushSecretStore(),
+      _state = PushRegistrationState(
         configured: adapter?.supported ?? false,
         registered: repository.prefs.getBool(_registeredKey) ?? false,
         backendReachable: repository.api.isNotEmpty,
@@ -333,6 +330,7 @@ class PushManager extends ChangeNotifier {
     }
     return (id: id, secret: secret);
   }
+
   Uri _uri(String suffix) {
     if (repository.api.isEmpty) {
       throw const ApiFailure(ApiFailureKind.notConfigured);
