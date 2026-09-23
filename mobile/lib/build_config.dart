@@ -1,9 +1,7 @@
-import 'package:flutter/foundation.dart' show kReleaseMode;
-
 // A second gate at application startup complements the release workflow's build check.
 const appEnvironment = String.fromEnvironment(
   'APP_ENV',
-  defaultValue: kReleaseMode ? 'production' : 'development',
+  defaultValue: 'development',
 );
 const compiledApi = String.fromEnvironment('API_BASE_URL');
 const compiledDeveloperSettings = bool.fromEnvironment(
