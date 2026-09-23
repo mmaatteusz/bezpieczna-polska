@@ -1,0 +1,77 @@
+name: Verify iOS native build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/ios-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/ios-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-native-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  PREVIEW_API_BASE_URL: ${{ vars.PREVIEW_API_BASE_URL }}
+  FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+  FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+  FIREBASE_MESSAGING_SENDER_ID: ${{ vars.FIREBASE_MESSAGING_SENDER_ID }}
+  FIREBASE_IOS_APP_ID: ${{ vars.FIREBASE_IOS_APP_ID }}
+  FIREBASE_IOS_BUNDLE_ID: ${{ vars.FIREBASE_IOS_BUNDLE_ID }}
+
+jobs:
+  ios-build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          flutter --version
+      - name: Resolve, analyze and test shared iOS-facing code
+        working-directory: mobile
+        run: |
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze --no-pub
+          flutter test --no-pub test/push_notifications_test.dart test/build_config_test.dart test/widget_test.dart
+      - name: Build native iOS release without signing
+        working-directory: mobile
+        run: |
+          flutter build ios --release --no-codesign \
+            --dart-define=APP_ENV=preview \
+            --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL" \
+            --dart-define=ENABLE_DEVELOPER_SETTINGS=false \
+            --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" \
+            --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" \
+            --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define="FIREBASE_IOS_APP_ID=$FIREBASE_IOS_APP_ID" \
+            --dart-define="FIREBASE_IOS_BUNDLE_ID=$FIREBASE_IOS_BUNDLE_ID"
+      - name: Package unsigned smoke artifact
+        run: |
+          mkdir -p output
+          ditto -c -k --sequesterRsrc --keepParent mobile/build/ios/iphoneos/Runner.app output/Bezpieczna_Polska_iOS_unsigned.zip
+          shasum -a 256 output/Bezpieczna_Polska_iOS_unsigned.zip > output/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Bezpieczna_Polska_iOS_unsigned
+          path: output/
+          if-no-files-found: error
+          retention-days: 14

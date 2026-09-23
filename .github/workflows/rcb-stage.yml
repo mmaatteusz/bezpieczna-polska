@@ -32,8 +32,8 @@ jobs:
       FLUTTER_SUPPRESS_ANALYTICS: 'true'
       TEST_DATABASE_URL: postgresql://test:disposable_ci_only@localhost:5432/test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
@@ -57,7 +57,7 @@ jobs:
         continue-on-error: true
         working-directory: backend
         run: node scripts/live-rcb.mjs ../docs/validation/rcb
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: rcb-live-validation
           path: docs/validation/rcb/rcb-live.json

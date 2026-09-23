@@ -51,6 +51,10 @@ class SourceStatusPage extends StatelessWidget {
             final state =
                 (source['healthStatus'] ?? source['state'] ?? 'UNKNOWN')
                     .toString();
+            final enabled = source['enabled'] != false;
+            final displayState = enabled
+                ? label(state)
+                : 'NIEAKTYWNE • POZA SKONFIGUROWANYM ZAKRESEM';
             final fallback = source['fallback'];
             return Card(
               child: ExpansionTile(
@@ -59,7 +63,7 @@ class SourceStatusPage extends StatelessWidget {
                   source['name']?.toString() ?? source['id'].toString(),
                 ),
                 subtitle: Text(
-                  '${label(state)}\nOstatnia poprawna synchronizacja: ${stamp(source['lastSuccessfulSyncAt'] ?? source['lastSuccess'])}',
+                  '$displayState\nOstatnia poprawna synchronizacja: ${stamp(source['lastSuccessfulSyncAt'] ?? source['lastSuccess'])}',
                 ),
                 childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 children: [

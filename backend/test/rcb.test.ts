@@ -18,6 +18,15 @@ test('real RCB article: date precision, recipient provinces, provenance; no inve
  assert.match(e.sourceContentHash!,/^[a-f0-9]{64}$/);
  assert.deepEqual(parseRcbArticle(html.replace('woj. podkarpackiego','woj: podkarpackiego'),url,now).regions,['06','18']);
 });
+test('body update explicitly ending danger closes the original RCB warning',()=>{
+ const updated=html.replace(
+  '<div><p>"UWAGA!',
+  '<div><p>Aktualizacja!</p><p>UWAGA! Zakończył się atak powietrzny na Ukrainę. Brak zagrożenia na terenie Polski.</p><p>"UWAGA!'
+ );
+ const e=parseRcbArticle(updated,url,now);
+ assert.equal(e.lifecycle,'CANCELLED');assert.equal(e.officialWarning,false);assert.equal(e.severity,'INFORMATIONAL');
+ assert.match(e.correction??'',/Brak zagrożenia/);
+});
 test('county opolski in Lubelskie must not become province Opolskie',()=>{
  const text=html.replace('woj. podkarpackiego i lubelskiego','powiatów chełmskiego i opolskiego (woj. lubelskie)');
  assert.deepEqual(parseRcbArticle(text,url,now).regions,['06']);

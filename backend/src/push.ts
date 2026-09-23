@@ -30,7 +30,7 @@ const watchedLocationSchema=z.object({
 export const pushPreferencesSchema=z.object({
  criticalPoland:z.boolean().default(true),
  regionAlerts:z.boolean().default(true),
- watchedLocations:z.boolean().default(true),
+ watchedLocations:z.boolean().default(false),
  cyber:z.boolean().default(true),
  border:z.boolean().default(true),
  ukraine:z.boolean().default(false),
@@ -90,6 +90,7 @@ export interface PushProvider{
 const sha=(value:string)=>createHash('sha256').update(value).digest('hex');
 const b64url=(value:Buffer|string)=>Buffer.from(value).toString('base64url');
 const safeError=(code:string)=>code.replace(/[^A-Z0-9_:\-.]/gi,'_').slice(0,120);
+const scrubbedPreferences=JSON.stringify({criticalPoland:false,regionAlerts:false,watchedLocations:false,cyber:false,border:false,ukraine:false,regionId:null,locations:[]});
 
 export function parsePushEncryptionKey(value:string|undefined):Buffer|null{
  if(!value)return null;
@@ -359,8 +360,8 @@ export class PushService{
   return {ok:true};
  }
  private async scrubDevice(db:PushDb,id:string,reason:string,now:Date){
-  await db.run('UPDATE push_devices SET enabled=0,token_ciphertext=?,token_hash=?,updated_at=?,last_seen_at=?,disabled_at=?,disabled_reason=? WHERE device_id=?',[
-   'revoked','revoked:'+id,now.toISOString(),now.toISOString(),now.toISOString(),reason,id
+  await db.run('UPDATE push_devices SET enabled=0,token_ciphertext=?,token_hash=?,preferences=?,language=NULL,updated_at=?,last_seen_at=?,disabled_at=?,disabled_reason=? WHERE device_id=?',[
+   'revoked','revoked:'+id,scrubbedPreferences,now.toISOString(),now.toISOString(),now.toISOString(),reason,id
   ]);
   await db.run("UPDATE push_outbox SET state='PERMANENT_FAILURE',last_error_code=?,next_attempt_at=? WHERE device_id=? AND state IN ('PENDING','RETRY','SENDING')",[
    safeError(reason),now.toISOString(),id

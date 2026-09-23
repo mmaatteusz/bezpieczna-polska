@@ -7,6 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'model.dart';
 import 'app_version.dart';
@@ -20,6 +21,29 @@ abstract class PushPlatformAdapter {
   Future<PushPermissionState> requestPermission();
   Future<String?> token();
   Stream<String> get tokenChanges;
+}
+
+abstract class PushSecretStore {
+  Future<String?> read();
+  Future<void> write(String value);
+  Future<void> delete();
+}
+
+class SecurePushSecretStore implements PushSecretStore {
+  static const _key = 'push_manage_secret_v1';
+  final FlutterSecureStorage storage;
+
+  SecurePushSecretStore({FlutterSecureStorage? storage})
+    : storage = storage ?? const FlutterSecureStorage();
+
+  @override
+  Future<String?> read() => storage.read(key: _key);
+
+  @override
+  Future<void> write(String value) => storage.write(key: _key, value: value);
+
+  @override
+  Future<void> delete() => storage.delete(key: _key);
 }
 
 class FirebasePushPlatformAdapter implements PushPlatformAdapter {
@@ -131,7 +155,7 @@ class PushPreferences {
   const PushPreferences({
     this.criticalPoland = true,
     this.regionAlerts = true,
-    this.watchedLocations = true,
+    this.watchedLocations = false,
     this.cyber = true,
     this.border = true,
     this.ukraine = false,
@@ -160,7 +184,7 @@ class PushPreferences {
     return PushPreferences(
       criticalPoland: read('criticalPoland', true),
       regionAlerts: read('regionAlerts', true),
-      watchedLocations: read('watchedLocations', true),
+      watchedLocations: read('watchedLocations', false),
       cyber: read('cyber', true),
       border: read('border', true),
       ukraine: read('ukraine', false),
@@ -219,19 +243,21 @@ class PushRegistrationState {
 
 class PushManager extends ChangeNotifier {
   static const _installationKey = 'push_installation_id_v1';
-  static const _secretKey = 'push_manage_secret_v1';
+  static const _legacySecretKey = 'push_manage_secret_v1';
   static const _registeredKey = 'push_registered_v1';
   static const _preferencesKey = 'push_preferences_v1';
   static const _appVersion = appVersion;
 
   final DataRepository repository;
   final PushPlatformAdapter? adapter;
+  final PushSecretStore secretStore;
   PushRegistrationState _state;
   StreamSubscription<String>? _tokenSubscription;
   bool _initialized = false;
 
-  PushManager(this.repository, this.adapter)
-    : _state = PushRegistrationState(
+  PushManager(this.repository, this.adapter, {PushSecretStore? secretStore})
+    : secretStore = secretStore ?? SecurePushSecretStore(),
+      _state = PushRegistrationState(
         configured: adapter?.supported ?? false,
         registered: repository.prefs.getBool(_registeredKey) ?? false,
         backendReachable: repository.api.isNotEmpty,
@@ -272,7 +298,19 @@ class PushManager extends ChangeNotifier {
 
   Future<({String id, String secret})> _identity() async {
     var id = repository.prefs.getString(_installationKey);
-    var secret = repository.prefs.getString(_secretKey);
+    var secret = await secretStore.read();
+
+    // One-way migration from pre-hardening builds. The plaintext legacy copy is
+    // deleted as soon as it has been committed to platform secure storage.
+    final legacySecret = repository.prefs.getString(_legacySecretKey);
+    if (secret == null &&
+        legacySecret != null &&
+        RegExp(r'^bp_push_[A-Za-z0-9_-]{43}$').hasMatch(legacySecret)) {
+      secret = legacySecret;
+      await secretStore.write(secret);
+      await repository.prefs.remove(_legacySecretKey);
+    }
+
     final validId =
         id != null &&
         RegExp(
@@ -286,7 +324,8 @@ class PushManager extends ChangeNotifier {
       id = _randomId();
       secret = _randomSecret();
       await repository.prefs.setString(_installationKey, id);
-      await repository.prefs.setString(_secretKey, secret);
+      await secretStore.write(secret);
+      await repository.prefs.remove(_legacySecretKey);
       await repository.prefs.setBool(_registeredKey, false);
     }
     return (id: id, secret: secret);
@@ -580,6 +619,9 @@ class PushManager extends ChangeNotifier {
         identity.secret,
       );
       await repository.prefs.setBool(_registeredKey, false);
+      await repository.prefs.remove(_installationKey);
+      await repository.prefs.remove(_legacySecretKey);
+      await secretStore.delete();
       _setState(
         _state.copyWith(
           registered: false,
