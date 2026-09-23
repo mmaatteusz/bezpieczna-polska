@@ -36,5 +36,7 @@ export function serverConfig(env:NodeJS.ProcessEnv=process.env){
  }
  const port=Number(env.PORT??8080);
  if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid PORT');
+ const poolMax=Number(env.PG_POOL_MAX??10);
+ if(!Number.isInteger(poolMax)||poolMax<1||poolMax>50)throw new Error('Invalid PG_POOL_MAX');
  return {stage:stage as AppEnv,production,port,host:env.HOST??(production?'0.0.0.0':'127.0.0.1'),buildSha:env.BUILD_SHA??'unknown'};
 }

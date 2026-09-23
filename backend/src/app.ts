@@ -7,6 +7,7 @@ import {mapLayers,mapQuery,shelterViewport} from './map-layers.js';
 import {securityLevelStatus} from './security-level.js';
 import Fastify from 'fastify';import rateLimit from '@fastify/rate-limit';import {timingSafeEqual} from 'node:crypto';import {z} from 'zod';
 import {APP_VERSION,type AppEnv} from './config.js';
+import {assertSchema} from './migrate.js';
 import {computeStatus,eventSchema,REGIONS,sourceHealth} from './domain.js';import {Store} from './store.js';import {initializeSources,ingest} from './adapters.js';
 export async function buildApp(store:Store,adminToken?:string,push?:PushService,config:{stage?:AppEnv;buildSha?:string;trustProxy?:boolean}={}){
  const production=config.stage==='production';
@@ -69,7 +70,8 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
  });
  const ready=async(_:unknown,reply:any)=>{
   try{await store.db.all('SELECT 1 AS ok');if(production&&store.db.kind!=='postgres')throw new Error('POSTGIS_REQUIRED');
-   if(store.db.kind==='postgres'&&!(await store.db.all("SELECT extname FROM pg_extension WHERE extname='postgis'")).length)throw new Error('POSTGIS_REQUIRED');
+   if(production)await assertSchema(store.db);
+   else if(store.db.kind==='postgres'&&!(await store.db.all("SELECT extname FROM pg_extension WHERE extname='postgis'")).length)throw new Error('POSTGIS_REQUIRED');
    return reply.send({ready:true,database:store.db.kind,postgis:store.db.kind==='postgres'});
   }catch{return reply.code(503).send({ready:false,error:'DATABASE_UNAVAILABLE'});}
  };
