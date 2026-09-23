@@ -91,7 +91,7 @@ jobs:
             exit 1
           fi
           sha256sum output/*.apk | tee output/SHA256SUMS.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Bezpieczna_Polska_0.1.0-alpha.11-preview-arm64
           path: output/
