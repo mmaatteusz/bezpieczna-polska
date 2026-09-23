@@ -28,19 +28,19 @@ jobs:
       FLUTTER_SUPPRESS_ANALYTICS: 'true'
       CI: 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Apply reviewed source package
         run: |
           echo 'a1d2aeaab31b2a103110a58adbc496634987f927490fe5e13b75d23e5a77bb59  levels-stage.tar.gz' | sha256sum -c -
           tar -xzf levels-stage.tar.gz
           rm -f mobile/lib/safety_map.dart mobile/assets/europe.geojson mobile/test/goldens/map.png
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - name: Backend and PostGIS
         working-directory: backend
         run: npm ci && npm run build && npm test
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
