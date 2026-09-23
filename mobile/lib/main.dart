@@ -521,6 +521,17 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         online: online,
         openSource: openLink,
       ),
+      if (events.any((e) => e.sources.any((s) => s['id'] == 'IMGW_METEO' || s['id'] == 'IMGW_HYDRO'))) ...[
+        heading('Ostrzeżenia IMGW'),
+        notice(
+          'Źródłem pochodzenia danych jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane Instytutu Meteorologii i Gospodarki Wodnej – Państwowego Instytutu Badawczego zostały przetworzone.',
+          Icons.cloud_outlined,
+        ),
+        ...events
+            .where((e) => e.sources.any((s) => s['id'] == 'IMGW_METEO' || s['id'] == 'IMGW_HYDRO'))
+            .take(5)
+            .map(eventCard),
+      ],
       if (events.any((e) => e.data['eventType'] == 'CYBER')) ...[
         heading('Cyberbezpieczeństwo'),
         notice(
@@ -735,6 +746,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     'POLICE' => 'Policja',
     'PSP_INCIDENTS' => 'PSP',
     'CSIRT_GOV' => 'CSIRT GOV',
+    'IMGW_METEO' => 'IMGW meteo',
+    'IMGW_HYDRO' => 'IMGW hydro',
     _ => value,
   };
 
@@ -744,6 +757,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       'RCB',
       'RSO',
       'WCZK',
+      'IMGW_METEO',
+      'IMGW_HYDRO',
       'PAA',
       'CERT',
       'CSIRT_GOV',
