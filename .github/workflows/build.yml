@@ -64,7 +64,7 @@ jobs:
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
           cd output
           sha256sum *.apk > SHA256SUMS.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: Bezpieczna_Polska_0.1.0-alpha.17-preview-arm64
           path: output/
