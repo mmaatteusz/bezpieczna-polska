@@ -131,15 +131,11 @@ class _OfflineDataScreenState extends State<OfflineDataScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Pakiet zapisuje status regionu, komunikaty, stan źródeł, stopnie alarmowe, dane PAA, katalog schronień i obserwowane miejsca. Dzięki temu podstawowe informacje pozostają dostępne bez internetu.',
+                    'Pobierz region przed utratą internetu. Pakiet zachowuje status, komunikaty, źródła, schronienia i obserwowane miejsca. Dane zapisane są zawsze oznaczone jako OFFLINE / LAST KNOWN GOOD — ich brak nie potwierdza bezpieczeństwa.',
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Dane offline są zawsze oznaczone jako OFFLINE / LAST KNOWN GOOD. Brak nowych danych nie jest potwierdzeniem bezpieczeństwa.',
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Podkład mapy nie jest częścią pakietu. Bez internetu nadal działają zapisane komunikaty, schronienia i lokalne warstwy danych.',
+                    'Podkład mapy może wymagać internetu, ale zapisane warstwy pozostają dostępne.',
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
