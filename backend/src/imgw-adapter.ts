@@ -32,7 +32,11 @@ function dateField(raw:Raw,keys:string[]){
 function parsePayload(text:string):Raw[]{
  let value:unknown;
  try{value=JSON.parse(text);}catch{throw new Error('IMGW_JSON_INVALID');}
- if(isRaw(value)&&value.status===false&&value.message==='No products were found')return [];
+ if(isRaw(value)){
+  const message=typeof value.message==='string'?clean(value.message):'';
+  if(value.status===false&&message==='No products were found')return [];
+  if(/^Brak ostrzeżeń (?:meteorologicznych|hydrologicznych)$/iu.test(message))return [];
+ }
  if(!Array.isArray(value)||value.length>500||value.some(v=>!isRaw(v)))throw new Error('IMGW_JSON_CONTRACT_CHANGED');
  return value as Raw[];
 }

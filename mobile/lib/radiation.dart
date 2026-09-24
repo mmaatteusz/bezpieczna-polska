@@ -147,10 +147,11 @@ class RadiationPanel extends StatelessWidget {
               radiation?.communicationText(now, online) ??
                   'Komunikaty PAA: brak danych',
             ),
-            Text(
-              radiation?.measurementText(now, online) ??
-                  'Pomiary PAA: brak danych',
-            ),
+            if (radiation?.data['measurementState'] != 'NOT_CONFIGURED')
+              Text(
+                radiation?.measurementText(now, online) ??
+                    'Pomiary PAA: brak danych',
+              ),
             const Text(
               'Pomiar promieniowania nie jest alarmem. Archiwum publikacji nie stanowi pełnej listy aktywnych zagrożeń.',
             ),

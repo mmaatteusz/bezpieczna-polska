@@ -157,11 +157,23 @@ export const pspIncidentsAdapter:SourceAdapter={id:'PSP_INCIDENTS',version:PSP_I
   }
   for(const e of previousEvents.filter(e=>e.sources.some(s=>s.id==='PSP_INCIDENTS'))){for(const s of e.sources.filter(s=>s.id==='PSP_INCIDENTS'))urls.add(pspUrl(s.url).href);}
   if(urls.size>60)throw new Error('PSP_INCIDENTS_RECHECK_LIMIT_REACHED');
-  const known=new Set(previousEvents.flatMap(e=>e.sources.filter(s=>s.id==='PSP_INCIDENTS').map(s=>s.url))),events:Event[]=[];
-  const list=[...urls];
+  const previousByUrl=new Map(previousEvents.filter(e=>e.sources.some(s=>s.id==='PSP_INCIDENTS')).flatMap(e=>e.sources.filter(s=>s.id==='PSP_INCIDENTS').map(s=>[s.url,e] as const)));
+  const events:Event[]=[],list=[...urls];let readable=0;
   for(let i=0;i<list.length;i+=4){
-    const parsed=await Promise.all(list.slice(i,i+4).map(async u=>{const e=parsePspArticle(await fetchText(u),u,now);if(!e&&known.has(u))throw new Error('PSP_INCIDENTS_KNOWN_MESSAGE_CONTRACT_CHANGED');return e;}));
+    const parsed=await Promise.all(list.slice(i,i+4).map(async u=>{
+      try{
+        const e=parsePspArticle(await fetchText(u),u,now);readable++;
+        // If an older operational article becomes editorial/unparseable for
+        // classification purposes, keep its last-known-good record.
+        return e??previousByUrl.get(u)??null;
+      }catch{
+        // One malformed/removed gov.pl article must not take the whole PSP
+        // source down. Preserve known records; skip unknown broken articles.
+        return previousByUrl.get(u)??null;
+      }
+    }));
     events.push(...parsed.filter((e):e is Event=>e!==null));
   }
-  return {events,complete:false,coverage:'RECENT_PUBLICATIONS',pagesFetched:pages.size};
+  if(list.length&&readable===0&&events.length===0)throw new Error('PSP_INCIDENTS_ARTICLE_BATCH_FAILED');
+  return {events:[...new Map(events.map(e=>[e.id,e])).values()],complete:false,coverage:'RECENT_PUBLICATIONS',pagesFetched:pages.size};
 }};

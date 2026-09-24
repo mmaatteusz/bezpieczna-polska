@@ -1,7 +1,7 @@
 name: bezpieczna_polska
 description: Cywilne informacje o bezpieczeństwie Polski.
 publish_to: none
-version: 0.1.0-alpha.20+20
+version: 0.1.0-alpha.21+21
 environment:
   sdk: '>=3.10.0 <4.0.0'
 dependencies:

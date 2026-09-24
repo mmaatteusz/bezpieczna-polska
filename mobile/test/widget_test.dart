@@ -70,6 +70,7 @@ void main() {
     expect(find.byKey(const ValueKey('native-map-surface')), findsOneWidget);
     expect(find.byTooltip('Warstwy mapy'), findsOneWidget);
     expect(find.byTooltip('Wróć do wybranej miejscowości'), findsOneWidget);
+    expect(find.text('Ukraina'), findsNothing);
     await tester.tap(find.byTooltip('Warstwy mapy'));
     await tester.pumpAndSettle();
     expect(find.text('Zdarzenia'), findsOneWidget);
