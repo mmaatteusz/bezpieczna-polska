@@ -515,7 +515,7 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(find.text('Dane offline'), findsOneWidget);
     expect(
-      find.textContaining('Podkład mapy nie jest częścią pakietu'),
+      find.textContaining('Podkład mapy może wymagać internetu'),
       findsOneWidget,
     );
     await tester.ensureVisible(find.byType(ExpansionTile).first);
