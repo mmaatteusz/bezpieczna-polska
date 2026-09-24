@@ -517,7 +517,8 @@ void main() {
     await tester.tap(find.byType(ExpansionTile).first);
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.textContaining('Snapshot danych:'), findsOneWidget);
-    expect(find.textContaining('Checksum:'), findsOneWidget);
+    expect(find.textContaining('Integralność: zweryfikowana'), findsOneWidget);
+    expect(find.textContaining('LAST KNOWN GOOD:'), findsOneWidget);
     expect(find.textContaining('Podkład OpenFreeMap'), findsOneWidget);
   });
 
