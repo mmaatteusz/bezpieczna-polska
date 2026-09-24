@@ -487,16 +487,30 @@ class _NeptunMapState extends State<NeptunMap> {
   Future<void> styled() async {
     try {
       await controller?.addSource(
-        'neptun-tracks',
+        'neptun-live',
+        GeojsonSourceProperties(data: widget.data.live['map']),
+      );
+      await controller?.addCircleLayer(
+        'neptun-live',
+        'neptun-live-points',
+        const CircleLayerProperties(
+          circleColor: '#c62828',
+          circleRadius: 8,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: 2,
+        ),
+      );
+      await controller?.addSource(
+        'neptun-history',
         GeojsonSourceProperties(data: widget.data.data['map']),
       );
       await controller?.addLineLayer(
-        'neptun-tracks',
-        'neptun-track-lines',
+        'neptun-history',
+        'neptun-history-lines',
         const LineLayerProperties(
           lineColor: '#7062c8',
-          lineWidth: 4,
-          lineOpacity: 0.72,
+          lineWidth: 3,
+          lineOpacity: 0.55,
         ),
       );
     } catch (_) {
@@ -510,24 +524,29 @@ class _NeptunMapState extends State<NeptunMap> {
 
   @override
   Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       SizedBox(
-        height: 320,
-        child: MapLibreMap(
-          styleString: const String.fromEnvironment(
-            'MAP_STYLE_URL',
-            defaultValue: 'https://tiles.openfreemap.org/styles/liberty',
+        height: 380,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: MapLibreMap(
+            styleString: const String.fromEnvironment(
+              'MAP_STYLE_URL',
+              defaultValue: 'https://tiles.openfreemap.org/styles/liberty',
+            ),
+            initialCameraPosition: const CameraPosition(
+              target: LatLng(49, 31),
+              zoom: 5,
+            ),
+            onMapCreated: (c) => controller = c,
+            onStyleLoadedCallback: styled,
           ),
-          initialCameraPosition: const CameraPosition(
-            target: LatLng(50.3, 25.0),
-            zoom: 4.2,
-          ),
-          onMapCreated: (c) => controller = c,
-          onStyleLoadedCallback: styled,
         ),
       ),
+      const SizedBox(height: 6),
       const Text(
-        'Linie pokazują wyłącznie zgrubny, historyczny przebieg po zakończeniu zdarzenia.',
+        'Czerwone punkty: bieżące, celowo zgrubne pozycje. Fioletowe linie: wyłącznie historia.',
       ),
       if (error != null) Text(error!),
     ],
