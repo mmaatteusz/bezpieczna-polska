@@ -906,31 +906,33 @@ class _ShelterMapState extends State<ShelterMap> {
             FilledButton.tonalIcon(
               onPressed: retryOnlineStyle,
               icon: const Icon(Icons.map_outlined),
-              label: const Text('Spróbuj ponownie podkład online'),
+              label: const Text('Ponów podkład mapy'),
             ),
-          if (viewport != null)
-            Text(
-              '${fresh
-                  ? 'LIVE • dane pobrane z PSP'
-                  : meta?['offlinePackageTimestamp'] != null
-                  ? 'OFFLINE • LAST KNOWN GOOD • snapshot ${stamp(meta?['offlinePackageTimestamp'])}'
-                  : 'Ostatnie zapisane dane — aktualność niepotwierdzona'}\nData danych: ${meta?['dataDate'] ?? 'Nie podano'} • Aktualność źródła: ${stamp(meta?['health']?['lastSuccess'])}\nPunkty w widocznym obszarze: ${meta?['total']}',
+          if (message.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(message),
             ),
-          if (message.isNotEmpty) Text(message),
-          Wrap(
-            children: [
-              TextButton.icon(
-                onPressed: refresh,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Odśwież obszar'),
-              ),
-              TextButton(
-                onPressed: () => widget.openLink(
-                  'https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce',
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              children: [
+                TextButton.icon(
+                  onPressed: refresh,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Odśwież'),
                 ),
-                child: const Text('Źródło: KG PSP / dane.gov.pl'),
-              ),
-            ],
+                const Spacer(),
+                Text(
+                  viewport == null
+                      ? ''
+                      : fresh
+                      ? 'Dane bieżące'
+                      : 'Ostatnia zapisana kopia',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
           ),
         ],
         TextButton(
