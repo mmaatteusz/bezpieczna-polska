@@ -722,26 +722,24 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ];
   }
 
-  String verificationLabel(SafetyEvent event) => switch (
-    event.data['verification']?.toString()
-  ) {
-    'CONFIRMED' => 'POTWIERDZONE',
-    'PROBABLE' => 'PRAWDOPODOBNE',
-    'UNVERIFIED' => 'NIEZWERYFIKOWANE',
-    'REFUTED' => 'ZDEMENTOWANE',
-    'DISPUTED' => 'SPRZECZNE INFORMACJE',
-    _ => 'WERYFIKACJA NIEUSTALONA',
-  };
+  String verificationLabel(SafetyEvent event) =>
+      switch (event.data['verification']?.toString()) {
+        'CONFIRMED' => 'POTWIERDZONE',
+        'PROBABLE' => 'PRAWDOPODOBNE',
+        'UNVERIFIED' => 'NIEZWERYFIKOWANE',
+        'REFUTED' => 'ZDEMENTOWANE',
+        'DISPUTED' => 'SPRZECZNE INFORMACJE',
+        _ => 'WERYFIKACJA NIEUSTALONA',
+      };
 
-  String severityLabel(SafetyEvent event) => switch (
-    event.data['severity']?.toString()
-  ) {
-    'CRITICAL' => 'KRYTYCZNE',
-    'HIGH' || 'SEVERE' => 'WYSOKIE',
-    'ELEVATED' || 'MODERATE' => 'PODWYŻSZONE',
-    'NORMAL' || 'LOW' => 'STANDARDOWE',
-    _ => 'POZIOM NIEUSTALONY',
-  };
+  String severityLabel(SafetyEvent event) =>
+      switch (event.data['severity']?.toString()) {
+        'CRITICAL' => 'KRYTYCZNE',
+        'HIGH' || 'SEVERE' => 'WYSOKIE',
+        'ELEVATED' || 'MODERATE' => 'PODWYŻSZONE',
+        'NORMAL' || 'LOW' => 'STANDARDOWE',
+        _ => 'POZIOM NIEUSTALONY',
+      };
 
   Widget eventCard(SafetyEvent e) => Card(
     child: InkWell(
