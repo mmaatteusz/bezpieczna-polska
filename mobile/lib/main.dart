@@ -722,6 +722,27 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ];
   }
 
+  String verificationLabel(SafetyEvent event) => switch (
+    event.data['verification']?.toString()
+  ) {
+    'CONFIRMED' => 'POTWIERDZONE',
+    'PROBABLE' => 'PRAWDOPODOBNE',
+    'UNVERIFIED' => 'NIEZWERYFIKOWANE',
+    'REFUTED' => 'ZDEMENTOWANE',
+    'DISPUTED' => 'SPRZECZNE INFORMACJE',
+    _ => 'WERYFIKACJA NIEUSTALONA',
+  };
+
+  String severityLabel(SafetyEvent event) => switch (
+    event.data['severity']?.toString()
+  ) {
+    'CRITICAL' => 'KRYTYCZNE',
+    'HIGH' || 'SEVERE' => 'WYSOKIE',
+    'ELEVATED' || 'MODERATE' => 'PODWYŻSZONE',
+    'NORMAL' || 'LOW' => 'STANDARDOWE',
+    _ => 'POZIOM NIEUSTALONY',
+  };
+
   Widget eventCard(SafetyEvent e) => Card(
     child: InkWell(
       onTap: () => details(e),
@@ -736,8 +757,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               children: [
                 badge(e.sources.first['name'] as String),
                 badge(e.badge),
+                badge(verificationLabel(e)),
+                badge(severityLabel(e)),
                 badge(e.provenance),
-                if (e.sourceSummary != null) badge(e.sourceSummary!),
+                if (e.sources.length > 1)
+                  badge('POŁĄCZONO ${e.sources.length} ŹRÓDŁA'),
                 if (e.hasConflictingReports)
                   badge('RÓŻNICE MIĘDZY KOMUNIKATAMI'),
                 if (eventSourceState(e) == 'STALE')
