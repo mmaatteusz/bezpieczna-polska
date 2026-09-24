@@ -40,6 +40,12 @@ jobs:
           --health-interval 10s --health-timeout 5s --health-retries 10
     env:
       TEST_DATABASE_URL: postgresql://test:disposable_ci_only@localhost:5432/test
+      BP_ENV: preview
+      PREVIEW_API_BASE_URL: ${{ vars.PREVIEW_API_BASE_URL }}
+      FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+      FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+      FIREBASE_MESSAGING_SENDER_ID: ${{ vars.FIREBASE_MESSAGING_SENDER_ID }}
+      FIREBASE_ANDROID_APP_ID: ${{ vars.FIREBASE_ANDROID_APP_ID }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -83,15 +89,34 @@ jobs:
         run: flutter test --no-pub --reporter expanded
       - name: Build Android preview
         working-directory: mobile
-        run: flutter build apk --debug --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=true
+        run: >-
+          flutter build apk --debug --split-per-abi --target-platform android-arm64
+          --dart-define=APP_ENV=preview
+          --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL"
+          --dart-define=ENABLE_DEVELOPER_SETTINGS=false
+          --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY"
+          --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"
+          --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"
+          --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
       - name: Prepare artifact
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p output
-          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_preview_arm64.apk
+          VERSION="$(node -p "require('./backend/package.json').version")"
+          BUILD="$(sed -nE 's/^version: [^+]+\+([0-9]+)$/\1/p' mobile/pubspec.yaml)"
+          EXPECTED_CODE="$((2000 + BUILD))"
+          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_preview_arm64.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
+          grep -F "native-code: 'arm64-v8a'" output/package-info.txt
+          if grep -E "native-code:.*(armeabi-v7a|x86_64)" output/package-info.txt; then
+            echo "Unexpected non-arm64 native libraries in arm64 preview APK" >&2
+            exit 1
+          fi
+          grep -F "versionName='${VERSION}'" output/package-info.txt
+          grep -F "versionCode='${EXPECTED_CODE}'" output/package-info.txt
+          grep -F "name='pl.bezpiecznapolska.preview'" output/package-info.txt
           sha256sum output/*.apk | tee output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:

@@ -107,7 +107,7 @@ void main() {
       }
       expect(find.textContaining('CVE-2026-12345'), findsOneWidget);
 
-      await tester.tap(find.text('Alerty').last);
+      await tester.tap(find.byIcon(Icons.campaign_outlined).last);
       await tester.pumpAndSettle();
       expect(find.textContaining('CVE-2026-12345'), findsOneWidget);
       await tester.tap(find.text('Wszystkie').last);

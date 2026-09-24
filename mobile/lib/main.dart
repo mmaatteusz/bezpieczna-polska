@@ -305,6 +305,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               ],
             ),
           ),
+          dataStateStrip(),
           if (error != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -314,6 +315,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             child: RefreshIndicator(
               onRefresh: refresh,
               child: ListView(
+                key: PageStorageKey<int>(page),
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                 children: switch (page) {
                   0 => statusPage(),
@@ -400,6 +402,69 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ),
     child: Text(text, style: Theme.of(context).textTheme.labelSmall),
   );
+  Widget dataStateStrip() {
+    final now = DateTime.now();
+    final nationalFresh =
+        online && (snapshot?.freshAt(now, national: true) ?? false);
+    final localFresh =
+        online && (snapshot?.freshAt(now, national: false) ?? false);
+    final hasOffline = !online && offlinePackageData != null;
+    final hasAnyData = snapshot != null || offlinePackageData != null;
+    final label = nationalFresh && localFresh
+        ? 'LIVE • dane bieżące'
+        : hasOffline
+        ? 'OFFLINE • LAST KNOWN GOOD'
+        : hasAnyData
+        ? 'STALE • aktualność niepotwierdzona'
+        : 'Brak bieżących danych';
+    final icon = nationalFresh && localFresh
+        ? Icons.cloud_done_outlined
+        : hasOffline
+        ? Icons.offline_pin_outlined
+        : hasAnyData
+        ? Icons.schedule_outlined
+        : Icons.cloud_off_outlined;
+    final timestamp = hasOffline
+        ? offlinePackageData!.snapshotTimestamp.toIso8601String()
+        : snapshot?.data['serverTime'];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    timestamp == null
+                        ? 'Ostatnia aktualizacja: brak'
+                        : 'Ostatnia aktualizacja: ${stamp(timestamp)}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget statusCard(bool national) {
     final fresh =
         online &&
@@ -457,6 +522,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     final changed = events
         .where((e) => e.revision > (seen[e.id] ?? 0))
         .toList();
+    final active = events.where((e) {
+      if (e.data['lifecycle']?.toString() != 'ACTIVE') return false;
+      final validTo = DateTime.tryParse(e.data['validTo']?.toString() ?? '');
+      return validTo == null || validTo.isAfter(DateTime.now());
+    }).toList();
     return [
       if (!online && offlinePackageData != null)
         notice(
@@ -470,6 +540,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
           Icons.cloud_off,
         ),
+      heading('Najważniejsze aktywne komunikaty'),
+      if (active.isEmpty)
+        empty(
+          'Brak aktywnych komunikatów w pobranych danych',
+          'To nie jest potwierdzenie braku zagrożeń. Sprawdź też aktualność źródeł powyżej.',
+          Icons.notifications_none_outlined,
+        ),
+      ...active.take(3).map(eventCard),
       OutlinedButton.icon(
         onPressed: () => setState(() {
           page = 1;
@@ -584,7 +662,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ],
       const SizedBox(height: 12),
       notice(
-        'Wersja rozwojowa $appVersion • pakiety offline • push pozostaje opt-in.',
+        'Każdy komunikat zachowuje źródło i czas pobrania. Brak nowych danych nie jest traktowany jako potwierdzenie bezpieczeństwa.',
         Icons.science_outlined,
       ),
       heading('Od ostatniej wizyty'),
@@ -638,12 +716,31 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         OutlinedButton.icon(
           onPressed: openSources,
           icon: const Icon(Icons.hub_outlined),
-          label: const Text('Pokaż wszystkie źródła i diagnostykę'),
+          label: const Text('Sprawdź stan wszystkich źródeł'),
         ),
       heading('Zapisane komunikaty regionu'),
       ...events.take(30).map(eventCard),
     ];
   }
+
+  String verificationLabel(SafetyEvent event) =>
+      switch (event.data['verification']?.toString()) {
+        'CONFIRMED' => 'POTWIERDZONE',
+        'PROBABLE' => 'PRAWDOPODOBNE',
+        'UNVERIFIED' => 'NIEZWERYFIKOWANE',
+        'REFUTED' => 'ZDEMENTOWANE',
+        'DISPUTED' => 'SPRZECZNE INFORMACJE',
+        _ => 'WERYFIKACJA NIEUSTALONA',
+      };
+
+  String severityLabel(SafetyEvent event) =>
+      switch (event.data['severity']?.toString()) {
+        'CRITICAL' => 'KRYTYCZNE',
+        'HIGH' || 'SEVERE' => 'WYSOKIE',
+        'ELEVATED' || 'MODERATE' => 'PODWYŻSZONE',
+        'NORMAL' || 'LOW' => 'STANDARDOWE',
+        _ => 'POZIOM NIEUSTALONY',
+      };
 
   Widget eventCard(SafetyEvent e) => Card(
     child: InkWell(
@@ -659,8 +756,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               children: [
                 badge(e.sources.first['name'] as String),
                 badge(e.badge),
+                badge(verificationLabel(e)),
+                badge(severityLabel(e)),
                 badge(e.provenance),
-                if (e.sourceSummary != null) badge(e.sourceSummary!),
+                if (e.sources.length > 1)
+                  badge('POŁĄCZONE ŹRÓDŁA: ${e.sources.length}'),
                 if (e.hasConflictingReports)
                   badge('RÓŻNICE MIĘDZY KOMUNIKATAMI'),
                 if (eventSourceState(e) == 'STALE')
@@ -925,8 +1025,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ShelterMap(
         radiation: snapshot?.data['radiation'],
         radiationOnline: online,
+        events: events,
+        watchedLocations: widget.repository.watchedLocations,
+        openEvent: details,
         key: ValueKey(
-          'map:${widget.repository.api}:$region:$ukraine:${widget.repository.dataGeneration}',
+          'map:${widget.repository.api}:$region:$ukraine:${widget.repository.dataGeneration}:${widget.repository.watchedLocations.length}',
         ),
         repository: widget.repository,
         region: region,
@@ -937,7 +1040,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     notice(
       ukraine
           ? 'Alarmy Ukrainy są osobnym kontekstem. Brak oznaczeń nie oznacza braku alarmów.'
-          : 'Mapa pokazuje punkty schronienia wg PSP. Liczby grupują punkty w widocznym obszarze. Przybliż mapę, aby wybrać punkt. Mapa nie potwierdza bieżącej dostępności i nie służy do nawigacji. Offline dostępne są tylko zapisane obszary; podkład mapy wymaga internetu lub wcześniejszego cache.',
+          : 'Mapa pokazuje schronienia, zdarzenia z potwierdzoną lokalizacją i zapisane obserwowane miejsca. Dotknij punktu, aby zobaczyć szczegóły. Twoja pozycja jest pobierana wyłącznie po naciśnięciu przycisku lokalizacji i nie jest zapisywana. Offline dostępne są zapisane warstwy; podkład mapy może wymagać internetu.',
       Icons.info_outline,
     ),
     if (!ukraine) ...events.where((e) => e.hasPoint).take(20).map(eventCard),

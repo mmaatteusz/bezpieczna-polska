@@ -135,14 +135,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(adapter.requestCount, 0);
     expect(find.text('Włączyć powiadomienia?'), findsOneWidget);
-    expect(find.textContaining('bez historii GPS'), findsOneWidget);
+    expect(
+      find.textContaining('nie zapisuje historii przemieszczania'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Kontynuuj'));
     await tester.pumpAndSettle();
     expect(adapter.requestCount, 1);
-    expect(find.text('Powiadomienia włączone'), findsOneWidget);
-    expect(find.text('Token zarejestrowany'), findsOneWidget);
-    expect(find.text('Provider push: gotowy'), findsOneWidget);
+    expect(find.text('Powiadomienia gotowe'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Systemowa zgoda, rejestracja urządzenia i usługa wysyłki są gotowe',
+      ),
+      findsOneWidget,
+    );
 
     await tester.pumpWidget(const SizedBox());
     await adapter.close();
@@ -305,12 +312,12 @@ void main() {
       MaterialApp(home: NotificationSettingsScreen(manager: manager)),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Backend niedostępny'), findsOneWidget);
+    expect(find.text('Powiadomienia niedostępne w tej wersji'), findsOneWidget);
+    expect(find.text('Wysyłka jest wyłączona'), findsOneWidget);
     expect(
-      find.text('Provider push: brak bezpiecznej konfiguracji lub niegotowy'),
+      find.textContaining('nie ma kompletnej konfiguracji usługi powiadomień'),
       findsOneWidget,
     );
-    expect(find.text('Brak rejestracji tokenu'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     manager.dispose();
   });

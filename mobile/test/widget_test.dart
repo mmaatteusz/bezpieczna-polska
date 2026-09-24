@@ -58,16 +58,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Brak bieżącej oceny sytuacji'), findsNWidgets(2));
     expect(find.text('Skonfiguruj serwer danych'), findsNothing);
+    expect(find.text('STATUS POLSKI'), findsOneWidget);
+    expect(find.textContaining('TWOJA OKOLICA'), findsOneWidget);
+    for (
+      var i = 0;
+      i < 8 &&
+          find
+              .textContaining('Wymagana jest aktualizacja aplikacji')
+              .evaluate()
+              .isEmpty;
+      i++
+    ) {
+      await tester.drag(find.byType(ListView).first, const Offset(0, -250));
+      await tester.pumpAndSettle();
+    }
     expect(
       find.textContaining('Wymagana jest aktualizacja aplikacji'),
       findsOneWidget,
     );
-    expect(find.text('STATUS POLSKI'), findsOneWidget);
-    expect(find.textContaining('TWOJA OKOLICA'), findsOneWidget);
     await tester.tap(find.text('Mapa').last);
     await tester.pumpAndSettle();
     expect(find.byType(MapLibreMap), findsOneWidget);
     expect(find.byKey(const ValueKey('native-map-surface')), findsOneWidget);
+    expect(find.text('Zdarzenia'), findsOneWidget);
+    expect(find.text('Obserwowane miejsca'), findsOneWidget);
     expect(find.text('Punkty schronienia • wszystkie'), findsOneWidget);
     // A native platform view cannot be captured by Linux widget golden tests.
     expect(tester.takeException(), isNull);

@@ -685,7 +685,7 @@ class _NotificationSettingsScreenState
       builder: (dialog) => AlertDialog(
         title: const Text('Włączyć powiadomienia?'),
         content: const Text(
-          'Po kontynuowaniu pojawi się systemowa prośba o zgodę. Backend zapisze token urządzenia i wybrane preferencje alertów. Jeśli włączysz obserwowane lokalizacje, wysyłane są tylko aktualnie zapisane punkty i promienie — bez historii GPS i bez śledzenia w tle.',
+          'Dopiero po kontynuowaniu pojawi się systemowa prośba o zgodę. Wybrane kategorie zostaną zapisane dla tego urządzenia. Obserwowane lokalizacje są wysyłane tylko wtedy, gdy osobno włączysz tę kategorię; aplikacja działa bez historii GPS i nie zapisuje historii przemieszczania.',
         ),
         actions: [
           TextButton(
@@ -704,7 +704,16 @@ class _NotificationSettingsScreenState
     try {
       await widget.manager.enable();
     } catch (_) {
-      // State carries a user-facing network/configuration error.
+      // Stan managera zawiera komunikat dla użytkownika.
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _refresh() async {
+    setState(() => busy = true);
+    try {
+      await widget.manager.refreshForSettings();
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -715,7 +724,7 @@ class _NotificationSettingsScreenState
     try {
       await widget.manager.setPreferences(value);
     } catch (_) {
-      // Keep the local choice and surface backend state below.
+      // Lokalny wybór zostaje zachowany; stan usługi jest pokazany wyżej.
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -724,17 +733,42 @@ class _NotificationSettingsScreenState
   String get _permissionText => switch (widget.manager.state.permission) {
     PushPermissionState.authorized => 'Zgoda systemowa: przyznana',
     PushPermissionState.provisional => 'Zgoda systemowa: tymczasowa',
-    PushPermissionState.denied => 'Brak zgody systemowej',
+    PushPermissionState.denied => 'Zgoda systemowa: odmówiona',
     PushPermissionState.notDetermined => 'Zgoda systemowa: jeszcze nie pytano',
   };
 
   @override
   Widget build(BuildContext context) {
     final state = widget.manager.state, prefs = widget.manager.preferences;
-    final enabled =
-        state.registered &&
-        (state.permission == PushPermissionState.authorized ||
-            state.permission == PushPermissionState.provisional);
+    final permissionGranted =
+        state.permission == PushPermissionState.authorized ||
+        state.permission == PushPermissionState.provisional;
+    final registered = state.registered && permissionGranted;
+    final deliveryReady =
+        registered && state.providerReady && state.backendReachable;
+
+    final title = !state.configured
+        ? 'Powiadomienia niedostępne w tej wersji'
+        : !state.backendReachable
+        ? 'Nie można potwierdzić działania powiadomień'
+        : state.permission == PushPermissionState.denied
+        ? 'Powiadomienia zablokowane w systemie'
+        : deliveryReady
+        ? 'Powiadomienia gotowe'
+        : registered
+        ? 'Urządzenie zapisane, ale wysyłka nie jest aktywna'
+        : 'Powiadomienia wyłączone';
+
+    final description = !state.configured
+        ? 'Ta kompilacja nie ma skonfigurowanej usługi powiadomień. Ustawienia kategorii można przygotować, ale aplikacja nie będzie udawać, że alerty są wysyłane.'
+        : !state.backendReachable
+        ? 'Ostatnia próba połączenia nie powiodła się. Zapisane ustawienia pozostają na urządzeniu.'
+        : registered && !state.providerReady
+        ? 'Urządzenie jest zapisane, ale usługa wysyłki po stronie serwera nie jest gotowa. Do czasu zmiany tego stanu powiadomienia nie są uznawane za działające.'
+        : deliveryReady
+        ? 'Systemowa zgoda, rejestracja urządzenia i usługa wysyłki są gotowe.'
+        : 'Włączenie nastąpi dopiero po Twoim kliknięciu i systemowej zgodzie.';
+
     return Scaffold(
       appBar: AppBar(title: const Text('Powiadomienia')),
       body: ListView(
@@ -742,44 +776,71 @@ class _NotificationSettingsScreenState
         children: [
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    enabled
-                        ? 'Powiadomienia włączone'
-                        : 'Powiadomienia nieaktywne',
-                    style: Theme.of(context).textTheme.titleMedium,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        deliveryReady
+                            ? Icons.notifications_active_outlined
+                            : Icons.notifications_off_outlined,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 8),
+                  Text(description),
+                  const SizedBox(height: 10),
                   Text(_permissionText),
-                  Text(
-                    state.registered
-                        ? 'Token zarejestrowany'
-                        : 'Brak rejestracji tokenu',
-                  ),
-                  Text(
-                    state.backendReachable
-                        ? 'Backend: dostępny przy ostatniej próbie'
-                        : 'Backend niedostępny',
-                  ),
-                  Text(
-                    state.providerReady
-                        ? 'Provider push: gotowy'
-                        : 'Provider push: brak bezpiecznej konfiguracji lub niegotowy',
-                  ),
-                  if (state.error != null) Text(state.error!),
-                  if (busy) const LinearProgressIndicator(),
+                  if (state.error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(state.error!),
+                  ],
+                  if (busy) ...[
+                    const SizedBox(height: 10),
+                    const LinearProgressIndicator(),
+                  ],
+                  if (state.registered) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: busy ? null : _refresh,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Sprawdź ponownie'),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
           const SizedBox(height: 12),
-          if (!enabled)
+          if (!registered && state.configured)
             FilledButton.icon(
               onPressed: busy ? null : _enable,
               icon: const Icon(Icons.notifications_active_outlined),
               label: const Text('Włącz powiadomienia'),
+            ),
+          if (!state.configured)
+            const Card(
+              child: ListTile(
+                leading: Icon(Icons.info_outline),
+                title: Text('Wysyłka jest wyłączona'),
+                subtitle: Text(
+                  'Ta wersja aplikacji nie ma kompletnej konfiguracji usługi powiadomień.',
+                ),
+              ),
             ),
           const SizedBox(height: 8),
           const Text(
@@ -794,7 +855,7 @@ class _NotificationSettingsScreenState
                 : (value) => _update(prefs.copyWith(criticalPoland: value)),
           ),
           SwitchListTile(
-            title: const Text('Alerty obserwowanego województwa'),
+            title: const Text('Alerty wybranego województwa'),
             subtitle: Text(regions[widget.manager.repository.region] ?? ''),
             value: prefs.regionAlerts,
             onChanged: busy
@@ -804,7 +865,7 @@ class _NotificationSettingsScreenState
           SwitchListTile(
             title: const Text('Obserwowane lokalizacje'),
             subtitle: Text(
-              '${widget.manager.repository.watchedLocations.length} zapisanych punktów; bez historii przemieszczania',
+              '${widget.manager.repository.watchedLocations.length} zapisanych punktów • bez historii przemieszczania',
             ),
             value: prefs.watchedLocations,
             onChanged: busy
@@ -812,7 +873,7 @@ class _NotificationSettingsScreenState
                 : (value) => _update(prefs.copyWith(watchedLocations: value)),
           ),
           SwitchListTile(
-            title: const Text('Cyber'),
+            title: const Text('Cyberbezpieczeństwo'),
             value: prefs.cyber,
             onChanged: busy
                 ? null
@@ -837,7 +898,7 @@ class _NotificationSettingsScreenState
           ),
           const SizedBox(height: 12),
           const Text(
-            'Powiadomienia są transportem informacji z backendu. Brak powiadomienia nie oznacza bezpieczeństwa. NEPTUN nie wysyła operacyjnych push.',
+            'Brak powiadomienia nie oznacza bezpieczeństwa. Aplikacja zawsze opiera główny status na stanie danych i źródeł, nie na samym push.',
           ),
           if (state.registered)
             TextButton.icon(
@@ -848,13 +909,13 @@ class _NotificationSettingsScreenState
                       try {
                         await widget.manager.unregister();
                       } catch (_) {
-                        // Keep registration state if the backend did not confirm.
+                        // Rejestracja pozostaje aktywna, jeśli serwer nie potwierdził usunięcia.
                       } finally {
                         if (mounted) setState(() => busy = false);
                       }
                     },
               icon: const Icon(Icons.notifications_off_outlined),
-              label: const Text('Wyrejestruj to urządzenie'),
+              label: const Text('Wyłącz powiadomienia na tym urządzeniu'),
             ),
         ],
       ),

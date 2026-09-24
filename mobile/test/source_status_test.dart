@@ -41,13 +41,38 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('AKTYWNE • CZĘŚCIOWE'), findsOneWidget);
-      expect(find.textContaining('AKTUALNE'), findsOneWidget);
+      expect(find.text('HEALTHY • aktualne: 1'), findsOneWidget);
+      expect(find.text('PARTIAL • niepełne: 1'), findsOneWidget);
+      expect(find.text('DOWN • niedostępne: 1'), findsOneWidget);
+      expect(find.text('NOT_CONFIGURED • niepodłączone: 1'), findsOneWidget);
       expect(
-        find.textContaining('NIEPODŁĄCZONE • ŚWIADOMIE POZA ZAKRESEM'),
+        find.text(
+          'PARTIAL • niepełne\nOstatnia poprawna synchronizacja: Nie podano',
+        ),
         findsOneWidget,
       );
-      expect(find.textContaining('BŁĄD'), findsOneWidget);
+      expect(
+        find.text(
+          'HEALTHY • aktualne\nOstatnia poprawna synchronizacja: Nie podano',
+        ),
+        findsOneWidget,
+      );
+      for (var i = 0; i < 4 && find.text('BROKEN').evaluate().isEmpty; i++) {
+        await tester.drag(find.byType(ListView), const Offset(0, -300));
+        await tester.pumpAndSettle();
+      }
+      expect(
+        find.text(
+          'NOT_CONFIGURED • niepodłączone\nOstatnia poprawna synchronizacja: Nie podano',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'DOWN • niedostępne\nOstatnia poprawna synchronizacja: Nie podano',
+        ),
+        findsOneWidget,
+      );
     },
   );
 }

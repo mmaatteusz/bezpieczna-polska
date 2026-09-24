@@ -138,10 +138,10 @@ void main() {
       );
       await tester.pumpWidget(SafetyApp(repository: repo));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Alerty').last);
+      await tester.tap(find.byIcon(Icons.campaign_outlined).last);
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-        find.text('Komunikaty z 3 źródeł'),
+        find.text('POŁĄCZONE ŹRÓDŁA: 3'),
         200,
         scrollable: find
             .descendant(
@@ -150,7 +150,7 @@ void main() {
             )
             .first,
       );
-      expect(find.text('Komunikaty z 3 źródeł'), findsOneWidget);
+      expect(find.text('POŁĄCZONE ŹRÓDŁA: 3'), findsOneWidget);
       expect(find.text('Powódź — fixture'), findsOneWidget);
       await tester.pumpWidget(
         MaterialApp(
