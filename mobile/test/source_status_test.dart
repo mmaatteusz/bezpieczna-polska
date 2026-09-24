@@ -45,21 +45,38 @@ void main() {
       expect(find.text('PARTIAL • niepełne: 1'), findsOneWidget);
       expect(find.text('DOWN • niedostępne: 1'), findsOneWidget);
       expect(find.text('NOT_CONFIGURED • niepodłączone: 1'), findsOneWidget);
-      expect(find.textContaining('PARTIAL • niepełne'), findsOneWidget);
-      expect(find.textContaining('HEALTHY • aktualne'), findsOneWidget);
       expect(
-        find.textContaining('NOT_CONFIGURED • niepodłączone'),
+        find.text(
+          'PARTIAL • niepełne\nOstatnia poprawna synchronizacja: Nie podano',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'HEALTHY • aktualne\nOstatnia poprawna synchronizacja: Nie podano',
+        ),
         findsOneWidget,
       );
       for (
         var i = 0;
-        i < 4 && find.textContaining('DOWN • niedostępne').evaluate().isEmpty;
+        i < 4 && find.text('BROKEN').evaluate().isEmpty;
         i++
       ) {
         await tester.drag(find.byType(ListView), const Offset(0, -300));
         await tester.pumpAndSettle();
       }
-      expect(find.textContaining('DOWN • niedostępne'), findsOneWidget);
+      expect(
+        find.text(
+          'NOT_CONFIGURED • niepodłączone\nOstatnia poprawna synchronizacja: Nie podano',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'DOWN • niedostępne\nOstatnia poprawna synchronizacja: Nie podano',
+        ),
+        findsOneWidget,
+      );
     },
   );
 }
