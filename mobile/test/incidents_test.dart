@@ -75,7 +75,7 @@ void main() {
     expect(card.isRcb && card.isRso && card.isWczk, isTrue);
     expect(card.sources, hasLength(3));
     expect(card.reports, hasLength(3));
-    expect(card.sourceSummary, 'POŁĄCZONE ŹRÓDŁA: 3');
+    expect(card.sourceSummary, 'Komunikaty z 3 źródeł');
     expect(card.revision, 2);
     expect(card.hasConflictingReports, isTrue);
   });
