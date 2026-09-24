@@ -109,6 +109,36 @@ jobs:
       - name: Assert push notification contract
         working-directory: backend
         run: node --import tsx --test test/push.test.ts
+      - name: Live RSO contract check
+        working-directory: backend
+        continue-on-error: true
+        run: node scripts/live-rso.mjs ../output/rso-live.json
+
+      - name: Live WCZK contract check
+        continue-on-error: true
+        working-directory: backend
+        run: node scripts/live-wczk.mjs ../output/wczk-live.json
+
+      - name: Live IMGW warnings contract check
+        continue-on-error: true
+        working-directory: backend
+        run: node scripts/live-imgw.mjs ../output/imgw-live.json
+
+      - name: Live PAA communication contract check
+        continue-on-error: true
+        working-directory: backend
+        run: node scripts/live-paa.mjs ../output/paa-live.json
+
+      - name: Live CERT and CSIRT GOV contract check
+        continue-on-error: true
+        working-directory: backend
+        run: node scripts/live-cyber.mjs ../output/cyber-live.json
+
+      - name: Live Straż Graniczna contract check
+        continue-on-error: true
+        working-directory: backend
+        run: node scripts/live-sg.mjs ../output/sg-live.json
+
       - name: Configure stable preview signing
         shell: bash
         run: |
@@ -133,32 +163,6 @@ jobs:
           --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"
           --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"
           --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
-
-      - name: Live RSO contract check
-        working-directory: backend
-        continue-on-error: true
-        run: node scripts/live-rso.mjs ../output/rso-live.json
-
-      - name: Live WCZK contract check
-        continue-on-error: true
-        working-directory: backend
-        run: node scripts/live-wczk.mjs ../output/wczk-live.json
-      - name: Live IMGW warnings contract check
-        continue-on-error: true
-        working-directory: backend
-        run: node scripts/live-imgw.mjs ../output/imgw-live.json
-      - name: Live PAA communication contract check
-        continue-on-error: true
-        working-directory: backend
-        run: node scripts/live-paa.mjs ../output/paa-live.json
-      - name: Live CERT and CSIRT GOV contract check
-        continue-on-error: true
-        working-directory: backend
-        run: node scripts/live-cyber.mjs ../output/cyber-live.json
-      - name: Live Straż Graniczna contract check
-        continue-on-error: true
-        working-directory: backend
-        run: node scripts/live-sg.mjs ../output/sg-live.json
 
       - name: Prepare artifact
         shell: bash

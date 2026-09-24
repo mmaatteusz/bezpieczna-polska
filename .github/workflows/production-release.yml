@@ -104,6 +104,12 @@ jobs:
           for source in rcb wczk imgw paa cyber sg service-incidents ukraine; do
             node "scripts/live-$source.mjs" "../output/$source.json" || echo "$source unavailable: adapter fallback/STALE must remain safe"
           done
+      - name: Required live NEPTUN contract check
+        working-directory: backend
+        run: |
+          mkdir -p ../output
+          node scripts/live-neptun.mjs ../output/neptun-live.json
+
   android-release:
     needs: verify
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
