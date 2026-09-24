@@ -86,17 +86,54 @@ export async function neptunSnapshot(store:Store,now=new Date()){
   if(coords.length<2)return [];
   return [{type:'Feature' as const,id:t.id,geometry:{type:'LineString' as const,coordinates:coords},properties:{trackId:t.id,title:t.title,objectType:t.objectType,verification:t.verification,endedAt:t.endedAt,directionText:t.directionText,observationCount:t.observations.length,historicalOnly:true}}];
  });
- const health=(await store.health()).find(h=>h.id==='NEPTUN')??null;
+ const raw=(await store.health()).find(h=>h.id==='NEPTUN')??null;
+ const health=raw?sourceHealth([raw],now)[0]:null;
+ const state=health?.state==='HEALTHY'?'LIVE':health?.state==='STALE'?'STALE':health?.state==='BROKEN'?'DOWN':health?.state==='NOT_CONFIGURED'?'NOT_CONFIGURED':'UNAVAILABLE';
+ const threats=raw?.neptunMetadata?.threats??[];
+ const liveMap={
+  type:'FeatureCollection' as const,
+  features:threats.filter(t=>t.latitude!==null&&t.longitude!==null).map(t=>({
+   type:'Feature' as const,
+   id:'NEPTUN-LIVE-'+t.id,
+   geometry:{type:'Point' as const,coordinates:[t.longitude!,t.latitude!] as [number,number]},
+   properties:{
+    threatId:t.id,
+    type:t.type,
+    title:t.title,
+    region:t.region,
+    district:t.district,
+    locality:t.locality,
+    confidenceLevel:t.confidenceLevel,
+    updatedAt:t.updatedAt,
+    advisory:t.advisory,
+    precisionKm:t.precisionKm,
+    live:true,
+    coarse:true
+   }
+  }))
+ };
  return {
-  schemaVersion:1,
-  mode:'HISTORICAL_ONLY' as const,
+  schemaVersion:2,
+  mode:'LIVE_AND_HISTORY' as const,
   serverTime:now.toISOString(),
   safetyDelayHours:NEPTUN_SAFETY_DELAY_HOURS,
   minimumPublishedPrecisionKm:NEPTUN_MIN_PRECISION_KM,
-  coverage:tracks.length?'CURATED_HISTORY':'NO_CONFIGURED_FEED',
-  sourceHealth:health?sourceHealth([health],now)[0]:null,
+  coverage:tracks.length?'CURATED_HISTORY':'NO_CURATED_HISTORY',
+  sourceHealth:health,
+  live:{
+   state,
+   sourceUrl:'https://neptun.in.ua/',
+   sourceName:'NEPTUN',
+   lastSuccessfulSyncAt:raw?.lastSuccess??null,
+   sourceServerTime:raw?.neptunMetadata?.serverTime??null,
+   validUntil:raw?.lastSuccess?new Date(Date.parse(raw.lastSuccess)+raw.maxAgeSeconds*1000).toISOString():null,
+   threats,
+   map:liveMap,
+   attribution:'Dane live: NEPTUN — neptun.in.ua',
+   disclaimer:'NEPTUN jest agregatorem informacyjnym. Bieżące pozycje są celowo zgrubne; aplikacja nie publikuje kursu, prędkości ani predykcji ruchu.'
+  },
   tracks,
   map:{type:'FeatureCollection' as const,features},
-  disclaimer:'NEPTUN pokazuje wyłącznie zakończone, historyczne i zgrubne ślady. Nie publikuje aktywnych dokładnych pozycji.'
+  disclaimer:'Warstwa live NEPTUN jest informacyjna i nie zastępuje oficjalnych alarmów. Historia zawiera wyłącznie zakończone ślady publikowane po opóźnieniu bezpieczeństwa.'
  };
 }
