@@ -26,7 +26,7 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
  const regionQuery=z.object({regionId:z.string().refine(v=>v==='PL'||v in REGIONS).default('PL')});
  app.get('/status',async req=>{
   const {regionId}=regionQuery.parse(req.query),{events,health,incidents,radiationMeasurements}=await store.snapshot(),now=new Date();
-  return {schemaVersion:1,evaluatedAt:now.toISOString(),radiation:radiationStatus(events,health,regionId,now,radiationMeasurements),...securityLevelStatus(events,health,regionId,now),poland:{...computeStatus(events,health,'PL',now,incidents),...securityLevelStatus(events,health,'PL',now)},region:{id:regionId,name:REGIONS[regionId]??'Cała Polska',...computeStatus(events,health,regionId,now,incidents),...securityLevelStatus(events,health,regionId,now)},sourceHealth:sourceHealth(health,now).filter(s=>s.enabled)};
+  return {schemaVersion:1,evaluatedAt:now.toISOString(),radiation:radiationStatus(events,health,regionId,now,radiationMeasurements),...securityLevelStatus(events,health,regionId,now),poland:{...computeStatus(events,health,'PL',now,incidents),...securityLevelStatus(events,health,'PL',now)},region:{id:regionId,name:REGIONS[regionId]??'Cała Polska',...computeStatus(events,health,regionId,now,incidents),...securityLevelStatus(events,health,regionId,now)},sourceHealth:sourceHealth(health,now).filter(s=>s.enabled&&s.id!=='UA')};
  });
  app.get('/v1/map/layers',async()=>({schemaVersion:1,layers:mapLayers}));
  app.get('/v1/map/shelters',async(req,reply)=>{const q=mapQuery.parse(req.query);if(store.db.kind!=='postgres')return reply.code(503).send({error:'POSTGIS_REQUIRED'});return shelterViewport(store,q);});
@@ -36,7 +36,7 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
  app.get('/v1/neptun',async()=>neptunSnapshot(store));
  app.get('/v1/layers/neptun.geojson',async()=>{const s=await neptunSnapshot(store);return {type:'FeatureCollection',features:[...s.live.map.features,...s.map.features],metadata:{mode:s.mode,liveState:s.live.state,coverage:s.coverage,safetyDelayHours:s.safetyDelayHours,minimumPublishedPrecisionKm:s.minimumPublishedPrecisionKm,sourceHealth:s.sourceHealth,attribution:s.live.attribution}};});
  app.get('/v1/neptun/:id/timeline',async req=>store.neptunTimeline(z.object({id:z.string().regex(/^NEPTUN-[A-Za-z0-9._:-]{1,120}$/)}).parse(req.params).id));
- app.get('/v1/sources',async()=>({sourceHealth:sourceHealth(await store.health()).filter(s=>s.enabled)}));
+ app.get('/v1/sources',async()=>({sourceHealth:sourceHealth(await store.health()).filter(s=>s.enabled&&s.id!=='UA')}));
  const pushUnavailable=(r:any)=>r.code(503).send({error:'PUSH_NOT_CONFIGURED'});
  const pushRoute={bodyLimit:16*1024,config:{rateLimit:{max:10,timeWindow:'1 minute'}}};
  app.post('/v1/push/devices',pushRoute,async(req,r)=>{
@@ -80,7 +80,7 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
  app.get('/readyz',async(_,reply)=>{
   try{
    await store.db.all('SELECT 1 AS ok');
-   const sources=sourceHealth(await store.health()).filter(s=>s.enabled);
+   const sources=sourceHealth(await store.health()).filter(s=>s.enabled&&s.id!=='UA');
    const synchronized=sources.length>0&&sources.every(s=>s.state==='HEALTHY');
    return reply.code(synchronized?200:503).send({ready:synchronized,database:store.db.kind,sourceHealth:sources});
   }catch{return reply.code(503).send({ready:false,error:'DATABASE_UNAVAILABLE'});}
@@ -114,7 +114,7 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
  });
  app.get('/v1/snapshot',async req=>{
   const {regionId}=regionQuery.parse(req.query),{events,health,incidents,radiationMeasurements}=await store.snapshot(),now=new Date();
-  const sources=sourceHealth(health,now).filter(s=>s.enabled);
+  const sources=sourceHealth(health,now).filter(s=>s.enabled&&s.id!=='UA');
   const shelterPage=await sheltersResponse(shelterQuery.parse({regionId}));
   return {schemaVersion:1,serverTime:now.toISOString(),releaseStage:'ALPHA',regionId,radiation:radiationStatus(events,health,regionId,now,radiationMeasurements),incidents:incidents.filter(i=>i.relatedEventIds.some(id=>events.some(e=>e.id===id&&(regionId==='PL'||e.regions.includes(regionId))))).map(i=>({...i,reports:events.filter(e=>i.relatedEventIds.includes(e.id))})),status:computeStatus(events,health,regionId,now,incidents),nationalStatus:computeStatus(events,health,'PL',now,incidents),events:events.filter(e=>!isUa(e)&&!e.securityLevel&&(regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId))),sources,sourceHealth:sources,shelters:shelterPage.items,shelterPage,...securityLevelStatus(events,health,regionId,now),nationalSecurityLevels:securityLevelStatus(events,health,'PL',now).securityLevels,ukraineAlerts:[],capabilities:{push:!!push&&push.providerReadyAny,pushProviders:{android:push?.providerReady('ANDROID')??false,ios:push?.providerReady('IOS')??false},shelters:shelterPage.version!==null,ukraine:false,neptun:true,liveMap:store.db.kind==='postgres',rcb:true,rso:true,wczk:true,imgwMeteo:true,imgwHydro:true,correlation:true,paa:true,paaMeasurements:false,cert:true,csirtGov:false,sg:true,police:true,pspIncidents:true,around:true,watchedLocations:true}};
  });
