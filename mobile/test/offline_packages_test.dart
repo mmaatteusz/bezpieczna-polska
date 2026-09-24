@@ -514,6 +514,8 @@ void main() {
     }
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(find.text('Dane offline'), findsOneWidget);
+    await tester.ensureVisible(find.byType(ExpansionTile).first);
+    await tester.pumpAndSettle();
     await tester.tap(find.byType(ExpansionTile).first);
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.textContaining('Snapshot danych:'), findsOneWidget);
