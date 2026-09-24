@@ -238,7 +238,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Sprawdź wokół mnie • 20 km'), findsOneWidget);
-      expect(find.text('Dodaj miejsce ręcznie'), findsOneWidget);
+      expect(find.text('Dodaj miasto lub wieś'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
