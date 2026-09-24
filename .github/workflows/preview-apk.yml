@@ -1,7 +1,14 @@
-name: Build Police + PSP incidents preview APK
+name: Build preview APK and source live checks
 on:
   pull_request:
-    branches: [stage/sg-border]
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'mobile/**'
+      - 'docs/**'
+      - '.github/workflows/preview-apk.yml'
+  push:
+    branches: ['stage/**']
     paths:
       - 'backend/**'
       - 'mobile/**'
@@ -11,7 +18,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: preview-apk-police-psp-incidents
+  group: preview-apk-${{ github.ref }}
   cancel-in-progress: true
 env:
   CI: 'true'
@@ -43,9 +50,16 @@ jobs:
       - name: Backend build and tests
         working-directory: backend
         run: npm ci && npm run build && npm test
-      - name: Live Police and PSP incident contract check
+      - name: Live official-source smoke checks
         working-directory: backend
-        run: node scripts/live-service-incidents.mjs ../output/service-incidents-live.json
+        continue-on-error: true
+        env:
+          UKRAINE_ALARM_API_KEY: ${{ secrets.UKRAINE_ALARM_API_KEY }}
+        run: |
+          mkdir -p ../output
+          for source in rcb wczk imgw paa cyber sg service-incidents ukraine; do
+            node "scripts/live-$source.mjs" "../output/$source-live.json" || echo "$source unavailable: contract tests remain authoritative"
+          done
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -55,40 +69,33 @@ jobs:
           flutter-version: '3.47.4'
           channel: stable
           cache: true
-      - name: Flutter analyze and tests
+      - name: Flutter dependencies
         working-directory: mobile
-        run: |
-          flutter pub get
-          dart format --output=none --set-exit-if-changed lib/main.dart lib/model.dart test/model_test.dart test/widget_test.dart
-          flutter analyze --no-pub
-          flutter test --no-pub
+        run: flutter pub get
+      - name: Flutter format check
+        working-directory: mobile
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Flutter analyze
+        working-directory: mobile
+        run: flutter analyze --no-pub
+      - name: Flutter tests
+        working-directory: mobile
+        run: flutter test --no-pub --reporter expanded
       - name: Build Android preview
         working-directory: mobile
         run: flutter build apk --debug --target-platform android-arm64 --dart-define=ENABLE_DEVELOPER_SETTINGS=true
-      - name: Live WCZK contract check
-        working-directory: backend
-        run: node scripts/live-wczk.mjs ../output/wczk-live.json
-      - name: Live PAA communication contract check
-        working-directory: backend
-        run: node scripts/live-paa.mjs ../output/paa-live.json
-      - name: Live CERT and CSIRT GOV contract check
-        working-directory: backend
-        run: node scripts/live-cyber.mjs ../output/cyber-live.json
-      - name: Live Straż Graniczna contract check
-        working-directory: backend
-        run: node scripts/live-sg.mjs ../output/sg-live.json
       - name: Prepare artifact
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p output
-          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_0.1.0-alpha.10-preview-arm64.apk
+          cp mobile/build/app/outputs/flutter-apk/app-debug.apk output/Bezpieczna_Polska_preview_arm64.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
           sha256sum output/*.apk | tee output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
-          name: Bezpieczna_Polska_0.1.0-alpha.10-preview-arm64
+          name: Bezpieczna_Polska_preview_arm64
           path: output/
           if-no-files-found: error
           retention-days: 30

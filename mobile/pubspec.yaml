@@ -1,13 +1,15 @@
 name: bezpieczna_polska
 description: Cywilne informacje o bezpieczeństwie Polski.
 publish_to: none
-version: 0.1.0-alpha.17+17
+version: 0.1.0-alpha.18+18
 environment:
   sdk: '>=3.10.0 <4.0.0'
 dependencies:
+  crypto: ^3.0.7
   flutter:
     sdk: flutter
   maplibre_gl: 0.27.1
+  path_provider: ^2.1.6
   http: ^1.6.0
   shared_preferences: ^2.5.3
   url_launcher: ^6.3.2

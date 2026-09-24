@@ -1,10 +1,18 @@
-import {openDb,Store} from './store.js';
+import {openDb,type Db} from './store.js';
 import {serverConfig} from './config.js';
-export const SCHEMA_VERSION=1;
+import {migration001} from './migrations/001_initial.js';
+import {migration002} from './migrations/002_worker_leases.js';
+
+const migrations=[migration001,migration002] as const;
+export const SCHEMA_VERSION=migrations.at(-1)!.version;
+
+async function appliedVersions(db:Db){
+ return (await db.all('SELECT version FROM schema_migrations ORDER BY version ASC')).map(row=>Number(row.version));
+}
 export async function assertSchema(db:ReturnType<typeof openDb>){
- const rows=await db.all('SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1');
- if(Number(rows[0]?.version)!==SCHEMA_VERSION)throw new Error('Schema migration missing or incompatible');
- for(const table of ['event_revisions','incident_revisions','source_health','neptun_track_revisions','radiation_measurements','shelters','push_devices','push_outbox']){
+ const versions=await appliedVersions(db);
+ if(versions.length!==migrations.length||versions.some((version,index)=>version!==migrations[index].version))throw new Error('Schema migration missing or incompatible');
+ for(const table of ['event_revisions','incident_revisions','source_health','neptun_track_revisions','radiation_measurements','shelters','push_devices','push_outbox','worker_leases']){
   await db.all(`SELECT 1 FROM ${table} LIMIT 0`);
  }
  if(db.kind==='postgres'){
@@ -14,10 +22,17 @@ export async function assertSchema(db:ReturnType<typeof openDb>){
 }
 export async function migrate(db:ReturnType<typeof openDb>){
  await db.run('CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)');
- const rows=await db.all('SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1');
- if(rows.length&&Number(rows[0].version)>SCHEMA_VERSION)throw new Error('Database schema is newer than this application');
- await new Store(db).init();
- await db.run('INSERT INTO schema_migrations(version,applied_at) VALUES(?,?) ON CONFLICT(version) DO NOTHING',[SCHEMA_VERSION,new Date().toISOString()]);
+ const existing=await appliedVersions(db);
+ if(existing.some(version=>version>SCHEMA_VERSION))throw new Error('Database schema is newer than this application');
+ const applied=new Set(existing);
+ for(const migration of migrations){
+  if(applied.has(migration.version))continue;
+  await db.transaction(async tx=>{
+   await migration.up(tx);
+   await tx.run('INSERT INTO schema_migrations(version,applied_at) VALUES(?,?)',[migration.version,new Date().toISOString()]);
+  });
+  applied.add(migration.version);
+ }
  await assertSchema(db);
 }
 if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){

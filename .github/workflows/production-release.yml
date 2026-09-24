@@ -4,7 +4,7 @@ on:
     branches: [main]
   push:
     branches: [main]
-    tags: ['v0.1.0-alpha.17-rc.*']
+    tags: ['v*-rc.*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -98,6 +98,8 @@ jobs:
       - name: Live official-source smoke checks (external availability is advisory)
         working-directory: backend
         continue-on-error: true
+        env:
+          UKRAINE_ALARM_API_KEY: ${{ secrets.UKRAINE_ALARM_API_KEY }}
         run: |
           for source in rcb wczk imgw paa cyber sg service-incidents ukraine; do
             node "scripts/live-$source.mjs" "../output/$source.json" || echo "$source unavailable: adapter fallback/STALE must remain safe"
@@ -179,19 +181,20 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p output
-          cp mobile/build/app/outputs/bundle/release/app-release.aab output/Bezpieczna_Polska_0.1.0-alpha.17.aab
-          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk output/Bezpieczna_Polska_0.1.0-alpha.17-arm64.apk
+          VERSION="$(node -p "require('./backend/package.json').version")"
+          cp mobile/build/app/outputs/bundle/release/app-release.aab "output/Bezpieczna_Polska_${VERSION}.aab"
+          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "output/Bezpieczna_Polska_${VERSION}-arm64.apk"
           jarsigner -verify -strict output/*.aab
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
           grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk | tee output/package-info.txt
           grep -F "name='pl.bezpiecznapolska'" output/package-info.txt
-          grep -F "versionName='0.1.0-alpha.17'" output/package-info.txt
+          grep -F "versionName='${VERSION}'" output/package-info.txt
           (cd output && sha256sum *.aab *.apk > SHA256SUMS.txt)
       - uses: actions/upload-artifact@v7
         if: steps.signing.outputs.ready == 'true'
         with:
-          name: Bezpieczna_Polska_alpha17_signed_release
+          name: Bezpieczna_Polska_signed_release
           path: output/
           if-no-files-found: error
       - name: Remove temporary signing material
