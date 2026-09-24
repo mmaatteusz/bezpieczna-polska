@@ -30,7 +30,7 @@ jobs:
           --health-interval 10s --health-timeout 5s --health-retries 10
     env:
       TEST_DATABASE_URL: postgresql://test:disposable_ci_only@localhost:5432/test
-      PREVIEW_API_BASE_URL: ${{ vars.PREVIEW_API_BASE_URL }}
+      PREVIEW_API_BASE_URL: ${{ vars.PREVIEW_API_BASE_URL || 'https://api-production-b6560.up.railway.app' }}
       FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
       FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
       FIREBASE_MESSAGING_SENDER_ID: ${{ vars.FIREBASE_MESSAGING_SENDER_ID }}

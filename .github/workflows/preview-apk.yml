@@ -41,7 +41,7 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://test:disposable_ci_only@localhost:5432/test
       BP_ENV: preview
-      PREVIEW_API_BASE_URL: ${{ vars.PREVIEW_API_BASE_URL }}
+      PREVIEW_API_BASE_URL: ${{ vars.PREVIEW_API_BASE_URL || 'https://api-production-b6560.up.railway.app' }}
       FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
       FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
       FIREBASE_MESSAGING_SENDER_ID: ${{ vars.FIREBASE_MESSAGING_SENDER_ID }}
