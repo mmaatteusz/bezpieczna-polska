@@ -64,7 +64,7 @@ function validateNeptun(data){
   await json('/v1/ukraine');
 
   const shelters=await json('/v1/shelters?regionId=04&q=&offset=0&limit=5');
-  assert(shelters.schemaVersion===1&&shelters.region==='04','shelters contract invalid');
+  assert(shelters.schemaVersion===1&&shelters.regionId==='04','shelters contract invalid');
 
   const mapShelters=await json('/v1/map/shelters?bbox=17.7,52.9,18.3,53.3&zoom=10.5&regionId=04&availability=ALL');
   assert(mapShelters.type==='FeatureCollection'&&mapShelters.metadata?.schemaVersion===1,'map shelters contract invalid');
