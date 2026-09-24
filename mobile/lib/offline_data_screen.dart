@@ -131,15 +131,15 @@ class _OfflineDataScreenState extends State<OfflineDataScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Pakiet zachowuje snapshot statusu, Eventy i Incidenty, stan źródeł, stopnie alarmowe, PAA, pełny katalog schronień regionu, lokalne overlaye mapy i konfigurację obserwowanych miejsc.',
+                    'Pakiet zapisuje status regionu, komunikaty, stan źródeł, stopnie alarmowe, dane PAA, katalog schronień i obserwowane miejsca. Dzięki temu podstawowe informacje pozostają dostępne bez internetu.',
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Offline nigdy nie oznacza LIVE. Brak nowych danych nie potwierdza bezpieczeństwa. Alarmy Ukrainy i NEPTUN zachowują własny, niezależny lifecycle.',
+                    'Dane offline są zawsze oznaczone jako OFFLINE / LAST KNOWN GOOD. Brak nowych danych nie jest potwierdzeniem bezpieczeństwa.',
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Podkład OpenFreeMap nie jest częścią pakietu. Bez internetu aplikacja nadal ma lokalne dane i overlaye; podkład bazowy może być niedostępny.',
+                    'Podkład mapy nie jest częścią pakietu. Bez internetu nadal działają zapisane komunikaty, schronienia i lokalne warstwy danych.',
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
@@ -202,10 +202,10 @@ class _OfflineDataScreenState extends State<OfflineDataScreen> {
             final state = descriptor.package == null
                 ? descriptor.state
                 : package!.stateAt(now);
-            final sourceMap = manifest?['sourceTimestamps'];
-            final sourceRows = sourceMap is Map
-                ? sourceMap.entries.toList()
-                : <MapEntry<dynamic, dynamic>>[];
+            final checksum = manifest?['checksum'];
+            final checksumAlgorithm = checksum is Map
+                ? checksum['algorithm']?.toString()
+                : null;
             return Card(
               child: ExpansionTile(
                 leading: Icon(
@@ -233,52 +233,33 @@ class _OfflineDataScreenState extends State<OfflineDataScreen> {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Schema: ${manifest?['schemaVersion']} • app: ${manifest?['appVersion']} • backend: ${manifest?['backendVersion'] ?? 'nie podano'}',
+                        'Integralność: zweryfikowana${checksumAlgorithm == null ? '' : ' • $checksumAlgorithm'}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Schronienia: ${package.shelters.length} • wersja: ${package.shelterVersion ?? 'brak'}',
-                      ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Warstwy: ${package.layers.join(', ')}'),
-                    ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Składniki: ${package.components.join(', ')}',
-                      ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Checksum: ${manifest?['checksum']}'),
-                    ),
-                    const SizedBox(height: 10),
                     const Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Stan źródeł w chwili snapshotu:',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        'LAST KNOWN GOOD: dostępny po poprawnym zapisaniu pakietu',
                       ),
                     ),
-                    ...sourceRows
-                        .take(20)
-                        .map(
-                          (entry) => Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              '${entry.key}: ${entry.value is Map ? entry.value['state'] : 'UNKNOWN'} • ${entry.value is Map ? stamp(entry.value['lastSuccess']) : 'Nie podano'}',
-                            ),
-                          ),
-                        ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Punkty schronienia: ${package.shelters.length}',
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Warstwy lokalne: ${package.layers.isEmpty ? 'brak' : package.layers.join(', ')}',
+                      ),
+                    ),
                   ] else
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Pakiet nie będzie używany. Błąd: ${descriptor.errorCode ?? 'nieznany'}. Pobierz go ponownie.',
+                        'Pakiet jest uszkodzony albo niekompletny i nie będzie używany. Pobierz go ponownie; poprzednia poprawna kopia nie jest zastępowana uszkodzonym pakietem.',
                       ),
                     ),
                   const SizedBox(height: 12),
