@@ -41,13 +41,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('AKTYWNE • CZĘŚCIOWE'), findsOneWidget);
-      expect(find.textContaining('AKTUALNE'), findsOneWidget);
+      expect(find.textContaining('PARTIAL • niepełne'), findsOneWidget);
+      expect(find.textContaining('HEALTHY • aktualne'), findsOneWidget);
       expect(
-        find.textContaining('NIEPODŁĄCZONE • ŚWIADOMIE POZA ZAKRESEM'),
+        find.textContaining('NOT_CONFIGURED • niepodłączone'),
         findsOneWidget,
       );
-      expect(find.textContaining('BŁĄD'), findsOneWidget);
+      expect(find.textContaining('DOWN • niedostępne'), findsOneWidget);
     },
   );
 }
