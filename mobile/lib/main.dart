@@ -760,7 +760,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 badge(severityLabel(e)),
                 badge(e.provenance),
                 if (e.sources.length > 1)
-                  badge('POŁĄCZONO ${e.sources.length} ŹRÓDŁA'),
+                  badge('POŁĄCZONE ŹRÓDŁA: ${e.sources.length}'),
                 if (e.hasConflictingReports)
                   badge('RÓŻNICE MIĘDZY KOMUNIKATAMI'),
                 if (eventSourceState(e) == 'STALE')
