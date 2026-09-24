@@ -309,10 +309,7 @@ void main() {
       MaterialApp(home: NotificationSettingsScreen(manager: manager)),
     );
     await tester.pumpAndSettle();
-    expect(
-      find.text('Powiadomienia niedostępne w tej wersji'),
-      findsOneWidget,
-    );
+    expect(find.text('Powiadomienia niedostępne w tej wersji'), findsOneWidget);
     expect(find.text('Wysyłka jest wyłączona'), findsOneWidget);
     expect(
       find.textContaining('nie ma kompletnej konfiguracji usługi powiadomień'),
