@@ -44,7 +44,7 @@ export function computeStatus(events:Event[],health:Health[],region:string,now=n
  const ms=now.getTime();
  events=events.filter(e=>e.countryCode!=='UA'&&!e.ukraine&&!e.sources.some(s=>s.id==='UA'));
  // Facilities are reference data, never evidence of the absence of hazards.
- health=health.filter(h=>h.enabled!==false&&!['UA','SHELTERS','CERT','CSIRT_GOV','SG','POLICE','PSP_INCIDENTS'].includes(h.id)&&h.coverage!=='FACILITY_CATALOG'&&(!h.regionId||region==='PL'||h.regionId===region));
+ health=health.filter(h=>h.enabled!==false&&!['UA','NEPTUN','SHELTERS','CERT','CSIRT_GOV','SG','POLICE','PSP_INCIDENTS'].includes(h.id)&&h.coverage!=='FACILITY_CATALOG'&&(!h.regionId||region==='PL'||h.regionId===region));
  const relevant=events.filter(e=>!e.isDemo&&e.officialWarning&&e.messageContext==='ACTUAL'&&e.verification==='CONFIRMED'&&e.sources.some(s=>s.tier===1)&&(region==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(region)));
  const fresh=health.filter(h=>h.state==='HEALTHY'&&h.lastSuccess&&Date.parse(h.lastSuccess)<=ms+30000&&ms-Date.parse(h.lastSuccess)<h.maxAgeSeconds*1000);
  const coverage=health.length>0&&fresh.length===health.length&&fresh.every(h=>h.complete&&h.id!=='PAA_MEASUREMENTS')?'COMPLETE_FOR_CONFIGURED_SCOPE':fresh.length?'PARTIAL':'UNAVAILABLE';
