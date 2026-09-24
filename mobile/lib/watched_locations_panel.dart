@@ -191,8 +191,9 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
     Location? resolved = latitude == null || longitude == null
         ? null
         : Location(latitude: latitude, longitude: longitude);
-    String? resolvedName =
-        resolved == null ? null : 'Bieżąca lokalizacja z GPS';
+    String? resolvedName = resolved == null
+        ? null
+        : 'Bieżąca lokalizacja z GPS';
     var selectedRegion = '';
     var searching = false;
     String? validation;
@@ -258,11 +259,12 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                         final candidate = found.first;
                         var name = place.text.trim();
                         try {
-                          final marks = await geocoding.placemarkFromCoordinates(
-                            candidate.latitude,
-                            candidate.longitude,
-                            locale: const Locale('pl', 'PL'),
-                          );
+                          final marks = await geocoding
+                              .placemarkFromCoordinates(
+                                candidate.latitude,
+                                candidate.longitude,
+                                locale: const Locale('pl', 'PL'),
+                              );
                           if (marks.isNotEmpty) {
                             name = placemarkLabel(marks.first, name);
                             selectedRegion =
@@ -273,7 +275,11 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                         setDialogState(() {
                           resolved = candidate;
                           resolvedName = name;
-                          if (label.text.trim().isEmpty) label.text = name;
+                          if (label.text.trim().isEmpty) {
+                            label.text = name.length > 60
+                                ? name.substring(0, 60)
+                                : name;
+                          }
                           searching = false;
                         });
                       } catch (_) {
@@ -327,7 +333,11 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                               setDialogState(() {
                                 resolved = candidate;
                                 resolvedName = name;
-                                if (label.text.trim().isEmpty) label.text = name;
+                                if (label.text.trim().isEmpty) {
+                            label.text = name.length > 60
+                                ? name.substring(0, 60)
+                                : name;
+                          }
                                 searching = false;
                               });
                             } catch (_) {
@@ -353,7 +363,9 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.location_on_outlined),
                     title: Text(resolvedName!),
-                    subtitle: const Text('Miejsce znalezione i gotowe do zapisu'),
+                    subtitle: const Text(
+                      'Miejsce znalezione i gotowe do zapisu',
+                    ),
                     trailing: latitude == null
                         ? IconButton(
                             tooltip: 'Wybierz inne miejsce',
@@ -387,6 +399,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
+                  key: ValueKey(selectedRegion),
                   initialValue: selectedRegion,
                   isExpanded: true,
                   decoration: const InputDecoration(
@@ -442,8 +455,9 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                           latitude: resolved!.latitude,
                           longitude: resolved!.longitude,
                           radiusKm: ra,
-                          regionId:
-                              selectedRegion.isEmpty ? null : selectedRegion,
+                          regionId: selectedRegion.isEmpty
+                              ? null
+                              : selectedRegion,
                         );
                         final sync = widget.onPreferencesChanged;
                         if (sync != null) unawaited(sync());
