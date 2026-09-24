@@ -21,7 +21,7 @@ export async function initializeSources(store:Store){
  const existing=await store.health();
  for(const s of SOURCES){
   const previous=existing.find(h=>h.id===s.id);
-  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?172800:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
+  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
   else if(!s.enabled)await store.setHealth({...previous,...s,state:'NOT_CONFIGURED',complete:false});
   else await store.setHealth({...previous,...s,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?172800:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900});
  }
@@ -37,7 +37,16 @@ export function parseRso(xml:string,now=new Date()):Event[]{
   e.publishedAt=date(text('created_at'));e.validFrom=date(text('valid_from'));e.validTo=date(text('valid_to'));if(e.validFrom&&e.validTo&&e.validTo<=e.validFrom)throw new Error('RSO_DATE_ORDER');
   e.lifecycle=e.validFrom&&Date.parse(e.validFrom)>now.getTime()?'SCHEDULED':e.validTo&&Date.parse(e.validTo)<=now.getTime()?'EXPIRED':e.validTo?'ACTIVE':'UNKNOWN';
   e.regions=n.find('province').map((_,p)=>{const name=$(p).text().toLocaleLowerCase('pl');const code=Object.keys(REGIONS).find(k=>REGIONS[k].toLocaleLowerCase('pl')===name);if(!code)throw new Error('RSO_UNKNOWN_REGION');return code;}).get();e.geographicScope=e.regions.length?'REGIONAL':'UNKNOWN';
-  const alarm=text('rso_alarm');if(!['0','1'].includes(alarm))throw new Error('RSO_ALARM_INVALID');e.severity=alarm==='1'?'HIGH':'NORMAL';
+  const alarm=text('rso_alarm').toLocaleLowerCase('pl');
+  const falseValues=new Set(['','0','false','nie','no']);
+  const trueValues=new Set(['1','true','tak','yes']);
+  if(trueValues.has(alarm))e.severity='HIGH';
+  else if(falseValues.has(alarm))e.severity='NORMAL';
+  else {
+   // RSO has changed this field in the past. Keep the official warning instead
+   // of dropping the entire feed; unknown non-empty alarm markers fail safe high.
+   e.severity='HIGH';
+  }
   for(const k of ['latitude','longitude'] as const){if(text(k))e[k]=Number(text(k));}
   return eventSchema.parse(e);
  }).get();
