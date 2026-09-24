@@ -308,17 +308,11 @@ class _NeptunScreenState extends State<NeptunScreen> {
         leading: Icon(t['advisory'] == true ? Icons.info_outline : Icons.radar),
         title: Text(t['title'] as String),
         subtitle: Text(
-          typeLabel(t['type'] as String) +
-              (location.isEmpty ? '' : ' • ' + location) +
-              '\n' +
-              (t['advisory'] == true
-                  ? 'Obserwacja informacyjna'
-                  : 'Aktywne zagrożenie w feedzie NEPTUN') +
-              ' • aktualizacja ' +
-              when(t['updatedAt']) +
-              (precision == null
-                  ? ''
-                  : ' • pozycja zgrubna ≥ ' + precision.toString() + ' km'),
+          '${typeLabel(t['type'] as String)}'
+          '${location.isEmpty ? '' : ' • $location'}\n'
+          '${t['advisory'] == true ? 'Obserwacja informacyjna' : 'Aktywne zagrożenie w feedzie NEPTUN'}'
+          ' • aktualizacja ${when(t['updatedAt'])}'
+          '${precision == null ? '' : ' • pozycja zgrubna ≥ $precision km'}',
         ),
         isThreeLine: true,
       ),
@@ -414,14 +408,11 @@ class _NeptunScreenState extends State<NeptunScreen> {
                 ),
                 title: Text(
                   isLive
-                      ? 'LIVE • ' +
-                            threats.length.toString() +
-                            ' aktywnych wpisów'
-                      : liveState + ' • ostatnia znana kopia',
+                      ? 'LIVE • ${threats.length} aktywnych wpisów'
+                      : '$liveState • ostatnia znana kopia',
                 ),
                 subtitle: Text(
-                  'Ostatnia synchronizacja: ' +
-                      when(snapshot?.live['lastSuccessfulSyncAt']),
+                  'Ostatnia synchronizacja: ${when(snapshot?.live['lastSuccessfulSyncAt'])}',
                 ),
               ),
             ),
