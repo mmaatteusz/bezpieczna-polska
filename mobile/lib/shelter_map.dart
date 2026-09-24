@@ -672,6 +672,8 @@ class _ShelterMapState extends State<ShelterMap> {
   Future<void> showLayers() async {
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
       builder: (sheetContext) => StatefulBuilder(
         builder: (context, update) => SafeArea(
           child: Padding(
@@ -721,6 +723,7 @@ class _ShelterMapState extends State<ShelterMap> {
                 ),
                 if (!showRadiation)
                   DropdownButtonFormField<String>(
+                    key: ValueKey(availability),
                     initialValue: availability,
                     decoration: const InputDecoration(
                       labelText: 'Punkty schronienia',
