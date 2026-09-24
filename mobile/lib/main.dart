@@ -315,6 +315,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             child: RefreshIndicator(
               onRefresh: refresh,
               child: ListView(
+                key: PageStorageKey<int>(page),
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                 children: switch (page) {
                   0 => statusPage(),
@@ -534,6 +535,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ),
       statusCard(true),
       statusCard(false),
+      if (widget.repository.api.isEmpty)
+        notice(
+          'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
+          Icons.cloud_off,
+        ),
       heading('Najważniejsze aktywne komunikaty'),
       if (active.isEmpty)
         empty(
@@ -542,11 +548,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           Icons.notifications_none_outlined,
         ),
       ...active.take(3).map(eventCard),
-      if (widget.repository.api.isEmpty)
-        notice(
-          'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
-          Icons.cloud_off,
-        ),
       OutlinedButton.icon(
         onPressed: () => setState(() {
           page = 1;
