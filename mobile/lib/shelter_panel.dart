@@ -333,14 +333,8 @@ class _ShelterPanelState extends State<ShelterPanel> {
                     ),
                     const SizedBox(height: 8),
                     Text(point.availability),
-                    Text('Rodzaj wg PSP: ${point.data["sourceType"]}'),
-                    Text(
-                      'Współrzędne: ${(point.data["latitude"] as num).toStringAsFixed(6)}, ${(point.data["longitude"] as num).toStringAsFixed(6)}',
-                    ),
-                    Text(
-                      point.data['id'] as String,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    if (point.data["sourceType"] != null)
+                      Text('Rodzaj wg PSP: ${point.data["sourceType"]}'),
                   ],
                 ),
               ),
@@ -374,7 +368,7 @@ class _ShelterPanelState extends State<ShelterPanel> {
         ],
         const SizedBox(height: 16),
         const Text(
-          'Po pobraniu pakietu regionu offline dostępny jest pełny lokalny katalog tego regionu, wyszukiwanie i nearest shelter. Wyniki zawsze zachowują timestamp pakietu.',
+          'Po pobraniu pakietu regionu możesz bez internetu przeszukiwać lokalny katalog i znaleźć najbliższe zapisane punkty. Aplikacja zawsze pokazuje czas zapisania danych.',
         ),
         const SizedBox(height: 12),
         const Text(
