@@ -346,11 +346,13 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                           });
                           try {
                             final geocoder = Geocoding();
-                            final locations = await geocoder.locationFromAddress(
-                              '$query, Polska',
-                              locale: const Locale('pl', 'PL'),
-                            );
-                            if (locations.isEmpty) throw const FormatException();
+                            final locations = await geocoder
+                                .locationFromAddress(
+                                  '$query, Polska',
+                                  locale: const Locale('pl', 'PL'),
+                                );
+                            if (locations.isEmpty)
+                              throw const FormatException();
                             final point = locations.first;
                             var label = query;
                             try {
@@ -449,7 +451,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               child: const Text('Anuluj'),
             ),
             FilledButton(
-              onPressed: foundLabel == null ||
+              onPressed:
+                  foundLabel == null ||
                       foundLatitude == null ||
                       foundLongitude == null
                   ? null
@@ -519,13 +522,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(
-        [
-          'Status',
-          'Mapa',
-          'Alerty',
-          'Schronienia',
-          'Pomoc',
-        ][page],
+        ['Status', 'Mapa', 'Alerty', 'Schronienia', 'Pomoc'][page],
         style: Theme.of(
           context,
         ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -566,9 +563,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                                   localityLabel ?? 'Wybierz miasto lub wieś',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleSmall
+                                  style: Theme.of(context).textTheme.titleSmall
                                       ?.copyWith(fontWeight: FontWeight.w700),
                                 ),
                                 Text(
@@ -807,10 +802,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 ),
                 if (subtitle != null) ...[
                   const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                  Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
                 ],
               ],
             ),
