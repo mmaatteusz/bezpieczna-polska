@@ -298,8 +298,8 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                         : () async {
                             if (place.text.trim().length < 2) {
                               setDialogState(
-                                () => validation =
-                                    'Wpisz nazwę miasta lub wsi.',
+                                () =>
+                                    validation = 'Wpisz nazwę miasta lub wsi.',
                               );
                               return;
                             }
@@ -317,8 +317,8 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                               final candidate = found.first;
                               var name = place.text.trim();
                               try {
-                                final marks =
-                                    await geocoding.placemarkFromCoordinates(
+                                final marks = await geocoding
+                                    .placemarkFromCoordinates(
                                       candidate.latitude,
                                       candidate.longitude,
                                       locale: const Locale('pl', 'PL'),
@@ -334,10 +334,10 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                                 resolved = candidate;
                                 resolvedName = name;
                                 if (label.text.trim().isEmpty) {
-                            label.text = name.length > 60
-                                ? name.substring(0, 60)
-                                : name;
-                          }
+                                  label.text = name.length > 60
+                                      ? name.substring(0, 60)
+                                      : name;
+                                }
                                 searching = false;
                               });
                             } catch (_) {
