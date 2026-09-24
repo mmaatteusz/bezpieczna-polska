@@ -166,27 +166,30 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final now = DateTime.utc(2026, 9, 22, 12);
 
-  test('NEPTUN parser accepts live coarse threats and historical coarse tracks', () {
-    final data = NeptunData.parse(fixture(now));
-    expect(data.liveThreats.length, 1);
-    expect(data.liveThreats.first['precisionKm'], 10);
-    expect(data.tracks.length, 1);
-    expect(data.tracks.first['lifecycle'], 'ENDED');
+  test(
+    'NEPTUN parser accepts live coarse threats and historical coarse tracks',
+    () {
+      final data = NeptunData.parse(fixture(now));
+      expect(data.liveThreats.length, 1);
+      expect(data.liveThreats.first['precisionKm'], 10);
+      expect(data.tracks.length, 1);
+      expect(data.tracks.first['lifecycle'], 'ENDED');
 
-    final active = fixture(now);
-    active['tracks'][0]['lifecycle'] = 'ACTIVE';
-    expect(() => NeptunData.parse(active), throwsFormatException);
+      final active = fixture(now);
+      active['tracks'][0]['lifecycle'] = 'ACTIVE';
+      expect(() => NeptunData.parse(active), throwsFormatException);
 
-    final exact = fixture(now);
-    exact['tracks'][0]['observations'][0]['precisionKm'] = 1;
-    expect(() => NeptunData.parse(exact), throwsFormatException);
+      final exact = fixture(now);
+      exact['tracks'][0]['observations'][0]['precisionKm'] = 1;
+      expect(() => NeptunData.parse(exact), throwsFormatException);
 
-    final recent = fixture(now);
-    recent['tracks'][0]['endedAt'] = now
-        .subtract(const Duration(hours: 2))
-        .toIso8601String();
-    expect(() => NeptunData.parse(recent), throwsFormatException);
-  });
+      final recent = fixture(now);
+      recent['tracks'][0]['endedAt'] = now
+          .subtract(const Duration(hours: 2))
+          .toIso8601String();
+      expect(() => NeptunData.parse(recent), throwsFormatException);
+    },
+  );
 
   test(
     'NEPTUN last-known-good survives failure and clear removes it',
