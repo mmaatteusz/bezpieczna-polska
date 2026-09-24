@@ -8,8 +8,13 @@ Set-StrictMode -Version Latest
 
 function New-RandomHex([int]$Bytes = 32) {
   $buffer = New-Object byte[] $Bytes
-  [System.Security.Cryptography.RandomNumberGenerator]::Fill($buffer)
-  return ([Convert]::ToHexString($buffer)).ToLowerInvariant()
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  try {
+    $rng.GetBytes($buffer)
+  } finally {
+    $rng.Dispose()
+  }
+  return (($buffer | ForEach-Object { $_.ToString("x2") }) -join "")
 }
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
@@ -56,8 +61,8 @@ IMPORTANT:
 "@ | Set-Content -Encoding UTF8 $credentials
 
 try {
-  if ($IsWindows) {
-    & icacls $BackupDir /inheritance:r /grant:r "$env:USERNAME:(OI)(CI)F" | Out-Null
+  if ([System.Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+    & icacls $BackupDir /inheritance:r /grant:r "${env:USERNAME}:(OI)(CI)F" | Out-Null
   }
 } catch {
   Write-Warning "Could not tighten Windows ACLs automatically. Protect $BackupDir manually."
