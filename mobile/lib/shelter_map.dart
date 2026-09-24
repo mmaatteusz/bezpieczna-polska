@@ -251,10 +251,7 @@ class _ShelterMapState extends State<ShelterMap> {
                       (event.data['latitude'] as num).toDouble(),
                     ],
                   },
-                  'properties': {
-                    'eventId': event.id,
-                    'title': event.title,
-                  },
+                  'properties': {'eventId': event.id, 'title': event.title},
                 },
               )
               .toList()
@@ -673,10 +670,7 @@ class _ShelterMapState extends State<ShelterMap> {
             },
           ),
         if (!widget.ukraine && !showRadiation) ...[
-          Text(
-            'Warstwy mapy',
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
+          Text('Warstwy mapy', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 6),
           Wrap(
             spacing: 8,
