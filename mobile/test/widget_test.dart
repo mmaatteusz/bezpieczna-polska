@@ -56,26 +56,14 @@ void main() {
     final r = DataRepository(await SharedPreferences.getInstance());
     await tester.pumpWidget(SafetyApp(repository: r));
     await tester.pumpAndSettle();
-    expect(find.text('Brak bieżącej oceny sytuacji'), findsNWidgets(2));
-    expect(find.text('Skonfiguruj serwer danych'), findsNothing);
-    expect(find.text('STATUS POLSKI'), findsOneWidget);
-    expect(find.textContaining('TWOJA OKOLICA'), findsOneWidget);
-    for (
-      var i = 0;
-      i < 8 &&
-          find
-              .textContaining('Wymagana jest aktualizacja aplikacji')
-              .evaluate()
-              .isEmpty;
-      i++
-    ) {
-      await tester.drag(find.byType(ListView).first, const Offset(0, -250));
-      await tester.pumpAndSettle();
-    }
+    expect(find.text('Brak bieżącej oceny sytuacji'), findsNothing);
+    expect(find.text('STATUS POLSKI'), findsNothing);
+    expect(find.textContaining('TWOJA OKOLICA'), findsNothing);
     expect(
-      find.textContaining('Wymagana jest aktualizacja aplikacji'),
+      find.textContaining('Brak połączenia z serwerem danych'),
       findsOneWidget,
     );
+    expect(find.text('Po synchronizacji'), findsOneWidget);
     await tester.tap(find.text('Mapa').last);
     await tester.pumpAndSettle();
     expect(find.byType(MapLibreMap), findsOneWidget);
@@ -178,7 +166,7 @@ void main() {
       );
       await tester.pumpWidget(SafetyApp(repository: r));
       await tester.pumpAndSettle();
-      expect(requests, 1);
+      expect(requests, greaterThanOrEqualTo(2));
       expect(
         find.text('Brak wystarczających aktualnych danych'),
         findsNWidgets(2),
