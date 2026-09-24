@@ -774,75 +774,8 @@ class _ShelterMapState extends State<ShelterMap> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (!widget.ukraine)
-          SwitchListTile(
-            title: const Text('Radiacja / PAA'),
-            subtitle: const Text('Pomiary oddzielone od komunikatów'),
-            value: showRadiation,
-            onChanged: (value) {
-              setState(() => showRadiation = value);
-              refresh();
-            },
-          ),
-        if (!widget.ukraine && !showRadiation) ...[
-          Text('Warstwy mapy', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilterChip(
-                label: const Text('Zdarzenia'),
-                selected: showEvents,
-                onSelected: (value) {
-                  setState(() => showEvents = value);
-                  unawaited(syncContextLayers());
-                },
-              ),
-              FilterChip(
-                label: const Text('Obserwowane miejsca'),
-                selected: showWatched,
-                onSelected: (value) {
-                  setState(() => showWatched = value);
-                  unawaited(syncContextLayers());
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-        ],
-        if (!widget.ukraine && !showRadiation)
-          DropdownButton<String>(
-            isExpanded: true,
-            value: availability,
-            items: const [
-              DropdownMenuItem(
-                value: 'ALL',
-                child: Text('Punkty schronienia • wszystkie'),
-              ),
-              DropdownMenuItem(
-                value: '24H',
-                child: Text('Całodobowe wg źródła'),
-              ),
-              DropdownMenuItem(value: 'ON_REQUEST', child: Text('Na żądanie')),
-              DropdownMenuItem(
-                value: 'LIMITED_HOURS',
-                child: Text('Określone godziny'),
-              ),
-              DropdownMenuItem(
-                value: 'UNKNOWN',
-                child: Text('Dostępność nieustalona'),
-              ),
-            ],
-            onChanged: (v) {
-              if (v != null) {
-                setState(() => availability = v);
-                refresh();
-              }
-            },
-          ),
         SizedBox(
-          height: 350,
+          height: (MediaQuery.sizeOf(context).height * 0.62).clamp(430.0, 620.0),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(18),
             child: Stack(
@@ -850,10 +783,8 @@ class _ShelterMapState extends State<ShelterMap> {
                 MapLibreMap(
                   styleString: onlineStyle,
                   initialCameraPosition: CameraPosition(
-                    target: widget.ukraine
-                        ? const LatLng(49, 31)
-                        : const LatLng(52.1, 19.4),
-                    zoom: 5,
+                    target: widget.ukraine ? const LatLng(49, 31) : homeTarget,
+                    zoom: widget.ukraine ? 5 : homeZoom,
                   ),
                   trackCameraPosition: true,
                   minMaxZoomPreference: const MinMaxZoomPreference(0, 22),
@@ -898,6 +829,50 @@ class _ShelterMapState extends State<ShelterMap> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.my_location),
+                    ),
+                  ),
+                if (!widget.ukraine)
+                  Positioned(
+                    left: 8,
+                    top: 8,
+                    child: Column(
+                      children: [
+                        IconButton.filledTonal(
+                          tooltip: 'Warstwy mapy',
+                          onPressed: showLayers,
+                          icon: const Icon(Icons.layers_outlined),
+                        ),
+                        IconButton.filledTonal(
+                          tooltip: 'Wróć do wybranej miejscowości',
+                          onPressed: goHome,
+                          icon: const Icon(Icons.home_outlined),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (!widget.ukraine)
+                  Positioned(
+                    left: 8,
+                    bottom: 8,
+                    child: Material(
+                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        child: Text(
+                          showRadiation
+                              ? 'PAA'
+                              : fresh
+                              ? 'LIVE'
+                              : viewport != null
+                              ? 'OFFLINE / zapisane'
+                              : 'Ładowanie danych',
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                      ),
                     ),
                   ),
                 if (loading)
