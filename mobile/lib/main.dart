@@ -235,8 +235,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ]);
       if (mounted && target == region) await loadOffline();
     } finally {
-      if (mounted && target == region) {
+      if (mounted) {
         setState(() => backgroundSync = false);
+        if (target != region && widget.repository.api.isNotEmpty) {
+          unawaited(startupSync());
+        }
       }
     }
   }
@@ -284,7 +287,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             ][page],
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -483,14 +488,12 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  timestamp == null
-                      ? label
-                      : '$label • ${stamp(timestamp)}',
+                  timestamp == null ? label : '$label • ${stamp(timestamp)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
               if (backgroundSync)
@@ -536,7 +539,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   : !online && offlinePackageData != null && status is Map
                   ? 'OFFLINE • LAST KNOWN GOOD: ${status['displayText']}'
                   : 'Brak bieżącej oceny sytuacji',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
             Text(
