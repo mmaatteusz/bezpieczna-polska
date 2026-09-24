@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import 'map_layers.dart';
@@ -33,7 +34,7 @@ class ShelterMap extends StatefulWidget {
 class _ShelterMapState extends State<ShelterMap> {
   MapLibreMapController? controller;
   Timer? debounce, clock, styleFallback;
-  bool showRadiation = false;
+  bool showRadiation = false, locating = false;
   bool ready = false, loading = false, online = false, fallbackStyle = false;
   int ticket = 0;
   String availability = 'ALL', message = 'Przygotowywanie mapy…';
@@ -172,6 +173,17 @@ class _ShelterMapState extends State<ShelterMap> {
           ['get', 'cluster'],
           true,
         ],
+      );
+      await c.addSource('user-location', GeojsonSourceProperties(data: empty));
+      await c.addCircleLayer(
+        'user-location',
+        'user-location-point',
+        const CircleLayerProperties(
+          circleColor: '#1565c0',
+          circleRadius: 8,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: 3,
+        ),
       );
       if (!mounted) return;
       ready = true;
@@ -384,6 +396,105 @@ class _ShelterMapState extends State<ShelterMap> {
     }
   }
 
+  Future<void> locateUser() async {
+    final c = controller;
+    if (c == null || !ready) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mapa jeszcze się ładuje.')),
+        );
+      }
+      return;
+    }
+    if (locating) return;
+    setState(() => locating = true);
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Lokalizacja w telefonie jest wyłączona. Włącz ją i spróbuj ponownie.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                permission == LocationPermission.deniedForever
+                    ? 'Dostęp do lokalizacji jest zablokowany w ustawieniach systemu.'
+                    : 'Bez zgody na lokalizację nie można pokazać Twojej pozycji.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      await c.setGeoJsonSource('user-location', {
+        'type': 'FeatureCollection',
+        'features': [
+          {
+            'type': 'Feature',
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [position.longitude, position.latitude],
+            },
+            'properties': const {'kind': 'user-location'},
+          },
+        ],
+      });
+      await c.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(position.latitude, position.longitude),
+          13,
+        ),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Pokazano bieżącą pozycję. Lokalizacja nie jest zapisywana.',
+            ),
+          ),
+        );
+      }
+    } on TimeoutException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Nie udało się ustalić lokalizacji na czas. Spróbuj ponownie.',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nie udało się pobrać lokalizacji.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => locating = false);
+    }
+  }
+
   void zoom(double delta) {
     final c = controller, position = controller?.cameraPosition;
     if (c != null && position != null) {
@@ -483,6 +594,22 @@ class _ShelterMapState extends State<ShelterMap> {
                     ],
                   ),
                 ),
+                if (!widget.ukraine)
+                  Positioned(
+                    right: 8,
+                    top: 112,
+                    child: IconButton.filledTonal(
+                      tooltip: 'Pokaż moją lokalizację',
+                      onPressed: locating ? null : locateUser,
+                      icon: locating
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.my_location),
+                    ),
+                  ),
                 if (loading)
                   const Align(
                     alignment: Alignment.topCenter,
