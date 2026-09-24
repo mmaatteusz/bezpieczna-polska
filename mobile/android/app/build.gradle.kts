@@ -8,6 +8,8 @@ val bpEnv = providers.environmentVariable("BP_ENV").orElse("preview").get()
 require(bpEnv in setOf("development", "preview", "production")) { "Invalid BP_ENV" }
 val releaseKeys = listOf("ANDROID_KEYSTORE_PATH", "ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD")
 val hasReleaseKeys = releaseKeys.all { !System.getenv(it).isNullOrBlank() }
+val previewKeys = listOf("ANDROID_PREVIEW_KEYSTORE_PATH", "ANDROID_PREVIEW_KEYSTORE_PASSWORD", "ANDROID_PREVIEW_KEY_ALIAS", "ANDROID_PREVIEW_KEY_PASSWORD")
+val hasPreviewKeys = previewKeys.all { !System.getenv(it).isNullOrBlank() }
 
 android {
     namespace = "pl.bezpiecznapolska.bezpieczna_polska"
@@ -46,8 +48,21 @@ android {
                 keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
             }
         }
+        if (hasPreviewKeys) {
+            create("preview") {
+                storeFile = file(System.getenv("ANDROID_PREVIEW_KEYSTORE_PATH"))
+                storePassword = System.getenv("ANDROID_PREVIEW_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_PREVIEW_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_PREVIEW_KEY_PASSWORD")
+            }
+        }
     }
     buildTypes {
+        debug {
+            if (bpEnv == "preview" && hasPreviewKeys) {
+                signingConfig = signingConfigs.getByName("preview")
+            }
+        }
         release {
             if (hasReleaseKeys) signingConfig = signingConfigs.getByName("production")
         }
