@@ -64,7 +64,7 @@ test('shelter sync is isolated from events, retains last good data on failure, a
   const h=(await store.health()).find(h=>h.id==='SHELTERS')!;assert.equal(h.state,'BROKEN');assert.equal(h.lastSuccess,old.lastSuccess);assert.equal(h.sourceContentHash,old.sourceContentHash);
   const page=await store.shelterPage({regionId:'04',q:'',limit:50,offset:0});assert.equal(page.total,3);
   assert.equal(computeStatus([],[old],'04').hazardLevel,'UNKNOWN');
-  assert.equal(sourceHealth([{...old,lastSuccess:now.toISOString()}],new Date('2026-09-22T12:00:00Z'))[0].state,'STALE');
+  assert.equal(sourceHealth([{...old,lastSuccess:now.toISOString()}],new Date('2026-09-22T12:00:00Z'))[0].state,'HEALTHY');assert.equal(sourceHealth([{...old,lastSuccess:now.toISOString()}],new Date('2026-10-05T12:00:01Z'))[0].state,'STALE');
  }finally{await db.close();}
 });
 test('older official archive never replaces a newer last-known-good shelter catalog',async()=>{
