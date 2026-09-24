@@ -41,10 +41,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('HEALTHY: 1'), findsOneWidget);
-      expect(find.text('PARTIAL: 1'), findsOneWidget);
-      expect(find.text('DOWN: 1'), findsOneWidget);
-      expect(find.text('NOT_CONFIGURED: 1'), findsOneWidget);
+      expect(find.text('HEALTHY • aktualne: 1'), findsOneWidget);
+      expect(find.text('PARTIAL • niepełne: 1'), findsOneWidget);
+      expect(find.text('DOWN • niedostępne: 1'), findsOneWidget);
+      expect(find.text('NOT_CONFIGURED • niepodłączone: 1'), findsOneWidget);
       expect(find.textContaining('PARTIAL • niepełne'), findsOneWidget);
       expect(find.textContaining('HEALTHY • aktualne'), findsOneWidget);
       expect(
