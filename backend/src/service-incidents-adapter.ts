@@ -104,7 +104,6 @@ export function parsePoliceRss(xml:string,now=new Date()):PoliceRssItem[]{
     if(pubDate){
       const d=parsePolicePublicationDate(pubDate,now);
       publishedAt=d.toUTC().toISO();publicationDate=d.setZone('Europe/Warsaw').toISODate();
-      publishedAt=d.toUTC().toISO();publicationDate=d.setZone('Europe/Warsaw').toISODate();
     }
     out.push({id,title,description,url:u.href,publishedAt,publicationDate});
   });
