@@ -305,6 +305,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               ],
             ),
           ),
+          dataStateStrip(),
           if (error != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -400,6 +401,69 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ),
     child: Text(text, style: Theme.of(context).textTheme.labelSmall),
   );
+  Widget dataStateStrip() {
+    final now = DateTime.now();
+    final nationalFresh =
+        online && (snapshot?.freshAt(now, national: true) ?? false);
+    final localFresh =
+        online && (snapshot?.freshAt(now, national: false) ?? false);
+    final hasOffline = !online && offlinePackageData != null;
+    final hasAnyData = snapshot != null || offlinePackageData != null;
+    final label = nationalFresh && localFresh
+        ? 'LIVE • dane bieżące'
+        : hasOffline
+        ? 'OFFLINE • LAST KNOWN GOOD'
+        : hasAnyData
+        ? 'STALE • aktualność niepotwierdzona'
+        : 'Brak bieżących danych';
+    final icon = nationalFresh && localFresh
+        ? Icons.cloud_done_outlined
+        : hasOffline
+        ? Icons.offline_pin_outlined
+        : hasAnyData
+        ? Icons.schedule_outlined
+        : Icons.cloud_off_outlined;
+    final timestamp = hasOffline
+        ? offlinePackageData!.snapshotTimestamp.toIso8601String()
+        : snapshot?.data['serverTime'];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    timestamp == null
+                        ? 'Ostatnia aktualizacja: brak'
+                        : 'Ostatnia aktualizacja: ${stamp(timestamp)}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget statusCard(bool national) {
     final fresh =
         online &&
@@ -457,6 +521,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     final changed = events
         .where((e) => e.revision > (seen[e.id] ?? 0))
         .toList();
+    final active = events.where((e) {
+      if (e.data['lifecycle']?.toString() != 'ACTIVE') return false;
+      final validTo = DateTime.tryParse(e.data['validTo']?.toString() ?? '');
+      return validTo == null || validTo.isAfter(DateTime.now());
+    }).toList();
     return [
       if (!online && offlinePackageData != null)
         notice(
@@ -465,6 +534,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ),
       statusCard(true),
       statusCard(false),
+      heading('Najważniejsze aktywne komunikaty'),
+      if (active.isEmpty)
+        empty(
+          'Brak aktywnych komunikatów w pobranych danych',
+          'To nie jest potwierdzenie braku zagrożeń. Sprawdź też aktualność źródeł powyżej.',
+          Icons.notifications_none_outlined,
+        ),
+      ...active.take(3).map(eventCard),
       if (widget.repository.api.isEmpty)
         notice(
           'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
@@ -584,7 +661,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ],
       const SizedBox(height: 12),
       notice(
-        'Wersja rozwojowa $appVersion • pakiety offline • push pozostaje opt-in.',
+        'Każdy komunikat zachowuje źródło i czas pobrania. Brak nowych danych nie jest traktowany jako potwierdzenie bezpieczeństwa.',
         Icons.science_outlined,
       ),
       heading('Od ostatniej wizyty'),
@@ -638,7 +715,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         OutlinedButton.icon(
           onPressed: openSources,
           icon: const Icon(Icons.hub_outlined),
-          label: const Text('Pokaż wszystkie źródła i diagnostykę'),
+          label: const Text('Sprawdź stan wszystkich źródeł'),
         ),
       heading('Zapisane komunikaty regionu'),
       ...events.take(30).map(eventCard),
