@@ -75,7 +75,7 @@ void main() {
     expect(card.isRcb && card.isRso && card.isWczk, isTrue);
     expect(card.sources, hasLength(3));
     expect(card.reports, hasLength(3));
-    expect(card.sourceSummary, 'POŁĄCZONO 3 ŹRÓDŁA');
+    expect(card.sourceSummary, 'POŁĄCZONE ŹRÓDŁA: 3');
     expect(card.revision, 2);
     expect(card.hasConflictingReports, isTrue);
   });
@@ -138,10 +138,10 @@ void main() {
       );
       await tester.pumpWidget(SafetyApp(repository: repo));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Alerty').last);
+      await tester.tap(find.byIcon(Icons.campaign_outlined).last);
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-        find.text('POŁĄCZONO 3 ŹRÓDŁA'),
+        find.text('POŁĄCZONE ŹRÓDŁA: 3'),
         200,
         scrollable: find
             .descendant(
@@ -150,7 +150,7 @@ void main() {
             )
             .first,
       );
-      expect(find.text('POŁĄCZONO 3 ŹRÓDŁA'), findsOneWidget);
+      expect(find.text('POŁĄCZONE ŹRÓDŁA: 3'), findsOneWidget);
       expect(find.text('Powódź — fixture'), findsOneWidget);
       await tester.pumpWidget(
         MaterialApp(
