@@ -55,6 +55,10 @@ function validateNeptun(data){
   const sources=await json('/v1/sources');
   assert(Array.isArray(sources.sourceHealth),'sources contract invalid');
 
+  const layers=await json('/v1/map/layers');
+  const neptunLayer=layers.layers?.find(layer=>layer.id==='NEPTUN');
+  assert(neptunLayer?.mode==='LIVE_AND_HISTORY'&&neptunLayer?.geometry==='COARSE_LIVE_POINTS_AND_HISTORICAL_LINES','NEPTUN layer catalog stale');
+
   const snapshot=await json('/v1/snapshot?regionId=04');
   assert(snapshot.schemaVersion===1&&snapshot.regionId==='04','snapshot contract invalid');
   assert(snapshot.capabilities?.liveMap===true&&snapshot.capabilities?.neptun===true,'snapshot capabilities invalid');
