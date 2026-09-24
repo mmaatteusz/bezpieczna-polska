@@ -67,9 +67,11 @@ jobs:
           UKRAINE_ALARM_API_KEY: ${{ secrets.UKRAINE_ALARM_API_KEY }}
         run: |
           mkdir -p ../output
-          for source in rcb rso wczk imgw paa cyber sg service-incidents ukraine neptun; do
+          for source in rcb rso wczk imgw paa cyber sg service-incidents ukraine; do
             node "scripts/live-$source.mjs" "../output/$source-live.json" || echo "$source unavailable: contract tests remain authoritative"
           done
+          # NEPTUN is a core alpha.20+ live feature, not an optional enrichment.
+          node scripts/live-neptun.mjs ../output/neptun-live.json
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
