@@ -113,7 +113,7 @@ export function parseNeptunLive(input:unknown,now=new Date()){
 export const neptunLiveAdapter:SourceAdapter={
   id:'NEPTUN',
   version:NEPTUN_LIVE_VERSION,
-  minSyncIntervalSeconds:30,
+  minSyncIntervalSeconds:5,
   async sync({now,fetchText}){
     const snapshot=parseNeptunLive(JSON.parse(await fetchText(NEPTUN_API)),now);
     return {
