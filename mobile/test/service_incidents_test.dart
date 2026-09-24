@@ -98,7 +98,10 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.campaign_outlined).last);
     await tester.pumpAndSettle();
-    expect(find.text('Centrum alertów'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('Alerty')),
+      findsOneWidget,
+    );
     await tester.fling(
       find.byType(ListView).first,
       const Offset(0, 2000),

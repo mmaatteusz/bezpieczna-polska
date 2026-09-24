@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'model.dart';
@@ -52,7 +53,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
     if (!await Geolocator.isLocationServiceEnabled()) {
       setState(
         () => message =
-            'Lokalizacja w telefonie jest wyłączona. Możesz dodać miejsce ręcznie.',
+            'Lokalizacja w telefonie jest wyłączona. Możesz wyszukać miasto lub wieś.',
       );
       return null;
     }
@@ -63,7 +64,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
     if (permission == LocationPermission.denied) {
       setState(
         () => message =
-            'Bez zgody na lokalizację nie można użyć „Wokół mnie”. Możesz dodać miejsce ręcznie.',
+            'Bez zgody na lokalizację nie można użyć „Wokół mnie”. Możesz wyszukać miasto lub wieś.',
       );
       return null;
     }
@@ -182,16 +183,47 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
   }
 
   Future<void> _add({double? latitude, double? longitude}) async {
-    final label = TextEditingController();
-    final lat = TextEditingController(
-      text: latitude == null ? '' : latitude.toStringAsFixed(6),
-    );
-    final lon = TextEditingController(
-      text: longitude == null ? '' : longitude.toStringAsFixed(6),
+    final place = TextEditingController();
+    final label = TextEditingController(
+      text: latitude == null ? '' : 'Bieżąca lokalizacja',
     );
     final radius = TextEditingController(text: '20');
+    Location? resolved = latitude == null || longitude == null
+        ? null
+        : Location(latitude: latitude, longitude: longitude);
+    String? resolvedName = resolved == null
+        ? null
+        : 'Bieżąca lokalizacja z GPS';
     var selectedRegion = '';
+    var searching = false;
     String? validation;
+
+    String placemarkLabel(Placemark p, String fallback) {
+      final parts = <String>[
+        if ((p.locality ?? '').trim().isNotEmpty) p.locality!.trim(),
+        if ((p.subAdministrativeArea ?? '').trim().isNotEmpty &&
+            p.subAdministrativeArea!.trim() != p.locality?.trim())
+          p.subAdministrativeArea!.trim(),
+        if ((p.administrativeArea ?? '').trim().isNotEmpty)
+          p.administrativeArea!.trim(),
+      ];
+      return parts.isEmpty ? fallback : parts.toSet().join(', ');
+    }
+
+    String? regionFromPlacemark(Placemark p) {
+      String normalize(String value) => value
+          .toLowerCase()
+          .replaceAll('województwo', '')
+          .replaceAll('woj.', '')
+          .replaceAll(RegExp(r'[^a-ząćęłńóśźż]'), '');
+      final area = normalize(p.administrativeArea ?? '');
+      if (area.isEmpty) return null;
+      for (final entry in regions.entries.where((e) => e.key != 'PL')) {
+        if (normalize(entry.value) == area) return entry.key;
+      }
+      return null;
+    }
+
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -200,32 +232,159 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (resolved == null) ...[
+                  TextField(
+                    controller: place,
+                    textInputAction: TextInputAction.search,
+                    decoration: const InputDecoration(
+                      labelText: 'Miasto lub wieś',
+                      hintText: 'np. Bydgoszcz albo Osielsko',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onSubmitted: (_) async {
+                      if (searching || place.text.trim().length < 2) return;
+                      setDialogState(() {
+                        searching = true;
+                        validation = null;
+                      });
+                      try {
+                        final geocoding = Geocoding();
+                        final found = await geocoding.locationFromAddress(
+                          '${place.text.trim()}, Polska',
+                          locale: const Locale('pl', 'PL'),
+                        );
+                        if (found.isEmpty) throw const FormatException();
+                        final candidate = found.first;
+                        var name = place.text.trim();
+                        try {
+                          final marks = await geocoding
+                              .placemarkFromCoordinates(
+                                candidate.latitude,
+                                candidate.longitude,
+                                locale: const Locale('pl', 'PL'),
+                              );
+                          if (marks.isNotEmpty) {
+                            name = placemarkLabel(marks.first, name);
+                            selectedRegion =
+                                regionFromPlacemark(marks.first) ??
+                                selectedRegion;
+                          }
+                        } catch (_) {}
+                        setDialogState(() {
+                          resolved = candidate;
+                          resolvedName = name;
+                          if (label.text.trim().isEmpty) {
+                            label.text = name.length > 60
+                                ? name.substring(0, 60)
+                                : name;
+                          }
+                          searching = false;
+                        });
+                      } catch (_) {
+                        setDialogState(() {
+                          searching = false;
+                          validation =
+                              'Nie znaleziono tej miejscowości. Dopisz powiat lub województwo i spróbuj ponownie.';
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.tonalIcon(
+                    onPressed: searching
+                        ? null
+                        : () async {
+                            if (place.text.trim().length < 2) {
+                              setDialogState(
+                                () =>
+                                    validation = 'Wpisz nazwę miasta lub wsi.',
+                              );
+                              return;
+                            }
+                            setDialogState(() {
+                              searching = true;
+                              validation = null;
+                            });
+                            try {
+                              final geocoding = Geocoding();
+                              final found = await geocoding.locationFromAddress(
+                                '${place.text.trim()}, Polska',
+                                locale: const Locale('pl', 'PL'),
+                              );
+                              if (found.isEmpty) throw const FormatException();
+                              final candidate = found.first;
+                              var name = place.text.trim();
+                              try {
+                                final marks = await geocoding
+                                    .placemarkFromCoordinates(
+                                      candidate.latitude,
+                                      candidate.longitude,
+                                      locale: const Locale('pl', 'PL'),
+                                    );
+                                if (marks.isNotEmpty) {
+                                  name = placemarkLabel(marks.first, name);
+                                  selectedRegion =
+                                      regionFromPlacemark(marks.first) ??
+                                      selectedRegion;
+                                }
+                              } catch (_) {}
+                              setDialogState(() {
+                                resolved = candidate;
+                                resolvedName = name;
+                                if (label.text.trim().isEmpty) {
+                                  label.text = name.length > 60
+                                      ? name.substring(0, 60)
+                                      : name;
+                                }
+                                searching = false;
+                              });
+                            } catch (_) {
+                              setDialogState(() {
+                                searching = false;
+                                validation =
+                                    'Nie znaleziono tej miejscowości. Dopisz powiat lub województwo i spróbuj ponownie.';
+                              });
+                            }
+                          },
+                    icon: searching
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.travel_explore),
+                    label: const Text('Znajdź miejsce'),
+                  ),
+                ],
+                if (resolvedName != null) ...[
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.location_on_outlined),
+                    title: Text(resolvedName!),
+                    subtitle: const Text(
+                      'Miejsce znalezione i gotowe do zapisu',
+                    ),
+                    trailing: latitude == null
+                        ? IconButton(
+                            tooltip: 'Wybierz inne miejsce',
+                            onPressed: () => setDialogState(() {
+                              resolved = null;
+                              resolvedName = null;
+                              validation = null;
+                            }),
+                            icon: const Icon(Icons.close),
+                          )
+                        : null,
+                  ),
+                ],
                 TextField(
                   controller: label,
                   maxLength: 60,
                   decoration: const InputDecoration(
-                    labelText: 'Nazwa, np. Dom / Praca / Rodzina',
-                  ),
-                ),
-                TextField(
-                  controller: lat,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                    signed: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Szerokość geograficzna',
-                  ),
-                ),
-                TextField(
-                  controller: lon,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                    signed: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Długość geograficzna',
+                    labelText: 'Nazwa własna — opcjonalnie',
+                    hintText: 'np. Dom, Praca, Rodzina',
                   ),
                 ),
                 TextField(
@@ -234,20 +393,22 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                     decimal: true,
                   ),
                   decoration: const InputDecoration(
-                    labelText: 'Promień w km (1–100)',
+                    labelText: 'Promień alertów w km',
+                    hintText: '20',
                   ),
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
+                  key: ValueKey(selectedRegion),
                   initialValue: selectedRegion,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                    labelText: 'Kontekst wojewódzki — opcjonalny',
+                    labelText: 'Województwo — wykrywane automatycznie',
                   ),
                   items: [
                     const DropdownMenuItem(
                       value: '',
-                      child: Text('Bez kontekstu regionalnego'),
+                      child: Text('Nie ustawiaj'),
                     ),
                     ...regions.entries
                         .where((e) => e.key != 'PL')
@@ -263,7 +424,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Miejsce jest zapisywane lokalnie. Współrzędne są wysyłane przy ręcznym „Sprawdź”; dodatkowo mogą być synchronizowane do backendu wyłącznie wtedy, gdy osobno włączysz kategorię „Obserwowane lokalizacje” w ustawieniach powiadomień.',
+                  'Aplikacja zapisuje wybrane miejsce lokalnie. Nie zapisuje historii przemieszczania.',
                 ),
                 if (validation != null) ...[
                   const SizedBox(height: 8),
@@ -278,49 +439,47 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
               child: const Text('Anuluj'),
             ),
             FilledButton(
-              onPressed: () async {
-                final la = double.tryParse(
-                  lat.text.trim().replaceAll(',', '.'),
-                );
-                final lo = double.tryParse(
-                  lon.text.trim().replaceAll(',', '.'),
-                );
-                final ra = double.tryParse(
-                  radius.text.trim().replaceAll(',', '.'),
-                );
-                try {
-                  if (la == null || lo == null || ra == null) {
-                    throw const FormatException();
-                  }
-                  await widget.repository.addWatchedLocation(
-                    label: label.text,
-                    latitude: la,
-                    longitude: lo,
-                    radiusKm: ra,
-                    regionId: selectedRegion.isEmpty ? null : selectedRegion,
-                  );
-                  final sync = widget.onPreferencesChanged;
-                  if (sync != null) unawaited(sync());
-                  if (dialogContext.mounted) {
-                    Navigator.pop(dialogContext, true);
-                  }
-                } catch (error) {
-                  setDialogState(() {
-                    validation = error is StateError
-                        ? 'Można zapisać maksymalnie 20 lokalizacji.'
-                        : 'Sprawdź nazwę, współrzędne i promień 1–100 km.';
-                  });
-                }
-              },
+              onPressed: resolved == null
+                  ? null
+                  : () async {
+                      final ra = double.tryParse(
+                        radius.text.trim().replaceAll(',', '.'),
+                      );
+                      try {
+                        if (ra == null) throw const FormatException();
+                        final finalLabel = label.text.trim().isNotEmpty
+                            ? label.text.trim()
+                            : resolvedName ?? place.text.trim();
+                        await widget.repository.addWatchedLocation(
+                          label: finalLabel,
+                          latitude: resolved!.latitude,
+                          longitude: resolved!.longitude,
+                          radiusKm: ra,
+                          regionId: selectedRegion.isEmpty
+                              ? null
+                              : selectedRegion,
+                        );
+                        final sync = widget.onPreferencesChanged;
+                        if (sync != null) unawaited(sync());
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext, true);
+                        }
+                      } catch (error) {
+                        setDialogState(() {
+                          validation = error is StateError
+                              ? 'Można zapisać maksymalnie 20 lokalizacji.'
+                              : 'Sprawdź nazwę miejsca i promień 1–100 km.';
+                        });
+                      }
+                    },
               child: const Text('Zapisz'),
             ),
           ],
         ),
       ),
     );
+    place.dispose();
     label.dispose();
-    lat.dispose();
-    lon.dispose();
     radius.dispose();
     if (saved == true && mounted) setState(() {});
   }
@@ -471,7 +630,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
         OutlinedButton.icon(
           onPressed: loading ? null : () => _add(),
           icon: const Icon(Icons.edit_location_alt_outlined),
-          label: const Text('Dodaj miejsce ręcznie'),
+          label: const Text('Dodaj miasto lub wieś'),
         ),
         if (loading) const LinearProgressIndicator(),
         if (message != null)

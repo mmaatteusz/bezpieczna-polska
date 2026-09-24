@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
@@ -15,7 +16,6 @@ import 'shelter_map.dart';
 import 'security_levels.dart';
 import 'shelter_panel.dart';
 import 'event_details.dart';
-import 'status_explanation.dart';
 import 'source_status.dart';
 import 'watched_locations_panel.dart';
 import 'push_notifications.dart';
@@ -90,9 +90,11 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> with WidgetsBindingObserver {
   int page = 0, generation = 0;
-  bool online = false, loading = false, ukraine = false;
+  bool online = false, loading = false, backgroundSync = false, ukraine = false;
   late String region;
+  String? localityLabel;
   Snapshot? snapshot;
+  AroundResult? localityAround;
   OfflineRegionPackage? offlinePackageData;
   String? error;
   Timer? timer, refreshTimer;
@@ -109,13 +111,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       unawaited(widget.pushManager!.initializeWithoutPrompt());
     }
     region = widget.repository.region;
+    localityLabel = widget.repository.primaryLocationLabel;
     snapshot = widget.repository.cached(region);
     unawaited(loadOffline());
     loadSeen();
     timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
     });
-    if (widget.repository.api.isNotEmpty) unawaited(refresh());
+    if (widget.repository.api.isNotEmpty) unawaited(startupSync());
     refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted &&
           !loading &&
@@ -203,6 +206,297 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> startupSync() async {
+    if (backgroundSync || widget.repository.api.isEmpty) return;
+    final target = region;
+    setState(() => backgroundSync = true);
+
+    Future<void> ignoreFailure(Future<dynamic> Function() action) async {
+      try {
+        await action();
+      } catch (_) {
+        // The main snapshot error is already surfaced by refresh().
+        // Secondary caches keep their previous LAST KNOWN GOOD copy.
+      }
+    }
+
+    try {
+      await refresh();
+      if (!mounted || target != region || widget.repository.api.isEmpty) return;
+
+      final existingPackage = await widget.repository.offlinePackage(target);
+      final shouldRefreshOffline =
+          existingPackage == null ||
+          DateTime.now().toUtc().difference(existingPackage.createdAt) >
+              const Duration(hours: 6);
+
+      await Future.wait([
+        ignoreFailure(widget.repository.refreshUkraine),
+        ignoreFailure(widget.repository.refreshNeptun),
+        if (shouldRefreshOffline)
+          ignoreFailure(() => widget.repository.downloadOfflinePackage(target)),
+      ]);
+      await refreshPrimaryLocation(target);
+      if (mounted && target == region) await loadOffline();
+    } finally {
+      if (mounted) {
+        setState(() => backgroundSync = false);
+        if (target != region && widget.repository.api.isNotEmpty) {
+          unawaited(startupSync());
+        }
+      }
+    }
+  }
+
+  Future<void> refreshPrimaryLocation(String target) async {
+    final latitude = widget.repository.primaryLocationLatitude;
+    final longitude = widget.repository.primaryLocationLongitude;
+    if (latitude == null ||
+        longitude == null ||
+        widget.repository.primaryLocationLabel == null) {
+      if (mounted && target == region) setState(() => localityAround = null);
+      return;
+    }
+
+    AroundResult? result;
+    try {
+      result = await widget.repository.around(
+        latitude,
+        longitude,
+        radiusKm: 20,
+        regionId: target,
+      );
+    } catch (_) {
+      result = await widget.repository.offlineAround(
+        latitude,
+        longitude,
+        radiusKm: 20,
+        regionId: target,
+      );
+    }
+    if (mounted && target == region) {
+      setState(() => localityAround = result);
+    }
+  }
+
+  String? regionFromPlacemark(Placemark placemark) {
+    String normalize(String value) => value
+        .toLowerCase()
+        .replaceAll('województwo', '')
+        .replaceAll('woj.', '')
+        .replaceAll(RegExp(r'[^a-ząćęłńóśźż]'), '');
+    final area = normalize(placemark.administrativeArea ?? '');
+    if (area.isEmpty) return null;
+    for (final entry in regions.entries.where((e) => e.key != 'PL')) {
+      if (normalize(entry.value) == area) return entry.key;
+    }
+    return null;
+  }
+
+  Future<void> chooseLocality() async {
+    final queryController = TextEditingController();
+    String? foundLabel;
+    double? foundLatitude, foundLongitude;
+    var selectedRegion = region == 'PL' ? '04' : region;
+    var searching = false;
+    String? validation;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, update) => AlertDialog(
+          title: const Text('Wybierz swoją okolicę'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Wpisz miasto lub wieś. Współrzędne są ustalane automatycznie i nie są pokazywane w interfejsie.',
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: queryController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.search,
+                  decoration: const InputDecoration(
+                    labelText: 'Miasto lub wieś',
+                    hintText: 'np. Bydgoszcz albo Osielsko',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) {},
+                ),
+                const SizedBox(height: 10),
+                FilledButton.tonalIcon(
+                  onPressed: searching
+                      ? null
+                      : () async {
+                          final query = queryController.text.trim();
+                          if (query.length < 2) {
+                            update(
+                              () => validation = 'Wpisz nazwę miejscowości.',
+                            );
+                            return;
+                          }
+                          update(() {
+                            searching = true;
+                            validation = null;
+                          });
+                          try {
+                            final geocoder = Geocoding();
+                            final locations = await geocoder
+                                .locationFromAddress(
+                                  '$query, Polska',
+                                  locale: const Locale('pl', 'PL'),
+                                );
+                            if (locations.isEmpty) {
+                              throw const FormatException();
+                            }
+                            final point = locations.first;
+                            var label = query;
+                            try {
+                              final marks = await geocoder
+                                  .placemarkFromCoordinates(
+                                    point.latitude,
+                                    point.longitude,
+                                    locale: const Locale('pl', 'PL'),
+                                  );
+                              if (marks.isNotEmpty) {
+                                final mark = marks.first;
+                                final parts = <String>[
+                                  if ((mark.locality ?? '').trim().isNotEmpty)
+                                    mark.locality!.trim(),
+                                  if ((mark.subAdministrativeArea ?? '')
+                                          .trim()
+                                          .isNotEmpty &&
+                                      mark.subAdministrativeArea!.trim() !=
+                                          mark.locality?.trim())
+                                    mark.subAdministrativeArea!.trim(),
+                                ];
+                                if (parts.isNotEmpty) {
+                                  label = parts.toSet().join(', ');
+                                }
+                                selectedRegion =
+                                    regionFromPlacemark(mark) ?? selectedRegion;
+                              }
+                            } catch (_) {}
+                            update(() {
+                              foundLabel = label.length > 80
+                                  ? label.substring(0, 80)
+                                  : label;
+                              foundLatitude = point.latitude;
+                              foundLongitude = point.longitude;
+                              searching = false;
+                            });
+                          } catch (_) {
+                            update(() {
+                              searching = false;
+                              validation =
+                                  'Nie znaleziono miejscowości. Dopisz powiat lub województwo.';
+                            });
+                          }
+                        },
+                  icon: searching
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.travel_explore),
+                  label: const Text('Znajdź'),
+                ),
+                if (foundLabel != null) ...[
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.location_on_outlined),
+                    title: Text(foundLabel!),
+                    subtitle: Text(regions[selectedRegion] ?? selectedRegion),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  key: ValueKey(selectedRegion),
+                  initialValue: selectedRegion,
+                  decoration: const InputDecoration(
+                    labelText: 'Województwo',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: regions.entries
+                      .where((e) => e.key != 'PL')
+                      .map(
+                        (e) => DropdownMenuItem(
+                          value: e.key,
+                          child: Text(e.value),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      update(() => selectedRegion = value);
+                    }
+                  },
+                ),
+                if (validation != null) ...[
+                  const SizedBox(height: 8),
+                  Text(validation!),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Anuluj'),
+            ),
+            FilledButton(
+              onPressed:
+                  foundLabel == null ||
+                      foundLatitude == null ||
+                      foundLongitude == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
+              child: const Text('Ustaw lokalizację'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (saved == true &&
+        foundLabel != null &&
+        foundLatitude != null &&
+        foundLongitude != null) {
+      ++generation;
+      await widget.repository.setPrimaryLocation(
+        label: foundLabel!,
+        latitude: foundLatitude!,
+        longitude: foundLongitude!,
+        regionId: selectedRegion,
+      );
+      if (!mounted) return;
+      setState(() {
+        region = selectedRegion;
+        localityLabel = foundLabel;
+        localityAround = null;
+        snapshot = widget.repository.cached(selectedRegion);
+        offlinePackageData = null;
+        online = false;
+        loading = false;
+        error = null;
+        loadSeen();
+      });
+      await loadOffline();
+      if (widget.pushManager != null) {
+        unawaited(widget.pushManager!.syncCurrentPreferences());
+      }
+      if (widget.repository.api.isNotEmpty) unawaited(startupSync());
+    }
+
+    queryController.dispose();
+  }
+
   Future<void> changeRegion(String value) async {
     ++generation;
     await widget.repository.setRegion(value);
@@ -220,35 +514,18 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       loadSeen();
     });
     await loadOffline();
-    if (widget.repository.api.isNotEmpty) await refresh();
+    if (widget.repository.api.isNotEmpty) unawaited(startupSync());
   }
 
   List<SafetyEvent> get events => snapshot?.alertEvents ?? [];
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'BEZPIECZNA POLSKA',
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(letterSpacing: 2),
-          ),
-          Text(
-            [
-              'Twoje bezpieczeństwo',
-              'Mapa bezpieczeństwa',
-              'Centrum alertów',
-              'Znajdź schronienie',
-              'Pomoc i przygotowanie',
-            ][page],
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-        ],
+      title: Text(
+        ['Status', 'Mapa', 'Alerty', 'Schronienia', 'Pomoc'][page],
+        style: Theme.of(
+          context,
+        ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
       ),
       actions: [
         IconButton(
@@ -262,39 +539,55 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: const EdgeInsets.fromLTRB(16, 6, 8, 4),
             child: Row(
               children: [
-                const Icon(Icons.location_on_outlined),
-                const SizedBox(width: 8),
                 Expanded(
-                  child: DropdownButton<String>(
-                    value: region,
-                    isExpanded: true,
-                    underline: const SizedBox(),
-                    items: regions.entries
-                        .map(
-                          (e) => DropdownMenuItem(
-                            value: e.key,
-                            child: Text(
-                              e.value,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: chooseLocality,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 7,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.location_on_outlined, size: 22),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  localityLabel ?? 'Wybierz miasto lub wieś',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                Text(
+                                  regions[region] ?? region,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
                             ),
                           ),
-                        )
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) unawaited(changeRegion(v));
-                    },
+                          const Icon(Icons.expand_more),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Odśwież',
-                  onPressed: loading || widget.repository.api.isEmpty
+                  tooltip: 'Odśwież dane',
+                  onPressed:
+                      loading || backgroundSync || widget.repository.api.isEmpty
                       ? null
-                      : refresh,
-                  icon: loading
+                      : startupSync,
+                  icon: loading || backgroundSync
                       ? const SizedBox(
                           width: 20,
                           height: 20,
@@ -308,15 +601,15 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           dataStateStrip(),
           if (error != null)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: notice(error!, Icons.cloud_off),
             ),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: refresh,
+              onRefresh: startupSync,
               child: ListView(
                 key: PageStorageKey<int>(page),
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
                 children: switch (page) {
                   0 => statusPage(),
                   1 => mapPage(),
@@ -381,7 +674,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   );
   Widget empty(String title, String text, IconData icon) => Card(
     child: Padding(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -410,14 +703,18 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         online && (snapshot?.freshAt(now, national: false) ?? false);
     final hasOffline = !online && offlinePackageData != null;
     final hasAnyData = snapshot != null || offlinePackageData != null;
-    final label = nationalFresh && localFresh
-        ? 'LIVE • dane bieżące'
+    final label = backgroundSync
+        ? 'Synchronizacja danych…'
+        : nationalFresh && localFresh
+        ? 'Dane aktualne'
         : hasOffline
-        ? 'OFFLINE • LAST KNOWN GOOD'
+        ? 'Offline • ostatnia zapisana kopia'
         : hasAnyData
-        ? 'STALE • aktualność niepotwierdzona'
-        : 'Brak bieżących danych';
-    final icon = nationalFresh && localFresh
+        ? 'Dane mogą być nieaktualne'
+        : 'Brak pobranych danych';
+    final icon = backgroundSync
+        ? Icons.sync
+        : nationalFresh && localFresh
         ? Icons.cloud_done_outlined
         : hasOffline
         ? Icons.offline_pin_outlined
@@ -428,90 +725,135 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ? offlinePackageData!.snapshotTimestamp.toIso8601String()
         : snapshot?.data['serverTime'];
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    timestamp == null
-                        ? 'Ostatnia aktualizacja: brak'
-                        : 'Ostatnia aktualizacja: ${stamp(timestamp)}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: Material(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Row(
+            children: [
+              Icon(icon, size: 19),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  timestamp == null ? label : '$label • ${stamp(timestamp)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                ),
               ),
-            ),
-          ],
+              if (backgroundSync)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget statusCard(bool national) {
-    final fresh =
-        online &&
-        (snapshot?.freshAt(DateTime.now(), national: national) ?? false);
-    final status = snapshot?.data[national ? 'nationalStatus' : 'status'];
-    final danger = fresh && status?['hazardLevel'] == 'ACTIVE_DANGER';
+  Widget statusOverviewCard() {
+    final now = DateTime.now();
+    final nationalFresh =
+        online && (snapshot?.freshAt(now, national: true) ?? false);
+    final regionalFresh =
+        online && (snapshot?.freshAt(now, national: false) ?? false);
+    final national = snapshot?.data['nationalStatus'];
+    final regional = snapshot?.data['status'];
+
+    String statusText(dynamic status, bool fresh) {
+      if (status is! Map) return 'Brak danych';
+      if (fresh) return status['displayText']?.toString() ?? 'Brak danych';
+      if (!online && offlinePackageData != null) {
+        return 'Ostatnia zapisana kopia: ${status['displayText'] ?? 'brak oceny'}';
+      }
+      return 'Dane nie są aktualne';
+    }
+
+    Widget row({
+      required IconData icon,
+      required String title,
+      required String value,
+      String? subtitle,
+    }) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.labelLarge),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final nearbyActive =
+        localityAround?.nearbyEvents.where((item) {
+          final lifecycle = item.event.data['lifecycle']?.toString();
+          final validTo = DateTime.tryParse(
+            item.event.data['validTo']?.toString() ?? '',
+          );
+          return lifecycle == 'ACTIVE' &&
+              (validTo == null || validTo.isAfter(DateTime.now()));
+        }).length ??
+        0;
+
     return Card(
-      color: danger
-          ? Theme.of(context).colorScheme.errorContainer
-          : Theme.of(context).colorScheme.surfaceContainerHigh,
       child: Padding(
-        padding: const EdgeInsets.all(22),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              national ? 'STATUS POLSKI' : 'TWOJA OKOLICA • ${regions[region]}',
-              style: Theme.of(context).textTheme.labelLarge,
+            row(
+              icon: Icons.public_outlined,
+              title: 'Polska',
+              value: statusText(national, nationalFresh),
             ),
-            const SizedBox(height: 14),
-            Text(
-              fresh
-                  ? snapshot!.statusText(
-                      DateTime.now(),
-                      online: true,
-                      national: national,
-                    )
-                  : !online && offlinePackageData != null && status is Map
-                  ? 'OFFLINE • LAST KNOWN GOOD: ${status['displayText']}'
-                  : 'Brak bieżącej oceny sytuacji',
-              style: Theme.of(context).textTheme.titleLarge,
+            const Divider(height: 1),
+            row(
+              icon: Icons.map_outlined,
+              title: regions[region] ?? region,
+              value: statusText(regional, regionalFresh),
             ),
-            const SizedBox(height: 12),
-            Text(
-              fresh
-                  ? 'Ocena obejmuje wyłącznie monitorowane źródła.'
-                  : 'Brak aktualnych danych nie potwierdza bezpieczeństwa.',
-            ),
-            const SizedBox(height: 12),
-            Text(
-              !online && offlinePackageData != null
-                  ? 'Snapshot: ${stamp(offlinePackageData!.snapshotTimestamp.toIso8601String())} • pobrano: ${stamp(offlinePackageData!.createdAt.toIso8601String())}'
-                  : 'Dane: ${stamp(snapshot?.data['serverTime'])}',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            if (status is Map)
-              StatusExplanation(status: status, events: snapshot?.events ?? []),
+            if (localityLabel != null) ...[
+              const Divider(height: 1),
+              row(
+                icon: Icons.near_me_outlined,
+                title: localityLabel!,
+                value: localityAround == null
+                    ? 'Dane okolicy jeszcze niepobrane'
+                    : nearbyActive == 0
+                    ? 'Brak aktywnych komunikatów z dokładną lokalizacją w promieniu 20 km'
+                    : nearbyActive == 1
+                    ? '1 aktywny komunikat w promieniu 20 km'
+                    : '$nearbyActive aktywne komunikaty w promieniu 20 km',
+                subtitle:
+                    'Komunikaty bez dokładnej geometrii są nadal uwzględniane na poziomie województwa.',
+              ),
+            ],
           ],
         ),
       ),
@@ -527,19 +869,48 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       final validTo = DateTime.tryParse(e.data['validTo']?.toString() ?? '');
       return validTo == null || validTo.isAfter(DateTime.now());
     }).toList();
+    final noData = snapshot == null && offlinePackageData == null;
+    if (noData) {
+      return [
+        if (widget.repository.api.isEmpty)
+          notice(
+            'Brak połączenia z serwerem danych. Ten build testowy nie ma ustawionego adresu API.',
+            Icons.cloud_off_outlined,
+          )
+        else
+          empty(
+            backgroundSync ? 'Pobieram dane' : 'Nie udało się pobrać danych',
+            backgroundSync
+                ? 'Pierwsza synchronizacja zapisze dane na telefonie, żeby aplikacja mogła działać także bez internetu.'
+                : 'Sprawdź internet i przeciągnij ekran w dół, aby spróbować ponownie.',
+            backgroundSync ? Icons.sync : Icons.cloud_off_outlined,
+          ),
+        heading('Po synchronizacji'),
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.notifications_active_outlined),
+          title: Text('Alerty i status regionu'),
+        ),
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.map_outlined),
+          title: Text('Mapa zdarzeń i schronienia'),
+        ),
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.offline_pin_outlined),
+          title: Text('Kopia offline na telefonie'),
+        ),
+      ];
+    }
+
     return [
       if (!online && offlinePackageData != null)
         notice(
           'OFFLINE • LAST KNOWN GOOD z ${stamp(offlinePackageData!.snapshotTimestamp.toIso8601String())}. Wiek pakietu: ${formatOfflineAge(offlinePackageData!.createdAt, DateTime.now().toUtc())}. Stan źródeł pochodzi z chwili snapshotu. Brak nowych danych nie oznacza bezpieczeństwa.',
           Icons.offline_pin_outlined,
         ),
-      statusCard(true),
-      statusCard(false),
-      if (widget.repository.api.isEmpty)
-        notice(
-          'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
-          Icons.cloud_off,
-        ),
+      statusOverviewCard(),
       heading('Najważniejsze aktywne komunikaty'),
       if (active.isEmpty)
         empty(
@@ -1184,7 +1555,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       builder: (sheet) => StatefulBuilder(
         builder: (sheet, update) => SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(22),
+            padding: const EdgeInsets.all(16),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

@@ -280,7 +280,9 @@ class _NeptunScreenState extends State<NeptunScreen> {
               'Tryb: ${snapshot?.data['mode'] ?? 'HISTORICAL_ONLY'} • opóźnienie publikacji: ${snapshot?.data['safetyDelayHours'] ?? 24} h • minimalna dokładność: ${snapshot?.data['minimumPublishedPrecisionKm'] ?? 10} km',
             ),
             Text(
-              'Pokrycie: ${snapshot?.data['coverage'] ?? 'NO_CONFIGURED_FEED'}${online ? '' : ' • offline / ostatnia poprawna kopia'}',
+              snapshot?.data['coverage'] == 'CURATED_HISTORY'
+                  ? 'Dostępna jest opublikowana historia zdarzeń${online ? '' : ' • ostatnia zapisana kopia'}'
+                  : 'Brak opublikowanych danych historycznych${online ? '' : ' • offline'}',
             ),
             if (loading) const LinearProgressIndicator(),
             if (error != null) Text(error!),
@@ -297,7 +299,7 @@ class _NeptunScreenState extends State<NeptunScreen> {
                 child: Padding(
                   padding: EdgeInsets.all(18),
                   child: Text(
-                    'Brak opublikowanych historycznych śladów NEPTUN. Źródło live nie jest skonfigurowane.',
+                    'Brak opublikowanych historycznych śladów NEPTUN. Ten moduł pokazuje wyłącznie zakończone zdarzenia po opóźnieniu bezpieczeństwa — nie jest źródłem pozycji live.',
                   ),
                 ),
               ),
