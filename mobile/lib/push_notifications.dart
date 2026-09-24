@@ -685,7 +685,7 @@ class _NotificationSettingsScreenState
       builder: (dialog) => AlertDialog(
         title: const Text('Włączyć powiadomienia?'),
         content: const Text(
-          'Dopiero po kontynuowaniu pojawi się systemowa prośba o zgodę. Wybrane kategorie zostaną zapisane dla tego urządzenia. Obserwowane lokalizacje są wysyłane tylko wtedy, gdy osobno włączysz tę kategorię; aplikacja nie zapisuje historii przemieszczania.',
+          'Dopiero po kontynuowaniu pojawi się systemowa prośba o zgodę. Wybrane kategorie zostaną zapisane dla tego urządzenia. Obserwowane lokalizacje są wysyłane tylko wtedy, gdy osobno włączysz tę kategorię; aplikacja działa bez historii GPS i nie zapisuje historii przemieszczania.',
         ),
         actions: [
           TextButton(
