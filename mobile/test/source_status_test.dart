@@ -50,7 +50,10 @@ void main() {
       for (
         var i = 0;
         i < 4 &&
-            find.textContaining('DOWN • niedostępne').evaluate().isEmpty;
+            find
+                .textContaining('DOWN • niedostępne')
+                .evaluate()
+                .isEmpty;
         i++
       ) {
         await tester.drag(find.byType(ListView), const Offset(0, -300));
