@@ -29,12 +29,12 @@ export async function aroundLocation(store:Store,q:AroundQuery,now=new Date()){
  if(store.db.kind!=='postgres')throw new Error('POSTGIS_REQUIRED');
  return store.db.transaction(async db=>{
   const scoped=new Store(db);
-  const [all,health,nearRows,nearestShelters]=await Promise.all([
-   scoped.events(),
-   scoped.health(),
-   scoped.nearbyEvents(q.latitude,q.longitude,Math.round(q.radiusKm*1000),50),
-   scoped.nearestShelters(q.latitude,q.longitude,3),
-  ]);
+  // A PostgreSQL transaction uses one PoolClient. Keep its queries
+  // sequential; pg warns (and pg@9 will reject) concurrent client.query calls.
+  const all=await scoped.events();
+  const health=await scoped.health();
+  const nearRows=await scoped.nearbyEvents(q.latitude,q.longitude,Math.round(q.radiusKm*1000),50);
+  const nearestShelters=await scoped.nearestShelters(q.latitude,q.longitude,3);
   const nearby=nearRows
    .filter(row=>usable(row.event,now))
    .map(row=>({event:row.event,distanceMeters:row.distanceMeters,relevance:'NEARBY' as const}));
