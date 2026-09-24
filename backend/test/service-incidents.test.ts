@@ -135,6 +135,13 @@ test('large service incident alone cannot raise regional status',()=>{
  assert.notEqual(computeStatus([e],[h],'04',now).hazardLevel,'ACTIVE_DANGER');
 });
 
+test('PSP adapter isolates one malformed current article instead of dropping healthy articles',async()=>{
+ const broken='https://www.gov.pl/web/kgpsp/uszkodzony-artykul';
+ const index='<main><article><h2>Aktualności</h2><div class="art-prev"><div class="title"><a href="'+new URL(pspUrl).pathname+'">Zdarzenie</a></div></div><div class="art-prev"><div class="title"><a href="'+new URL(broken).pathname+'">Uszkodzony</a></div></div></article></main>';
+ const batch=await pspIncidentsAdapter.sync({now,fetchText:async u=>u===PSP_INCIDENTS_INDEX?index:u===pspUrl?pspArticle('Sokolniki Suche - wypadek kolejowy','Pociągiem podróżowało ponad 100 osób. 8 osób zabrano do szpitala. Na miejscu pracowało blisko 30 zastępów i specjalistyczne grupy ratownictwa.'):'<html>broken</html>'});
+ assert.equal(batch.events.length,1);assert.equal(batch.events[0].eventType,'RESCUE');
+});
+
 test('PSP adapter bounded sync rejects educational posts and imports operational incident',async()=>{
  const data=new Map<string,string>([
   [PSP_INCIDENTS_INDEX,pspIndex()],
