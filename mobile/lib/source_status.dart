@@ -61,12 +61,18 @@ class SourceStatusPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final healthy = sources.where((s) => effectiveStateOf(s) == 'HEALTHY').length;
-    final stale = sources.where((s) => effectiveStateOf(s) == 'STALE').length;
+    final healthy = sources
+        .where((s) => effectiveStateOf(s) == 'HEALTHY')
+        .length;
+    final stale = sources
+        .where((s) => effectiveStateOf(s) == 'STALE')
+        .length;
     final partial = sources
         .where((s) => effectiveStateOf(s) == 'DEGRADED')
         .length;
-    final down = sources.where((s) => effectiveStateOf(s) == 'BROKEN').length;
+    final down = sources
+        .where((s) => effectiveStateOf(s) == 'BROKEN')
+        .length;
     final notConfigured = sources
         .where((s) => effectiveStateOf(s) == 'NOT_CONFIGURED')
         .length;
