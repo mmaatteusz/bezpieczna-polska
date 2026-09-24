@@ -8,9 +8,15 @@ export const NEPTUN_PUBLIC_MIN_PRECISION_KM=10;
 
 const timestamp=z.iso.datetime({offset:true});
 const finite=z.number().finite();
+const knownThreatTypes=['uav','recon','missile','ballistic','kab','mig31k','unknown'] as const;
+const threatType=z.string().min(1).max(80).transform((value):typeof knownThreatTypes[number]=>
+  (knownThreatTypes as readonly string[]).includes(value)?value as typeof knownThreatTypes[number]:'unknown'
+);
 const rawThreatSchema=z.object({
   id:z.string().min(1).max(120),
-  type:z.enum(['uav','recon','missile','ballistic','kab','mig31k','unknown']),
+  // Upstream may add categories without notice. Unknown categories remain visible
+  // as generic threats instead of taking the entire live snapshot down.
+  type:threatType,
   title:z.string().min(1).max(300),
   region:z.string().max(250).nullish().transform(v=>v??null),
   district:z.string().max(250).nullish().transform(v=>v??null),
