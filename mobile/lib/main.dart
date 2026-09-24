@@ -1026,8 +1026,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ShelterMap(
         radiation: snapshot?.data['radiation'],
         radiationOnline: online,
+        events: events,
+        watchedLocations: widget.repository.watchedLocations,
+        openEvent: details,
         key: ValueKey(
-          'map:${widget.repository.api}:$region:$ukraine:${widget.repository.dataGeneration}',
+          'map:${widget.repository.api}:$region:$ukraine:${widget.repository.dataGeneration}:${widget.repository.watchedLocations.length}',
         ),
         repository: widget.repository,
         region: region,
@@ -1038,7 +1041,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     notice(
       ukraine
           ? 'Alarmy Ukrainy są osobnym kontekstem. Brak oznaczeń nie oznacza braku alarmów.'
-          : 'Mapa pokazuje punkty schronienia wg PSP. Liczby grupują punkty w widocznym obszarze. Przybliż mapę, aby wybrać punkt. Mapa nie potwierdza bieżącej dostępności i nie służy do nawigacji. Offline dostępne są tylko zapisane obszary; podkład mapy wymaga internetu lub wcześniejszego cache.',
+          : 'Mapa pokazuje schronienia, zdarzenia z potwierdzoną lokalizacją i zapisane obserwowane miejsca. Dotknij punktu, aby zobaczyć szczegóły. Twoja pozycja jest pobierana wyłącznie po naciśnięciu przycisku lokalizacji i nie jest zapisywana. Offline dostępne są zapisane warstwy; podkład mapy może wymagać internetu.',
       Icons.info_outline,
     ),
     if (!ukraine) ...events.where((e) => e.hasPoint).take(20).map(eventCard),
