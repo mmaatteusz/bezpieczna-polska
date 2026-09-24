@@ -91,6 +91,7 @@ function validateNeptun(data){
   assert(around.schemaVersion===1&&Array.isArray(around.nearbyEvents)&&around.nearestShelters,'around invalid');
 
   const first=await json('/v1/neptun');
+  console.log('PROBE_NEPTUN_STATE',JSON.stringify({state:first.live?.state,lastSuccessfulSyncAt:first.live?.lastSuccessfulSyncAt,sourceServerTime:first.live?.sourceServerTime,sourceHealth:first.sourceHealth}));
   validateNeptun(first);
 
   const neptunGeo=await json('/v1/layers/neptun.geojson');
