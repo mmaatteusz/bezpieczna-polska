@@ -1,4 +1,3 @@
-import 'ukraine.dart';
 import 'neptun.dart';
 import 'radiation.dart';
 
@@ -90,7 +89,7 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> with WidgetsBindingObserver {
   int page = 0, generation = 0;
-  bool online = false, loading = false, backgroundSync = false, ukraine = false;
+  bool online = false, loading = false, backgroundSync = false;
   late String region;
   String? localityLabel;
   Snapshot? snapshot;
@@ -231,7 +230,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               const Duration(hours: 6);
 
       await Future.wait([
-        ignoreFailure(widget.repository.refreshUkraine),
         ignoreFailure(widget.repository.refreshNeptun),
         if (shouldRefreshOffline)
           ignoreFailure(() => widget.repository.downloadOfflinePackage(target)),
@@ -919,14 +917,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           Icons.notifications_none_outlined,
         ),
       ...active.take(3).map(eventCard),
-      OutlinedButton.icon(
-        onPressed: () => setState(() {
-          page = 1;
-          ukraine = true;
-        }),
-        icon: const Icon(Icons.public),
-        label: const Text('Ukraina • oficjalne alarmy'),
-      ),
       Card(
         child: ListTile(
           leading: const Icon(Icons.timeline_outlined),
@@ -1232,7 +1222,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       'IMGW_HYDRO',
       'PAA',
       'CERT',
-      'CSIRT_GOV',
       'SG',
       'POLICE',
       'PSP_INCIDENTS',
@@ -1381,42 +1370,24 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   }
 
   List<Widget> mapPage() => [
-    SegmentedButton<bool>(
-      segments: const [
-        ButtonSegment(value: false, label: Text('Polska')),
-        ButtonSegment(value: true, label: Text('Ukraina')),
-      ],
-      selected: {ukraine},
-      onSelectionChanged: (v) => setState(() => ukraine = v.first),
+    ShelterMap(
+      radiation: snapshot?.data['radiation'],
+      radiationOnline: online,
+      events: events,
+      watchedLocations: widget.repository.watchedLocations,
+      openEvent: details,
+      key: ValueKey(
+        'map:${widget.repository.api}:$region:${widget.repository.dataGeneration}:${widget.repository.watchedLocations.length}',
+      ),
+      repository: widget.repository,
+      region: region,
+      ukraine: false,
+      openLink: openLink,
     ),
-    const SizedBox(height: 12),
-    if (ukraine)
-      UkrainePanel(repository: widget.repository, openSource: openLink)
-    else
-      ShelterMap(
-        radiation: snapshot?.data['radiation'],
-        radiationOnline: online,
-        events: events,
-        watchedLocations: widget.repository.watchedLocations,
-        openEvent: details,
-        key: ValueKey(
-          'map:${widget.repository.api}:$region:$ukraine:${widget.repository.dataGeneration}:${widget.repository.watchedLocations.length}',
-        ),
-        repository: widget.repository,
-        region: region,
-        ukraine: ukraine,
-        openLink: openLink,
-      ),
     const SizedBox(height: 8),
-    if (ukraine)
-      notice(
-        'Alarmy Ukrainy są osobnym kontekstem. Brak oznaczeń nie oznacza braku alarmów.',
-        Icons.info_outline,
-      )
-    else
-      const Text(
-        'Dotknij punktu po szczegóły. Warstwy, schronienia i PAA zmienisz przyciskiem na mapie. GPS działa tylko po Twoim kliknięciu.',
-      ),
+    const Text(
+      'Dotknij punktu po szczegóły. Warstwy, schronienia i PAA zmienisz przyciskiem na mapie. GPS działa tylko po Twoim kliknięciu.',
+    ),
   ];
   List<Widget> shelterPage() => [
     ShelterPanel(
