@@ -242,12 +242,22 @@ class _NeptunScreenState extends State<NeptunScreen> {
   NeptunData? snapshot;
   bool loading = false, online = false;
   String? error;
+  Timer? timer;
 
   @override
   void initState() {
     super.initState();
     snapshot = widget.repository.cachedNeptun();
     if (widget.repository.api.isNotEmpty) unawaited(refresh());
+    timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && widget.repository.api.isNotEmpty) unawaited(refresh());
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
   }
 
   Future<void> refresh() async {
@@ -275,6 +285,45 @@ class _NeptunScreenState extends State<NeptunScreen> {
   }
 
   String when(dynamic value) => value is String ? stamp(value) : 'Nie podano';
+
+  String typeLabel(String value) => switch (value) {
+    'uav' => 'BSP / dron',
+    'recon' => 'Rozpoznanie',
+    'missile' => 'Rakieta',
+    'ballistic' => 'Balistyka',
+    'kab' => 'KAB',
+    'mig31k' => 'MiG-31K',
+    _ => 'Nieokreślone',
+  };
+
+  Widget liveCard(Map<String, dynamic> t) {
+    final location = [
+      t['locality'],
+      t['district'],
+      t['region'],
+    ].whereType<String>().where((v) => v.trim().isNotEmpty).toSet().join(' • ');
+    final precision = t['precisionKm'];
+    return Card(
+      child: ListTile(
+        leading: Icon(t['advisory'] == true ? Icons.info_outline : Icons.radar),
+        title: Text(t['title'] as String),
+        subtitle: Text(
+          typeLabel(t['type'] as String) +
+              (location.isEmpty ? '' : ' • ' + location) +
+              '\n' +
+              (t['advisory'] == true
+                  ? 'Obserwacja informacyjna'
+                  : 'Aktywne zagrożenie w feedzie NEPTUN') +
+              ' • aktualizacja ' +
+              when(t['updatedAt']) +
+              (precision == null
+                  ? ''
+                  : ' • pozycja zgrubna ≥ ' + precision.toString() + ' km'),
+        ),
+        isThreeLine: true,
+      ),
+    );
+  }
 
   Widget trackCard(Map<String, dynamic> t) {
     final observations = (t['observations'] as List).cast<Map>();
