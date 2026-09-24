@@ -16,7 +16,6 @@ import 'shelter_map.dart';
 import 'security_levels.dart';
 import 'shelter_panel.dart';
 import 'event_details.dart';
-import 'status_explanation.dart';
 import 'source_status.dart';
 import 'watched_locations_panel.dart';
 import 'push_notifications.dart';
@@ -351,8 +350,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                                   '$query, Polska',
                                   locale: const Locale('pl', 'PL'),
                                 );
-                            if (locations.isEmpty)
+                            if (locations.isEmpty) {
                               throw const FormatException();
+                            }
                             final point = locations.first;
                             var label = query;
                             try {
