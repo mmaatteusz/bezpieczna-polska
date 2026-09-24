@@ -71,6 +71,19 @@ test('NEPTUN live parser removes operational motion data and coarsens positions'
  assert.equal(parsed.threats[1].longitude,null);
 });
 
+test('NEPTUN live parser maps new upstream categories to unknown without dropping snapshot',()=>{
+ const input={serverTime:now.toISOString(),threats:[{
+  id:'trk-new-type',type:'new-upstream-category',title:'Nowy typ obiektu',region:'Київська область',district:'',locality:'Київ',
+  lat:50.45,lon:30.52,heading:90,confidenceLevel:'medium',sourceCount:1,count:null,updatedAt:now.toISOString(),
+  status:'active',explanationShort:'Nowa kategoria źródła',confirmedAt:now.toISOString(),uncertaintyKm:10,positionQuality:'approx'
+ }]};
+ const parsed=parseNeptunLive(input,now);
+ assert.equal(parsed.threats.length,1);
+ assert.equal(parsed.threats[0].type,'unknown');
+ assert.ok(parsed.threats[0].precisionKm!>=NEPTUN_PUBLIC_MIN_PRECISION_KM);
+ assert.equal('heading' in parsed.threats[0],false);
+});
+
 test('NEPTUN live adapter uses the public endpoint and stores no event object',async()=>{
  let requested='';
  const batch=await neptunLiveAdapter.sync({
