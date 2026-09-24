@@ -6,6 +6,7 @@ export type SourceContext = {now: Date; previousEvents?: Event[]; fetchText: (ur
 export type SourceBatch = {
   events: Event[];
   uaMetadata?: NonNullable<import('./domain.js').Health['uaMetadata']>;
+  neptunMetadata?: NonNullable<import('./domain.js').Health['neptunMetadata']>;
   shelters?: Shelter[];
   metadata?: {dataDate:string;sourceUpdatedAt:string;sourceContentHash:string;sourceUrl:string;datasetUrl:string;license:string;fallbackSelected?:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'};
   // A publication archive is never proof that there are no active warnings.
@@ -37,4 +38,5 @@ export const SOURCES = [
   {id: 'POLICE', name: 'Policja — istotne zdarzenia', url: 'https://policja.pl/pol/aktualnosci', enabled: true, implementation:'OFFICIAL_RSS_INCIDENT_FILTER', integrationNote:'Oficjalny RSS Aktualności Policji. Importowane są wyłącznie zdarzenia o znaczeniu sytuacyjnym; zwykłe zatrzymania, kradzieże, przemyt, statystyki i materiały PR są odrzucane.'},
   {id: 'PSP_INCIDENTS', name: 'PSP — istotne zdarzenia', url: 'https://www.gov.pl/web/kgpsp/aktualnosci', enabled: true, implementation:'OFFICIAL_NEWS_INCIDENT_FILTER', integrationNote:'Centralne Aktualności KG PSP na gov.pl z konserwatywnym filtrem zdarzeń. Brak zweryfikowanego krajowego live API/RSS incydentów; lista publikacji nie oznacza pełnego pokrycia.'},
   {id: 'UA', name: 'UkraineAlarm — oficjalne alarmy Ukrainy', url: 'https://map.ukrainealarm.com/', enabled: true, implementation:'UKRAINEALARM_V3', integrationNote:'Oficjalne API wymaga klucza. Historia źródła jest ograniczona. Alarmy UA nie wpływają na status Polski.'},
+  {id: 'NEPTUN', name: 'NEPTUN — bieżące zagrożenia powietrzne', url: 'https://neptun.in.ua/', enabled: true, implementation:'NEPTUN_PUBLIC_API_V1', integrationNote:'Otwarty feed live. Publicznie przekazujemy wyłącznie zgrubną pozycję (minimum 10 km), bez kursu, prędkości i predykcji ruchu. NEPTUN jest agregatorem informacyjnym i nie zastępuje oficjalnych alarmów.'},
 ];

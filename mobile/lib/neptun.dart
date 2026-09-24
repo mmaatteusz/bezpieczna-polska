@@ -14,8 +14,8 @@ class NeptunData {
     final m = Map<String, dynamic>.from(input);
     final delay = m['safetyDelayHours'],
         minimum = m['minimumPublishedPrecisionKm'];
-    if (m['schemaVersion'] != 1 ||
-        m['mode'] != 'HISTORICAL_ONLY' ||
+    if (m['schemaVersion'] != 2 ||
+        m['mode'] != 'LIVE_AND_HISTORY' ||
         delay is! num ||
         delay < 24 ||
         minimum is! num ||
@@ -25,11 +25,89 @@ class NeptunData {
         m['map'] is! Map ||
         m['map']['type'] != 'FeatureCollection' ||
         m['map']['features'] is! List ||
-        !['NO_CONFIGURED_FEED', 'CURATED_HISTORY'].contains(m['coverage'])) {
+        m['live'] is! Map) {
       throw const FormatException('Nieobsługiwany kontrakt NEPTUN');
     }
     final server = DateTime.parse(m['serverTime'] as String);
     final cutoff = server.subtract(Duration(hours: delay.toInt()));
+    final live = Map<String, dynamic>.from(m['live'] as Map);
+    if (!{
+          'LIVE',
+          'STALE',
+          'DOWN',
+          'NOT_CONFIGURED',
+          'UNAVAILABLE',
+        }.contains(live['state']) ||
+        live['sourceUrl'] is! String ||
+        Uri.tryParse(live['sourceUrl'] as String)?.scheme != 'https' ||
+        live['threats'] is! List ||
+        (live['threats'] as List).length > 5000 ||
+        live['map'] is! Map ||
+        live['map']['type'] != 'FeatureCollection' ||
+        live['map']['features'] is! List) {
+      throw const FormatException('Niepoprawny live NEPTUN');
+    }
+    final liveIds = <String>{};
+    for (final raw in live['threats'] as List) {
+      if (raw is! Map) {
+        throw const FormatException('Niepoprawne zagrożenie NEPTUN');
+      }
+      final t = Map<String, dynamic>.from(raw);
+      if (t['id'] is! String ||
+          !liveIds.add(t['id'] as String) ||
+          ![
+            'uav',
+            'recon',
+            'missile',
+            'ballistic',
+            'kab',
+            'mig31k',
+            'unknown',
+          ].contains(t['type']) ||
+          t['title'] is! String ||
+          !['low', 'medium', 'high'].contains(t['confidenceLevel']) ||
+          !['active', 'stale'].contains(t['status']) ||
+          t['updatedAt'] is! String ||
+          t.containsKey('heading') ||
+          t.containsKey('velocity') ||
+          t.containsKey('confirmedAt')) {
+        throw const FormatException('Niepoprawny live NEPTUN');
+      }
+      DateTime.parse(t['updatedAt'] as String);
+      final lat = t['latitude'],
+          lon = t['longitude'],
+          precision = t['precisionKm'];
+      final areaOnly = t['areaOnly'] == true;
+      if ((lat == null) != (lon == null) ||
+          (lat == null) != (precision == null) ||
+          (lat != null &&
+              (lat is! num ||
+                  lon is! num ||
+                  precision is! num ||
+                  !lat.isFinite ||
+                  !lon.isFinite ||
+                  !precision.isFinite ||
+                  lat.abs() > 90 ||
+                  lon.abs() > 180 ||
+                  precision < minimum)) ||
+          (areaOnly && (lat != null || lon != null))) {
+        throw const FormatException('Zbyt dokładna lub błędna pozycja NEPTUN');
+      }
+    }
+    for (final rawFeature in live['map']['features'] as List) {
+      if (rawFeature is! Map ||
+          rawFeature['geometry'] is! Map ||
+          rawFeature['geometry']['type'] != 'Point' ||
+          rawFeature['geometry']['coordinates'] is! List ||
+          (rawFeature['geometry']['coordinates'] as List).length != 2 ||
+          rawFeature['properties'] is! Map ||
+          rawFeature['properties']['live'] != true ||
+          rawFeature['properties']['coarse'] != true ||
+          !liveIds.contains(rawFeature['properties']['threatId'])) {
+        throw const FormatException('Niepoprawna mapa live NEPTUN');
+      }
+    }
+
     final ids = <String>{};
     for (final raw in m['tracks'] as List) {
       if (raw is! Map) throw const FormatException('Niepoprawny ślad NEPTUN');
@@ -135,6 +213,11 @@ class NeptunData {
     return NeptunData._(m);
   }
 
+  Map<String, dynamic> get live =>
+      Map<String, dynamic>.from(data['live'] as Map);
+  List<Map<String, dynamic>> get liveThreats => (live['threats'] as List)
+      .map((e) => Map<String, dynamic>.from(e as Map))
+      .toList();
   List<Map<String, dynamic>> get tracks => (data['tracks'] as List)
       .map((e) => Map<String, dynamic>.from(e as Map))
       .toList();
@@ -159,12 +242,22 @@ class _NeptunScreenState extends State<NeptunScreen> {
   NeptunData? snapshot;
   bool loading = false, online = false;
   String? error;
+  Timer? timer;
 
   @override
   void initState() {
     super.initState();
     snapshot = widget.repository.cachedNeptun();
     if (widget.repository.api.isNotEmpty) unawaited(refresh());
+    timer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted && widget.repository.api.isNotEmpty) unawaited(refresh());
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
   }
 
   Future<void> refresh() async {
@@ -192,6 +285,39 @@ class _NeptunScreenState extends State<NeptunScreen> {
   }
 
   String when(dynamic value) => value is String ? stamp(value) : 'Nie podano';
+
+  String typeLabel(String value) => switch (value) {
+    'uav' => 'BSP / dron',
+    'recon' => 'Rozpoznanie',
+    'missile' => 'Rakieta',
+    'ballistic' => 'Balistyka',
+    'kab' => 'KAB',
+    'mig31k' => 'MiG-31K',
+    _ => 'Nieokreślone',
+  };
+
+  Widget liveCard(Map<String, dynamic> t) {
+    final location = [
+      t['locality'],
+      t['district'],
+      t['region'],
+    ].whereType<String>().where((v) => v.trim().isNotEmpty).toSet().join(' • ');
+    final precision = t['precisionKm'];
+    return Card(
+      child: ListTile(
+        leading: Icon(t['advisory'] == true ? Icons.info_outline : Icons.radar),
+        title: Text(t['title'] as String),
+        subtitle: Text(
+          '${typeLabel(t['type'] as String)}'
+          '${location.isEmpty ? '' : ' • $location'}\n'
+          '${t['advisory'] == true ? 'Obserwacja informacyjna' : 'Aktywne zagrożenie w feedzie NEPTUN'}'
+          ' • aktualizacja ${when(t['updatedAt'])}'
+          '${precision == null ? '' : ' • pozycja zgrubna ≥ $precision km'}',
+        ),
+        isThreeLine: true,
+      ),
+    );
+  }
 
   Widget trackCard(Map<String, dynamic> t) {
     final observations = (t['observations'] as List).cast<Map>();
@@ -253,10 +379,13 @@ class _NeptunScreenState extends State<NeptunScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final threats = snapshot?.liveThreats ?? const <Map<String, dynamic>>[];
     final tracks = snapshot?.tracks ?? const <Map<String, dynamic>>[];
+    final liveState = snapshot?.live['state']?.toString() ?? 'UNAVAILABLE';
+    final isLive = online && liveState == 'LIVE';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('NEPTUN • historia'),
+        title: const Text('NEPTUN • live'),
         actions: [
           IconButton(
             onPressed: loading || widget.repository.api.isEmpty
@@ -272,36 +401,60 @@ class _NeptunScreenState extends State<NeptunScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const Text(
-              'Historyczny przebieg zdarzeń OSINT. NEPTUN nie pokazuje aktywnych dokładnych pozycji ani nie wpływa na status Polski.',
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Tryb: ${snapshot?.data['mode'] ?? 'HISTORICAL_ONLY'} • opóźnienie publikacji: ${snapshot?.data['safetyDelayHours'] ?? 24} h • minimalna dokładność: ${snapshot?.data['minimumPublishedPrecisionKm'] ?? 10} km',
-            ),
-            Text(
-              snapshot?.data['coverage'] == 'CURATED_HISTORY'
-                  ? 'Dostępna jest opublikowana historia zdarzeń${online ? '' : ' • ostatnia zapisana kopia'}'
-                  : 'Brak opublikowanych danych historycznych${online ? '' : ' • offline'}',
+            Card(
+              child: ListTile(
+                leading: Icon(
+                  isLive ? Icons.wifi_tethering : Icons.schedule_outlined,
+                ),
+                title: Text(
+                  isLive
+                      ? 'LIVE • ${threats.length} aktywnych wpisów'
+                      : '$liveState • ostatnia znana kopia',
+                ),
+                subtitle: Text(
+                  'Ostatnia synchronizacja: ${when(snapshot?.live['lastSuccessfulSyncAt'])}',
+                ),
+              ),
             ),
             if (loading) const LinearProgressIndicator(),
             if (error != null) Text(error!),
-            const SizedBox(height: 12),
-            if (widget.showMap && snapshot != null && tracks.isNotEmpty)
-              NeptunMap(data: snapshot!),
+            if (widget.showMap && snapshot != null) NeptunMap(data: snapshot!),
             const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => widget.openSource('https://neptun.in.ua/'),
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Dane live: NEPTUN • neptun.in.ua'),
+            ),
             const Text(
-              'Brak śladów nie oznacza braku zdarzeń. Dane są publikowane dopiero po zakończeniu i dodatkowym opóźnieniu bezpieczeństwa; współrzędne są zgrubne.',
+              'NEPTUN jest agregatorem informacyjnym, nie oficjalnym systemem alarmowym. Pozycje w tej aplikacji są celowo zgrubne; nie pokazujemy kursu, prędkości ani predykcji ruchu.',
             ),
             const SizedBox(height: 12),
-            if (tracks.isEmpty)
+            Text(
+              'Bieżące zagrożenia',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            if (threats.isEmpty)
               const Card(
                 child: Padding(
-                  padding: EdgeInsets.all(18),
+                  padding: EdgeInsets.all(16),
                   child: Text(
-                    'Brak opublikowanych historycznych śladów NEPTUN. Ten moduł pokazuje wyłącznie zakończone zdarzenia po opóźnieniu bezpieczeństwa — nie jest źródłem pozycji live.',
+                    'Brak bieżących wpisów w ostatniej pobranej kopii NEPTUN. Nie oznacza to braku zagrożenia — kieruj się oficjalnymi alarmami.',
                   ),
                 ),
+              ),
+            ...threats.map(liveCard),
+            const SizedBox(height: 16),
+            Text(
+              'Historia zweryfikowana',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const Text(
+              'Zakończone ślady są publikowane osobno, po opóźnieniu bezpieczeństwa.',
+            ),
+            if (tracks.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text('Brak opublikowanych śladów historycznych.'),
               ),
             ...tracks.map(trackCard),
           ],
@@ -322,22 +475,61 @@ class NeptunMap extends StatefulWidget {
 class _NeptunMapState extends State<NeptunMap> {
   MapLibreMapController? controller;
   String? error;
+  bool ready = false;
+
+  @override
+  void didUpdateWidget(covariant NeptunMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (ready && oldWidget.data.data != widget.data.data) {
+      unawaited(syncSources());
+    }
+  }
+
+  Future<void> syncSources() async {
+    final c = controller;
+    if (!ready || c == null) return;
+    try {
+      await c.setGeoJsonSource('neptun-live', widget.data.live['map']);
+      await c.setGeoJsonSource('neptun-history', widget.data.data['map']);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          error = 'Nie udało się odświeżyć warstwy NEPTUN.';
+        });
+      }
+    }
+  }
 
   Future<void> styled() async {
     try {
       await controller?.addSource(
-        'neptun-tracks',
+        'neptun-live',
+        GeojsonSourceProperties(data: widget.data.live['map']),
+      );
+      await controller?.addCircleLayer(
+        'neptun-live',
+        'neptun-live-points',
+        const CircleLayerProperties(
+          circleColor: '#c62828',
+          circleRadius: 8,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: 2,
+        ),
+      );
+      await controller?.addSource(
+        'neptun-history',
         GeojsonSourceProperties(data: widget.data.data['map']),
       );
       await controller?.addLineLayer(
-        'neptun-tracks',
-        'neptun-track-lines',
+        'neptun-history',
+        'neptun-history-lines',
         const LineLayerProperties(
           lineColor: '#7062c8',
-          lineWidth: 4,
-          lineOpacity: 0.72,
+          lineWidth: 3,
+          lineOpacity: 0.55,
         ),
       );
+      ready = true;
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -349,24 +541,29 @@ class _NeptunMapState extends State<NeptunMap> {
 
   @override
   Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       SizedBox(
-        height: 320,
-        child: MapLibreMap(
-          styleString: const String.fromEnvironment(
-            'MAP_STYLE_URL',
-            defaultValue: 'https://tiles.openfreemap.org/styles/liberty',
+        height: 380,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: MapLibreMap(
+            styleString: const String.fromEnvironment(
+              'MAP_STYLE_URL',
+              defaultValue: 'https://tiles.openfreemap.org/styles/liberty',
+            ),
+            initialCameraPosition: const CameraPosition(
+              target: LatLng(49, 31),
+              zoom: 5,
+            ),
+            onMapCreated: (c) => controller = c,
+            onStyleLoadedCallback: styled,
           ),
-          initialCameraPosition: const CameraPosition(
-            target: LatLng(50.3, 25.0),
-            zoom: 4.2,
-          ),
-          onMapCreated: (c) => controller = c,
-          onStyleLoadedCallback: styled,
         ),
       ),
+      const SizedBox(height: 6),
       const Text(
-        'Linie pokazują wyłącznie zgrubny, historyczny przebieg po zakończeniu zdarzenia.',
+        'Czerwone punkty: bieżące, celowo zgrubne pozycje. Fioletowe linie: wyłącznie historia.',
       ),
       if (error != null) Text(error!),
     ],

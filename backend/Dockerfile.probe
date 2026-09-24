@@ -1,0 +1,5 @@
+FROM node:24-bookworm-slim
+WORKDIR /probe
+COPY scripts/railway-runtime-smoke.mjs ./
+USER node
+CMD ["node","railway-runtime-smoke.mjs"]

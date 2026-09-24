@@ -47,6 +47,17 @@ class _ShelterMapState extends State<ShelterMap> {
   String availability = 'ALL', message = 'Przygotowywanie mapy…';
   MapViewport? viewport;
   ShelterMapProvider get provider => ShelterMapProvider(widget.repository);
+  LatLng get homeTarget {
+    final lat = widget.repository.primaryLocationLatitude;
+    final lon = widget.repository.primaryLocationLongitude;
+    return lat != null && lon != null
+        ? LatLng(lat, lon)
+        : const LatLng(52.1, 19.4);
+  }
+
+  double get homeZoom =>
+      widget.repository.primaryLocationLatitude != null ? 10.5 : 5.2;
+
   static const empty = {'type': 'FeatureCollection', 'features': <dynamic>[]};
   static const onlineStyle = String.fromEnvironment(
     'MAP_STYLE_URL',
@@ -652,82 +663,120 @@ class _ShelterMapState extends State<ShelterMap> {
     }
   }
 
+  Future<void> goHome() async {
+    final c = controller;
+    if (c == null) return;
+    await c.animateCamera(CameraUpdate.newLatLngZoom(homeTarget, homeZoom));
+  }
+
+  Future<void> showLayers() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, update) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Warstwy mapy',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Zdarzenia'),
+                  value: showEvents && !showRadiation,
+                  onChanged: showRadiation
+                      ? null
+                      : (value) {
+                          setState(() => showEvents = value);
+                          update(() {});
+                          unawaited(syncContextLayers());
+                        },
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Obserwowane miejsca'),
+                  value: showWatched && !showRadiation,
+                  onChanged: showRadiation
+                      ? null
+                      : (value) {
+                          setState(() => showWatched = value);
+                          update(() {});
+                          unawaited(syncContextLayers());
+                        },
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Radiacja / PAA'),
+                  subtitle: const Text('Pomiary jako osobna warstwa'),
+                  value: showRadiation,
+                  onChanged: (value) {
+                    setState(() => showRadiation = value);
+                    update(() {});
+                    unawaited(refresh());
+                  },
+                ),
+                if (!showRadiation)
+                  DropdownButtonFormField<String>(
+                    key: ValueKey(availability),
+                    initialValue: availability,
+                    decoration: const InputDecoration(
+                      labelText: 'Punkty schronienia',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'ALL', child: Text('Wszystkie')),
+                      DropdownMenuItem(
+                        value: '24H',
+                        child: Text('Całodobowe wg źródła'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'ON_REQUEST',
+                        child: Text('Na żądanie'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'LIMITED_HOURS',
+                        child: Text('Określone godziny'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'UNKNOWN',
+                        child: Text('Dostępność nieustalona'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => availability = value);
+                      update(() {});
+                      unawaited(refresh());
+                    },
+                  ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Czerwone: zdarzenia • zielone: schronienia • niebieskie: obserwowane miejsca • fioletowe: PAA',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final fresh = online && viewport?.freshAt(DateTime.now()) == true,
-        meta = viewport?.metadata;
+    final fresh = online && viewport?.freshAt(DateTime.now()) == true;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (!widget.ukraine)
-          SwitchListTile(
-            title: const Text('Radiacja / PAA'),
-            subtitle: const Text('Pomiary oddzielone od komunikatów'),
-            value: showRadiation,
-            onChanged: (value) {
-              setState(() => showRadiation = value);
-              refresh();
-            },
-          ),
-        if (!widget.ukraine && !showRadiation) ...[
-          Text('Warstwy mapy', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilterChip(
-                label: const Text('Zdarzenia'),
-                selected: showEvents,
-                onSelected: (value) {
-                  setState(() => showEvents = value);
-                  unawaited(syncContextLayers());
-                },
-              ),
-              FilterChip(
-                label: const Text('Obserwowane miejsca'),
-                selected: showWatched,
-                onSelected: (value) {
-                  setState(() => showWatched = value);
-                  unawaited(syncContextLayers());
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-        ],
-        if (!widget.ukraine && !showRadiation)
-          DropdownButton<String>(
-            isExpanded: true,
-            value: availability,
-            items: const [
-              DropdownMenuItem(
-                value: 'ALL',
-                child: Text('Punkty schronienia • wszystkie'),
-              ),
-              DropdownMenuItem(
-                value: '24H',
-                child: Text('Całodobowe wg źródła'),
-              ),
-              DropdownMenuItem(value: 'ON_REQUEST', child: Text('Na żądanie')),
-              DropdownMenuItem(
-                value: 'LIMITED_HOURS',
-                child: Text('Określone godziny'),
-              ),
-              DropdownMenuItem(
-                value: 'UNKNOWN',
-                child: Text('Dostępność nieustalona'),
-              ),
-            ],
-            onChanged: (v) {
-              if (v != null) {
-                setState(() => availability = v);
-                refresh();
-              }
-            },
-          ),
         SizedBox(
-          height: 350,
+          height: (MediaQuery.sizeOf(context).height * 0.62)
+              .clamp(430.0, 620.0)
+              .toDouble(),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(18),
             child: Stack(
@@ -735,10 +784,8 @@ class _ShelterMapState extends State<ShelterMap> {
                 MapLibreMap(
                   styleString: onlineStyle,
                   initialCameraPosition: CameraPosition(
-                    target: widget.ukraine
-                        ? const LatLng(49, 31)
-                        : const LatLng(52.1, 19.4),
-                    zoom: 5,
+                    target: widget.ukraine ? const LatLng(49, 31) : homeTarget,
+                    zoom: widget.ukraine ? 5 : homeZoom,
                   ),
                   trackCameraPosition: true,
                   minMaxZoomPreference: const MinMaxZoomPreference(0, 22),
@@ -785,6 +832,50 @@ class _ShelterMapState extends State<ShelterMap> {
                           : const Icon(Icons.my_location),
                     ),
                   ),
+                if (!widget.ukraine)
+                  Positioned(
+                    left: 8,
+                    top: 8,
+                    child: Column(
+                      children: [
+                        IconButton.filledTonal(
+                          tooltip: 'Warstwy mapy',
+                          onPressed: showLayers,
+                          icon: const Icon(Icons.layers_outlined),
+                        ),
+                        IconButton.filledTonal(
+                          tooltip: 'Wróć do wybranej miejscowości',
+                          onPressed: goHome,
+                          icon: const Icon(Icons.home_outlined),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (!widget.ukraine)
+                  Positioned(
+                    left: 8,
+                    bottom: 8,
+                    child: Material(
+                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        child: Text(
+                          showRadiation
+                              ? 'PAA'
+                              : fresh
+                              ? 'LIVE'
+                              : viewport != null
+                              ? 'OFFLINE / zapisane'
+                              : 'Ładowanie danych',
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                      ),
+                    ),
+                  ),
                 if (loading)
                   const Align(
                     alignment: Alignment.topCenter,
@@ -816,31 +907,33 @@ class _ShelterMapState extends State<ShelterMap> {
             FilledButton.tonalIcon(
               onPressed: retryOnlineStyle,
               icon: const Icon(Icons.map_outlined),
-              label: const Text('Spróbuj ponownie podkład online'),
+              label: const Text('Ponów podkład mapy'),
             ),
-          if (viewport != null)
-            Text(
-              '${fresh
-                  ? 'LIVE • dane pobrane z PSP'
-                  : meta?['offlinePackageTimestamp'] != null
-                  ? 'OFFLINE • LAST KNOWN GOOD • snapshot ${stamp(meta?['offlinePackageTimestamp'])}'
-                  : 'Ostatnie zapisane dane — aktualność niepotwierdzona'}\nData danych: ${meta?['dataDate'] ?? 'Nie podano'} • Aktualność źródła: ${stamp(meta?['health']?['lastSuccess'])}\nPunkty w widocznym obszarze: ${meta?['total']}',
+          if (message.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(message),
             ),
-          if (message.isNotEmpty) Text(message),
-          Wrap(
-            children: [
-              TextButton.icon(
-                onPressed: refresh,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Odśwież obszar'),
-              ),
-              TextButton(
-                onPressed: () => widget.openLink(
-                  'https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce',
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              children: [
+                TextButton.icon(
+                  onPressed: refresh,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Odśwież'),
                 ),
-                child: const Text('Źródło: KG PSP / dane.gov.pl'),
-              ),
-            ],
+                const Spacer(),
+                Text(
+                  viewport == null
+                      ? ''
+                      : fresh
+                      ? 'Dane bieżące'
+                      : 'Ostatnia zapisana kopia',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
           ),
         ],
         TextButton(

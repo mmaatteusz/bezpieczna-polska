@@ -68,9 +68,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(MapLibreMap), findsOneWidget);
     expect(find.byKey(const ValueKey('native-map-surface')), findsOneWidget);
+    expect(find.byTooltip('Warstwy mapy'), findsOneWidget);
+    expect(find.byTooltip('Wróć do wybranej miejscowości'), findsOneWidget);
+    await tester.tap(find.byTooltip('Warstwy mapy'));
+    await tester.pumpAndSettle();
     expect(find.text('Zdarzenia'), findsOneWidget);
     expect(find.text('Obserwowane miejsca'), findsOneWidget);
-    expect(find.text('Punkty schronienia • wszystkie'), findsOneWidget);
+    expect(find.text('Punkty schronienia'), findsOneWidget);
+    await tester.tapAt(const Offset(380, 100));
+    await tester.pumpAndSettle();
     // A native platform view cannot be captured by Linux widget golden tests.
     expect(tester.takeException(), isNull);
     await tester.tap(find.text('Schronienie').last);

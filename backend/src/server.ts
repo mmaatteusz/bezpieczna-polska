@@ -1,9 +1,9 @@
-import {openDb,Store} from './store.js';import {buildApp} from './app.js';import {ingest} from './adapters.js';import {createPushServiceFromEnv} from './push.js';
+import {openDb,Store} from './store.js';import {buildApp} from './app.js';import {ingest,ingestNeptunLive} from './adapters.js';import {createPushServiceFromEnv} from './push.js';
 import {serverConfig} from './config.js';import {assertSchema,migrate} from './migrate.js';import {tryAcquireWorkerLease,releaseWorkerLease} from './worker-lease.js';import {randomUUID} from 'node:crypto';
 const config=serverConfig();
 const db=openDb(process.env.DATABASE_URL,process.env.SQLITE_PATH);
 let app:Awaited<ReturnType<typeof buildApp>>|undefined;
-let timer:NodeJS.Timeout|undefined,pushTimer:NodeJS.Timeout|undefined;
+let timer:NodeJS.Timeout|undefined,neptunTimer:NodeJS.Timeout|undefined,pushTimer:NodeJS.Timeout|undefined;
 try{
  const store=new Store(db);
  if(config.production)await assertSchema(db);else await migrate(db);
@@ -21,7 +21,19 @@ try{
   }
  }catch{app?.log.error({component:'ingestion',errorCode:'INGEST_FAILED'},'Ingestion failed; existing data retained');}
  finally{if(leased)await releaseWorkerLease(db,'ingest',workerOwner).catch(()=>{});running=false;}}
- if(process.env.ENABLE_INGESTION!=='false'){timer=setInterval(()=>void sync(),60000);void sync();}
+ if(process.env.ENABLE_INGESTION!=='false'){
+  timer=setInterval(()=>void sync(),60000);
+  void sync();
+  let neptunRunning=false;
+  async function syncNeptun(){if(neptunRunning)return;neptunRunning=true;let leased=false;try{
+   leased=await tryAcquireWorkerLease(db,'neptun-live',workerOwner,15000);
+   if(!leased)return;
+   await ingestNeptunLive(store);
+  }catch{app?.log.error({component:'neptun-live',errorCode:'NEPTUN_INGEST_FAILED'},'NEPTUN live refresh failed; existing data retained');}
+  finally{if(leased)await releaseWorkerLease(db,'neptun-live',workerOwner).catch(()=>{});neptunRunning=false;}}
+  neptunTimer=setInterval(()=>void syncNeptun(),5000);
+  void syncNeptun();
+ }
  let pushRunning=false;
  async function dispatchPush(){if(!push||pushRunning)return;pushRunning=true;let leased=false;try{
   leased=await tryAcquireWorkerLease(db,'push',workerOwner,60000);
@@ -32,9 +44,9 @@ try{
  if(push){pushTimer=setInterval(()=>void dispatchPush(),15000);void dispatchPush();}
  await app.listen({port:config.port,host:config.host});
  let closing=false;
- async function shutdown(){if(closing)return;closing=true;if(timer)clearInterval(timer);if(pushTimer)clearInterval(pushTimer);
+ async function shutdown(){if(closing)return;closing=true;if(timer)clearInterval(timer);if(neptunTimer)clearInterval(neptunTimer);if(pushTimer)clearInterval(pushTimer);
   const deadline=setTimeout(()=>process.exit(1),20000);deadline.unref();
   try{await app?.close();await db.close();clearTimeout(deadline);}catch{process.exitCode=1;}
  }
  for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>void shutdown());
-}catch(e){if(timer)clearInterval(timer);if(pushTimer)clearInterval(pushTimer);await app?.close();await db.close();throw e;}
+}catch(e){if(timer)clearInterval(timer);if(neptunTimer)clearInterval(neptunTimer);if(pushTimer)clearInterval(pushTimer);await app?.close();await db.close();throw e;}

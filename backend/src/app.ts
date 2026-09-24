@@ -34,7 +34,7 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
  app.get('/v1/ukraine',async()=>ukraineSnapshot(store));
  app.get('/v1/layers/ukraine.geojson',async()=>{const s=await ukraineSnapshot(store);return {...s.map,metadata:{coverage:s.coverage,sourceHealth:s.sourceHealth,validUntil:s.validUntil}};});
  app.get('/v1/neptun',async()=>neptunSnapshot(store));
- app.get('/v1/layers/neptun.geojson',async()=>{const s=await neptunSnapshot(store);return {...s.map,metadata:{mode:s.mode,coverage:s.coverage,safetyDelayHours:s.safetyDelayHours,minimumPublishedPrecisionKm:s.minimumPublishedPrecisionKm,sourceHealth:s.sourceHealth}};});
+ app.get('/v1/layers/neptun.geojson',async()=>{const s=await neptunSnapshot(store);return {type:'FeatureCollection',features:[...s.live.map.features,...s.map.features],metadata:{mode:s.mode,liveState:s.live.state,coverage:s.coverage,safetyDelayHours:s.safetyDelayHours,minimumPublishedPrecisionKm:s.minimumPublishedPrecisionKm,sourceHealth:s.sourceHealth,attribution:s.live.attribution}};});
  app.get('/v1/neptun/:id/timeline',async req=>store.neptunTimeline(z.object({id:z.string().regex(/^NEPTUN-[A-Za-z0-9._:-]{1,120}$/)}).parse(req.params).id));
  app.get('/v1/sources',async()=>({sourceHealth:sourceHealth(await store.health())}));
  const pushUnavailable=(r:any)=>r.code(503).send({error:'PUSH_NOT_CONFIGURED'});
