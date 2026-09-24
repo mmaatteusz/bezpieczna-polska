@@ -14,6 +14,13 @@ class SourceStatusPage extends StatelessWidget {
   String stateOf(Map<String, dynamic> source) =>
       (source['healthStatus'] ?? source['state'] ?? 'UNKNOWN').toString();
 
+  String effectiveStateOf(Map<String, dynamic> source) {
+    final state = stateOf(source);
+    if (source['enabled'] == false) return 'NOT_CONFIGURED';
+    if (state == 'HEALTHY' && source['complete'] != true) return 'DEGRADED';
+    return state;
+  }
+
   String label(String state) => switch (state) {
     'HEALTHY' => 'HEALTHY • aktualne',
     'STALE' => 'STALE • nieaktualne',
@@ -54,12 +61,14 @@ class SourceStatusPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final healthy = sources.where((s) => stateOf(s) == 'HEALTHY').length;
-    final stale = sources.where((s) => stateOf(s) == 'STALE').length;
-    final partial = sources.where((s) => stateOf(s) == 'DEGRADED').length;
-    final down = sources.where((s) => stateOf(s) == 'BROKEN').length;
+    final healthy = sources.where((s) => effectiveStateOf(s) == 'HEALTHY').length;
+    final stale = sources.where((s) => effectiveStateOf(s) == 'STALE').length;
+    final partial = sources
+        .where((s) => effectiveStateOf(s) == 'DEGRADED')
+        .length;
+    final down = sources.where((s) => effectiveStateOf(s) == 'BROKEN').length;
     final notConfigured = sources
-        .where((s) => s['enabled'] == false || stateOf(s) == 'NOT_CONFIGURED')
+        .where((s) => effectiveStateOf(s) == 'NOT_CONFIGURED')
         .length;
 
     return Scaffold(
@@ -134,14 +143,7 @@ class SourceStatusPage extends StatelessWidget {
               ),
             ),
           ...sources.map((source) {
-            final state = stateOf(source);
-            final enabled = source['enabled'] != false;
-            final complete = source['complete'] == true;
-            final effectiveState = !enabled
-                ? 'NOT_CONFIGURED'
-                : state == 'HEALTHY' && !complete
-                ? 'DEGRADED'
-                : state;
+            final effectiveState = effectiveStateOf(source);
             final fallback = source['fallback'];
             return Card(
               child: ExpansionTile(
