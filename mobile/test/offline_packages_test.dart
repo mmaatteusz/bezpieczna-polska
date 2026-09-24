@@ -514,6 +514,10 @@ void main() {
     }
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(find.text('Dane offline'), findsOneWidget);
+    expect(
+      find.textContaining('Podkład mapy nie jest częścią pakietu'),
+      findsOneWidget,
+    );
     await tester.ensureVisible(find.byType(ExpansionTile).first);
     await tester.pumpAndSettle();
     await tester.tap(find.byType(ExpansionTile).first);
@@ -521,7 +525,6 @@ void main() {
     expect(find.textContaining('Snapshot danych:'), findsOneWidget);
     expect(find.textContaining('Integralność: zweryfikowana'), findsOneWidget);
     expect(find.textContaining('LAST KNOWN GOOD:'), findsOneWidget);
-    expect(find.textContaining('Podkład OpenFreeMap'), findsOneWidget);
   });
 
   testWidgets('offline home never presents LKG as LIVE green status', (
