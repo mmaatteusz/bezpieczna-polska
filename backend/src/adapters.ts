@@ -114,3 +114,63 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
   }
  }
 }
+
+
+const neptunRunning = new WeakMap<Store, Promise<void>>();
+
+export function ingestNeptunLive(
+ store:Store,
+ fetchText:(url:string)=>Promise<string>=fetchPublic
+):Promise<void>{
+ const existing=neptunRunning.get(store);
+ if(existing)return existing;
+ const task=(async()=>{
+  let previous=(await store.health()).find(s=>s.id==='NEPTUN');
+  if(!previous){
+   await initializeSources(store);
+   previous=(await store.health()).find(s=>s.id==='NEPTUN');
+  }
+  if(!previous)throw new Error('NEPTUN_SOURCE_NOT_INITIALIZED');
+  const begin=Date.now(),lastAttempt=new Date(begin).toISOString();
+  if(previous.lastSuccess&&begin-Date.parse(previous.lastSuccess)>=0&&begin-Date.parse(previous.lastSuccess)<5000)return;
+  try{
+   const batch=await neptunLiveAdapter.sync({now:new Date(begin),fetchText});
+   if(!batch.neptunMetadata||batch.events.length)throw new Error('NEPTUN_INVALID_BATCH');
+   const health:Health={
+    ...previous,
+    neptunMetadata:batch.neptunMetadata,
+    enabled:true,
+    state:'HEALTHY',
+    lastAttempt,
+    lastSuccess:new Date().toISOString(),
+    lastItemTime:batch.neptunMetadata.serverTime,
+    responseTime:Date.now()-begin,
+    failureCount:0,
+    complete:false,
+    coverage:'ACTIVE_WARNINGS',
+    pagesFetched:batch.pagesFetched,
+    itemCount:batch.neptunMetadata.threats.length,
+    errorCode:null,
+    adapterVersion:neptunLiveAdapter.version
+   };
+   await store.setHealth(health);
+  }catch(error){
+   const message=error instanceof Error?error.message:'';
+   const errorCode=/^[A-Z][A-Z0-9_]{2,100}$/.test(message)?message:'SOURCE_SYNC_FAILED';
+   await store.setHealth({
+    ...previous,
+    enabled:true,
+    state:'BROKEN',
+    lastAttempt,
+    lastFailure:new Date().toISOString(),
+    failureCount:previous.failureCount+1,
+    responseTime:Date.now()-begin,
+    complete:false,
+    errorCode,
+    adapterVersion:neptunLiveAdapter.version
+   });
+  }
+ })().finally(()=>neptunRunning.delete(store));
+ neptunRunning.set(store,task);
+ return task;
+}
