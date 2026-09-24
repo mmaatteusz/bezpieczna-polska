@@ -3,7 +3,7 @@ import {mapQuery,mapLayers} from '../src/map-layers.js';import {Store,openDb} fr
 test('map rejects missing, reversed, malformed bbox, unknown region/filter and excessive zoom',()=>{
  for(const q of [{},{bbox:'1,2,3',zoom:5},{bbox:'1,2,1,4',zoom:5},{bbox:'181,0,182,2',zoom:5},{bbox:'1,2,3,4',zoom:30},{bbox:'1,2,3,4',zoom:5,availability:'OPEN_NOW'},{bbox:'1,2,3,4',zoom:5,regionId:'99'}])assert.equal(mapQuery.safeParse(q).success,false);
  assert.equal(mapQuery.parse({bbox:'14,49,25,55',zoom:5}).regionId,'PL');
- assert.equal(mapLayers.find(l=>l.id==='NEPTUN')?.authority,'OSINT');assert.equal(mapLayers.find(l=>l.id==='NEPTUN')?.geometry,'COARSE_HISTORICAL_LINES_ONLY');assert.equal(mapLayers.filter(l=>l.enabled).length,4);
+ const neptun=mapLayers.find(l=>l.id==='NEPTUN');assert.equal(neptun?.authority,'OSINT');assert.equal(neptun?.geometry,'COARSE_LIVE_POINTS_AND_HISTORICAL_LINES');assert.equal(neptun?.mode,'LIVE_AND_HISTORY');assert.equal(mapLayers.filter(l=>l.enabled).length,4);
 });
 test('viewport requires actual PostGIS; missing data is never fabricated',async()=>{
  const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();const app=await buildApp(store);
