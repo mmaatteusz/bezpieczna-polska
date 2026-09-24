@@ -135,7 +135,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(adapter.requestCount, 0);
     expect(find.text('Włączyć powiadomienia?'), findsOneWidget);
-    expect(find.textContaining('bez historii GPS'), findsOneWidget);
+    expect(
+      find.textContaining('nie zapisuje historii przemieszczania'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Kontynuuj'));
     await tester.pumpAndSettle();
