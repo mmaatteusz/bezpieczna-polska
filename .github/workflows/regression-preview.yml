@@ -35,6 +35,10 @@ jobs:
       FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
       FIREBASE_MESSAGING_SENDER_ID: ${{ vars.FIREBASE_MESSAGING_SENDER_ID }}
       FIREBASE_ANDROID_APP_ID: ${{ vars.FIREBASE_ANDROID_APP_ID }}
+      ANDROID_PREVIEW_KEYSTORE_B64: ${{ secrets.ANDROID_PREVIEW_KEYSTORE_B64 }}
+      ANDROID_PREVIEW_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_PREVIEW_KEYSTORE_PASSWORD }}
+      ANDROID_PREVIEW_KEY_ALIAS: ${{ secrets.ANDROID_PREVIEW_KEY_ALIAS }}
+      ANDROID_PREVIEW_KEY_PASSWORD: ${{ secrets.ANDROID_PREVIEW_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -105,6 +109,19 @@ jobs:
       - name: Assert push notification contract
         working-directory: backend
         run: node --import tsx --test test/push.test.ts
+      - name: Configure stable preview signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in ANDROID_PREVIEW_KEYSTORE_B64 ANDROID_PREVIEW_KEYSTORE_PASSWORD ANDROID_PREVIEW_KEY_ALIAS ANDROID_PREVIEW_KEY_PASSWORD; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "Missing required GitHub secret: $key" >&2
+              exit 1
+            fi
+          done
+          echo "$ANDROID_PREVIEW_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/preview-signing.jks"
+          echo "ANDROID_PREVIEW_KEYSTORE_PATH=$RUNNER_TEMP/preview-signing.jks" >> "$GITHUB_ENV"
+          keytool -list -keystore "$RUNNER_TEMP/preview-signing.jks" -storepass "$ANDROID_PREVIEW_KEYSTORE_PASSWORD" -alias "$ANDROID_PREVIEW_KEY_ALIAS" >/dev/null
       - name: Build Android preview
         working-directory: mobile
         run: >-
@@ -148,7 +165,7 @@ jobs:
           EXPECTED_CODE="$((2000 + BUILD))"
           cp mobile/pubspec.lock output/pubspec.lock.resolved
           cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk "output/Bezpieczna_Polska_${VERSION}-preview-arm64.apk"
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs output/*.apk | tee output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
           grep -F "native-code: 'arm64-v8a'" output/package-info.txt
           if grep -E "native-code:.*(armeabi-v7a|x86_64)" output/package-info.txt; then
