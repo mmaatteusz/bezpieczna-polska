@@ -134,6 +134,11 @@ jobs:
           --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"
           --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
 
+      - name: Live RSO contract check
+        working-directory: backend
+        continue-on-error: true
+        run: node scripts/live-rso.mjs ../output/rso-live.json
+
       - name: Live WCZK contract check
         continue-on-error: true
         working-directory: backend
