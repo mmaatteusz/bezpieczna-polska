@@ -120,6 +120,29 @@ void main() {
     },
   );
 
+  test('primary locality persists human label and derived region', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final repo = DataRepository(prefs);
+
+    await repo.setPrimaryLocation(
+      label: 'Bydgoszcz',
+      latitude: 53.1235,
+      longitude: 18.0084,
+      regionId: '04',
+    );
+
+    expect(repo.primaryLocationLabel, 'Bydgoszcz');
+    expect(repo.primaryLocationLatitude, 53.1235);
+    expect(repo.primaryLocationLongitude, 18.0084);
+    expect(repo.region, '04');
+    expect(
+      prefs.getKeys().where(
+        (key) => key.contains('history') || key.contains('last_position'),
+      ),
+      isEmpty,
+    );
+  });
+
   test('watched location validation rejects unsafe values', () async {
     final repo = DataRepository(await SharedPreferences.getInstance());
     await expectLater(
