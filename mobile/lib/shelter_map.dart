@@ -727,10 +727,7 @@ class _ShelterMapState extends State<ShelterMap> {
                       border: OutlineInputBorder(),
                     ),
                     items: const [
-                      DropdownMenuItem(
-                        value: 'ALL',
-                        child: Text('Wszystkie'),
-                      ),
+                      DropdownMenuItem(value: 'ALL', child: Text('Wszystkie')),
                       DropdownMenuItem(
                         value: '24H',
                         child: Text('Całodobowe wg źródła'),
