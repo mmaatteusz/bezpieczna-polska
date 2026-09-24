@@ -1,0 +1,31 @@
+name: Audit production runtime smoke
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: audit-production-runtime-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  smoke:
+    if: github.head_ref == 'audit/alpha21-full-audit-2026-09-24'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Build backend smoke client
+        working-directory: backend
+        run: npm ci && npm run build
+      - name: Probe current Railway production
+        working-directory: backend
+        env:
+          SMOKE_BASE_URL: https://api-production-b6560.up.railway.app
+          EXPECTED_VERSION: 0.1.0-alpha.21
+          EXPECTED_BUILD_SHA: e4bda898729d8d10b0b3cc07faa08d3cdcbee4ea
+        run: node scripts/railway-runtime-smoke.mjs
