@@ -90,7 +90,7 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> with WidgetsBindingObserver {
   int page = 0, generation = 0;
-  bool online = false, loading = false, ukraine = false;
+  bool online = false, loading = false, backgroundSync = false, ukraine = false;
   late String region;
   Snapshot? snapshot;
   OfflineRegionPackage? offlinePackageData;
@@ -115,7 +115,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
     });
-    if (widget.repository.api.isNotEmpty) unawaited(refresh());
+    if (widget.repository.api.isNotEmpty) unawaited(startupSync());
     refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted &&
           !loading &&
@@ -203,6 +203,44 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> startupSync() async {
+    if (backgroundSync || widget.repository.api.isEmpty) return;
+    final target = region;
+    setState(() => backgroundSync = true);
+
+    Future<void> ignoreFailure(Future<dynamic> Function() action) async {
+      try {
+        await action();
+      } catch (_) {
+        // The main snapshot error is already surfaced by refresh().
+        // Secondary caches keep their previous LAST KNOWN GOOD copy.
+      }
+    }
+
+    try {
+      await refresh();
+      if (!mounted || target != region || widget.repository.api.isEmpty) return;
+
+      final existingPackage = await widget.repository.offlinePackage(target);
+      final shouldRefreshOffline =
+          existingPackage == null ||
+          DateTime.now().toUtc().difference(existingPackage.createdAt) >
+              const Duration(hours: 6);
+
+      await Future.wait([
+        ignoreFailure(widget.repository.refreshUkraine),
+        ignoreFailure(widget.repository.refreshNeptun),
+        if (shouldRefreshOffline)
+          ignoreFailure(() => widget.repository.downloadOfflinePackage(target)),
+      ]);
+      if (mounted && target == region) await loadOffline();
+    } finally {
+      if (mounted && target == region) {
+        setState(() => backgroundSync = false);
+      }
+    }
+  }
+
   Future<void> changeRegion(String value) async {
     ++generation;
     await widget.repository.setRegion(value);
@@ -220,7 +258,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       loadSeen();
     });
     await loadOffline();
-    if (widget.repository.api.isNotEmpty) await refresh();
+    if (widget.repository.api.isNotEmpty) unawaited(startupSync());
   }
 
   List<SafetyEvent> get events => snapshot?.alertEvents ?? [];
@@ -246,7 +284,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             ][page],
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleLarge,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -262,7 +300,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Row(
               children: [
                 const Icon(Icons.location_on_outlined),
@@ -291,10 +329,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 ),
                 IconButton(
                   tooltip: 'Odśwież',
-                  onPressed: loading || widget.repository.api.isEmpty
+                  onPressed:
+                      loading || backgroundSync || widget.repository.api.isEmpty
                       ? null
-                      : refresh,
-                  icon: loading
+                      : startupSync,
+                  icon: loading || backgroundSync
                       ? const SizedBox(
                           width: 20,
                           height: 20,
@@ -308,15 +347,15 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           dataStateStrip(),
           if (error != null)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: notice(error!, Icons.cloud_off),
             ),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: refresh,
+              onRefresh: startupSync,
               child: ListView(
                 key: PageStorageKey<int>(page),
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
                 children: switch (page) {
                   0 => statusPage(),
                   1 => mapPage(),
@@ -381,7 +420,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   );
   Widget empty(String title, String text, IconData icon) => Card(
     child: Padding(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -410,14 +449,18 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         online && (snapshot?.freshAt(now, national: false) ?? false);
     final hasOffline = !online && offlinePackageData != null;
     final hasAnyData = snapshot != null || offlinePackageData != null;
-    final label = nationalFresh && localFresh
-        ? 'LIVE • dane bieżące'
+    final label = backgroundSync
+        ? 'Synchronizacja danych…'
+        : nationalFresh && localFresh
+        ? 'Dane aktualne'
         : hasOffline
-        ? 'OFFLINE • LAST KNOWN GOOD'
+        ? 'Offline • ostatnia zapisana kopia'
         : hasAnyData
-        ? 'STALE • aktualność niepotwierdzona'
-        : 'Brak bieżących danych';
-    final icon = nationalFresh && localFresh
+        ? 'Dane mogą być nieaktualne'
+        : 'Brak pobranych danych';
+    final icon = backgroundSync
+        ? Icons.sync
+        : nationalFresh && localFresh
         ? Icons.cloud_done_outlined
         : hasOffline
         ? Icons.offline_pin_outlined
@@ -428,38 +471,36 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ? offlinePackageData!.snapshotTimestamp.toIso8601String()
         : snapshot?.data['serverTime'];
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: Material(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Row(
+            children: [
+              Icon(icon, size: 19),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  timestamp == null
+                      ? label
+                      : '$label • ${stamp(timestamp)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
-                  Text(
-                    timestamp == null
-                        ? 'Ostatnia aktualizacja: brak'
-                        : 'Ostatnia aktualizacja: ${stamp(timestamp)}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
+              if (backgroundSync)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -476,7 +517,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           ? Theme.of(context).colorScheme.errorContainer
           : Theme.of(context).colorScheme.surfaceContainerHigh,
       child: Padding(
-        padding: const EdgeInsets.all(22),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -484,7 +525,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               national ? 'STATUS POLSKI' : 'TWOJA OKOLICA • ${regions[region]}',
               style: Theme.of(context).textTheme.labelLarge,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
             Text(
               fresh
                   ? snapshot!.statusText(
@@ -495,7 +536,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   : !online && offlinePackageData != null && status is Map
                   ? 'OFFLINE • LAST KNOWN GOOD: ${status['displayText']}'
                   : 'Brak bieżącej oceny sytuacji',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
             Text(
@@ -527,6 +568,41 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       final validTo = DateTime.tryParse(e.data['validTo']?.toString() ?? '');
       return validTo == null || validTo.isAfter(DateTime.now());
     }).toList();
+    final noData = snapshot == null && offlinePackageData == null;
+    if (noData) {
+      return [
+        if (widget.repository.api.isEmpty)
+          notice(
+            'Brak połączenia z serwerem danych. Ten build testowy nie ma ustawionego adresu API.',
+            Icons.cloud_off_outlined,
+          )
+        else
+          empty(
+            backgroundSync ? 'Pobieram dane' : 'Nie udało się pobrać danych',
+            backgroundSync
+                ? 'Pierwsza synchronizacja zapisze dane na telefonie, żeby aplikacja mogła działać także bez internetu.'
+                : 'Sprawdź internet i przeciągnij ekran w dół, aby spróbować ponownie.',
+            backgroundSync ? Icons.sync : Icons.cloud_off_outlined,
+          ),
+        heading('Po synchronizacji'),
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.notifications_active_outlined),
+          title: Text('Alerty i status regionu'),
+        ),
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.map_outlined),
+          title: Text('Mapa zdarzeń i schronienia'),
+        ),
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.offline_pin_outlined),
+          title: Text('Kopia offline na telefonie'),
+        ),
+      ];
+    }
+
     return [
       if (!online && offlinePackageData != null)
         notice(
@@ -535,11 +611,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ),
       statusCard(true),
       statusCard(false),
-      if (widget.repository.api.isEmpty)
-        notice(
-          'Ta wersja aplikacji nie ma skonfigurowanego połączenia z usługą. Wymagana jest aktualizacja aplikacji.',
-          Icons.cloud_off,
-        ),
       heading('Najważniejsze aktywne komunikaty'),
       if (active.isEmpty)
         empty(
@@ -1184,7 +1255,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       builder: (sheet) => StatefulBuilder(
         builder: (sheet, update) => SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(22),
+            padding: const EdgeInsets.all(16),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
