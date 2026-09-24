@@ -494,7 +494,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
               leading: const Icon(Icons.bookmark_border),
               title: Text(location.label),
               subtitle: Text(
-                '${location.latitude.toStringAsFixed(5)}, ${location.longitude.toStringAsFixed(5)} • ${location.radiusKm.toStringAsFixed(0)} km'
+                'Promień alertów: ${location.radiusKm.toStringAsFixed(0)} km'
                 '${location.regionId == null ? '' : ' • ${regions[location.regionId]}'}',
               ),
               trailing: PopupMenuButton<String>(
