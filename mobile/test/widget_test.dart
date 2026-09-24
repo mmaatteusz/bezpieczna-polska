@@ -68,6 +68,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(MapLibreMap), findsOneWidget);
     expect(find.byKey(const ValueKey('native-map-surface')), findsOneWidget);
+    expect(find.text('Zdarzenia'), findsOneWidget);
+    expect(find.text('Obserwowane miejsca'), findsOneWidget);
     expect(find.text('Punkty schronienia • wszystkie'), findsOneWidget);
     // A native platform view cannot be captured by Linux widget golden tests.
     expect(tester.takeException(), isNull);
