@@ -505,6 +505,39 @@ class DataRepository {
           .trim()
           .replaceAll(RegExp(r'/+$'), '');
   String get region => prefs.getString('region') ?? '04';
+
+  String? get primaryLocationLabel =>
+      prefs.getString('primary_location_label')?.trim().isNotEmpty == true
+      ? prefs.getString('primary_location_label')!.trim()
+      : null;
+  double? get primaryLocationLatitude =>
+      prefs.getDouble('primary_location_latitude');
+  double? get primaryLocationLongitude =>
+      prefs.getDouble('primary_location_longitude');
+
+  Future<void> setPrimaryLocation({
+    required String label,
+    required double latitude,
+    required double longitude,
+    required String regionId,
+  }) async {
+    final normalized = label.trim();
+    if (normalized.isEmpty ||
+        normalized.length > 80 ||
+        !latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude.abs() > 90 ||
+        longitude.abs() > 180 ||
+        regionId == 'PL' ||
+        !regions.containsKey(regionId)) {
+      throw const FormatException('Niepoprawna lokalizacja');
+    }
+    await prefs.setString('primary_location_label', normalized);
+    await prefs.setDouble('primary_location_latitude', latitude);
+    await prefs.setDouble('primary_location_longitude', longitude);
+    await setRegion(regionId);
+  }
+
   static const watchedLocationsKey = 'watched_locations_v1';
   List<WatchedLocation> get watchedLocations {
     try {
