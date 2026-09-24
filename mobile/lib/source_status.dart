@@ -59,10 +59,7 @@ class SourceStatusPage extends StatelessWidget {
     final partial = sources.where((s) => stateOf(s) == 'DEGRADED').length;
     final down = sources.where((s) => stateOf(s) == 'BROKEN').length;
     final notConfigured = sources
-        .where(
-          (s) =>
-              s['enabled'] == false || stateOf(s) == 'NOT_CONFIGURED',
-        )
+        .where((s) => s['enabled'] == false || stateOf(s) == 'NOT_CONFIGURED')
         .length;
 
     return Scaffold(
@@ -89,9 +86,19 @@ class SourceStatusPage extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      _metric(context, Icons.check_circle_outline, 'HEALTHY', healthy),
+                      _metric(
+                        context,
+                        Icons.check_circle_outline,
+                        'HEALTHY',
+                        healthy,
+                      ),
                       _metric(context, Icons.schedule_outlined, 'STALE', stale),
-                      _metric(context, Icons.warning_amber_outlined, 'PARTIAL', partial),
+                      _metric(
+                        context,
+                        Icons.warning_amber_outlined,
+                        'PARTIAL',
+                        partial,
+                      ),
                       _metric(context, Icons.error_outline, 'DOWN', down),
                       _metric(
                         context,
