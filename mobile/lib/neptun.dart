@@ -14,8 +14,8 @@ class NeptunData {
     final m = Map<String, dynamic>.from(input);
     final delay = m['safetyDelayHours'],
         minimum = m['minimumPublishedPrecisionKm'];
-    if (m['schemaVersion'] != 1 ||
-        m['mode'] != 'HISTORICAL_ONLY' ||
+    if (m['schemaVersion'] != 2 ||
+        m['mode'] != 'LIVE_AND_HISTORY' ||
         delay is! num ||
         delay < 24 ||
         minimum is! num ||
@@ -25,11 +25,89 @@ class NeptunData {
         m['map'] is! Map ||
         m['map']['type'] != 'FeatureCollection' ||
         m['map']['features'] is! List ||
-        !['NO_CONFIGURED_FEED', 'CURATED_HISTORY'].contains(m['coverage'])) {
+        m['live'] is! Map) {
       throw const FormatException('Nieobsługiwany kontrakt NEPTUN');
     }
     final server = DateTime.parse(m['serverTime'] as String);
     final cutoff = server.subtract(Duration(hours: delay.toInt()));
+    final live = Map<String, dynamic>.from(m['live'] as Map);
+    if (!{
+          'LIVE',
+          'STALE',
+          'DOWN',
+          'NOT_CONFIGURED',
+          'UNAVAILABLE',
+        }.contains(live['state']) ||
+        live['sourceUrl'] is! String ||
+        Uri.tryParse(live['sourceUrl'] as String)?.scheme != 'https' ||
+        live['threats'] is! List ||
+        (live['threats'] as List).length > 5000 ||
+        live['map'] is! Map ||
+        live['map']['type'] != 'FeatureCollection' ||
+        live['map']['features'] is! List) {
+      throw const FormatException('Niepoprawny live NEPTUN');
+    }
+    final liveIds = <String>{};
+    for (final raw in live['threats'] as List) {
+      if (raw is! Map) {
+        throw const FormatException('Niepoprawne zagrożenie NEPTUN');
+      }
+      final t = Map<String, dynamic>.from(raw);
+      if (t['id'] is! String ||
+          !liveIds.add(t['id'] as String) ||
+          ![
+            'uav',
+            'recon',
+            'missile',
+            'ballistic',
+            'kab',
+            'mig31k',
+            'unknown',
+          ].contains(t['type']) ||
+          t['title'] is! String ||
+          !['low', 'medium', 'high'].contains(t['confidenceLevel']) ||
+          !['active', 'stale'].contains(t['status']) ||
+          t['updatedAt'] is! String ||
+          t.containsKey('heading') ||
+          t.containsKey('velocity') ||
+          t.containsKey('confirmedAt')) {
+        throw const FormatException('Niepoprawny live NEPTUN');
+      }
+      DateTime.parse(t['updatedAt'] as String);
+      final lat = t['latitude'],
+          lon = t['longitude'],
+          precision = t['precisionKm'];
+      final areaOnly = t['areaOnly'] == true;
+      if ((lat == null) != (lon == null) ||
+          (lat == null) != (precision == null) ||
+          (lat != null &&
+              (lat is! num ||
+                  lon is! num ||
+                  precision is! num ||
+                  !lat.isFinite ||
+                  !lon.isFinite ||
+                  !precision.isFinite ||
+                  lat.abs() > 90 ||
+                  lon.abs() > 180 ||
+                  precision < minimum)) ||
+          (areaOnly && (lat != null || lon != null))) {
+        throw const FormatException('Zbyt dokładna lub błędna pozycja NEPTUN');
+      }
+    }
+    for (final rawFeature in live['map']['features'] as List) {
+      if (rawFeature is! Map ||
+          rawFeature['geometry'] is! Map ||
+          rawFeature['geometry']['type'] != 'Point' ||
+          rawFeature['geometry']['coordinates'] is! List ||
+          (rawFeature['geometry']['coordinates'] as List).length != 2 ||
+          rawFeature['properties'] is! Map ||
+          rawFeature['properties']['live'] != true ||
+          rawFeature['properties']['coarse'] != true ||
+          !liveIds.contains(rawFeature['properties']['threatId'])) {
+        throw const FormatException('Niepoprawna mapa live NEPTUN');
+      }
+    }
+
     final ids = <String>{};
     for (final raw in m['tracks'] as List) {
       if (raw is! Map) throw const FormatException('Niepoprawny ślad NEPTUN');
@@ -135,6 +213,11 @@ class NeptunData {
     return NeptunData._(m);
   }
 
+  Map<String, dynamic> get live =>
+      Map<String, dynamic>.from(data['live'] as Map);
+  List<Map<String, dynamic>> get liveThreats => (live['threats'] as List)
+      .map((e) => Map<String, dynamic>.from(e as Map))
+      .toList();
   List<Map<String, dynamic>> get tracks => (data['tracks'] as List)
       .map((e) => Map<String, dynamic>.from(e as Map))
       .toList();
