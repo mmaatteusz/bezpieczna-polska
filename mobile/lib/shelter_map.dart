@@ -774,7 +774,9 @@ class _ShelterMapState extends State<ShelterMap> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(
-          height: (MediaQuery.sizeOf(context).height * 0.62).clamp(430.0, 620.0),
+          height: (MediaQuery.sizeOf(context).height * 0.62)
+              .clamp(430.0, 620.0)
+              .toDouble(),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(18),
             child: Stack(
