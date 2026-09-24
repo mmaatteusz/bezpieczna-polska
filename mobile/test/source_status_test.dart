@@ -57,11 +57,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      for (
-        var i = 0;
-        i < 4 && find.text('BROKEN').evaluate().isEmpty;
-        i++
-      ) {
+      for (var i = 0; i < 4 && find.text('BROKEN').evaluate().isEmpty; i++) {
         await tester.drag(find.byType(ListView), const Offset(0, -300));
         await tester.pumpAndSettle();
       }
