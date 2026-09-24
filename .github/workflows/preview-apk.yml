@@ -67,7 +67,7 @@ jobs:
           UKRAINE_ALARM_API_KEY: ${{ secrets.UKRAINE_ALARM_API_KEY }}
         run: |
           mkdir -p ../output
-          for source in rcb wczk imgw paa cyber sg service-incidents ukraine; do
+          for source in rcb wczk imgw paa cyber sg service-incidents ukraine neptun; do
             node "scripts/live-$source.mjs" "../output/$source-live.json" || echo "$source unavailable: contract tests remain authoritative"
           done
       - uses: actions/setup-java@v6
