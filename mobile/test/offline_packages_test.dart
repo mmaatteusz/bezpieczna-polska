@@ -497,9 +497,7 @@ void main() {
     tester,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    await tester.runAsync(
-      () => OfflinePackageStore(prefs).commit(package()),
-    );
+    await tester.runAsync(() => OfflinePackageStore(prefs).commit(package()));
     final repo = DataRepository(prefs);
     await tester.pumpWidget(
       MaterialApp(home: OfflineDataScreen(repository: repo)),
@@ -527,9 +525,7 @@ void main() {
     tester,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    await tester.runAsync(
-      () => OfflinePackageStore(prefs).commit(package()),
-    );
+    await tester.runAsync(() => OfflinePackageStore(prefs).commit(package()));
     final repo = DataRepository(prefs);
     await tester.pumpWidget(SafetyApp(repository: repo));
     for (var attempt = 0; attempt < 20; attempt++) {
