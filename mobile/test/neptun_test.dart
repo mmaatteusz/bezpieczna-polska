@@ -12,13 +12,63 @@ Map<String, dynamic> fixture(DateTime now) {
   final ended = now.subtract(const Duration(hours: 48));
   final started = ended.subtract(const Duration(hours: 2));
   return {
-    'schemaVersion': 1,
-    'mode': 'HISTORICAL_ONLY',
+    'schemaVersion': 2,
+    'mode': 'LIVE_AND_HISTORY',
     'serverTime': now.toIso8601String(),
     'safetyDelayHours': 24,
     'minimumPublishedPrecisionKm': 10,
     'coverage': 'CURATED_HISTORY',
     'sourceHealth': null,
+    'live': {
+      'state': 'LIVE',
+      'sourceUrl': 'https://neptun.in.ua/',
+      'sourceName': 'NEPTUN',
+      'lastSuccessfulSyncAt': now.toIso8601String(),
+      'sourceServerTime': now.toIso8601String(),
+      'validUntil': now.add(const Duration(minutes: 2)).toIso8601String(),
+      'attribution': 'Dane live: NEPTUN — neptun.in.ua',
+      'disclaimer': 'coarse live only',
+      'threats': [
+        {
+          'id': 'trk-live-1',
+          'type': 'uav',
+          'title': 'BSP testowy',
+          'region': 'Obwód testowy',
+          'district': null,
+          'locality': 'Rejon testowy',
+          'confidenceLevel': 'high',
+          'sourceCount': 3,
+          'count': 1,
+          'updatedAt': now.toIso8601String(),
+          'status': 'active',
+          'explanationShort': 'zagrożenie testowe',
+          'advisory': false,
+          'areaOnly': false,
+          'latitude': 49.1,
+          'longitude': 31.2,
+          'precisionKm': 10,
+          'sourceUrl': 'https://neptun.in.ua/',
+        },
+      ],
+      'map': {
+        'type': 'FeatureCollection',
+        'features': [
+          {
+            'type': 'Feature',
+            'id': 'NEPTUN-LIVE-trk-live-1',
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [31.2, 49.1],
+            },
+            'properties': {
+              'threatId': 'trk-live-1',
+              'live': true,
+              'coarse': true,
+            },
+          },
+        ],
+      },
+    },
     'disclaimer': 'history only',
     'tracks': [
       {
@@ -116,8 +166,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final now = DateTime.utc(2026, 9, 22, 12);
 
-  test('NEPTUN parser accepts only historical coarse tracks', () {
+  test('NEPTUN parser accepts live coarse threats and historical coarse tracks', () {
     final data = NeptunData.parse(fixture(now));
+    expect(data.liveThreats.length, 1);
+    expect(data.liveThreats.first['precisionKm'], 10);
     expect(data.tracks.length, 1);
     expect(data.tracks.first['lifecycle'], 'ENDED');
 
@@ -164,7 +216,7 @@ void main() {
     },
   );
 
-  testWidgets('NEPTUN screen is explicitly historical and shows sources', (
+  testWidgets('NEPTUN screen shows live threats, attribution and history', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -186,14 +238,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(
-      find.textContaining('Historyczny przebieg zdarzeń OSINT'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('nie pokazuje aktywnych dokładnych pozycji'),
-      findsOneWidget,
-    );
+    expect(find.text('NEPTUN • live'), findsOneWidget);
+    expect(find.textContaining('LIVE • 1 aktywnych wpisów'), findsOneWidget);
+    expect(find.text('BSP testowy'), findsOneWidget);
+    expect(find.textContaining('Dane live: NEPTUN'), findsOneWidget);
     expect(find.text('Historyczny ślad testowy'), findsOneWidget);
     expect(find.text('Timeline i źródła'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
