@@ -769,8 +769,7 @@ class _ShelterMapState extends State<ShelterMap> {
 
   @override
   Widget build(BuildContext context) {
-    final fresh = online && viewport?.freshAt(DateTime.now()) == true,
-        meta = viewport?.metadata;
+    final fresh = online && viewport?.freshAt(DateTime.now()) == true;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
