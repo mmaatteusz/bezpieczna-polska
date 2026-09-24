@@ -93,7 +93,7 @@ export async function fetchPublicBytes(url:string):Promise<Uint8Array>{
 }
 // Sharing the same coordinator prevents timer/admin overlap on this Store.
 const running = new WeakMap<Store, Promise<void>>();
-export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters,imgwMeteoAdapter,imgwHydroAdapter,paaAdapter,certAdapter,sgAdapter,policeAdapter,pspIncidentsAdapter,ukraineAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
+export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters,imgwMeteoAdapter,imgwHydroAdapter,paaAdapter,certAdapter,sgAdapter,policeAdapter,pspIncidentsAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
  const existing=running.get(store);if(existing)return existing;
  const task=syncSources(store,adapters,fetchText,fetchBytes).finally(()=>running.delete(store));
  running.set(store,task);return task;
