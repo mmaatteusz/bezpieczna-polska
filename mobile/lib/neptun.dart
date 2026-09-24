@@ -249,7 +249,7 @@ class _NeptunScreenState extends State<NeptunScreen> {
     super.initState();
     snapshot = widget.repository.cachedNeptun();
     if (widget.repository.api.isNotEmpty) unawaited(refresh());
-    timer = Timer.periodic(const Duration(seconds: 30), (_) {
+    timer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted && widget.repository.api.isNotEmpty) unawaited(refresh());
     });
   }
@@ -484,6 +484,30 @@ class NeptunMap extends StatefulWidget {
 class _NeptunMapState extends State<NeptunMap> {
   MapLibreMapController? controller;
   String? error;
+  bool ready = false;
+
+  @override
+  void didUpdateWidget(covariant NeptunMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (ready && oldWidget.data.data != widget.data.data) {
+      unawaited(syncSources());
+    }
+  }
+
+  Future<void> syncSources() async {
+    final c = controller;
+    if (!ready || c == null) return;
+    try {
+      await c.setGeoJsonSource('neptun-live', widget.data.live['map']);
+      await c.setGeoJsonSource('neptun-history', widget.data.data['map']);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          error = 'Nie udało się odświeżyć warstwy NEPTUN.';
+        });
+      }
+    }
+  }
 
   Future<void> styled() async {
     try {
@@ -514,6 +538,7 @@ class _NeptunMapState extends State<NeptunMap> {
           lineOpacity: 0.55,
         ),
       );
+      ready = true;
     } catch (_) {
       if (mounted) {
         setState(() {
