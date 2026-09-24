@@ -7,7 +7,7 @@ export const mapLayers=[
  {id:'radiation',sourceId:'PAA',authority:'OFFICIAL_PL',enabled:true,measurementsEnabled:false},
  {id:'shelters',sourceId:'SHELTERS',authority:'OFFICIAL_PL',enabled:true},
  ...['RCB','WCZK','RSO_WCZK','border','police_PSP'].map(id=>({id,sourceId:id,authority:'OFFICIAL_PL',enabled:false})),
- {id:'Ukraine_alerts',sourceId:'UA',authority:'OFFICIAL_FOREIGN',enabled:true,geometry:'ADMINISTRATIVE_POLYGONS_ONLY'},
+ {id:'Ukraine_alerts',sourceId:'UA',authority:'OFFICIAL_FOREIGN',enabled:false,geometry:'ADMINISTRATIVE_POLYGONS_ONLY',integrationNote:'UkraineAlarm pozostaje ukryty do czasu skonfigurowania i zweryfikowania klucza API.'},
  {id:'NEPTUN',sourceId:'NEPTUN',authority:'OSINT',enabled:true,geometry:'COARSE_LIVE_POINTS_AND_HISTORICAL_LINES',mode:'LIVE_AND_HISTORY'},
 ];
 const bounds=z.tuple([z.number().min(-180).max(180),z.number().min(-85).max(85),z.number().min(-180).max(180),z.number().min(-85).max(85)]).refine(b=>b[0]<b[2]&&b[1]<b[3]);
