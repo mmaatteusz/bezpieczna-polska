@@ -1407,14 +1407,16 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ukraine: ukraine,
         openLink: openLink,
       ),
-    const SizedBox(height: 12),
-    notice(
-      ukraine
-          ? 'Alarmy Ukrainy są osobnym kontekstem. Brak oznaczeń nie oznacza braku alarmów.'
-          : 'Mapa pokazuje schronienia, zdarzenia z potwierdzoną lokalizacją i zapisane obserwowane miejsca. Dotknij punktu, aby zobaczyć szczegóły. Twoja pozycja jest pobierana wyłącznie po naciśnięciu przycisku lokalizacji i nie jest zapisywana. Offline dostępne są zapisane warstwy; podkład mapy może wymagać internetu.',
-      Icons.info_outline,
-    ),
-    if (!ukraine) ...events.where((e) => e.hasPoint).take(20).map(eventCard),
+    const SizedBox(height: 8),
+    if (ukraine)
+      notice(
+        'Alarmy Ukrainy są osobnym kontekstem. Brak oznaczeń nie oznacza braku alarmów.',
+        Icons.info_outline,
+      )
+    else
+      const Text(
+        'Dotknij punktu po szczegóły. Warstwy, schronienia i PAA zmienisz przyciskiem na mapie. GPS działa tylko po Twoim kliknięciu.',
+      ),
   ];
   List<Widget> shelterPage() => [
     ShelterPanel(
