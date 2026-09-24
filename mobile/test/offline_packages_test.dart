@@ -533,7 +533,10 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 50)),
       );
       await tester.pump();
-      if (find.textContaining('OFFLINE • LAST KNOWN GOOD').evaluate().isNotEmpty) {
+      if (find
+          .textContaining('OFFLINE • LAST KNOWN GOOD')
+          .evaluate()
+          .isNotEmpty) {
         break;
       }
     }
