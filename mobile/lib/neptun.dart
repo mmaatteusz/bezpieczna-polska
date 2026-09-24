@@ -385,10 +385,13 @@ class _NeptunScreenState extends State<NeptunScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final threats = snapshot?.liveThreats ?? const <Map<String, dynamic>>[];
     final tracks = snapshot?.tracks ?? const <Map<String, dynamic>>[];
+    final liveState = snapshot?.live['state']?.toString() ?? 'UNAVAILABLE';
+    final isLive = online && liveState == 'LIVE';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('NEPTUN • historia'),
+        title: const Text('NEPTUN • live'),
         actions: [
           IconButton(
             onPressed: loading || widget.repository.api.isEmpty
@@ -404,36 +407,62 @@ class _NeptunScreenState extends State<NeptunScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const Text(
-              'Historyczny przebieg zdarzeń OSINT. NEPTUN nie pokazuje aktywnych dokładnych pozycji ani nie wpływa na status Polski.',
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Tryb: ${snapshot?.data['mode'] ?? 'HISTORICAL_ONLY'} • opóźnienie publikacji: ${snapshot?.data['safetyDelayHours'] ?? 24} h • minimalna dokładność: ${snapshot?.data['minimumPublishedPrecisionKm'] ?? 10} km',
-            ),
-            Text(
-              snapshot?.data['coverage'] == 'CURATED_HISTORY'
-                  ? 'Dostępna jest opublikowana historia zdarzeń${online ? '' : ' • ostatnia zapisana kopia'}'
-                  : 'Brak opublikowanych danych historycznych${online ? '' : ' • offline'}',
+            Card(
+              child: ListTile(
+                leading: Icon(
+                  isLive ? Icons.wifi_tethering : Icons.schedule_outlined,
+                ),
+                title: Text(
+                  isLive
+                      ? 'LIVE • ' + threats.length.toString() + ' aktywnych wpisów'
+                      : liveState + ' • ostatnia znana kopia',
+                ),
+                subtitle: Text(
+                  'Ostatnia synchronizacja: ' +
+                      when(snapshot?.live['lastSuccessfulSyncAt']),
+                ),
+              ),
             ),
             if (loading) const LinearProgressIndicator(),
             if (error != null) Text(error!),
-            const SizedBox(height: 12),
-            if (widget.showMap && snapshot != null && tracks.isNotEmpty)
+            if (widget.showMap && snapshot != null)
               NeptunMap(data: snapshot!),
             const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => widget.openSource('https://neptun.in.ua/'),
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Dane live: NEPTUN • neptun.in.ua'),
+            ),
             const Text(
-              'Brak śladów nie oznacza braku zdarzeń. Dane są publikowane dopiero po zakończeniu i dodatkowym opóźnieniu bezpieczeństwa; współrzędne są zgrubne.',
+              'NEPTUN jest agregatorem informacyjnym, nie oficjalnym systemem alarmowym. Pozycje w tej aplikacji są celowo zgrubne; nie pokazujemy kursu, prędkości ani predykcji ruchu.',
             ),
             const SizedBox(height: 12),
-            if (tracks.isEmpty)
+            Text(
+              'Bieżące zagrożenia',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            if (threats.isEmpty)
               const Card(
                 child: Padding(
-                  padding: EdgeInsets.all(18),
+                  padding: EdgeInsets.all(16),
                   child: Text(
-                    'Brak opublikowanych historycznych śladów NEPTUN. Ten moduł pokazuje wyłącznie zakończone zdarzenia po opóźnieniu bezpieczeństwa — nie jest źródłem pozycji live.',
+                    'Brak bieżących wpisów w ostatniej pobranej kopii NEPTUN. Nie oznacza to braku zagrożenia — kieruj się oficjalnymi alarmami.',
                   ),
                 ),
+              ),
+            ...threats.map(liveCard),
+            const SizedBox(height: 16),
+            Text(
+              'Historia zweryfikowana',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const Text(
+              'Zakończone ślady są publikowane osobno, po opóźnieniu bezpieczeństwa.',
+            ),
+            if (tracks.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text('Brak opublikowanych śladów historycznych.'),
               ),
             ...tracks.map(trackCard),
           ],
