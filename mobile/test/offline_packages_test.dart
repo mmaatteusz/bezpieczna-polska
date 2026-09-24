@@ -502,10 +502,20 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: OfflineDataScreen(repository: repo)),
     );
-    await tester.pumpAndSettle();
+    // The screen reloads file-backed packages from real async I/O. Do not use
+    // pumpAndSettle while the indeterminate loading indicator is mounted:
+    // fake-time pumping can starve the real file-system future indefinitely.
+    for (var attempt = 0; attempt < 20; attempt++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+      if (find.byType(LinearProgressIndicator).evaluate().isEmpty) break;
+    }
+    expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(find.text('Dane offline'), findsOneWidget);
     await tester.tap(find.byType(ExpansionTile).first);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.textContaining('Snapshot danych:'), findsOneWidget);
     expect(find.textContaining('Checksum:'), findsOneWidget);
     expect(find.textContaining('Podkład OpenFreeMap'), findsOneWidget);
@@ -518,7 +528,15 @@ void main() {
     await OfflinePackageStore(prefs).commit(package());
     final repo = DataRepository(prefs);
     await tester.pumpWidget(SafetyApp(repository: repo));
-    await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 20; attempt++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+      if (find.textContaining('OFFLINE • LAST KNOWN GOOD').evaluate().isNotEmpty) {
+        break;
+      }
+    }
     expect(find.textContaining('OFFLINE • LAST KNOWN GOOD'), findsWidgets);
     expect(
       find.textContaining('Brak nowych danych nie oznacza bezpieczeństwa'),
