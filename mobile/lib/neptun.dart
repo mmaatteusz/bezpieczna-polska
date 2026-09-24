@@ -414,7 +414,9 @@ class _NeptunScreenState extends State<NeptunScreen> {
                 ),
                 title: Text(
                   isLive
-                      ? 'LIVE • ' + threats.length.toString() + ' aktywnych wpisów'
+                      ? 'LIVE • ' +
+                            threats.length.toString() +
+                            ' aktywnych wpisów'
                       : liveState + ' • ostatnia znana kopia',
                 ),
                 subtitle: Text(
@@ -425,8 +427,7 @@ class _NeptunScreenState extends State<NeptunScreen> {
             ),
             if (loading) const LinearProgressIndicator(),
             if (error != null) Text(error!),
-            if (widget.showMap && snapshot != null)
-              NeptunMap(data: snapshot!),
+            if (widget.showMap && snapshot != null) NeptunMap(data: snapshot!),
             const SizedBox(height: 8),
             TextButton.icon(
               onPressed: () => widget.openSource('https://neptun.in.ua/'),
