@@ -6,6 +6,7 @@ import {join} from 'node:path';
 import {buildApp} from '../src/app.js';
 import {openDb,Store} from '../src/store.js';
 import {NEPTUN_MIN_PRECISION_KM,NEPTUN_SAFETY_DELAY_HOURS,neptunSnapshot,neptunTrackSchema,publicNeptunTrack,type NeptunTrack} from '../src/neptun.js';
+import {NEPTUN_API,NEPTUN_PUBLIC_MIN_PRECISION_KM,neptunLiveAdapter,parseNeptunLive} from '../src/neptun-live-adapter.js';
 
 const now=new Date('2026-09-22T12:00:00Z');
 const track=(overrides:Partial<NeptunTrack>={}):NeptunTrack=>neptunTrackSchema.parse({
@@ -43,6 +44,47 @@ test('NEPTUN public track coarsens coordinates and preserves provenance',()=>{
  assert.equal(pub.observations[0].source.url,'https://example.com/a');
 });
 
+test('NEPTUN live parser removes operational motion data and coarsens positions',()=>{
+ const input={
+  serverTime:now.toISOString(),
+  threats:[{
+   id:'trk-live-1',type:'uav',title:'БпЛА',region:'Одеська область',district:'Одеський район',locality:'Чорноморськ',
+   lat:46.30123,lon:30.65123,heading:42,confidenceLevel:'high',sourceCount:3,count:2,updatedAt:now.toISOString(),
+   status:'active',explanationShort:'БпЛА у регіоні',velocity:{bearingDeg:42,speedKmh:150},confirmedAt:now.toISOString(),
+   uncertaintyKm:4,positionQuality:'confirmed',advisory:false,areaOnly:false
+  },{
+   id:'trk-area',type:'missile',title:'Ракета',region:'Одеська область',district:null,locality:'Одеська область',
+   lat:46.5,lon:30.7,heading:null,confidenceLevel:'medium',sourceCount:1,count:null,updatedAt:now.toISOString(),
+   status:'active',explanationShort:'Ракета на область',velocity:null,confirmedAt:null,
+   uncertaintyKm:20,positionQuality:'approx',advisory:false,areaOnly:true
+  }]
+ };
+ const parsed=parseNeptunLive(input,now);
+ assert.equal(parsed.threats.length,2);
+ const point=parsed.threats[0];
+ assert.ok(point.precisionKm!>=NEPTUN_PUBLIC_MIN_PRECISION_KM);
+ assert.notEqual(point.latitude,input.threats[0].lat);
+ assert.notEqual(point.longitude,input.threats[0].lon);
+ assert.equal('heading' in point,false);
+ assert.equal('velocity' in point,false);
+ assert.equal(parsed.threats[1].latitude,null);
+ assert.equal(parsed.threats[1].longitude,null);
+});
+
+test('NEPTUN live adapter uses the public endpoint and stores no event object',async()=>{
+ let requested='';
+ const batch=await neptunLiveAdapter.sync({
+  now,
+  fetchText:async url=>{
+   requested=url;
+   return JSON.stringify({serverTime:now.toISOString(),threats:[]});
+  }
+ });
+ assert.equal(requested,NEPTUN_API);
+ assert.deepEqual(batch.events,[]);
+ assert.equal(batch.neptunMetadata?.serverTime,now.toISOString());
+});
+
 test('NEPTUN persistence is revisioned and snapshot is historical-only with safety delay',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'neptun-')),file=join(dir,'test.db');
  let db=openDb(undefined,file),store=new Store(db);await store.init();
@@ -56,7 +98,8 @@ test('NEPTUN persistence is revisioned and snapshot is historical-only with safe
   await db.close();db=openDb(undefined,file);store=new Store(db);await store.init();
   assert.equal((await store.neptunTrack(track().id))?.revision,2);
   const snapshot=await neptunSnapshot(store,now);
-  assert.equal(snapshot.mode,'HISTORICAL_ONLY');
+  assert.equal(snapshot.mode,'LIVE_AND_HISTORY');
+  assert.equal(snapshot.schemaVersion,2);
   assert.equal(snapshot.safetyDelayHours,NEPTUN_SAFETY_DELAY_HOURS);
   assert.equal(snapshot.tracks.length,1);
   assert.equal(snapshot.map.features.length,1);
