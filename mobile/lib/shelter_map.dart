@@ -47,6 +47,17 @@ class _ShelterMapState extends State<ShelterMap> {
   String availability = 'ALL', message = 'Przygotowywanie mapy…';
   MapViewport? viewport;
   ShelterMapProvider get provider => ShelterMapProvider(widget.repository);
+  LatLng get homeTarget {
+    final lat = widget.repository.primaryLocationLatitude;
+    final lon = widget.repository.primaryLocationLongitude;
+    return lat != null && lon != null
+        ? LatLng(lat, lon)
+        : const LatLng(52.1, 19.4);
+  }
+
+  double get homeZoom =>
+      widget.repository.primaryLocationLatitude != null ? 10.5 : 5.2;
+
   static const empty = {'type': 'FeatureCollection', 'features': <dynamic>[]};
   static const onlineStyle = String.fromEnvironment(
     'MAP_STYLE_URL',
@@ -650,6 +661,110 @@ class _ShelterMapState extends State<ShelterMap> {
         CameraUpdate.zoomTo((position.zoom + delta).clamp(0, 22).toDouble()),
       );
     }
+  }
+
+  Future<void> goHome() async {
+    final c = controller;
+    if (c == null) return;
+    await c.animateCamera(CameraUpdate.newLatLngZoom(homeTarget, homeZoom));
+  }
+
+  Future<void> showLayers() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, update) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Warstwy mapy',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Zdarzenia'),
+                  value: showEvents && !showRadiation,
+                  onChanged: showRadiation
+                      ? null
+                      : (value) {
+                          setState(() => showEvents = value);
+                          update(() {});
+                          unawaited(syncContextLayers());
+                        },
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Obserwowane miejsca'),
+                  value: showWatched && !showRadiation,
+                  onChanged: showRadiation
+                      ? null
+                      : (value) {
+                          setState(() => showWatched = value);
+                          update(() {});
+                          unawaited(syncContextLayers());
+                        },
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Radiacja / PAA'),
+                  subtitle: const Text('Pomiary jako osobna warstwa'),
+                  value: showRadiation,
+                  onChanged: (value) {
+                    setState(() => showRadiation = value);
+                    update(() {});
+                    unawaited(refresh());
+                  },
+                ),
+                if (!showRadiation)
+                  DropdownButtonFormField<String>(
+                    initialValue: availability,
+                    decoration: const InputDecoration(
+                      labelText: 'Punkty schronienia',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'ALL',
+                        child: Text('Wszystkie'),
+                      ),
+                      DropdownMenuItem(
+                        value: '24H',
+                        child: Text('Całodobowe wg źródła'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'ON_REQUEST',
+                        child: Text('Na żądanie'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'LIMITED_HOURS',
+                        child: Text('Określone godziny'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'UNKNOWN',
+                        child: Text('Dostępność nieustalona'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => availability = value);
+                      update(() {});
+                      unawaited(refresh());
+                    },
+                  ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Czerwone: zdarzenia • zielone: schronienia • niebieskie: obserwowane miejsca • fioletowe: PAA',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
