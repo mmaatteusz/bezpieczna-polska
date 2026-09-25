@@ -68,11 +68,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
     final needle = query.trim().toLowerCase();
     final list = widget.events.where((event) {
       final text =
-          (event.title +
-                  ' ' +
-                  event.description +
-                  ' ' +
-                  safetySourceLabel(event))
+          '${event.title} ${event.description} ${safetySourceLabel(event)}'
               .toLowerCase();
       return _lifecycleMatches(event) &&
           (category == 'Wszystkie' || _categoryOf(event) == category) &&
@@ -133,7 +129,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            list.length.toString() + ' komunikatów',
+            '${list.length} komunikatów',
             style: Theme.of(context).textTheme.labelLarge,
           ),
           const SizedBox(height: 6),
