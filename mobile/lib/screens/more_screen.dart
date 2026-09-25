@@ -36,11 +36,7 @@ class MoreScreen extends StatelessWidget {
             children: [
               ShelterPanel(
                 key: ValueKey(
-                  repository.api +
-                      ':' +
-                      region +
-                      ':' +
-                      repository.dataGeneration.toString(),
+                  '${repository.api}:$region:${repository.dataGeneration}',
                 ),
                 repository: repository,
                 region: region,
