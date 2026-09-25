@@ -99,12 +99,6 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
  };
  // Precise coordinates belong in the request body, not URLs/proxy access logs.
  app.post('/v1/shelters/nearest',async req=>nearestSheltersResponse(nearestShelterBody.parse(req.body)));
- // Temporary compatibility only. New clients must use POST above.
- app.get('/v1/shelters/nearest',async(req,reply)=>{
-  reply.header('Deprecation','true').header('Warning','299 - "Deprecated: use POST /v1/shelters/nearest"');
-  const q=z.object({lat:z.coerce.number().min(-90).max(90),lon:z.coerce.number().min(-180).max(180),limit:z.coerce.number().int().min(1).max(10).default(3)}).parse(req.query);
-  return nearestSheltersResponse({latitude:q.lat,longitude:q.lon,limit:q.limit});
- });
  app.get('/v1/layers/shelters.geojson',async(req,reply)=>{
   const raw=z.object({bbox:z.string().optional()}).parse(req.query).bbox;
   const bbox=raw===undefined?undefined:z.tuple([z.number().min(-180).max(180),z.number().min(-90).max(90),z.number().min(-180).max(180),z.number().min(-90).max(90)]).refine(b=>b[0]<=b[2]&&b[1]<=b[3]).parse(raw.split(',').map(Number));
