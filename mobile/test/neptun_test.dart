@@ -164,11 +164,14 @@ http.Response jsonResponse(Object value, int status) => http.Response.bytes(
 );
 
 void main() {
-  test('status entry point wording advertises live data without precise-motion claims',() {
-    final source=File('lib/main.dart').readAsStringSync();
-    expect(source,contains('NEPTUN • live + historia'));
-    expect(source,contains('Bez kursu, prędkości i predykcji ruchu'));
-  });
+  test(
+    'status entry point wording advertises live data without precise-motion claims',
+    () {
+      final source = File('lib/main.dart').readAsStringSync();
+      expect(source, contains('NEPTUN • live + historia'));
+      expect(source, contains('Bez kursu, prędkości i predykcji ruchu'));
+    },
+  );
   TestWidgetsFlutterBinding.ensureInitialized();
   final now = DateTime.utc(2026, 9, 22, 12);
 
