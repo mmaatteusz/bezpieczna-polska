@@ -65,12 +65,15 @@ http.Response jsonResponse(Object value, [int status = 200]) => http.Response(
 );
 
 void main() {
-  test('push platform initialization failure never blocks application startup', () async {
-    expect(
-      await safePushPlatformAdapter(() async => throw StateError('firebase')),
-      isNull,
-    );
-  });
+  test(
+    'push platform initialization failure never blocks application startup',
+    () async {
+      expect(
+        await safePushPlatformAdapter(() async => throw StateError('firebase')),
+        isNull,
+      );
+    },
+  );
 
   TestWidgetsFlutterBinding.ensureInitialized();
 
