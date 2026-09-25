@@ -101,8 +101,6 @@ export async function neptunSnapshot(store:Store,now=new Date()){
     type:t.type,
     title:t.title,
     region:t.region,
-    district:t.district,
-    locality:t.locality,
     confidenceLevel:t.confidenceLevel,
     updatedAt:t.updatedAt,
     advisory:t.advisory,
