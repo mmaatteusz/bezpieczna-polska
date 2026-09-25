@@ -35,3 +35,9 @@ test('manual Android preview uses preview environment in Gradle and Dart',()=>{
   assert.match(manualAndroid,/--dart-define=APP_ENV=preview/);
   assert.match(manualAndroid,/--dart-define="API_BASE_URL=\$API_BASE_URL"/);
 });
+
+test('production Android artifact gate checks versionCode and arm64 ABI',()=>{
+  assert.match(production,/versionCode='\$\{EXPECTED_CODE\}'/);
+  assert.match(production,/native-code: 'arm64-v8a'/);
+  assert.match(production,/Unexpected non-arm64 native libraries/);
+});
