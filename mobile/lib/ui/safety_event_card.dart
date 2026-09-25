@@ -88,7 +88,7 @@ class SafetyEventCard extends StatelessWidget {
                   if (sourceCount > 1)
                     _badge(
                       context,
-                      'NIEZALEŻNE ŹRÓDŁA: ' + sourceCount.toString(),
+                      'NIEZALEŻNE ŹRÓDŁA: $sourceCount',
                     ),
                   if (event.hasConflictingReports)
                     _badge(context, 'RÓŻNICE W KOMUNIKATACH'),
