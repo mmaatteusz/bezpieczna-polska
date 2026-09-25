@@ -24,7 +24,8 @@ import 'offline_data_screen.dart';
 import 'build_config.dart';
 import 'app_version.dart';
 
-String? localityRegionSeed(String currentRegion) => currentRegion == 'PL' ? null : currentRegion;
+String? localityRegionSeed(String currentRegion) =>
+    currentRegion == 'PL' ? null : currentRegion;
 
 Future<void> main() async {
   validateBuildConfiguration();
@@ -412,7 +413,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.location_on_outlined),
                     title: Text(foundLabel!),
-                    subtitle: Text(selectedRegion == null ? 'Wybierz województwo' : regions[selectedRegion] ?? selectedRegion!),
+                    subtitle: Text(
+                      selectedRegion == null
+                          ? 'Wybierz województwo'
+                          : regions[selectedRegion] ?? selectedRegion!,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 8),
