@@ -21,9 +21,7 @@ int independentSourceCount(SafetyEvent event) {
   final families = <String>{};
   for (final source in event.sources) {
     final id = source['id']?.toString() ?? '';
-    families.add(
-      id == 'RSO' || id.startsWith('WCZK-') ? 'WCZK_RSO' : id,
-    );
+    families.add(id == 'RSO' || id.startsWith('WCZK-') ? 'WCZK_RSO' : id);
   }
   return families.length;
 }
@@ -50,14 +48,13 @@ class SafetyEventCard extends StatelessWidget {
         _ => 'NIEUSTALONE',
       };
 
-  String get severityLabel =>
-      switch (event.data['severity']?.toString()) {
-        'CRITICAL' => 'KRYTYCZNE',
-        'HIGH' || 'SEVERE' => 'WYSOKIE',
-        'ELEVATED' || 'MODERATE' => 'PODWYŻSZONE',
-        'NORMAL' || 'LOW' => 'STANDARDOWE',
-        _ => 'NIEUSTALONE',
-      };
+  String get severityLabel => switch (event.data['severity']?.toString()) {
+    'CRITICAL' => 'KRYTYCZNE',
+    'HIGH' || 'SEVERE' => 'WYSOKIE',
+    'ELEVATED' || 'MODERATE' => 'PODWYŻSZONE',
+    'NORMAL' || 'LOW' => 'STANDARDOWE',
+    _ => 'NIEUSTALONE',
+  };
 
   Widget _badge(BuildContext context, String text) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -100,9 +97,8 @@ class SafetyEventCard extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 event.title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 7),
               Text(
