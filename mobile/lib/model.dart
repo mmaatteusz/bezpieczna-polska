@@ -166,7 +166,9 @@ class Snapshot {
   final Map<String, dynamic> data;
   final List<SafetyEvent> events;
   Snapshot._(this.data, this.events);
-  List<SafetyEvent> get alertEvents {
+  late final List<SafetyEvent> alertEvents = _buildAlertEvents();
+
+  List<SafetyEvent> _buildAlertEvents() {
     final byId = {for (final e in events) e.id: e};
     final grouped = <String>{};
     final cards = <SafetyEvent>[];
