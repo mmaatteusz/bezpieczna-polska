@@ -1,0 +1,21 @@
+name: Alpha22 temporary formatter diff
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  format-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+      - name: Resolve and print exact formatter diff
+        run: |
+          cd mobile
+          flutter pub get
+          dart format lib/main.dart lib/screens/dashboard_screen.dart lib/screens/more_screen.dart lib/ui/safety_event_card.dart
+          git diff -- lib/main.dart lib/screens/dashboard_screen.dart lib/screens/more_screen.dart lib/ui/safety_event_card.dart
