@@ -205,8 +205,13 @@ class DashboardScreen extends StatelessWidget {
     final localRelevant = localityAround == null
         ? 0
         : {
-            ...localityAround!.nearbyEvents.map((item) => item.event.id),
-            ...localityAround!.regionalEvents.map((event) => event.id),
+            ...localityAround!.nearbyEvents
+                .map((item) => item.event)
+                .where((event) => safetyEventIsSignificant(event, now))
+                .map((event) => event.id),
+            ...localityAround!.regionalEvents
+                .where((event) => safetyEventIsSignificant(event, now))
+                .map((event) => event.id),
           }.length;
 
     return RefreshIndicator(

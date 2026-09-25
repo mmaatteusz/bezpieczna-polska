@@ -192,6 +192,10 @@ void main() {
           .toIso8601String();
       expect(NeptunData.parse(stale).isFreshLive(now), isFalse);
 
+      final operationalLeak = fixture(now);
+      operationalLeak['live']['threats'][0]['presumptiveCourse'] = true;
+      expect(() => NeptunData.parse(operationalLeak), throwsFormatException);
+
       final active = fixture(now);
       active['tracks'][0]['lifecycle'] = 'ACTIVE';
       expect(() => NeptunData.parse(active), throwsFormatException);

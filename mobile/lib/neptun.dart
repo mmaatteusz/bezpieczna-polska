@@ -96,7 +96,14 @@ class NeptunData {
           t.containsKey('positionQuality') ||
           t.containsKey('explanationShort') ||
           t.containsKey('locality') ||
-          t.containsKey('district')) {
+          t.containsKey('district') ||
+          t.containsKey('trail') ||
+          t.containsKey('lifecycle') ||
+          t.containsKey('displayConfidence') ||
+          t.containsKey('presumptiveCourse') ||
+          t.containsKey('destination') ||
+          t.containsKey('sea') ||
+          t.containsKey('regionKey')) {
         throw const FormatException('Niepoprawny live NEPTUN');
       }
       DateTime.parse(t['updatedAt'] as String);
@@ -135,6 +142,9 @@ class NeptunData {
           rawFeature['properties'].containsKey('locality') ||
           rawFeature['properties'].containsKey('district') ||
           rawFeature['properties'].containsKey('explanationShort') ||
+          rawFeature['properties'].containsKey('trail') ||
+          rawFeature['properties'].containsKey('presumptiveCourse') ||
+          rawFeature['properties'].containsKey('destination') ||
           !liveIds.contains(rawFeature['properties']['threatId'])) {
         throw const FormatException('Niepoprawna mapa live NEPTUN');
       }
