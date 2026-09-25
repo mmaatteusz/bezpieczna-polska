@@ -86,17 +86,11 @@ void main() {
         isFalse,
       );
       expect(
-        mapDatasetChanged(
-          rendered,
-          MapRequest(rendered.bbox, 10, '14', 'ALL'),
-        ),
+        mapDatasetChanged(rendered, MapRequest(rendered.bbox, 10, '14', 'ALL')),
         isTrue,
       );
       expect(
-        mapDatasetChanged(
-          rendered,
-          MapRequest(rendered.bbox, 10, '04', '24H'),
-        ),
+        mapDatasetChanged(rendered, MapRequest(rendered.bbox, 10, '04', '24H')),
         isTrue,
       );
     },
