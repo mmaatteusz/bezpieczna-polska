@@ -923,9 +923,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       Card(
         child: ListTile(
           leading: const Icon(Icons.timeline_outlined),
-          title: const Text('NEPTUN • historyczny przebieg'),
+          title: const Text('NEPTUN • live + historia'),
           subtitle: const Text(
-            'Zakończone ślady OSINT, timeline i źródła. Bez aktywnych dokładnych pozycji.',
+            'Bieżące zgrubne zagrożenia oraz zakończone ślady OSINT. Bez kursu, prędkości i predykcji ruchu.',
           ),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
