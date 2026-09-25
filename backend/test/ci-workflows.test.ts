@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 
 const production=readFileSync('../.github/workflows/production-release.yml','utf8');
 const regression=readFileSync('../.github/workflows/regression-preview.yml','utf8');
+const manualAndroid=readFileSync('../.github/workflows/build.yml','utf8');
 
 function stepBlock(yaml:string,name:string){
   const marker=`      - name: ${name}`;
@@ -27,4 +28,10 @@ test('external live source checks run before preview signing can block the job',
     assert.ok(source>=0,`missing ${name}`);
     assert.ok(source<signing,`${name} must run before signing`);
   }
+});
+
+test('manual Android preview uses preview environment in Gradle and Dart',()=>{
+  assert.match(manualAndroid,/BP_ENV:\s*preview/);
+  assert.match(manualAndroid,/--dart-define=APP_ENV=preview/);
+  assert.match(manualAndroid,/--dart-define="API_BASE_URL=\$API_BASE_URL"/);
 });
