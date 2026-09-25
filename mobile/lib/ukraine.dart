@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
+import 'map_interaction.dart';
 import 'model.dart';
 
 class UkraineData {
@@ -439,6 +440,7 @@ class _UkraineMapState extends State<UkraineMap> {
       SizedBox(
         height: 320,
         child: MapLibreMap(
+          gestureRecognizers: mapGestureRecognizers(),
           styleString: const String.fromEnvironment(
             'MAP_STYLE_URL',
             defaultValue: 'https://tiles.openfreemap.org/styles/liberty',
