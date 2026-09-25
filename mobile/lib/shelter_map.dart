@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
+import 'map_interaction.dart';
 import 'map_layers.dart';
 import 'model.dart';
 import 'shelters.dart';
@@ -800,6 +801,7 @@ class _ShelterMapState extends State<ShelterMap> {
               children: [
                 MapLibreMap(
                   styleString: onlineStyle,
+                  gestureRecognizers: mapGestureRecognizers(),
                   initialCameraPosition: CameraPosition(
                     target: widget.ukraine ? const LatLng(49, 31) : homeTarget,
                     zoom: widget.ukraine ? 5 : homeZoom,
