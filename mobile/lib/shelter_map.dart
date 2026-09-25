@@ -94,6 +94,8 @@ class _ShelterMapState extends State<ShelterMap> {
   @override
   void dispose() {
     ticket++;
+    ready = false;
+    controller = null;
     debounce?.cancel();
     clock?.cancel();
     styleFallback?.cancel();
@@ -141,6 +143,7 @@ class _ShelterMapState extends State<ShelterMap> {
   }
 
   Future<void> styled() async {
+    if (!mounted) return;
     final c = controller;
     if (c == null) return;
     styleFallback?.cancel();
@@ -804,6 +807,7 @@ class _ShelterMapState extends State<ShelterMap> {
                   trackCameraPosition: true,
                   minMaxZoomPreference: const MinMaxZoomPreference(0, 22),
                   onMapCreated: (c) {
+                    if (!mounted) return;
                     controller = c;
                     armStyleFallback(c);
                   },
