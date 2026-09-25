@@ -43,6 +43,10 @@ void main() {
       expect(repository.region, 'PL');
     },
   );
+  test('alert cards are stable for the lifetime of one snapshot', () {
+    final snapshot = Snapshot.parse(jsonEncode(data()));
+    expect(identical(snapshot.alertEvents, snapshot.alertEvents), isTrue);
+  });
   test(
     'stale data never presents current green',
     () => expect(
