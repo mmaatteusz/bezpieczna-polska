@@ -31,8 +31,9 @@ Future<void> main() async {
   validateBuildConfiguration();
   WidgetsFlutterBinding.ensureInitialized();
   final repository = DataRepository(await SharedPreferences.getInstance());
-  final pushAdapter =
-      await FirebasePushPlatformAdapter.fromBuildConfiguration();
+  final pushAdapter = await safePushPlatformAdapter(
+    FirebasePushPlatformAdapter.fromBuildConfiguration,
+  );
   runApp(
     SafetyApp(
       repository: repository,
