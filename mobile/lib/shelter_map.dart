@@ -46,6 +46,7 @@ class _ShelterMapState extends State<ShelterMap> {
   int ticket = 0;
   String availability = 'ALL', message = 'Przygotowywanie mapy…';
   MapViewport? viewport;
+  MapRequest? renderedRequest;
   ShelterMapProvider get provider => ShelterMapProvider(widget.repository);
   LatLng get homeTarget {
     final lat = widget.repository.primaryLocationLatitude;
@@ -84,6 +85,9 @@ class _ShelterMapState extends State<ShelterMap> {
     if (oldWidget.events != widget.events ||
         oldWidget.watchedLocations != widget.watchedLocations) {
       unawaited(syncContextLayers());
+    }
+    if (oldWidget.region != widget.region) {
+      idle();
     }
   }
 
@@ -364,15 +368,21 @@ class _ShelterMapState extends State<ShelterMap> {
         widget.region,
         availability,
       );
-      // Remove old viewport immediately: it must not masquerade as this area/filter.
-      viewport = null;
-      await c.setGeoJsonSource('shelters', empty);
+      // Keep the previous viewport during ordinary pan/zoom so markers do not
+      // blink out while the replacement request is in flight. A changed
+      // region/filter is a different dataset and must be cleared immediately.
+      if (mapDatasetChanged(renderedRequest, request)) {
+        viewport = null;
+        renderedRequest = null;
+        await c.setGeoJsonSource('shelters', empty);
+      }
       final result = await provider.fetch(request);
       if (!mounted || current != ticket) return;
       await c.setGeoJsonSource('shelters', result.data);
       if (!mounted || current != ticket) return;
       setState(() {
         viewport = result;
+        renderedRequest = request;
         online = true;
         message = '';
       });
@@ -385,10 +395,14 @@ class _ShelterMapState extends State<ShelterMap> {
       final fallback = cached ?? offline;
       if (fallback != null) {
         await c.setGeoJsonSource('shelters', fallback.data);
+      } else {
+        // The previous viewport is no longer valid for the new camera area.
+        await c.setGeoJsonSource('shelters', empty);
       }
       if (!mounted || current != ticket) return;
       setState(() {
         viewport = fallback;
+        renderedRequest = fallback == null ? null : request;
         online = false;
         message = fallback == null
             ? apiFailureMessage(failure)
