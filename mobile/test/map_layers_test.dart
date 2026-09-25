@@ -78,13 +78,13 @@ void main() {
     'pan and zoom keep rendered markers but region/filter changes invalidate them',
     () {
       final rendered = MapRequest([17.8, 53, 18.3, 53.3], 10, '04', 'ALL');
-    expect(
-      mapDatasetChanged(
-        rendered,
-        MapRequest([17.9, 53.05, 18.4, 53.35], 11, '04', 'ALL'),
-      ),
-      isFalse,
-    );
+      expect(
+        mapDatasetChanged(
+          rendered,
+          MapRequest([17.9, 53.05, 18.4, 53.35], 11, '04', 'ALL'),
+        ),
+        isFalse,
+      );
       expect(
         mapDatasetChanged(
           rendered,
