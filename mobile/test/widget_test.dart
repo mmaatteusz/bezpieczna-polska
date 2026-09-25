@@ -26,10 +26,13 @@ class TestMapPlatform extends MapLibrePlatform {
 }
 
 void main() {
-  test('national scope does not silently seed Kujawsko for locality selection',(){
-    expect(localityRegionSeed('PL'),isNull);
-    expect(localityRegionSeed('14'),'14');
-  });
+  test(
+    'national scope does not silently seed Kujawsko for locality selection',
+    () {
+      expect(localityRegionSeed('PL'), isNull);
+      expect(localityRegionSeed('14'), '14');
+    },
+  );
   setUp(() {
     final original = MapLibrePlatform.createInstance;
     MapLibrePlatform.createInstance = () => TestMapPlatform();
