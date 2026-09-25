@@ -539,6 +539,13 @@ class _NeptunMapState extends State<NeptunMap> {
   bool ready = false;
 
   @override
+  void dispose() {
+    ready = false;
+    controller = null;
+    super.dispose();
+  }
+
+  @override
   void didUpdateWidget(covariant NeptunMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (ready && oldWidget.data.data != widget.data.data) {
@@ -562,12 +569,15 @@ class _NeptunMapState extends State<NeptunMap> {
   }
 
   Future<void> styled() async {
+    if (!mounted) return;
+    final c = controller;
+    if (c == null) return;
     try {
-      await controller?.addSource(
+      await c.addSource(
         'neptun-live',
         GeojsonSourceProperties(data: widget.data.live['map']),
       );
-      await controller?.addCircleLayer(
+      await c.addCircleLayer(
         'neptun-live',
         'neptun-live-points',
         const CircleLayerProperties(
@@ -577,11 +587,11 @@ class _NeptunMapState extends State<NeptunMap> {
           circleStrokeWidth: 2,
         ),
       );
-      await controller?.addSource(
+      await c.addSource(
         'neptun-history',
         GeojsonSourceProperties(data: widget.data.data['map']),
       );
-      await controller?.addLineLayer(
+      await c.addLineLayer(
         'neptun-history',
         'neptun-history-lines',
         const LineLayerProperties(
@@ -617,7 +627,9 @@ class _NeptunMapState extends State<NeptunMap> {
               target: LatLng(49, 31),
               zoom: 5,
             ),
-            onMapCreated: (c) => controller = c,
+            onMapCreated: (c) {
+              if (mounted) controller = c;
+            },
             onStyleLoadedCallback: styled,
           ),
         ),

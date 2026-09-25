@@ -89,6 +89,7 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> with WidgetsBindingObserver {
   int page = 0, generation = 0;
+  final Set<int> visitedPages = <int>{0};
   bool online = false, loading = false, backgroundSync = false;
   late String region;
   String? localityLabel;
@@ -516,51 +517,61 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ],
     ),
     body: SafeArea(
-      child: switch (page) {
-        0 => DashboardScreen(
-          snapshot: snapshot,
-          events: events,
-          localityAround: localityAround,
-          offlinePackage: offlinePackageData,
-          online: online,
-          loading: loading,
-          backgroundSync: backgroundSync,
-          region: region,
-          localityLabel: localityLabel,
-          error: error,
-          onRefresh: startupSync,
-          onChooseLocality: chooseLocality,
-          onOpenAlerts: () => setState(() => page = 2),
-          onOpenEvent: details,
-        ),
-        1 => SafetyMapScreen(
-          repository: widget.repository,
-          snapshot: snapshot,
-          events: events,
-          online: online,
-          region: region,
-          onOpenEvent: details,
-          openLink: openLink,
-        ),
-        2 => AlertsScreen(
-          events: events,
-          onOpenEvent: details,
-          onRefresh: startupSync,
-        ),
-        _ => MoreScreen(
-          repository: widget.repository,
-          snapshot: snapshot,
-          online: online,
-          region: region,
-          openLink: openLink,
-          call112: call112,
-          onWatchedLocationsChanged: widget.pushManager?.syncCurrentPreferences,
-        ),
-      },
+      child: IndexedStack(
+        index: page,
+        children: [
+          DashboardScreen(
+            snapshot: snapshot,
+            events: events,
+            localityAround: localityAround,
+            offlinePackage: offlinePackageData,
+            online: online,
+            loading: loading,
+            backgroundSync: backgroundSync,
+            region: region,
+            localityLabel: localityLabel,
+            error: error,
+            onRefresh: startupSync,
+            onChooseLocality: chooseLocality,
+            onOpenAlerts: () => _selectPage(2),
+            onOpenEvent: details,
+          ),
+          visitedPages.contains(1)
+              ? SafetyMapScreen(
+                  repository: widget.repository,
+                  snapshot: snapshot,
+                  events: events,
+                  online: online,
+                  region: region,
+                  onOpenEvent: details,
+                  openLink: openLink,
+                )
+              : const SizedBox.shrink(),
+          visitedPages.contains(2)
+              ? AlertsScreen(
+                  events: events,
+                  onOpenEvent: details,
+                  onRefresh: startupSync,
+                )
+              : const SizedBox.shrink(),
+          visitedPages.contains(3)
+              ? MoreScreen(
+                  repository: widget.repository,
+                  snapshot: snapshot,
+                  online: online,
+                  region: region,
+                  openLink: openLink,
+                  call112: call112,
+                  onWatchedLocationsChanged:
+                      widget.pushManager?.syncCurrentPreferences,
+                )
+              : const SizedBox.shrink(),
+        ],
+      ),
     ),
     bottomNavigationBar: NavigationBar(
       selectedIndex: page,
-      onDestinationSelected: (index) => setState(() => page = index),
+      onDestinationSelected: _selectPage,
       destinations: const [
         NavigationDestination(
           icon: Icon(Icons.shield_outlined),
@@ -585,6 +596,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ],
     ),
   );
+
+  void _selectPage(int index) {
+    if (index == page && visitedPages.contains(index)) return;
+    setState(() {
+      visitedPages.add(index);
+      page = index;
+    });
+  }
 
   Future<void> call112() async {
     final yes = await showDialog<bool>(

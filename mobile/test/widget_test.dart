@@ -84,6 +84,17 @@ void main() {
     expect(find.text('Schronienia'), findsOneWidget);
     expect(find.text('NEPTUN'), findsOneWidget);
     expect(find.text('Obserwowane miejsca'), findsOneWidget);
+    expect(
+      find.byType(MapLibreMap, skipOffstage: false),
+      findsOneWidget,
+      reason: 'Visited tabs must stay mounted instead of being torn down.',
+    );
+
+    for (final label in ['Start', 'Alerty', 'Mapa', 'Więcej']) {
+      await tester.tap(find.text(label).last);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    }
 
     await tester.tap(find.text('Schronienia'));
     await tester.pumpAndSettle();
