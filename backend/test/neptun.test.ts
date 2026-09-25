@@ -67,6 +67,9 @@ test('NEPTUN live parser removes operational motion data and coarsens positions'
  assert.notEqual(point.longitude,input.threats[0].lon);
  assert.equal('heading' in point,false);
  assert.equal('velocity' in point,false);
+ assert.equal('confirmedAt' in point,false);
+ assert.equal('positionQuality' in point,false);
+ assert.equal('explanationShort' in point,false);
  assert.equal(parsed.threats[1].latitude,null);
  assert.equal(parsed.threats[1].longitude,null);
 });
@@ -82,6 +85,7 @@ test('NEPTUN live parser maps new upstream categories to unknown without droppin
  assert.equal(parsed.threats[0].type,'unknown');
  assert.ok(parsed.threats[0].precisionKm!>=NEPTUN_PUBLIC_MIN_PRECISION_KM);
  assert.equal('heading' in parsed.threats[0],false);
+ assert.equal('explanationShort' in parsed.threats[0],false);
 });
 
 test('NEPTUN live adapter uses the public endpoint and stores no event object',async()=>{
