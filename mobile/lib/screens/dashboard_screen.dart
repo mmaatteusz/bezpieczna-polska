@@ -495,19 +495,18 @@ class DashboardScreen extends StatelessWidget {
                   children: [
                     Text(
                       'Sytuacja teraz',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.5,
-                      ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                          ),
                     ),
                     if (snapshotTime != null) ...[
                       const SizedBox(height: 2),
                       Text(
                         'Ostatni odczyt: $snapshotTime',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurfaceVariant,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -568,7 +567,8 @@ class DashboardScreen extends StatelessWidget {
           _sectionHeader(
             context,
             title: 'Istotne zagrożenia',
-            subtitle: 'Najważniejsze aktywne komunikaty, bez informacyjnego szumu.',
+            subtitle:
+                'Najważniejsze aktywne komunikaty, bez informacyjnego szumu.',
             count: active.length,
           ),
           const SizedBox(height: 8),
@@ -633,9 +633,9 @@ class _InfoBanner extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ),
         ],
