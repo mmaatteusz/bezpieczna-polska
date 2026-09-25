@@ -9,6 +9,7 @@ concurrency:
 env:
   CI: 'true'
   FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  BP_ENV: preview
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -51,7 +52,7 @@ jobs:
       - name: Build with backend from repository build configuration
         env:
           API_BASE_URL: ${{ vars.API_BASE_URL }}
-        run: flutter build apk --no-pub --debug --split-per-abi --target-platform android-arm64 --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false
+        run: flutter build apk --no-pub --debug --split-per-abi --target-platform android-arm64 --dart-define=APP_ENV=preview --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false
         working-directory: mobile
       - name: Verify APK and prepare download
         shell: bash
