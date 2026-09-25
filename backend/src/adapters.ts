@@ -103,14 +103,17 @@ export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securit
 }
 async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:string)=>Promise<string>,fetchBytes:(url:string)=>Promise<Uint8Array>){
  await initializeSources(store);
+ const healthById=new Map((await store.health()).map(source=>[source.id,source]));
+ const needsPreviousEvents=adapters.some(adapter=>['UA','PAA','SG','POLICE','PSP_INCIDENTS'].includes(adapter.id));
+ const previousEvents=needsPreviousEvents?await store.events():[];
  for(const adapter of adapters){
-  const previous=(await store.health()).find(s=>s.id===adapter.id);
+  const previous=healthById.get(adapter.id);
   if(!previous)throw new Error('UNKNOWN_ADAPTER');
   if(!previous.enabled)continue;
   const begin=Date.now(),lastAttempt=new Date(begin).toISOString();
   if(adapter.minSyncIntervalSeconds&&previous.lastSuccess&&previous.state==='HEALTHY'&&begin-Date.parse(previous.lastSuccess)>=0&&begin-Date.parse(previous.lastSuccess)<adapter.minSyncIntervalSeconds*1000)continue;
   try{
-   const batch=await adapter.sync({now:new Date(begin),fetchText,fetchBytes,previousEvents:['UA','PAA','SG','POLICE','PSP_INCIDENTS'].includes(adapter.id)?await store.events():undefined});
+   const batch=await adapter.sync({now:new Date(begin),fetchText,fetchBytes,previousEvents:['UA','PAA','SG','POLICE','PSP_INCIDENTS'].includes(adapter.id)?previousEvents:undefined});
    const items=batch.events.map(e=>eventSchema.parse(e));
    if(items.some(e=>e.isDemo||!e.sources.some(s=>s.id===adapter.id)))throw new Error('SOURCE_INVALID_EVENT');
    const published=items.map(e=>e.publishedAt??(e.securityLevel?.publishedAt?e.securityLevel.publishedAt:null)).filter((v):v is string=>v!==null).sort();
