@@ -72,8 +72,10 @@ class MoreScreen extends StatelessWidget {
         subtitle: 'Bieżące zgrubne zagrożenia i historia',
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) =>
-                NeptunScreen(repository: repository, openSource: openLink),
+            builder: (_) => NeptunScreen(
+              repository: repository,
+              openSource: openLink,
+            ),
           ),
         ),
       ),
