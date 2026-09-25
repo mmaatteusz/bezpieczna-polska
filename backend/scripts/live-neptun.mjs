@@ -8,13 +8,18 @@ const bytes=Buffer.from(await response.arrayBuffer());
 if(bytes.length===0||bytes.length>4*1024*1024)throw new Error('NEPTUN_BODY_SIZE');
 const raw=JSON.parse(bytes.toString('utf8'));
 const parsed=parseNeptunLive(raw,new Date());
+for(const threat of parsed.threats){
+  for(const key of ['heading','velocity','confirmedAt','positionQuality','explanationShort']){
+    if(Object.prototype.hasOwnProperty.call(threat,key))throw new Error('NEPTUN_PUBLIC_MOTION_FIELD_'+key.toUpperCase());
+  }
+}
 const result={
   checkedAt:new Date().toISOString(),
   source:NEPTUN_API,
   serverTime:parsed.serverTime,
   threatCount:parsed.threats.length,
   types:[...new Set(parsed.threats.map(t=>t.type))].sort(),
-  contract:'sanitized-live-no-heading-no-velocity'
+  contract:'sanitized-live-no-operational-motion-data'
 };
 await writeFile(out,JSON.stringify(result,null,2)+'\n');
 console.log(JSON.stringify(result));
