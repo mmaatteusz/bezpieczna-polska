@@ -16,7 +16,17 @@ jobs:
         working-directory: mobile
         shell: bash
         run: |
-          dart format lib test
-          echo '---FORMAT_PATCH_BEGIN---'
-          git diff -- lib/main.dart lib/screens/dashboard_screen.dart lib/screens/more_screen.dart lib/ui/safety_event_card.dart
-          echo '---FORMAT_PATCH_END---'
+          cp lib/main.dart /tmp/main.dart
+          cp lib/screens/dashboard_screen.dart /tmp/dashboard_screen.dart
+          cp lib/screens/more_screen.dart /tmp/more_screen.dart
+          cp lib/ui/safety_event_card.dart /tmp/safety_event_card.dart
+          dart format lib/main.dart lib/screens/dashboard_screen.dart lib/screens/more_screen.dart lib/ui/safety_event_card.dart
+          echo '---MAIN---'
+          diff -u /tmp/main.dart lib/main.dart || true
+          echo '---DASHBOARD---'
+          diff -u /tmp/dashboard_screen.dart lib/screens/dashboard_screen.dart || true
+          echo '---MORE---'
+          diff -u /tmp/more_screen.dart lib/screens/more_screen.dart || true
+          echo '---CARD---'
+          diff -u /tmp/safety_event_card.dart lib/ui/safety_event_card.dart || true
+          echo '---END---'
