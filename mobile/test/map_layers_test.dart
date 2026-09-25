@@ -74,8 +74,10 @@ void main() {
       );
     },
   );
-  test('pan and zoom keep rendered markers but region/filter changes invalidate them', () {
-    final rendered = MapRequest([17.8, 53, 18.3, 53.3], 10, '04', 'ALL');
+  test(
+    'pan and zoom keep rendered markers but region/filter changes invalidate them',
+    () {
+      final rendered = MapRequest([17.8, 53, 18.3, 53.3], 10, '04', 'ALL');
     expect(
       mapDatasetChanged(
         rendered,
@@ -83,15 +85,22 @@ void main() {
       ),
       isFalse,
     );
-    expect(
-      mapDatasetChanged(rendered, MapRequest(rendered.bbox, 10, '14', 'ALL')),
-      isTrue,
-    );
-    expect(
-      mapDatasetChanged(rendered, MapRequest(rendered.bbox, 10, '04', '24H')),
-      isTrue,
-    );
-  });
+      expect(
+        mapDatasetChanged(
+          rendered,
+          MapRequest(rendered.bbox, 10, '14', 'ALL'),
+        ),
+        isTrue,
+      );
+      expect(
+        mapDatasetChanged(
+          rendered,
+          MapRequest(rendered.bbox, 10, '04', '24H'),
+        ),
+        isTrue,
+      );
+    },
+  );
 
   test(
     'backend bbox/filter sent automatically; offline retains last known good only for same viewport',
