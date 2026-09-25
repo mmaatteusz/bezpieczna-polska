@@ -8,9 +8,7 @@ import 'package:bezpieczna_polska/model.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('service incident is available through simplified Alerts filters', (
-    tester,
-  ) async {
+  testWidgets('service incident uses Alerts filters', (tester) async {
     final now = DateTime.now().toUtc();
     final status = {
       'hazardLevel': 'UNKNOWN',
