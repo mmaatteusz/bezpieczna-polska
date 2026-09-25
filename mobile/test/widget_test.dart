@@ -67,7 +67,9 @@ void main() {
     expect(find.text('Sytuacja teraz'), findsOneWidget);
     expect(find.text('Polska'), findsOneWidget);
     expect(find.text('Twoja okolica'), findsOneWidget);
-    expect(find.text('Istotne aktywne zagrożenia'), findsOneWidget);
+    expect(find.text('Ustaw lokalizację'), findsOneWidget);
+    expect(find.text('Bezpieczna Polska'), findsOneWidget);
+    expect(find.text('Istotne zagrożenia'), findsOneWidget);
     expect(find.text('Źródła i aktualność'), findsNothing);
     expect(find.text('Diagnostyka źródeł'), findsNothing);
     expect(find.byType(NavigationDestination), findsNWidgets(4));
