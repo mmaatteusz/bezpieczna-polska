@@ -110,6 +110,41 @@ class _AlertsScreenState extends State<AlertsScreen> {
     );
   }
 
+  Future<void> _openSearch() async {
+    final controller = TextEditingController(text: query);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Szukaj w alertach'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textInputAction: TextInputAction.search,
+          decoration: const InputDecoration(
+            hintText: 'Tytuł, opis albo źródło',
+            prefixIcon: Icon(Icons.search),
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (text) => Navigator.pop(dialogContext, text),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Anuluj'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('Szukaj'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (value != null && mounted) {
+      setState(() => query = value.trim());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final matched = widget.events.where(_matchesTextAndCategory).toList();
@@ -240,13 +275,28 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   ),
                 ),
                 const SizedBox(height: 11),
-                TextField(
-                  decoration: const InputDecoration(
-                    hintText: 'Szukaj alertu',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (value) => setState(() => query = value),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _openSearch,
+                        icon: const Icon(Icons.search),
+                        label: Text(
+                          query.isEmpty ? 'Szukaj w alertach' : 'Szukaj: $query',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    if (query.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Wyczyść wyszukiwanie',
+                        onPressed: () => setState(() => query = ''),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
