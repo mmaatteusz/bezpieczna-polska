@@ -3,12 +3,12 @@ import type {SourceAdapter} from './source-adapter.js';
 
 export const NEPTUN_API='https://neptun.in.ua/api/v1/threats';
 export const NEPTUN_HOME='https://neptun.in.ua/';
-export const NEPTUN_LIVE_VERSION='neptun-public-v1/1.0.1';
+export const NEPTUN_LIVE_VERSION='neptun-public-v1/1.0.2';
 export const NEPTUN_PUBLIC_MIN_PRECISION_KM=10;
 
 const timestamp=z.iso.datetime({offset:true});
 const finite=z.number().finite();
-const knownThreatTypes=['uav','recon','missile','ballistic','kab','mig31k','unknown'] as const;
+const knownThreatTypes=['uav','fpv','recon','missile','ballistic','kab','mig31k','unknown'] as const;
 const threatType=z.string().min(1).max(80).transform((value):typeof knownThreatTypes[number]=>
   (knownThreatTypes as readonly string[]).includes(value)?value as typeof knownThreatTypes[number]:'unknown'
 );
@@ -51,7 +51,7 @@ const responseSchema=z.object({
 
 export type PublicNeptunThreat={
   id:string;
-  type:'uav'|'recon'|'missile'|'ballistic'|'kab'|'mig31k'|'unknown';
+  type:'uav'|'fpv'|'recon'|'missile'|'ballistic'|'kab'|'mig31k'|'unknown';
   title:string;
   region:string|null;
   confidenceLevel:'low'|'medium'|'high';
@@ -70,6 +70,7 @@ export type PublicNeptunThreat={
 function publicThreatTitle(type:PublicNeptunThreat['type']){
   return ({
     uav:'BSP / dron',
+    fpv:'FPV / dron',
     recon:'Obiekt rozpoznawczy',
     missile:'Rakieta',
     ballistic:'Zagrożenie balistyczne',

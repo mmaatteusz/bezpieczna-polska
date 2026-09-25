@@ -540,17 +540,12 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 50)),
       );
       await tester.pump();
-      if (find
-          .textContaining('OFFLINE • LAST KNOWN GOOD')
-          .evaluate()
-          .isNotEmpty) {
+      if (find.textContaining('Tryb offline:').evaluate().isNotEmpty) {
         break;
       }
     }
-    expect(find.textContaining('OFFLINE • LAST KNOWN GOOD'), findsWidgets);
-    expect(
-      find.textContaining('Brak nowych danych nie oznacza bezpieczeństwa'),
-      findsWidgets,
-    );
+    expect(find.textContaining('Tryb offline:'), findsOneWidget);
+    expect(find.text('BRAK ŚWIEŻEJ OCENY'), findsWidgets);
+    expect(find.text('SPOKOJNIE'), findsNothing);
   });
 }

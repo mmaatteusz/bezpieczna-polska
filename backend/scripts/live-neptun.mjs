@@ -9,7 +9,7 @@ if(bytes.length===0||bytes.length>4*1024*1024)throw new Error('NEPTUN_BODY_SIZE'
 const raw=JSON.parse(bytes.toString('utf8'));
 const parsed=parseNeptunLive(raw,new Date());
 for(const threat of parsed.threats){
-  for(const key of ['heading','velocity','confirmedAt','positionQuality','explanationShort','locality','district']){
+  for(const key of ['heading','velocity','confirmedAt','positionQuality','explanationShort','locality','district','trail','lifecycle','displayConfidence','presumptiveCourse','destination','sea','regionKey']){
     if(Object.prototype.hasOwnProperty.call(threat,key))throw new Error('NEPTUN_PUBLIC_MOTION_FIELD_'+key.toUpperCase());
   }
 }

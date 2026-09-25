@@ -37,6 +37,7 @@ export function parseRso(xml:string,now=new Date()):Event[]{
   e.publishedAt=date(text('created_at'));e.validFrom=date(text('valid_from'));e.validTo=date(text('valid_to'));if(e.validFrom&&e.validTo&&e.validTo<=e.validFrom)throw new Error('RSO_DATE_ORDER');
   e.lifecycle=e.validFrom&&Date.parse(e.validFrom)>now.getTime()?'SCHEDULED':e.validTo&&Date.parse(e.validTo)<=now.getTime()?'EXPIRED':e.validTo?'ACTIVE':'UNKNOWN';
   e.regions=n.find('province').map((_,p)=>{const name=$(p).text().toLocaleLowerCase('pl');const code=Object.keys(REGIONS).find(k=>REGIONS[k].toLocaleLowerCase('pl')===name);if(!code)throw new Error('RSO_UNKNOWN_REGION');return code;}).get();e.geographicScope=e.regions.length?'REGIONAL':'UNKNOWN';
+  if(e.regions.length)e.sources[0].name='WCZK - Regionalny System Ostrzegania';
   const alarm=text('rso_alarm').toLocaleLowerCase('pl');
   const falseValues=new Set(['','0','false','nie','no']);
   const trueValues=new Set(['1','true','tak','yes']);

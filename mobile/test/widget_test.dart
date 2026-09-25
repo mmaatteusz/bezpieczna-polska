@@ -52,7 +52,7 @@ void main() {
       await loader.load();
     }
   });
-  testWidgets('phone layout, MapLibre surface, navigation and deliberate SOS', (
+  testWidgets('four-tab phone layout, focused home, map and deliberate SOS', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -63,38 +63,37 @@ void main() {
     final r = DataRepository(await SharedPreferences.getInstance());
     await tester.pumpWidget(SafetyApp(repository: r));
     await tester.pumpAndSettle();
-    expect(find.text('Brak bieżącej oceny sytuacji'), findsNothing);
-    expect(find.text('STATUS POLSKI'), findsNothing);
-    expect(find.textContaining('TWOJA OKOLICA'), findsNothing);
-    expect(
-      find.textContaining('Brak połączenia z serwerem danych'),
-      findsOneWidget,
-    );
-    expect(find.text('Po synchronizacji'), findsOneWidget);
+
+    expect(find.text('Sytuacja teraz'), findsOneWidget);
+    expect(find.text('Polska'), findsOneWidget);
+    expect(find.text('Twoja okolica'), findsOneWidget);
+    expect(find.text('Istotne aktywne zagrożenia'), findsOneWidget);
+    expect(find.text('Źródła i aktualność'), findsNothing);
+    expect(find.text('Diagnostyka źródeł'), findsNothing);
+    expect(find.byType(NavigationDestination), findsNWidgets(4));
+
     await tester.tap(find.text('Mapa').last);
     await tester.pumpAndSettle();
     expect(find.byType(MapLibreMap), findsOneWidget);
     expect(find.byKey(const ValueKey('native-map-surface')), findsOneWidget);
     expect(find.byTooltip('Warstwy mapy'), findsOneWidget);
     expect(find.byTooltip('Wróć do wybranej miejscowości'), findsOneWidget);
-    expect(find.text('Ukraina'), findsNothing);
-    await tester.tap(find.byTooltip('Warstwy mapy'));
+
+    await tester.tap(find.text('Więcej').last);
     await tester.pumpAndSettle();
-    expect(find.text('Zdarzenia'), findsOneWidget);
+    expect(find.text('Schronienia'), findsOneWidget);
+    expect(find.text('NEPTUN'), findsOneWidget);
     expect(find.text('Obserwowane miejsca'), findsOneWidget);
-    expect(find.text('Punkty schronienia'), findsOneWidget);
-    await tester.tapAt(const Offset(380, 100));
-    await tester.pumpAndSettle();
-    // A native platform view cannot be captured by Linux widget golden tests.
-    expect(tester.takeException(), isNull);
-    await tester.tap(find.text('Schronienie').last);
+
+    await tester.tap(find.text('Schronienia'));
     await tester.pumpAndSettle();
     expect(
       find.text('Brak zweryfikowanego pakietu schronienia'),
       findsOneWidget,
     );
-    await tester.tap(find.text('Pomoc').last);
+    await tester.pageBack();
     await tester.pumpAndSettle();
+
     await tester.tap(find.text('112 • Numer alarmowy'));
     await tester.pumpAndSettle();
     expect(find.text('Otworzyć telefon z numerem 112?'), findsOneWidget);
@@ -103,6 +102,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
+
   testWidgets('200 percent font on phone does not overflow status', (
     tester,
   ) async {
@@ -138,6 +138,7 @@ void main() {
       await tester.tap(find.byTooltip('Ustawienia'));
       await tester.pumpAndSettle();
       expect(find.byType(TextField), findsNothing);
+      expect(find.text('Diagnostyka źródeł'), findsOneWidget);
       await tester.tap(find.text('Developer Settings'));
       await tester.pumpAndSettle();
       expect(find.text('Backend URL (HTTPS)'), findsOneWidget);

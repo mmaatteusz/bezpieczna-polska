@@ -1,6 +1,3 @@
-import 'neptun.dart';
-import 'radiation.dart';
-
 import 'dart:async';
 import 'dart:convert';
 
@@ -8,21 +5,20 @@ import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:share_plus/share_plus.dart';
 
 import 'model.dart';
-import 'shelter_map.dart';
-import 'security_levels.dart';
-import 'shelter_panel.dart';
 import 'event_details.dart';
 import 'source_status.dart';
-import 'watched_locations_panel.dart';
 import 'push_notifications.dart';
 import 'offline_packages.dart';
 import 'offline_repository.dart';
 import 'offline_data_screen.dart';
 import 'build_config.dart';
 import 'app_version.dart';
+import 'screens/dashboard_screen.dart';
+import 'screens/alerts_screen.dart';
+import 'screens/map_screen.dart';
+import 'screens/more_screen.dart';
 
 String? localityRegionSeed(String currentRegion) =>
     currentRegion == 'PL' ? null : currentRegion;
@@ -101,10 +97,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   OfflineRegionPackage? offlinePackageData;
   String? error;
   Timer? timer, refreshTimer;
-  String statusFilter = 'Wszystkie',
-      sourceFilter = 'Wszystkie',
-      typeFilter = 'Wszystkie',
-      query = '';
   Map<String, int> seen = {};
   @override
   void initState() {
@@ -504,32 +496,13 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     queryController.dispose();
   }
 
-  Future<void> changeRegion(String value) async {
-    ++generation;
-    await widget.repository.setRegion(value);
-    if (widget.pushManager != null) {
-      unawaited(widget.pushManager!.syncCurrentPreferences());
-    }
-    if (!mounted) return;
-    setState(() {
-      region = value;
-      snapshot = widget.repository.cached(value);
-      offlinePackageData = null;
-      online = false;
-      loading = false;
-      error = null;
-      loadSeen();
-    });
-    await loadOffline();
-    if (widget.repository.api.isNotEmpty) unawaited(startupSync());
-  }
-
   List<SafetyEvent> get events => snapshot?.alertEvents ?? [];
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(
-        ['Status', 'Mapa', 'Alerty', 'Schronienia', 'Pomoc'][page],
+        ['Start', 'Mapa', 'Alerty', 'Więcej'][page],
         style: Theme.of(
           context,
         ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -538,924 +511,81 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         IconButton(
           tooltip: 'Ustawienia',
           onPressed: settings,
-          icon: const Icon(Icons.tune),
+          icon: const Icon(Icons.settings_outlined),
         ),
       ],
     ),
     body: SafeArea(
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 8, 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: chooseLocality,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 7,
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.location_on_outlined, size: 22),
-                          const SizedBox(width: 9),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  localityLabel ?? 'Wybierz miasto lub wieś',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                                Text(
-                                  regions[region] ?? region,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Icon(Icons.expand_more),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Odśwież dane',
-                  onPressed:
-                      loading || backgroundSync || widget.repository.api.isEmpty
-                      ? null
-                      : startupSync,
-                  icon: loading || backgroundSync
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh),
-                ),
-              ],
-            ),
-          ),
-          dataStateStrip(),
-          if (error != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: notice(error!, Icons.cloud_off),
-            ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: startupSync,
-              child: ListView(
-                key: PageStorageKey<int>(page),
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
-                children: switch (page) {
-                  0 => statusPage(),
-                  1 => mapPage(),
-                  2 => rcbPage(),
-                  3 => shelterPage(),
-                  _ => helpPage(),
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
+      child: switch (page) {
+        0 => DashboardScreen(
+          snapshot: snapshot,
+          events: events,
+          localityAround: localityAround,
+          offlinePackage: offlinePackageData,
+          online: online,
+          loading: loading,
+          backgroundSync: backgroundSync,
+          region: region,
+          localityLabel: localityLabel,
+          error: error,
+          onRefresh: startupSync,
+          onChooseLocality: chooseLocality,
+          onOpenAlerts: () => setState(() => page = 2),
+          onOpenEvent: details,
+        ),
+        1 => SafetyMapScreen(
+          repository: widget.repository,
+          snapshot: snapshot,
+          events: events,
+          online: online,
+          region: region,
+          onOpenEvent: details,
+          openLink: openLink,
+        ),
+        2 => AlertsScreen(
+          events: events,
+          onOpenEvent: details,
+          onRefresh: startupSync,
+        ),
+        _ => MoreScreen(
+          repository: widget.repository,
+          snapshot: snapshot,
+          online: online,
+          region: region,
+          openLink: openLink,
+          call112: call112,
+          onWatchedLocationsChanged: widget.pushManager?.syncCurrentPreferences,
+        ),
+      },
     ),
     bottomNavigationBar: NavigationBar(
       selectedIndex: page,
-      onDestinationSelected: (i) => setState(() => page = i),
+      onDestinationSelected: (index) => setState(() => page = index),
       destinations: const [
         NavigationDestination(
           icon: Icon(Icons.shield_outlined),
-          label: 'Status',
+          selectedIcon: Icon(Icons.shield),
+          label: 'Start',
         ),
-        NavigationDestination(icon: Icon(Icons.map_outlined), label: 'Mapa'),
+        NavigationDestination(
+          icon: Icon(Icons.map_outlined),
+          selectedIcon: Icon(Icons.map),
+          label: 'Mapa',
+        ),
         NavigationDestination(
           icon: Icon(Icons.campaign_outlined),
+          selectedIcon: Icon(Icons.campaign),
           label: 'Alerty',
         ),
         NavigationDestination(
-          icon: Icon(Icons.home_work_outlined),
-          label: 'Schronienie',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.support_outlined),
-          label: 'Pomoc',
+          icon: Icon(Icons.more_horiz),
+          selectedIcon: Icon(Icons.more),
+          label: 'Więcej',
         ),
       ],
     ),
   );
-  Widget notice(String text, IconData icon) => Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 22),
-        const SizedBox(width: 12),
-        Expanded(child: Text(text)),
-      ],
-    ),
-  );
-  Widget heading(String text) => Padding(
-    padding: const EdgeInsets.only(top: 22, bottom: 12),
-    child: Text(
-      text,
-      style: Theme.of(
-        context,
-      ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-    ),
-  );
-  Widget empty(String title, String text, IconData icon) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 32),
-          const SizedBox(height: 12),
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Text(text),
-        ],
-      ),
-    ),
-  );
-  Widget badge(String text) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Text(text, style: Theme.of(context).textTheme.labelSmall),
-  );
-  Widget dataStateStrip() {
-    final now = DateTime.now();
-    final nationalFresh =
-        online && (snapshot?.freshAt(now, national: true) ?? false);
-    final localFresh =
-        online && (snapshot?.freshAt(now, national: false) ?? false);
-    final hasOffline = !online && offlinePackageData != null;
-    final hasAnyData = snapshot != null || offlinePackageData != null;
-    final label = backgroundSync
-        ? 'Synchronizacja danych…'
-        : nationalFresh && localFresh
-        ? 'Dane aktualne'
-        : hasOffline
-        ? 'Offline • ostatnia zapisana kopia'
-        : hasAnyData
-        ? 'Dane mogą być nieaktualne'
-        : 'Brak pobranych danych';
-    final icon = backgroundSync
-        ? Icons.sync
-        : nationalFresh && localFresh
-        ? Icons.cloud_done_outlined
-        : hasOffline
-        ? Icons.offline_pin_outlined
-        : hasAnyData
-        ? Icons.schedule_outlined
-        : Icons.cloud_off_outlined;
-    final timestamp = hasOffline
-        ? offlinePackageData!.snapshotTimestamp.toIso8601String()
-        : snapshot?.data['serverTime'];
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      child: Material(
-        color: Theme.of(context).colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          child: Row(
-            children: [
-              Icon(icon, size: 19),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(
-                  timestamp == null ? label : '$label • ${stamp(timestamp)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ),
-              if (backgroundSync)
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
-  Widget statusOverviewCard() {
-    final now = DateTime.now();
-    final nationalFresh =
-        online && (snapshot?.freshAt(now, national: true) ?? false);
-    final regionalFresh =
-        online && (snapshot?.freshAt(now, national: false) ?? false);
-    final national = snapshot?.data['nationalStatus'];
-    final regional = snapshot?.data['status'];
-
-    String statusText(dynamic status, bool fresh) {
-      if (status is! Map) return 'Brak danych';
-      if (fresh) return status['displayText']?.toString() ?? 'Brak danych';
-      if (!online && offlinePackageData != null) {
-        return 'Ostatnia zapisana kopia: ${status['displayText'] ?? 'brak oceny'}';
-      }
-      return 'Dane nie są aktualne';
-    }
-
-    Widget row({
-      required IconData icon,
-      required String title,
-      required String value,
-      String? subtitle,
-    }) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.labelLarge),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-
-    final nearbyActive =
-        localityAround?.nearbyEvents.where((item) {
-          final lifecycle = item.event.data['lifecycle']?.toString();
-          final validTo = DateTime.tryParse(
-            item.event.data['validTo']?.toString() ?? '',
-          );
-          return lifecycle == 'ACTIVE' &&
-              (validTo == null || validTo.isAfter(DateTime.now()));
-        }).length ??
-        0;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(
-          children: [
-            row(
-              icon: Icons.public_outlined,
-              title: 'Polska',
-              value: statusText(national, nationalFresh),
-            ),
-            const Divider(height: 1),
-            row(
-              icon: Icons.map_outlined,
-              title: regions[region] ?? region,
-              value: statusText(regional, regionalFresh),
-            ),
-            if (localityLabel != null) ...[
-              const Divider(height: 1),
-              row(
-                icon: Icons.near_me_outlined,
-                title: localityLabel!,
-                value: localityAround == null
-                    ? 'Dane okolicy jeszcze niepobrane'
-                    : nearbyActive == 0
-                    ? 'Brak aktywnych komunikatów z dokładną lokalizacją w promieniu 20 km'
-                    : nearbyActive == 1
-                    ? '1 aktywny komunikat w promieniu 20 km'
-                    : '$nearbyActive aktywne komunikaty w promieniu 20 km',
-                subtitle:
-                    'Komunikaty bez dokładnej geometrii są nadal uwzględniane na poziomie województwa.',
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Widget> statusPage() {
-    final changed = events
-        .where((e) => e.revision > (seen[e.id] ?? 0))
-        .toList();
-    final active = events.where((e) {
-      if (e.data['lifecycle']?.toString() != 'ACTIVE') return false;
-      final validTo = DateTime.tryParse(e.data['validTo']?.toString() ?? '');
-      return validTo == null || validTo.isAfter(DateTime.now());
-    }).toList();
-    final noData = snapshot == null && offlinePackageData == null;
-    if (noData) {
-      return [
-        if (widget.repository.api.isEmpty)
-          notice(
-            'Brak połączenia z serwerem danych. Ten build testowy nie ma ustawionego adresu API.',
-            Icons.cloud_off_outlined,
-          )
-        else
-          empty(
-            backgroundSync ? 'Pobieram dane' : 'Nie udało się pobrać danych',
-            backgroundSync
-                ? 'Pierwsza synchronizacja zapisze dane na telefonie, żeby aplikacja mogła działać także bez internetu.'
-                : 'Sprawdź internet i przeciągnij ekran w dół, aby spróbować ponownie.',
-            backgroundSync ? Icons.sync : Icons.cloud_off_outlined,
-          ),
-        heading('Po synchronizacji'),
-        const ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: Icon(Icons.notifications_active_outlined),
-          title: Text('Alerty i status regionu'),
-        ),
-        const ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: Icon(Icons.map_outlined),
-          title: Text('Mapa zdarzeń i schronienia'),
-        ),
-        const ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: Icon(Icons.offline_pin_outlined),
-          title: Text('Kopia offline na telefonie'),
-        ),
-      ];
-    }
-
-    return [
-      if (!online && offlinePackageData != null)
-        notice(
-          'OFFLINE • LAST KNOWN GOOD z ${stamp(offlinePackageData!.snapshotTimestamp.toIso8601String())}. Wiek pakietu: ${formatOfflineAge(offlinePackageData!.createdAt, DateTime.now().toUtc())}. Stan źródeł pochodzi z chwili snapshotu. Brak nowych danych nie oznacza bezpieczeństwa.',
-          Icons.offline_pin_outlined,
-        ),
-      statusOverviewCard(),
-      heading('Najważniejsze aktywne komunikaty'),
-      if (active.isEmpty)
-        empty(
-          'Brak aktywnych komunikatów w pobranych danych',
-          'To nie jest potwierdzenie braku zagrożeń. Sprawdź też aktualność źródeł powyżej.',
-          Icons.notifications_none_outlined,
-        ),
-      ...active.take(3).map(eventCard),
-      Card(
-        child: ListTile(
-          leading: const Icon(Icons.timeline_outlined),
-          title: const Text('NEPTUN • live + historia'),
-          subtitle: const Text(
-            'Bieżące zgrubne zagrożenia oraz zakończone ślady OSINT. Bez kursu, prędkości i predykcji ruchu.',
-          ),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => NeptunScreen(
-                repository: widget.repository,
-                openSource: openLink,
-              ),
-            ),
-          ),
-        ),
-      ),
-      Card(
-        child: ListTile(
-          leading: const Icon(Icons.radar_outlined),
-          title: const Text('Wokół mnie'),
-          subtitle: const Text(
-            'Jednorazowy GPS lub zapisane miejsca. Bez ciągłego śledzenia i bez historii ruchu.',
-          ),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => WatchedLocationsScreen(
-                repository: widget.repository,
-                onPreferencesChanged:
-                    widget.pushManager?.syncCurrentPreferences,
-              ),
-            ),
-          ),
-        ),
-      ),
-      RadiationPanel(snapshot: snapshot, online: online, openSource: openLink),
-      SecurityLevelsPanel(
-        snapshot: snapshot,
-        online: online,
-        openSource: openLink,
-      ),
-      if (events.any(isImgwEvent)) ...[
-        heading('Ostrzeżenia IMGW'),
-        notice(
-          'Źródłem pochodzenia danych jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy. Dane Instytutu Meteorologii i Gospodarki Wodnej – Państwowego Instytutu Badawczego zostały przetworzone.',
-          Icons.cloud_outlined,
-        ),
-        ...events.where(isImgwEvent).take(5).map(eventCard),
-      ],
-      if (events.any((e) => e.data['eventType'] == 'CYBER')) ...[
-        heading('Cyberbezpieczeństwo'),
-        notice(
-          'Komunikaty cyber są prezentowane osobno i nie podnoszą automatycznie statusu zagrożenia fizycznego.',
-          Icons.security_outlined,
-        ),
-        ...events
-            .where((e) => e.data['eventType'] == 'CYBER')
-            .take(3)
-            .map(eventCard),
-      ],
-      if (events.any(
-        (e) =>
-            e.data['eventType'] == 'BORDER' &&
-            e.sources.any((s) => s['id'] == 'SG'),
-      )) ...[
-        heading('Granice • Straż Graniczna'),
-        notice(
-          'Pokazujemy wyłącznie operacyjne informacje o zamknięciach, ograniczeniach, kontrolach i utrudnieniach granicznych. Taki komunikat nie podnosi automatycznie głównego statusu zagrożenia.',
-          Icons.travel_explore_outlined,
-        ),
-        ...events
-            .where(
-              (e) =>
-                  e.data['eventType'] == 'BORDER' &&
-                  e.sources.any((s) => s['id'] == 'SG'),
-            )
-            .take(3)
-            .map(eventCard),
-      ],
-      if (events.any(
-        (e) => e.sources.any(
-          (s) => s['id'] == 'POLICE' || s['id'] == 'PSP_INCIDENTS',
-        ),
-      )) ...[
-        heading('Zdarzenia służb'),
-        notice(
-          'Pokazujemy tylko zdarzenia Policji i PSP istotne sytuacyjnie. Pojedyncza publikacja służby nie podnosi automatycznie statusu całego województwa.',
-          Icons.local_fire_department_outlined,
-        ),
-        ...events
-            .where(
-              (e) => e.sources.any(
-                (s) => s['id'] == 'POLICE' || s['id'] == 'PSP_INCIDENTS',
-              ),
-            )
-            .take(5)
-            .map(eventCard),
-      ],
-      if (events.any((e) => e.isRso)) ...[
-        heading('Regionalny System Ostrzegania'),
-        ...events.where((e) => e.isRso).take(5).map(eventCard),
-      ],
-      const SizedBox(height: 12),
-      notice(
-        'Każdy komunikat zachowuje źródło i czas pobrania. Brak nowych danych nie jest traktowany jako potwierdzenie bezpieczeństwa.',
-        Icons.science_outlined,
-      ),
-      heading('Od ostatniej wizyty'),
-      if (changed.isEmpty)
-        empty(
-          'Brak nowych zapisanych informacji',
-          'Nie jest to potwierdzenie braku zagrożeń.',
-          Icons.history,
-        ),
-      ...changed.take(5).map(eventCard),
-      if (changed.isNotEmpty)
-        TextButton(
-          onPressed: () async {
-            final values = {for (final e in events) e.id: e.revision};
-            await widget.repository.prefs.setString(
-              'seen:${widget.repository.api}:$region',
-              jsonEncode(values),
-            );
-            if (mounted) setState(() => seen = values);
-          },
-          child: const Text('Oznacz zmiany jako przeczytane'),
-        ),
-      heading('Źródła i aktualność'),
-      if (snapshot == null)
-        empty(
-          'Źródła niepołączone',
-          'RCB, RSO i pozostałe kategorie pokażą swój stan po synchronizacji.',
-          Icons.hub_outlined,
-        ),
-      ...?((snapshot?.data['sources'] as List?)?.take(4).map((raw) {
-        final s = raw as Map;
-        final state = (s['healthStatus'] ?? s['state'] ?? 'UNKNOWN').toString();
-        return Card(
-          child: ListTile(
-            leading: Icon(
-              state == 'HEALTHY'
-                  ? Icons.check_circle_outline
-                  : state == 'STALE'
-                  ? Icons.schedule_outlined
-                  : Icons.info_outline,
-            ),
-            title: Text(s['name'] as String),
-            trailing: state == 'STALE' ? badge('STALE') : null,
-            subtitle: Text(
-              '${sourceStateLabel(state)}\nOstatnia poprawna synchronizacja: ${stamp(s['lastSuccess'])}',
-            ),
-          ),
-        );
-      })),
-      if (snapshot != null)
-        OutlinedButton.icon(
-          onPressed: openSources,
-          icon: const Icon(Icons.hub_outlined),
-          label: const Text('Sprawdź stan wszystkich źródeł'),
-        ),
-      heading('Zapisane komunikaty regionu'),
-      ...events.take(30).map(eventCard),
-    ];
-  }
-
-  String verificationLabel(SafetyEvent event) =>
-      switch (event.data['verification']?.toString()) {
-        'CONFIRMED' => 'POTWIERDZONE',
-        'PROBABLE' => 'PRAWDOPODOBNE',
-        'UNVERIFIED' => 'NIEZWERYFIKOWANE',
-        'REFUTED' => 'ZDEMENTOWANE',
-        'DISPUTED' => 'SPRZECZNE INFORMACJE',
-        _ => 'WERYFIKACJA NIEUSTALONA',
-      };
-
-  String severityLabel(SafetyEvent event) =>
-      switch (event.data['severity']?.toString()) {
-        'CRITICAL' => 'KRYTYCZNE',
-        'HIGH' || 'SEVERE' => 'WYSOKIE',
-        'ELEVATED' || 'MODERATE' => 'PODWYŻSZONE',
-        'NORMAL' || 'LOW' => 'STANDARDOWE',
-        _ => 'POZIOM NIEUSTALONY',
-      };
-
-  Widget eventCard(SafetyEvent e) => Card(
-    child: InkWell(
-      onTap: () => details(e),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                badge(e.sources.first['name'] as String),
-                badge(e.badge),
-                badge(verificationLabel(e)),
-                badge(severityLabel(e)),
-                badge(e.provenance),
-                if (e.sources.length > 1)
-                  badge('POŁĄCZONE ŹRÓDŁA: ${e.sources.length}'),
-                if (e.hasConflictingReports)
-                  badge('RÓŻNICE MIĘDZY KOMUNIKATAMI'),
-                if (eventSourceState(e) == 'STALE')
-                  badge('STALE • DANE NIEAKTUALNE'),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(e.title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(e.description, maxLines: 3, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 10),
-            Text(
-              e.areas.isEmpty
-                  ? 'Obszar nieustalony — sprawdź treść'
-                  : e.areas.map((r) => regions[r] ?? r).join(', '),
-            ),
-            Text(
-              'Publikacja: ${e.data['publishedAt'] == null ? (e.data['publicationDate'] ?? 'Nie podano') : stamp(e.data['publishedAt'])}',
-            ),
-            if (e.data['locationText'] != null)
-              Text('Obszar według źródła: ${e.data['locationText']}'),
-            Text('Pobrano: ${stamp(e.data['retrievedAt'])}'),
-          ],
-        ),
-      ),
-    ),
-  );
-  bool alertStatusMatches(SafetyEvent e) {
-    final lifecycle = e.data['lifecycle'] as String;
-    final correction = e.data['correction'];
-    final expired =
-        DateTime.tryParse(
-          e.data['validTo'] as String? ?? '',
-        )?.isBefore(DateTime.now()) ??
-        false;
-    return switch (statusFilter) {
-      'Aktywne' => lifecycle == 'ACTIVE' && !expired,
-      'Zakończone' =>
-        ['ENDED', 'CANCELLED', 'EXPIRED'].contains(lifecycle) || expired,
-      'Nieustalone' => lifecycle == 'UNKNOWN',
-      'Korekty' =>
-        correction != null ||
-            e.revision > 1 ||
-            ['REFUTED', 'DISPUTED'].contains(e.data['verification']),
-      _ => true,
-    };
-  }
-
-  String eventSourceState(SafetyEvent e) {
-    final sources = snapshot?.data['sources'];
-    if (sources is! List) return 'UNKNOWN';
-    for (final eventSource in e.sources) {
-      for (final raw in sources) {
-        if (raw is Map && raw['id'] == eventSource['id']) {
-          return (raw['healthStatus'] ?? raw['state'] ?? 'UNKNOWN').toString();
-        }
-      }
-    }
-    return 'UNKNOWN';
-  }
-
-  String eventTypeLabel(String value) => switch (value) {
-    'AIR' => 'Powietrzne',
-    'BORDER' => 'Granica',
-    'CYBER' => 'Cyber',
-    'RADIATION' => 'Radiacja',
-    'FIRE' => 'Pożar',
-    'EXPLOSION' => 'Wybuch',
-    'HAZMAT' => 'Zagrożenie chemiczne',
-    'RESCUE' => 'Ratownictwo',
-    'PUBLIC_SAFETY' => 'Bezpieczeństwo publiczne',
-    'EVACUATION' => 'Ewakuacja',
-    'OUTAGE' => 'Awarie',
-    'WEATHER' => 'Pogoda',
-    'OTHER' => 'Inne',
-    _ => value,
-  };
-
-  bool isImgwEvent(SafetyEvent e) =>
-      e.sources.any((s) => s['id'] == 'IMGW_METEO' || s['id'] == 'IMGW_HYDRO');
-
-  String sourceLabel(String value) => switch (value) {
-    'POLICE' => 'Policja',
-    'PSP_INCIDENTS' => 'PSP',
-    'CSIRT_GOV' => 'CSIRT GOV',
-    'IMGW_METEO' => 'IMGW meteo',
-    'IMGW_HYDRO' => 'IMGW hydro',
-    _ => value,
-  };
-
-  List<Widget> rcbPage() {
-    final sourceOptions = <String>{
-      'Wszystkie',
-      'RCB',
-      'RSO',
-      'WCZK',
-      'IMGW_METEO',
-      'IMGW_HYDRO',
-      'PAA',
-      'CERT',
-      'SG',
-      'POLICE',
-      'PSP_INCIDENTS',
-      ...events.expand((e) => e.sources.map((s) => s['id'].toString())),
-    }.toList();
-    final typeOptions = <String>{
-      'Wszystkie',
-      'FIRE',
-      'EXPLOSION',
-      'RESCUE',
-      'HAZMAT',
-      'PUBLIC_SAFETY',
-      ...events.map((e) => e.data['eventType'].toString()),
-    }.toList();
-    if (!sourceOptions.contains(sourceFilter)) sourceFilter = 'Wszystkie';
-    if (!typeOptions.contains(typeFilter)) typeFilter = 'Wszystkie';
-    final normalized = query.trim().toLowerCase();
-    final list = events.where((e) {
-      final text = e.reports
-          .map((r) => '${r.title} ${r.description}')
-          .join(' ')
-          .toLowerCase();
-      final sourceOk =
-          sourceFilter == 'Wszystkie' ||
-          (sourceFilter == 'WCZK' && e.isWczk) ||
-          e.sources.any((s) => s['id'] == sourceFilter);
-      final typeOk =
-          typeFilter == 'Wszystkie' ||
-          e.reports.any((r) => r.data['eventType'] == typeFilter);
-      return text.contains(normalized) &&
-          sourceOk &&
-          typeOk &&
-          e.reports.any(alertStatusMatches);
-    }).toList();
-    return [
-      TextField(
-        decoration: const InputDecoration(
-          labelText: 'Szukaj w alertach',
-          prefixIcon: Icon(Icons.search),
-        ),
-        onChanged: (v) => setState(() => query = v),
-      ),
-      const SizedBox(height: 12),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children:
-            ['Wszystkie', 'Aktywne', 'Zakończone', 'Nieustalone', 'Korekty']
-                .map(
-                  (s) => ChoiceChip(
-                    label: Text(s),
-                    selected: statusFilter == s,
-                    onSelected: (_) => setState(() => statusFilter = s),
-                  ),
-                )
-                .toList(),
-      ),
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          Expanded(
-            child: DropdownButtonFormField<String>(
-              initialValue: sourceFilter,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Źródło'),
-              items: sourceOptions
-                  .map(
-                    (s) =>
-                        DropdownMenuItem(value: s, child: Text(sourceLabel(s))),
-                  )
-                  .toList(),
-              onChanged: (v) => setState(() => sourceFilter = v ?? 'Wszystkie'),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: DropdownButtonFormField<String>(
-              initialValue: typeFilter,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Kategoria'),
-              items: typeOptions
-                  .map(
-                    (s) => DropdownMenuItem(
-                      value: s,
-                      child: Text(s == 'Wszystkie' ? s : eventTypeLabel(s)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) => setState(() => typeFilter = v ?? 'Wszystkie'),
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 12),
-      Text('Pokazano ${list.length} z ${events.length} zapisanych alertów'),
-      if (list.isEmpty)
-        empty(
-          'Brak alertów dla tych filtrów',
-          'Zmień filtr lub sprawdź stan synchronizacji źródeł.',
-          Icons.campaign_outlined,
-        ),
-      ...list.map(eventCard),
-      Wrap(
-        spacing: 8,
-        children: [
-          OutlinedButton.icon(
-            onPressed: () => openLink('https://www.gov.pl/web/rcb'),
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('RCB'),
-          ),
-          OutlinedButton.icon(
-            onPressed: () => openLink('https://komunikaty.tvp.pl/'),
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('RSO'),
-          ),
-          OutlinedButton.icon(
-            onPressed: () => openLink('https://moje.cert.pl/komunikaty/'),
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('CERT Polska'),
-          ),
-          OutlinedButton.icon(
-            onPressed: () => openLink('https://www.csirt.gov.pl/cer/rss'),
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('CSIRT GOV'),
-          ),
-          OutlinedButton.icon(
-            onPressed: () =>
-                openLink('https://www.strazgraniczna.pl/pl/aktualnosci'),
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('Straż Graniczna'),
-          ),
-          OutlinedButton.icon(
-            onPressed: () => openLink('https://policja.pl/pol/aktualnosci'),
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('Policja'),
-          ),
-          OutlinedButton.icon(
-            onPressed: () =>
-                openLink('https://www.gov.pl/web/kgpsp/aktualnosci'),
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('PSP'),
-          ),
-        ],
-      ),
-    ];
-  }
-
-  List<Widget> mapPage() => [
-    ShelterMap(
-      radiation: snapshot?.data['radiation'],
-      radiationOnline: online,
-      events: events,
-      watchedLocations: widget.repository.watchedLocations,
-      openEvent: details,
-      key: ValueKey(
-        'map:${widget.repository.api}:$region:${widget.repository.dataGeneration}:${widget.repository.watchedLocations.length}',
-      ),
-      repository: widget.repository,
-      region: region,
-      ukraine: false,
-      openLink: openLink,
-    ),
-    const SizedBox(height: 8),
-    const Text(
-      'Dotknij punktu po szczegóły. Warstwy, schronienia i PAA zmienisz przyciskiem na mapie. GPS działa tylko po Twoim kliknięciu.',
-    ),
-  ];
-  List<Widget> shelterPage() => [
-    ShelterPanel(
-      key: ValueKey(
-        '${widget.repository.api}:$region:${widget.repository.dataGeneration}',
-      ),
-      repository: widget.repository,
-      region: region,
-      initial: snapshot?.shelters,
-      online: online,
-      openLink: openLink,
-    ),
-  ];
-  List<Widget> helpPage() => [
-    FilledButton.icon(
-      onPressed: call112,
-      icon: const Icon(Icons.phone_outlined),
-      label: const Text('112 • Numer alarmowy'),
-    ),
-    heading('Jestem bezpieczny'),
-    const Text(
-      'Udostępnij krótką wiadomość przez wybraną aplikację. Lokalizacja nie jest dołączana.',
-    ),
-    OutlinedButton.icon(
-      onPressed: () async {
-        await SharePlus.instance.share(ShareParams(text: 'Jestem bezpieczny.'));
-      },
-      icon: const Icon(Icons.share_outlined),
-      label: const Text('Udostępnij „Jestem bezpieczny”'),
-    ),
-    heading('Oficjalne informacje'),
-    ...[
-      ('Rządowe Centrum Bezpieczeństwa', 'https://www.gov.pl/web/rcb'),
-      ('Regionalny System Ostrzegania', 'https://komunikaty.tvp.pl/'),
-      ('Państwowa Agencja Atomistyki', 'https://www.gov.pl/web/paa'),
-      ('CERT Polska', 'https://moje.cert.pl/komunikaty/'),
-      ('CSIRT GOV', 'https://www.csirt.gov.pl/cer/rss'),
-      ('Straż Graniczna', 'https://www.strazgraniczna.pl/pl/aktualnosci'),
-      ('Policja', 'https://policja.pl/pol/aktualnosci'),
-      ('Państwowa Straż Pożarna', 'https://www.gov.pl/web/kgpsp/aktualnosci'),
-    ].map(
-      (e) => Card(
-        child: ListTile(
-          title: Text(e.$1),
-          trailing: const Icon(Icons.open_in_new),
-          onTap: () => openLink(e.$2),
-        ),
-      ),
-    ),
-    heading('Prywatność'),
-    const Text(
-      'Konto jest niewymagane. GPS jest używany wyłącznie po wyraźnej akcji użytkownika; aplikacja nie zapisuje historii ruchu ani nie śledzi pozycji w tle. Region, ustawienia, cache i pakiety offline pozostają na urządzeniu. Przy ręcznym „Wokół mnie” serwer może otrzymać jednorazowo współrzędne potrzebne do obliczenia odległości. Zapisane miejsca są wysyłane do backendu tylko po osobnym włączeniu kategorii powiadomień „Obserwowane lokalizacje”; po jej wyłączeniu backend otrzymuje pustą listę, a po wyrejestrowaniu push dane lokalizacji urządzenia są usuwane z rekordu push. Przy fallbacku offline obliczenia są lokalne. Linki otwierają zewnętrzną przeglądarkę.',
-    ),
-    const SizedBox(height: 16),
-    notice(
-      'Niezależny projekt rozwojowy. Nie zastępuje komunikatów służb ani numeru 112.',
-      Icons.info_outline,
-    ),
-  ];
   Future<void> call112() async {
     final yes = await showDialog<bool>(
       context: context,
@@ -1613,6 +743,17 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                         );
                       },
                     ),
+                  ListTile(
+                    title: const Text('Diagnostyka źródeł'),
+                    subtitle: const Text(
+                      'Stan synchronizacji i szczegóły techniczne',
+                    ),
+                    leading: const Icon(Icons.hub_outlined),
+                    onTap: () {
+                      Navigator.pop(sheet);
+                      openSources();
+                    },
+                  ),
                   if (widget.repository.developerSettingsEnabled)
                     ListTile(
                       title: const Text('Developer Settings'),

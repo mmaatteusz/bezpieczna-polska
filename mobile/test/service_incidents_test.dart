@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bezpieczna_polska/main.dart';
@@ -9,9 +8,7 @@ import 'package:bezpieczna_polska/model.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('service incident section and alpha.10 filters are visible', (
-    tester,
-  ) async {
+  testWidgets('service incident uses Alerts filters', (tester) async {
     final now = DateTime.now().toUtc();
     final status = {
       'hazardLevel': 'UNKNOWN',
@@ -82,41 +79,19 @@ void main() {
     await tester.pumpWidget(SafetyApp(repository: repo));
     await tester.pumpAndSettle();
 
-    for (
-      var i = 0;
-      i < 12 && find.text('Zdarzenia służb').evaluate().isEmpty;
-      i++
-    ) {
-      await tester.drag(find.byType(ListView).first, const Offset(0, -300));
-      await tester.pumpAndSettle();
-    }
-    expect(find.text('Zdarzenia służb'), findsOneWidget);
-    expect(
-      find.textContaining('nie podnosi automatycznie statusu'),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byIcon(Icons.campaign_outlined).last);
+    expect(find.text('Duży pożar magazynu'), findsNothing);
+    await tester.tap(find.text('Alerty').last);
     await tester.pumpAndSettle();
-    expect(
-      find.descendant(of: find.byType(AppBar), matching: find.text('Alerty')),
-      findsOneWidget,
-    );
-    await tester.fling(
-      find.byType(ListView).first,
-      const Offset(0, 2000),
-      1000,
-    );
+    await tester.tap(find.text('Filtry i wyszukiwanie'));
     await tester.pumpAndSettle();
-    final dropdowns = find.byWidgetPredicate(
-      (w) => w is DropdownButtonFormField<String>,
-    );
-    expect(dropdowns, findsNWidgets(2));
-    await tester.tap(dropdowns.last);
+    await tester.tap(find.text('Wszystkie').first);
     await tester.pumpAndSettle();
-    expect(find.text('Wybuch'), findsOneWidget);
-    expect(find.text('Ratownictwo'), findsOneWidget);
-    expect(find.text('Zagrożenie chemiczne'), findsOneWidget);
-    expect(find.text('Bezpieczeństwo publiczne'), findsOneWidget);
+    expect(find.text('Duży pożar magazynu'), findsOneWidget);
+    await tester.tap(find.text('Bezpieczeństwo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Duży pożar magazynu'), findsOneWidget);
+    expect(find.text('Pogoda'), findsOneWidget);
+    expect(find.text('Cyber'), findsOneWidget);
+    expect(find.text('Granica'), findsOneWidget);
   });
 }

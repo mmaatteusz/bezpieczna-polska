@@ -57,7 +57,7 @@ Map<String, dynamic> fixture() {
         'revision': 2,
         'primaryEventId': reports.first['id'],
         'relatedEventIds': reports.map((e) => e['id']).toList(),
-        'sourceCount': 3,
+        'sourceCount': 2,
         'hasConflictingReports': true,
         'reports': reports,
       },
@@ -142,7 +142,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.campaign_outlined).last);
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-        find.text('POŁĄCZONE ŹRÓDŁA: 3'),
+        find.text('NIEZALEŻNE ŹRÓDŁA: 2'),
         200,
         scrollable: find
             .descendant(
@@ -151,7 +151,7 @@ void main() {
             )
             .first,
       );
-      expect(find.text('POŁĄCZONE ŹRÓDŁA: 3'), findsOneWidget);
+      expect(find.text('NIEZALEŻNE ŹRÓDŁA: 2'), findsOneWidget);
       expect(find.text('Powódź — fixture'), findsOneWidget);
       await tester.pumpWidget(
         MaterialApp(

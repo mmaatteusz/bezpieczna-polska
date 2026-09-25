@@ -6,7 +6,7 @@ import type {SourceAdapter} from './source-adapter.js';
 import {WCZK_SOURCES} from './wczk-registry.js';
 
 export const WCZK_PODKARPACKIE='https://rzeszow.uw.gov.pl/wczk/ostrzezenia';
-const version='1.0.0';
+const version='1.1.0';
 const clean=(s:string)=>s.replace(/\s+/g,' ').trim();
 function localDate(time:string,date:string){
  const d=DateTime.fromFormat(`${date} ${time}`,'dd.MM.yyyy HH:mm',{zone:'Europe/Warsaw'});

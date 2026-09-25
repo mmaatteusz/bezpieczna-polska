@@ -31,6 +31,17 @@ class NeptunData {
     final server = DateTime.parse(m['serverTime'] as String);
     final cutoff = server.subtract(Duration(hours: delay.toInt()));
     final live = Map<String, dynamic>.from(m['live'] as Map);
+    for (final key in [
+      'lastSuccessfulSyncAt',
+      'sourceServerTime',
+      'validUntil',
+    ]) {
+      final value = live[key];
+      if (value != null && value is! String) {
+        throw const FormatException('Niepoprawny czas live NEPTUN');
+      }
+      if (value is String) DateTime.parse(value);
+    }
     if (!{
           'LIVE',
           'STALE',
@@ -57,6 +68,7 @@ class NeptunData {
           !liveIds.add(t['id'] as String) ||
           ![
             'uav',
+            'fpv',
             'recon',
             'missile',
             'ballistic',
@@ -67,6 +79,7 @@ class NeptunData {
           t['title'] !=
               const {
                 'uav': 'BSP / dron',
+                'fpv': 'FPV / dron',
                 'recon': 'Obiekt rozpoznawczy',
                 'missile': 'Rakieta',
                 'ballistic': 'Zagrożenie balistyczne',
@@ -83,7 +96,14 @@ class NeptunData {
           t.containsKey('positionQuality') ||
           t.containsKey('explanationShort') ||
           t.containsKey('locality') ||
-          t.containsKey('district')) {
+          t.containsKey('district') ||
+          t.containsKey('trail') ||
+          t.containsKey('lifecycle') ||
+          t.containsKey('displayConfidence') ||
+          t.containsKey('presumptiveCourse') ||
+          t.containsKey('destination') ||
+          t.containsKey('sea') ||
+          t.containsKey('regionKey')) {
         throw const FormatException('Niepoprawny live NEPTUN');
       }
       DateTime.parse(t['updatedAt'] as String);
@@ -122,6 +142,9 @@ class NeptunData {
           rawFeature['properties'].containsKey('locality') ||
           rawFeature['properties'].containsKey('district') ||
           rawFeature['properties'].containsKey('explanationShort') ||
+          rawFeature['properties'].containsKey('trail') ||
+          rawFeature['properties'].containsKey('presumptiveCourse') ||
+          rawFeature['properties'].containsKey('destination') ||
           !liveIds.contains(rawFeature['properties']['threatId'])) {
         throw const FormatException('Niepoprawna mapa live NEPTUN');
       }
@@ -240,6 +263,17 @@ class NeptunData {
   List<Map<String, dynamic>> get tracks => (data['tracks'] as List)
       .map((e) => Map<String, dynamic>.from(e as Map))
       .toList();
+
+  bool isFreshLive(DateTime now) {
+    if (live['state'] != 'LIVE') return false;
+    final sync = DateTime.tryParse(
+      live['lastSuccessfulSyncAt']?.toString() ?? '',
+    );
+    final validUntil = DateTime.tryParse(live['validUntil']?.toString() ?? '');
+    if (sync == null || validUntil == null) return false;
+    if (sync.isAfter(now.add(const Duration(seconds: 30)))) return false;
+    return validUntil.isAfter(now);
+  }
 }
 
 class NeptunScreen extends StatefulWidget {
@@ -307,6 +341,7 @@ class _NeptunScreenState extends State<NeptunScreen> {
 
   String typeLabel(String value) => switch (value) {
     'uav' => 'BSP / dron',
+    'fpv' => 'FPV / dron',
     'recon' => 'Rozpoznanie',
     'missile' => 'Rakieta',
     'ballistic' => 'Balistyka',
@@ -315,12 +350,8 @@ class _NeptunScreenState extends State<NeptunScreen> {
     _ => 'Nieokreślone',
   };
 
-  Widget liveCard(Map<String, dynamic> t) {
-    final location = [
-      t['locality'],
-      t['district'],
-      t['region'],
-    ].whereType<String>().where((v) => v.trim().isNotEmpty).toSet().join(' • ');
+  Widget liveCard(Map<String, dynamic> t, {required bool current}) {
+    final location = (t['region'] as String?)?.trim() ?? '';
     final precision = t['precisionKm'];
     return Card(
       child: ListTile(
@@ -329,7 +360,11 @@ class _NeptunScreenState extends State<NeptunScreen> {
         subtitle: Text(
           '${typeLabel(t['type'] as String)}'
           '${location.isEmpty ? '' : ' • $location'}\n'
-          '${t['advisory'] == true ? 'Obserwacja informacyjna' : 'Aktywne zagrożenie w feedzie NEPTUN'}'
+          '${t['advisory'] == true
+              ? 'Obserwacja informacyjna'
+              : current
+              ? 'Aktywne zagrożenie w feedzie NEPTUN'
+              : 'Ostatnio pobrany wpis NEPTUN'}'
           ' • aktualizacja ${when(t['updatedAt'])}'
           '${precision == null ? '' : ' • pozycja zgrubna ≥ $precision km'}',
         ),
@@ -401,10 +436,13 @@ class _NeptunScreenState extends State<NeptunScreen> {
     final threats = snapshot?.liveThreats ?? const <Map<String, dynamic>>[];
     final tracks = snapshot?.tracks ?? const <Map<String, dynamic>>[];
     final liveState = snapshot?.live['state']?.toString() ?? 'UNAVAILABLE';
-    final isLive = online && liveState == 'LIVE';
+    final isLive =
+        online &&
+        snapshot != null &&
+        snapshot!.isFreshLive(DateTime.now().toUtc());
     return Scaffold(
       appBar: AppBar(
-        title: const Text('NEPTUN • live'),
+        title: const Text('NEPTUN'),
         actions: [
           IconButton(
             onPressed: loading || widget.repository.api.isEmpty
@@ -428,10 +466,14 @@ class _NeptunScreenState extends State<NeptunScreen> {
                 title: Text(
                   isLive
                       ? 'LIVE • ${threats.length} aktywnych wpisów'
-                      : '$liveState • ostatnia znana kopia',
+                      : snapshot == null
+                      ? 'BRAK DANYCH BIEŻĄCYCH'
+                      : '$liveState • ostatnia poprawna kopia',
                 ),
                 subtitle: Text(
-                  'Ostatnia synchronizacja: ${when(snapshot?.live['lastSuccessfulSyncAt'])}',
+                  snapshot == null
+                      ? 'Nie pobrano jeszcze poprawnej kopii NEPTUN.'
+                      : 'Ostatnia udana synchronizacja: ${when(snapshot?.live['lastSuccessfulSyncAt'])}',
                 ),
               ),
             ),
@@ -449,7 +491,7 @@ class _NeptunScreenState extends State<NeptunScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Bieżące zagrożenia',
+              isLive ? 'Bieżące zagrożenia' : 'Ostatnio pobrane zagrożenia',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             if (threats.isEmpty)
@@ -461,7 +503,7 @@ class _NeptunScreenState extends State<NeptunScreen> {
                   ),
                 ),
               ),
-            ...threats.map(liveCard),
+            ...threats.map((threat) => liveCard(threat, current: isLive)),
             const SizedBox(height: 16),
             Text(
               'Historia zweryfikowana',

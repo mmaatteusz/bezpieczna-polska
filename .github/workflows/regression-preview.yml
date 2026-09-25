@@ -106,6 +106,9 @@ jobs:
       - name: Assert NEPTUN historical safety contract
         working-directory: backend
         run: node --import tsx --test test/neptun.test.ts
+      - name: Live deployed NEPTUN API contract
+        working-directory: backend
+        run: node scripts/live-neptun-api.mjs ../output/neptun-api-live.json
       - name: Assert push notification contract
         working-directory: backend
         run: node --import tsx --test test/push.test.ts

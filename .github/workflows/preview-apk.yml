@@ -70,8 +70,12 @@ jobs:
           for source in rcb rso wczk imgw paa cyber sg service-incidents ukraine; do
             node "scripts/live-$source.mjs" "../output/$source-live.json" || echo "$source unavailable: contract tests remain authoritative"
           done
-          # NEPTUN is a core alpha.20+ live feature, not an optional enrichment.
+      - name: Required live NEPTUN contracts
+        working-directory: backend
+        run: |
+          mkdir -p ../output
           node scripts/live-neptun.mjs ../output/neptun-live.json
+          node scripts/live-neptun-api.mjs ../output/neptun-api-live.json
       - uses: actions/setup-java@v6
         with:
           distribution: temurin

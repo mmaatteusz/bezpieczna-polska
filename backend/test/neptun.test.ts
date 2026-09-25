@@ -77,6 +77,25 @@ test('NEPTUN live parser removes operational motion data and coarsens positions'
  assert.equal(parsed.threats[1].longitude,null);
 });
 
+
+test('NEPTUN recognizes FPV but strips newly added operational metadata',()=>{
+ const input={serverTime:now.toISOString(),threats:[{
+  id:'trk-fpv',type:'fpv',title:'FPV-дрон',region:'Сумська область',district:'',regionKey:'сумська',locality:'Глухів',
+  lat:51.6781,lon:33.9161,heading:212,confidenceLevel:'medium',sourceCount:1,count:null,updatedAt:now.toISOString(),
+  status:'active',explanationShort:'FPV-дрон',confirmedAt:now.toISOString(),uncertaintyKm:4,positionQuality:'confirmed',
+  lifecycle:'confirmed',displayConfidence:'medium',presumptiveCourse:true,destination:true,
+  trail:[{lat:51.7,lon:33.8,t:now.toISOString()}]
+ }]};
+ const parsed=parseNeptunLive(input,now);
+ assert.equal(parsed.threats.length,1);
+ assert.equal(parsed.threats[0].type,'fpv');
+ assert.equal(parsed.threats[0].title,'FPV / dron');
+ assert.ok(parsed.threats[0].precisionKm!>=NEPTUN_PUBLIC_MIN_PRECISION_KM);
+ for(const key of ['heading','velocity','confirmedAt','positionQuality','explanationShort','locality','district','trail','lifecycle','displayConfidence','presumptiveCourse','destination','sea','regionKey']){
+  assert.equal(key in parsed.threats[0],false,key+' must not be public');
+ }
+});
+
 test('NEPTUN live parser maps new upstream categories to unknown without dropping snapshot',()=>{
  const input={serverTime:now.toISOString(),threats:[{
   id:'trk-new-type',type:'new-upstream-category',title:'Nowy typ obiektu',region:'Київська область',district:'',locality:'Київ',

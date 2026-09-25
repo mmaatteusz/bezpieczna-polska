@@ -1,8 +1,9 @@
 import {createHash} from 'node:crypto';
 import type {Event} from './domain.js';
 
-export const CORRELATION_VERSION='1.2.0';
+export const CORRELATION_VERSION='1.2.1';
 export type Incident={eventRevisions:Record<string,number>;id:string;relatedEventIds:string[];primaryEventId:string;sourceIds:string[];sourceCount:number;confirmedSourceCount:number;hasConflictingReports:boolean;revision:number;rulesetVersion:string};
+const sourceFamily=(id:string)=>id==='RSO'||/^WCZK-\d{2}$/.test(id)?'WCZK_RSO':id;
 export const normalize=(s:string)=>s.normalize('NFD').replace(/\p{M}/gu,'').replace(/ł/g,'l').replace(/Ł/g,'L').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 const physicalEligible=(e:Event)=>!e.isDemo&&!e.securityLevel&&e.sources.some(s=>s.id==='RCB'||s.id==='RSO'||s.id==='IMGW_METEO'||s.id==='IMGW_HYDRO'||s.id==='POLICE'||s.id==='PSP_INCIDENTS'||/^WCZK-\d{2}$/.test(s.id));
 const cyberEligible=(e:Event)=>!e.isDemo&&!e.securityLevel&&e.eventType==='CYBER'&&e.sources.some(s=>s.id==='CERT'||s.id==='CSIRT_GOV');
@@ -79,7 +80,9 @@ export function choosePrimary(events:Event[],now=new Date()):Event{
 }
 export function describeIncident(id:string,events:Event[],revision=1):Incident{
  const sourceIds=[...new Set(events.flatMap(e=>e.sources.map(s=>s.id)))].sort();
- return {eventRevisions:Object.fromEntries(events.map(e=>[e.id,e.revision]).sort(([a],[b])=>String(a).localeCompare(String(b)))),id,relatedEventIds:events.map(e=>e.id).sort(),primaryEventId:choosePrimary(events,new Date(0)).id,sourceIds,sourceCount:sourceIds.length,confirmedSourceCount:new Set(events.filter(e=>e.verification==='CONFIRMED').flatMap(e=>e.sources.map(s=>s.id))).size,hasConflictingReports:new Set(events.map(e=>e.lifecycle)).size>1||new Set(events.map(regionKey)).size>1||new Set(events.map(e=>e.validTo)).size>1||new Set(events.map(e=>normalize(e.locationText??''))).size>1||events.some(e=>['REFUTED','DISPUTED'].includes(e.verification)),revision,rulesetVersion:CORRELATION_VERSION};
+ const sourceCount=new Set(sourceIds.map(sourceFamily)).size;
+ const confirmedSourceCount=new Set(events.filter(e=>e.verification==='CONFIRMED').flatMap(e=>e.sources.map(s=>sourceFamily(s.id)))).size;
+ return {eventRevisions:Object.fromEntries(events.map(e=>[e.id,e.revision]).sort(([a],[b])=>String(a).localeCompare(String(b)))),id,relatedEventIds:events.map(e=>e.id).sort(),primaryEventId:choosePrimary(events,new Date(0)).id,sourceIds,sourceCount,confirmedSourceCount,hasConflictingReports:new Set(events.map(e=>e.lifecycle)).size>1||new Set(events.map(regionKey)).size>1||new Set(events.map(e=>e.validTo)).size>1||new Set(events.map(e=>normalize(e.locationText??''))).size>1||events.some(e=>['REFUTED','DISPUTED'].includes(e.verification)),revision,rulesetVersion:CORRELATION_VERSION};
 }
 /** Existing memberships are durable. Later corrections remain visible in the same history.
  * New events join only one unambiguous group and must match EVERY current member.
