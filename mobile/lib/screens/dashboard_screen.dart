@@ -77,8 +77,9 @@ class DashboardScreen extends StatelessWidget {
     if (status is! Map) return 'Brak danych';
     final text = status['displayText']?.toString() ?? 'Brak danych';
     if (fresh) return text;
-    if (!online && offlinePackage != null)
-      return 'Ostatnia zapisana kopia: ' + text;
+    if (!online && offlinePackage != null) {
+      return 'Ostatnia zapisana kopia: $text';
+    }
     return 'Brak świeżej oceny sytuacji';
   }
 
@@ -192,11 +193,8 @@ class DashboardScreen extends StatelessWidget {
                   if (localityLabel != null && localityAround != null) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'Dokładne zdarzenia w promieniu 20 km: ' +
-                          localityAround!.nearbyEvents.length.toString() +
-                          '. Komunikaty bez geometrii nadal liczą się dla województwa ' +
-                          (regions[region] ?? region) +
-                          '.',
+                      'Dokładne zdarzenia w promieniu 20 km: ${localityAround!.nearbyEvents.length}. '
+                      'Komunikaty bez geometrii nadal liczą się dla województwa ${regions[region] ?? region}.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
