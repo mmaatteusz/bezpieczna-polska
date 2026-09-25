@@ -10,7 +10,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'cached SG operational notice appears in the dedicated border section',
+    'cached SG operational notice appears in the Alerts border category',
     (tester) async {
       final now = DateTime.now().toUtc();
       final status = {
@@ -82,17 +82,22 @@ void main() {
       await tester.pumpWidget(SafetyApp(repository: repo));
       await tester.pumpAndSettle();
 
-      for (
-        var i = 0;
-        i < 10 && find.text('Granice • Straż Graniczna').evaluate().isEmpty;
-        i++
-      ) {
-        await tester.drag(find.byType(ListView).first, const Offset(0, -300));
-        await tester.pumpAndSettle();
-      }
-      expect(find.text('Granice • Straż Graniczna'), findsOneWidget);
       expect(
-        find.textContaining('operacyjne informacje o zamknięciach'),
+        find.text('Utrudnienia na przejściu granicznym w Hrebennem'),
+        findsNothing,
+      );
+      await tester.tap(find.text('Alerty').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Wszystkie').first);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Utrudnienia na przejściu granicznym w Hrebennem'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Granica'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Utrudnienia na przejściu granicznym w Hrebennem'),
         findsOneWidget,
       );
     },
