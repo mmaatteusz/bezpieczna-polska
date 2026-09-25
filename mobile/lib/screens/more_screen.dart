@@ -93,8 +93,9 @@ class MoreScreen extends StatelessWidget {
       const SizedBox(height: 10),
       Text(
         'Pomoc',
-        style: Theme.of(context).textTheme.titleLarge
-            ?.copyWith(fontWeight: FontWeight.w800),
+        style: Theme.of(
+          context,
+        ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
       ),
       const SizedBox(height: 8),
       FilledButton.icon(
@@ -115,8 +116,9 @@ class MoreScreen extends StatelessWidget {
       const SizedBox(height: 18),
       Text(
         'Oficjalne informacje',
-        style: Theme.of(context).textTheme.titleMedium
-            ?.copyWith(fontWeight: FontWeight.w700),
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
       ),
       for (final link in const [
         ('Rządowe Centrum Bezpieczeństwa', 'https://www.gov.pl/web/rcb'),
