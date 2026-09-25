@@ -482,6 +482,17 @@ class AroundResult {
   String? get regionId => data['query']['regionId'] as String?;
 }
 
+bool shouldPersistNeptunCache(NeptunData? previous, NeptunData next) {
+  if (previous == null) return true;
+  if (previous.live['state'] != next.live['state']) return true;
+  final previousTime = DateTime.tryParse(
+    previous.data['serverTime']?.toString() ?? '',
+  );
+  final nextTime = DateTime.tryParse(next.data['serverTime']?.toString() ?? '');
+  if (previousTime == null || nextTime == null) return true;
+  return nextTime.difference(previousTime) >= const Duration(seconds: 30);
+}
+
 class DataRepository {
   final SharedPreferences prefs;
   final http.Client client;
@@ -743,12 +754,15 @@ class DataRepository {
       throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
     if (ticket != _generation) throw StateError('Konfiguracja zmieniona');
-    for (final other in prefs.getKeys().where(
-      (k) => k.startsWith('neptun:') && k != key,
-    )) {
-      await prefs.remove(other);
+    final previous = cachedNeptun();
+    if (shouldPersistNeptunCache(previous, result)) {
+      for (final other in prefs.getKeys().where(
+        (k) => k.startsWith('neptun:') && k != key,
+      )) {
+        await prefs.remove(other);
+      }
+      await prefs.setString(key, jsonEncode(result.data));
     }
-    await prefs.setString(key, jsonEncode(result.data));
     return result;
   }
 

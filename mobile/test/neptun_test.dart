@@ -201,6 +201,29 @@ void main() {
   );
 
   test(
+    'NEPTUN persistence is throttled independently from five-second live refresh',
+    () {
+      final first = NeptunData.parse(fixture(now));
+      final fiveSecondsLater = NeptunData.parse(
+        fixture(now.add(const Duration(seconds: 5))),
+      );
+      final thirtySecondsLater = NeptunData.parse(
+        fixture(now.add(const Duration(seconds: 30))),
+      );
+      expect(shouldPersistNeptunCache(null, first), isTrue);
+      expect(shouldPersistNeptunCache(first, fiveSecondsLater), isFalse);
+      expect(shouldPersistNeptunCache(first, thirtySecondsLater), isTrue);
+
+      final changedState = fixture(now.add(const Duration(seconds: 5)));
+      changedState['live']['state'] = 'STALE';
+      expect(
+        shouldPersistNeptunCache(first, NeptunData.parse(changedState)),
+        isTrue,
+      );
+    },
+  );
+
+  test(
     'NEPTUN last-known-good survives failure and clear removes it',
     () async {
       SharedPreferences.setMockInitialValues({});
