@@ -72,6 +72,7 @@ jobs:
           done
           # NEPTUN is a core alpha.20+ live feature, not an optional enrichment.
           node scripts/live-neptun.mjs ../output/neptun-live.json
+          node scripts/live-neptun-api.mjs ../output/neptun-api-live.json
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
