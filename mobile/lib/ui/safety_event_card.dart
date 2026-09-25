@@ -71,6 +71,68 @@ bool safetyEventIsSignificant(SafetyEvent event, [DateTime? at]) {
   return safetyVisualLevel(event, at) != SafetyVisualLevel.information;
 }
 
+String _normalizedEventText(Object? value) => (value?.toString() ?? '')
+    .toLowerCase()
+    .replaceAll(RegExp(r'\\s+'), ' ')
+    .trim();
+
+String safetyEventDisplayKey(SafetyEvent event) {
+  final sortedAreas = [...event.areas]..sort();
+  return [
+    _normalizedEventText(event.title),
+    _normalizedEventText(event.description),
+    sortedAreas.join(','),
+    event.data['messageContext']?.toString() ?? '',
+    event.data['severity']?.toString() ?? '',
+    event.data['validFrom']?.toString() ?? '',
+    event.data['validTo']?.toString() ?? '',
+  ].join('|');
+}
+
+List<SafetyEvent> deduplicateSafetyEventsForDisplay(
+  Iterable<SafetyEvent> events,
+) {
+  final seenRecords = <String>{};
+  final seenSemantic = <String>{};
+  final result = <SafetyEvent>[];
+
+  for (final event in events) {
+    final recordKey = event.incidentId?.isNotEmpty == true
+        ? 'incident:${event.incidentId}'
+        : 'event:${event.id}';
+    if (!seenRecords.add(recordKey)) continue;
+    if (!seenSemantic.add(safetyEventDisplayKey(event))) continue;
+    result.add(event);
+  }
+
+  return result;
+}
+
+bool safetyEventHasOpenEndedValidity(SafetyEvent event) {
+  final raw = event.data['validTo'];
+  if (raw is! String || raw.trim().isEmpty) return false;
+
+  for (final match in RegExp(r'\\d{4,}').allMatches(raw)) {
+    final value = int.tryParse(match.group(0)!);
+    if (value != null && value >= 9000) return true;
+  }
+
+  final parsed = DateTime.tryParse(raw);
+  return parsed != null && parsed.year >= 9000;
+}
+
+String safetyEventTimeLabel(SafetyEvent event, [DateTime? at]) {
+  final end = event.data['validTo'];
+  if (!safetyEventIsHistorical(event, at) && end is String) {
+    if (safetyEventHasOpenEndedValidity(event)) {
+      return 'Obowiązuje do odwołania';
+    }
+    return 'Ważne do ${stamp(end)}';
+  }
+  final published = event.data['publishedAt'] ?? event.data['retrievedAt'];
+  return published == null ? 'Czas nieustalony' : stamp(published);
+}
+
 class _CardVisual {
   final String label;
   final String hint;
@@ -185,14 +247,7 @@ class SafetyEventCard extends StatelessWidget {
       ? 'Obszar nieustalony'
       : event.areas.map((r) => regions[r] ?? r).join(', ');
 
-  String _timeLabel() {
-    final end = event.data['validTo'];
-    if (!safetyEventIsHistorical(event) && end is String) {
-      return 'Ważne do ${stamp(end)}';
-    }
-    final published = event.data['publishedAt'] ?? event.data['retrievedAt'];
-    return published == null ? 'Czas nieustalony' : stamp(published);
-  }
+  String _timeLabel() => safetyEventTimeLabel(event);
 
   String? _firstInstruction() {
     final raw = event.data['instructions'];
