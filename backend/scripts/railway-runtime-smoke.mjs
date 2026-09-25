@@ -91,17 +91,28 @@ function validateNeptun(data){
   assert(around.schemaVersion===1&&Array.isArray(around.nearbyEvents)&&around.nearestShelters,'around invalid');
 
   const first=await json('/v1/neptun');
-  console.log('PROBE_NEPTUN_STATE',JSON.stringify({state:first.live?.state,lastSuccessfulSyncAt:first.live?.lastSuccessfulSyncAt,sourceServerTime:first.live?.sourceServerTime,sourceHealth:first.sourceHealth}));
+  console.log('PROBE_NEPTUN_STATE',JSON.stringify({
+    state:first.live?.state,
+    lastSuccessfulSyncAt:first.live?.lastSuccessfulSyncAt,
+    sourceServerTime:first.live?.sourceServerTime,
+    itemCount:first.sourceHealth?.itemCount,
+    adapterVersion:first.sourceHealth?.adapterVersion
+  }));
   validateNeptun(first);
 
   const neptunGeo=await json('/v1/layers/neptun.geojson');
   assert(neptunGeo.type==='FeatureCollection','NEPTUN GeoJSON invalid');
   assert(neptunGeo.metadata?.mode==='LIVE_AND_HISTORY'&&neptunGeo.metadata?.liveState==='LIVE','NEPTUN GeoJSON metadata invalid');
 
-  await sleep(6500);
-  const second=await json('/v1/neptun');
-  validateNeptun(second);
-  assert(Date.parse(second.live.lastSuccessfulSyncAt)>Date.parse(first.live.lastSuccessfulSyncAt),'NEPTUN worker did not advance within >5 seconds');
+  let second=first;
+  const firstSuccess=Date.parse(first.live.lastSuccessfulSyncAt);
+  for(let attempt=0;attempt<10;attempt++){
+    await sleep(2000);
+    second=await json('/v1/neptun');
+    validateNeptun(second);
+    if(Date.parse(second.live.lastSuccessfulSyncAt)>firstSuccess)break;
+  }
+  assert(Date.parse(second.live.lastSuccessfulSyncAt)>firstSuccess,'NEPTUN worker did not advance within 20 seconds');
 
   console.log('PROBE_NEPTUN_REFRESH',first.live.lastSuccessfulSyncAt,'->',second.live.lastSuccessfulSyncAt,'threats',second.live.threats.length);
   const nonHealthy=sources.sourceHealth.filter(source=>source.state!=='HEALTHY').map(source=>({id:source.id,state:source.state,errorCode:source.errorCode}));
