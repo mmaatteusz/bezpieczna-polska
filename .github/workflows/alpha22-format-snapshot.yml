@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - stage/alpha22-android-gui-wczk
+  pull_request:
+    branches:
+      - main
 
 jobs:
   format-diff:
