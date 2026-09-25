@@ -24,22 +24,6 @@ class _AlertsScreenState extends State<AlertsScreen> {
   String lifecycle = 'Aktywne';
   String category = 'Wszystkie';
 
-  bool _isExpired(SafetyEvent event) {
-    final end = DateTime.tryParse(event.data['validTo']?.toString() ?? '');
-    return end != null && end.isBefore(DateTime.now());
-  }
-
-  bool _lifecycleMatches(SafetyEvent event) {
-    final state = event.data['lifecycle']?.toString();
-    final expired = _isExpired(event);
-    return switch (lifecycle) {
-      'Aktywne' => state == 'ACTIVE' && !expired,
-      'Zakończone' =>
-        ['ENDED', 'CANCELLED', 'EXPIRED'].contains(state) || expired,
-      _ => true,
-    };
-  }
-
   String _categoryOf(SafetyEvent event) {
     final type = event.data['eventType']?.toString();
     if (event.sources.any(
@@ -63,90 +47,257 @@ class _AlertsScreenState extends State<AlertsScreen> {
     return 'Inne';
   }
 
+  bool _matchesTextAndCategory(SafetyEvent event) {
+    final needle = query.trim().toLowerCase();
+    final text =
+        '${event.title} ${event.description} ${safetySourceLabel(event)}'
+            .toLowerCase();
+    return (category == 'Wszystkie' || _categoryOf(event) == category) &&
+        text.contains(needle);
+  }
+
+  int _sortEvents(SafetyEvent a, SafetyEvent b) {
+    final severity = safetyEventPriority(a).compareTo(safetyEventPriority(b));
+    if (severity != 0) return severity;
+    return safetyEventTime(b).compareTo(safetyEventTime(a));
+  }
+
+  Widget _section(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required List<SafetyEvent> events,
+  }) {
+    if (events.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(icon, size: 23),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              Text(
+                '${events.length}',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 9),
+          ...events.map(
+            (event) => SafetyEventCard(
+              event: event,
+              onTap: () => widget.onOpenEvent(event),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final needle = query.trim().toLowerCase();
-    final list = widget.events.where((event) {
-      final text =
-          '${event.title} ${event.description} ${safetySourceLabel(event)}'
-              .toLowerCase();
-      return _lifecycleMatches(event) &&
-          (category == 'Wszystkie' || _categoryOf(event) == category) &&
-          text.contains(needle);
-    }).toList();
+    final matched = widget.events.where(_matchesTextAndCategory).toList();
+    final active = matched.where(safetyEventIsActive).toList()
+      ..sort(_sortEvents);
+    final ended = matched.where(safetyEventIsHistorical).toList()
+      ..sort(_sortEvents);
+    final other = matched
+        .where(
+          (event) =>
+              !safetyEventIsActive(event) && !safetyEventIsHistorical(event),
+        )
+        .toList()
+      ..sort(_sortEvents);
+
+    final critical = active
+        .where((event) => safetyVisualLevel(event) == SafetyVisualLevel.critical)
+        .toList();
+    final high = active
+        .where((event) => safetyVisualLevel(event) == SafetyVisualLevel.high)
+        .toList();
+    final remaining = active
+        .where(
+          (event) => !{
+            SafetyVisualLevel.critical,
+            SafetyVisualLevel.high,
+          }.contains(safetyVisualLevel(event)),
+        )
+        .toList();
+
+    final visibleCount = switch (lifecycle) {
+      'Aktywne' => active.length,
+      'Zakończone' => ended.length,
+      _ => matched.length,
+    };
 
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
       child: ListView(
         key: const PageStorageKey('alerts'),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 26),
         children: [
-          TextField(
-            decoration: const InputDecoration(
-              hintText: 'Szukaj alertu',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (value) => setState(() => query = value),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: ['Aktywne', 'Wszystkie', 'Zakończone']
-                .map(
-                  (value) => ChoiceChip(
-                    label: Text(value),
-                    selected: lifecycle == value,
-                    onSelected: (_) => setState(() => lifecycle = value),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Alerty',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              if (critical.isNotEmpty)
+                Semantics(
+                  label: '${critical.length} krytycznych aktywnych alertów',
+                  child: Chip(
+                    avatar: const Icon(Icons.report_rounded, size: 18),
+                    label: Text('${critical.length} KRYTYCZNE'),
                   ),
-                )
-                .toList(),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Najpoważniejsze aktywne zagrożenia są zawsze na górze.',
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 10),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
+          Card(
+            elevation: 0,
+            child: ExpansionTile(
+              leading: const Icon(Icons.tune_rounded),
+              title: const Text('Filtry i wyszukiwanie'),
+              subtitle: Text(
+                lifecycle == 'Aktywne' && category == 'Wszystkie' && query.isEmpty
+                    ? 'Domyślnie: aktywne alerty'
+                    : '$lifecycle • $category${query.isEmpty ? '' : ' • wyszukiwanie'}',
+              ),
+              childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
               children: [
-                for (final value in [
-                  'Wszystkie',
-                  'Pogoda',
-                  'Bezpieczeństwo',
-                  'Cyber',
-                  'Granica',
-                  'Inne',
-                ])
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      label: Text(value),
-                      selected: category == value,
-                      onSelected: (_) => setState(() => category = value),
-                    ),
+                TextField(
+                  decoration: const InputDecoration(
+                    hintText: 'Szukaj alertu',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
                   ),
+                  onChanged: (value) => setState(() => query = value),
+                ),
+                const SizedBox(height: 11),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: ['Aktywne', 'Wszystkie', 'Zakończone']
+                        .map(
+                          (value) => ChoiceChip(
+                            label: Text(value),
+                            selected: lifecycle == value,
+                            onSelected: (_) =>
+                                setState(() => lifecycle = value),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                const SizedBox(height: 9),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      'Wszystkie',
+                      'Pogoda',
+                      'Bezpieczeństwo',
+                      'Cyber',
+                      'Granica',
+                      'Inne',
+                    ]
+                        .map(
+                          (value) => FilterChip(
+                            label: Text(value),
+                            selected: category == value,
+                            onSelected: (_) =>
+                                setState(() => category = value),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
           Text(
-            '${list.length} komunikatów',
+            '$visibleCount komunikatów w wybranym widoku',
             style: Theme.of(context).textTheme.labelLarge,
           ),
-          const SizedBox(height: 6),
-          if (list.isEmpty)
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.notifications_none_outlined),
-                title: Text('Brak alertów dla wybranych filtrów'),
-                subtitle: Text('Zmień filtr albo wyszukiwane hasło.'),
+          if (visibleCount == 0)
+            const Padding(
+              padding: EdgeInsets.only(top: 14),
+              child: Card(
+                child: ListTile(
+                  leading: Icon(Icons.notifications_none_outlined),
+                  title: Text('Brak alertów dla wybranego widoku'),
+                  subtitle: Text('Zmień filtry albo wyszukiwane hasło.'),
+                ),
               ),
-            )
-          else
-            ...list.map(
-              (event) => SafetyEventCard(
-                event: event,
-                onTap: () => widget.onOpenEvent(event),
-              ),
+            ),
+          if (lifecycle != 'Zakończone') ...[
+            _section(
+              context,
+              title: 'Krytyczne',
+              subtitle: 'Bezpośrednie zagrożenia wymagające najwyższej uwagi.',
+              icon: Icons.report_rounded,
+              events: critical,
+            ),
+            _section(
+              context,
+              title: 'Wysokie',
+              subtitle: 'Poważne aktywne ostrzeżenia.',
+              icon: Icons.warning_amber_rounded,
+              events: high,
+            ),
+            _section(
+              context,
+              title: 'Pozostałe aktywne',
+              subtitle: 'Ostrzeżenia i informacje o niższym priorytecie.',
+              icon: Icons.notifications_active_outlined,
+              events: remaining,
+            ),
+          ],
+          if (lifecycle == 'Wszystkie')
+            _section(
+              context,
+              title: 'Inne komunikaty',
+              subtitle: 'Zaplanowane lub o nieustalonej ważności.',
+              icon: Icons.schedule_outlined,
+              events: other,
+            ),
+          if (lifecycle != 'Aktywne')
+            _section(
+              context,
+              title: 'Zakończone i historyczne',
+              subtitle: 'Wyciszone komunikaty, które nie są już aktywne.',
+              icon: Icons.history_rounded,
+              events: ended,
             ),
         ],
       ),

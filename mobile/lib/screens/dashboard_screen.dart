@@ -38,87 +38,151 @@ class DashboardScreen extends StatelessWidget {
     required this.onOpenEvent,
   });
 
-  bool _active(SafetyEvent event, DateTime now) {
-    if (event.data['lifecycle'] != 'ACTIVE' ||
-        event.data['messageContext'] != 'ACTUAL' ||
-        event.data['verification'] == 'REFUTED') {
-      return false;
-    }
-    final end = DateTime.tryParse(event.data['validTo']?.toString() ?? '');
-    if (end != null && !end.isAfter(now)) return false;
-    final severity = event.data['severity']?.toString();
-    return event.data['officialWarning'] == true ||
-        severity == 'CRITICAL' ||
-        severity == 'HIGH';
+  String _statusWord(dynamic status, bool fresh) {
+    if (!fresh) return 'BRAK ŚWIEŻEJ OCENY';
+    final level = status is Map ? status['hazardLevel']?.toString() : null;
+    return switch (level) {
+      'ACTIVE_DANGER' => 'POWAŻNE ZAGROŻENIE',
+      'CAUTION' => 'OSTRZEŻENIA',
+      'NO_ACTIVE_WARNINGS' => 'SPOKOJNIE',
+      _ => 'BRAK PEWNEJ OCENY',
+    };
   }
 
-  Color _statusColor(BuildContext context, dynamic status) {
+  String _statusDetail(dynamic status, bool fresh) {
+    final text = status is Map ? status['displayText']?.toString() : null;
+    if (fresh) return text ?? 'Brak dodatkowych informacji';
+    if (!online && offlinePackage != null && text != null) {
+      return 'Ostatnia zapisana ocena: $text';
+    }
+    return 'Nie ma wystarczająco świeżych danych, aby ocenić sytuację.';
+  }
+
+  IconData _statusIcon(dynamic status, bool fresh) {
+    if (!fresh) return Icons.cloud_off_outlined;
+    final level = status is Map ? status['hazardLevel']?.toString() : null;
+    return switch (level) {
+      'ACTIVE_DANGER' => Icons.report_rounded,
+      'CAUTION' => Icons.warning_amber_rounded,
+      'NO_ACTIVE_WARNINGS' => Icons.verified_user_rounded,
+      _ => Icons.help_outline_rounded,
+    };
+  }
+
+  Color _statusBackground(BuildContext context, dynamic status, bool fresh) {
     final scheme = Theme.of(context).colorScheme;
+    if (!fresh) return scheme.surfaceContainerHigh;
     final level = status is Map ? status['hazardLevel']?.toString() : null;
     return switch (level) {
       'ACTIVE_DANGER' => scheme.errorContainer,
       'CAUTION' => scheme.tertiaryContainer,
       'NO_ACTIVE_WARNINGS' => scheme.primaryContainer,
-      _ => scheme.surfaceContainerHighest,
+      _ => scheme.surfaceContainerHigh,
     };
   }
 
-  IconData _statusIcon(dynamic status) {
+  Color _statusForeground(BuildContext context, dynamic status, bool fresh) {
+    final scheme = Theme.of(context).colorScheme;
+    if (!fresh) return scheme.onSurface;
     final level = status is Map ? status['hazardLevel']?.toString() : null;
     return switch (level) {
-      'ACTIVE_DANGER' => Icons.warning_rounded,
-      'CAUTION' => Icons.notification_important_outlined,
-      'NO_ACTIVE_WARNINGS' => Icons.verified_user_outlined,
-      _ => Icons.help_outline,
+      'ACTIVE_DANGER' => scheme.onErrorContainer,
+      'CAUTION' => scheme.onTertiaryContainer,
+      'NO_ACTIVE_WARNINGS' => scheme.onPrimaryContainer,
+      _ => scheme.onSurface,
     };
   }
 
-  String _statusText(dynamic status, bool fresh) {
-    if (status is! Map) return 'Brak danych';
-    final text = status['displayText']?.toString() ?? 'Brak danych';
-    if (fresh) return text;
-    if (!online && offlinePackage != null) {
-      return 'Ostatnia zapisana kopia: $text';
-    }
-    return 'Brak świeżej oceny sytuacji';
-  }
-
-  Widget _statusRow(
+  Widget _statusCard(
     BuildContext context, {
     required String title,
+    String? subtitle,
     required dynamic status,
     required bool fresh,
-    required IconData icon,
-  }) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: _statusColor(context, status),
-      borderRadius: BorderRadius.circular(18),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 28),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
+    required bool prominent,
+    VoidCallback? onTap,
+  }) {
+    final background = _statusBackground(context, status, fresh);
+    final foreground = _statusForeground(context, status, fresh);
+    final word = _statusWord(status, fresh);
+    return Material(
+      color: background,
+      borderRadius: BorderRadius.circular(prominent ? 24 : 18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(prominent ? 24 : 18),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(prominent ? 21 : 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(prominent ? 24 : 18),
+            border: Border.all(
+              color: foreground.withAlpha(prominent ? 115 : 70),
+              width: prominent ? 2 : 1,
+            ),
+          ),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: Theme.of(context).textTheme.labelLarge),
-              const SizedBox(height: 4),
-              Text(
-                _statusText(status, fresh),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              Icon(
+                _statusIcon(status, fresh),
+                size: prominent ? 42 : 30,
+                color: foreground,
               ),
+              SizedBox(width: prominent ? 15 : 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: foreground,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.7,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: foreground),
+                      ),
+                    ],
+                    SizedBox(height: prominent ? 8 : 5),
+                    Text(
+                      word,
+                      style:
+                          (prominent
+                                  ? Theme.of(context).textTheme.headlineSmall
+                                  : Theme.of(context).textTheme.titleLarge)
+                              ?.copyWith(
+                                color: foreground,
+                                fontWeight: FontWeight.w900,
+                              ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      _statusDetail(status, fresh),
+                      maxLines: prominent ? 3 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: foreground),
+                    ),
+                  ],
+                ),
+              ),
+              if (onTap != null)
+                Icon(Icons.chevron_right_rounded, color: foreground),
             ],
           ),
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -129,92 +193,106 @@ class DashboardScreen extends StatelessWidget {
         online && (snapshot?.freshAt(now, national: true) ?? false);
     final localFresh = online && (snapshot?.freshAt(now) ?? false);
     final active = events
-        .where((event) => _active(event, now))
-        .take(5)
-        .toList();
+        .where((event) => safetyEventIsSignificant(event, now))
+        .toList()
+      ..sort((a, b) {
+        final severity = safetyEventPriority(a, now).compareTo(
+          safetyEventPriority(b, now),
+        );
+        if (severity != 0) return severity;
+        return safetyEventTime(b).compareTo(safetyEventTime(a));
+      });
+    final localRelevant = localityAround == null
+        ? 0
+        : {
+            ...localityAround!.nearbyEvents.map((item) => item.event.id),
+            ...localityAround!.regionalEvents.map((event) => event.id),
+          }.length;
 
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
         key: const PageStorageKey('dashboard'),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 26),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Sytuacja teraz',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                      if (backgroundSync || loading)
-                        const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _statusRow(
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Sytuacja teraz',
+                  style: Theme.of(
                     context,
-                    title: 'Polska',
-                    status: national,
-                    fresh: nationalFresh,
-                    icon: _statusIcon(national),
-                  ),
-                  const SizedBox(height: 10),
-                  _statusRow(
-                    context,
-                    title: localityLabel == null
-                        ? 'Twoja okolica'
-                        : localityLabel!,
-                    status: local,
-                    fresh: localFresh,
-                    icon: Icons.location_on_outlined,
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: onChooseLocality,
-                    icon: const Icon(Icons.edit_location_alt_outlined),
-                    label: Text(
-                      localityLabel == null
-                          ? 'Ustaw swoją okolicę'
-                          : 'Zmień swoją okolicę',
-                    ),
-                  ),
-                  if (localityLabel != null && localityAround != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Dokładne zdarzenia w promieniu 20 km: ${localityAround!.nearbyEvents.length}. '
-                      'Komunikaty bez geometrii nadal liczą się dla województwa ${regions[region] ?? region}.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ],
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
               ),
-            ),
+              if (backgroundSync || loading)
+                const SizedBox(
+                  width: 21,
+                  height: 21,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: 11),
+          _statusCard(
+            context,
+            title: 'Polska',
+            status: national,
+            fresh: nationalFresh,
+            prominent: true,
+          ),
+          const SizedBox(height: 12),
+          _statusCard(
+            context,
+            title: 'Twoja okolica',
+            subtitle: localityLabel ?? 'Nie wybrano miejscowości',
+            status: local,
+            fresh: localFresh,
+            prominent: false,
+            onTap: onChooseLocality,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                localityLabel == null
+                    ? Icons.add_location_alt_outlined
+                    : Icons.location_on_outlined,
+                size: 18,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  localityLabel == null
+                      ? 'Ustaw miejscowość, aby szybciej oceniać swoją okolicę.'
+                      : localityAround == null
+                      ? 'Odświeżamy informacje dla wybranej okolicy.'
+                      : 'Istotne komunikaty lokalne lub regionalne: $localRelevant.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              TextButton(
+                onPressed: onChooseLocality,
+                child: Text(localityLabel == null ? 'Ustaw' : 'Zmień'),
+              ),
+            ],
           ),
           if (!online && offlinePackage != null) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             const _InfoBanner(
               icon: Icons.offline_pin_outlined,
               text:
-                  'OFFLINE • LAST KNOWN GOOD. Brak nowych danych nie oznacza bezpieczeństwa.',
+                  'Tryb offline: pokazujemy ostatnie zapisane dane. Mogły pojawić się nowsze ostrzeżenia.',
             ),
           ],
           if (error != null) ...[
-            const SizedBox(height: 8),
-            _InfoBanner(icon: Icons.cloud_off_outlined, text: error!),
+            const SizedBox(height: 6),
+            _InfoBanner(
+              icon: Icons.cloud_off_outlined,
+              text: 'Nie udało się pobrać świeżych danych. $error',
+            ),
           ],
-          const SizedBox(height: 18),
+          const SizedBox(height: 21),
           Row(
             children: [
               Expanded(
@@ -222,32 +300,33 @@ class DashboardScreen extends StatelessWidget {
                   'Istotne aktywne zagrożenia',
                   style: Theme.of(
                     context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
-              TextButton(
+              TextButton.icon(
                 onPressed: onOpenAlerts,
-                child: const Text('Wszystkie'),
+                icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                label: const Text('Wszystkie'),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 7),
           if (snapshot == null && offlinePackage == null)
             const _EmptyState(
               icon: Icons.cloud_download_outlined,
-              title: 'Brak pobranych danych',
+              title: 'Pobieramy aktualną sytuację',
               text:
-                  'Aplikacja spróbuje pobrać status automatycznie. Możesz też przeciągnąć ekran w dół.',
+                  'Możesz przeciągnąć ekran w dół, aby spróbować ponownie.',
             )
           else if (active.isEmpty)
             const _EmptyState(
               icon: Icons.notifications_none_outlined,
-              title: 'Brak istotnych aktywnych komunikatów w pobranych danych',
+              title: 'Brak istotnych aktywnych komunikatów',
               text:
-                  'To nie jest gwarancja bezpieczeństwa — ocena zależy od aktualności oficjalnych źródeł.',
+                  'Aplikacja nadal sprawdza źródła. Brak komunikatu nie jest gwarancją bezpieczeństwa.',
             )
           else
-            ...active.map(
+            ...active.take(5).map(
               (event) => SafetyEventCard(
                 event: event,
                 compact: true,
@@ -271,6 +350,7 @@ class _InfoBanner extends StatelessWidget {
     decoration: BoxDecoration(
       color: Theme.of(context).colorScheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -294,24 +374,27 @@ class _EmptyState extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 32),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(text),
-        ],
-      ),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 32),
+        const SizedBox(height: 10),
+        Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 6),
+        Text(text),
+      ],
     ),
   );
 }

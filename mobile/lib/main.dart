@@ -502,7 +502,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(
-        ['Start', 'Alerty', 'Mapa', 'Więcej'][page],
+        ['Start', 'Mapa', 'Alerty', 'Więcej'][page],
         style: Theme.of(
           context,
         ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -530,15 +530,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           error: error,
           onRefresh: startupSync,
           onChooseLocality: chooseLocality,
-          onOpenAlerts: () => setState(() => page = 1),
+          onOpenAlerts: () => setState(() => page = 2),
           onOpenEvent: details,
         ),
-        1 => AlertsScreen(
-          events: events,
-          onOpenEvent: details,
-          onRefresh: startupSync,
-        ),
-        2 => SafetyMapScreen(
+        1 => SafetyMapScreen(
           repository: widget.repository,
           snapshot: snapshot,
           events: events,
@@ -546,6 +541,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           region: region,
           onOpenEvent: details,
           openLink: openLink,
+        ),
+        2 => AlertsScreen(
+          events: events,
+          onOpenEvent: details,
+          onRefresh: startupSync,
         ),
         _ => MoreScreen(
           repository: widget.repository,
@@ -568,14 +568,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           label: 'Start',
         ),
         NavigationDestination(
-          icon: Icon(Icons.campaign_outlined),
-          selectedIcon: Icon(Icons.campaign),
-          label: 'Alerty',
-        ),
-        NavigationDestination(
           icon: Icon(Icons.map_outlined),
           selectedIcon: Icon(Icons.map),
           label: 'Mapa',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.campaign_outlined),
+          selectedIcon: Icon(Icons.campaign),
+          label: 'Alerty',
         ),
         NavigationDestination(
           icon: Icon(Icons.more_horiz),
