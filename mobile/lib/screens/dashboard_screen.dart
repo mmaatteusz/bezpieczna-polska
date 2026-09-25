@@ -77,7 +77,7 @@ class DashboardScreen extends StatelessWidget {
     if (status is! Map) return 'Brak danych';
     final text = status['displayText']?.toString() ?? 'Brak danych';
     if (fresh) return text;
-    if (!online && offlinePackage != null) return 'Ostatnia zapisana kopia: ' + text;
+    if (!online && offlinePackage != null)\n      return 'Ostatnia zapisana kopia: ' + text;
     return 'Brak świeżej oceny sytuacji';
   }
 
@@ -126,7 +126,7 @@ class DashboardScreen extends StatelessWidget {
     final nationalFresh =
         online && (snapshot?.freshAt(now, national: true) ?? false);
     final localFresh = online && (snapshot?.freshAt(now) ?? false);
-    final active = events.where((event) => _active(event, now)).take(5).toList();
+    final active = events\n        .where((event) => _active(event, now))\n        .take(5)\n        .toList();
 
     return RefreshIndicator(
       onRefresh: onRefresh,
@@ -169,7 +169,7 @@ class DashboardScreen extends StatelessWidget {
                   const SizedBox(height: 10),
                   _statusRow(
                     context,
-                    title: localityLabel == null ? 'Twoja okolica' : localityLabel!,
+                    title: localityLabel == null\n                        ? 'Twoja okolica'\n                        : localityLabel!,
                     status: local,
                     fresh: localFresh,
                     icon: Icons.location_on_outlined,
@@ -222,7 +222,7 @@ class DashboardScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              TextButton(onPressed: onOpenAlerts, child: const Text('Wszystkie')),
+              TextButton(\n                onPressed: onOpenAlerts,\n                child: const Text('Wszystkie'),\n              ),
             ],
           ),
           const SizedBox(height: 4),
