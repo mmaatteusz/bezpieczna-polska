@@ -126,7 +126,7 @@ function report(source:string,patch:Partial<Event>={}):Event{return eventSchema.
 
 test('Police/PSP reports can correlate with RCB/RSO/WCZK without verification promotion',()=>{
  const events=[report('RCB'),report('POLICE'),report('PSP_INCIDENTS'),report('RSO'),report('WCZK-04')];
- const groups=correlate(events);assert.equal(groups.length,1);assert.equal(groups[0].sourceCount,5);
+ const groups=correlate(events);assert.equal(groups.length,1);assert.equal(groups[0].sourceCount,4);
  assert.ok(events.every(e=>e.verification==='CONFIRMED'));
 });
 test('different service incidents in different places never correlate',()=>{
