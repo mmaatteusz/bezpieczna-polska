@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
+import 'map_interaction.dart';
 import 'model.dart';
 
 class NeptunData {
@@ -293,7 +294,7 @@ class NeptunScreen extends StatefulWidget {
 
 class _NeptunScreenState extends State<NeptunScreen> {
   NeptunData? snapshot;
-  bool loading = false, online = false;
+  bool loading = false, online = false, refreshing = false;
   String? error;
   Timer? timer;
 
@@ -303,7 +304,9 @@ class _NeptunScreenState extends State<NeptunScreen> {
     snapshot = widget.repository.cachedNeptun();
     if (widget.repository.api.isNotEmpty) unawaited(refresh());
     timer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted && widget.repository.api.isNotEmpty) unawaited(refresh());
+      if (mounted && widget.repository.api.isNotEmpty) {
+        unawaited(refresh(silent: true));
+      }
     });
   }
 
@@ -313,18 +316,22 @@ class _NeptunScreenState extends State<NeptunScreen> {
     super.dispose();
   }
 
-  Future<void> refresh() async {
-    if (loading) return;
-    setState(() {
-      loading = true;
-      error = null;
-    });
+  Future<void> refresh({bool silent = false}) async {
+    if (refreshing) return;
+    refreshing = true;
+    if (!silent) {
+      setState(() {
+        loading = true;
+        error = null;
+      });
+    }
     try {
       final result = await widget.repository.refreshNeptun();
       if (!mounted) return;
       setState(() {
         snapshot = result;
         online = true;
+        error = null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -333,7 +340,8 @@ class _NeptunScreenState extends State<NeptunScreen> {
         error = apiFailureMessage(e);
       });
     } finally {
-      if (mounted) setState(() => loading = false);
+      refreshing = false;
+      if (!silent && mounted) setState(() => loading = false);
     }
   }
 
@@ -537,6 +545,9 @@ class _NeptunMapState extends State<NeptunMap> {
   MapLibreMapController? controller;
   String? error;
   bool ready = false;
+  bool cameraMoving = false;
+  bool syncInProgress = false;
+  bool syncPending = false;
 
   @override
   void dispose() {
@@ -549,6 +560,22 @@ class _NeptunMapState extends State<NeptunMap> {
   void didUpdateWidget(covariant NeptunMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (ready && oldWidget.data.data != widget.data.data) {
+      if (cameraMoving || syncInProgress) {
+        syncPending = true;
+      } else {
+        unawaited(syncSources());
+      }
+    }
+  }
+
+  void cameraMove(CameraPosition _) {
+    cameraMoving = true;
+  }
+
+  void cameraIdle() {
+    cameraMoving = false;
+    if (syncPending) {
+      syncPending = false;
       unawaited(syncSources());
     }
   }
@@ -556,14 +583,31 @@ class _NeptunMapState extends State<NeptunMap> {
   Future<void> syncSources() async {
     final c = controller;
     if (!ready || c == null) return;
+    if (cameraMoving || syncInProgress) {
+      syncPending = true;
+      return;
+    }
+    syncInProgress = true;
+    final data = widget.data;
     try {
-      await c.setGeoJsonSource('neptun-live', widget.data.live['map']);
-      await c.setGeoJsonSource('neptun-history', widget.data.data['map']);
+      await c.setGeoJsonSource('neptun-live', data.live['map']);
+      await c.setGeoJsonSource('neptun-history', data.data['map']);
+      if (mounted) {
+        setState(() {
+          error = null;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
           error = 'Nie udało się odświeżyć warstwy NEPTUN.';
         });
+      }
+    } finally {
+      syncInProgress = false;
+      if (mounted && syncPending && !cameraMoving) {
+        syncPending = false;
+        unawaited(syncSources());
       }
     }
   }
@@ -619,6 +663,7 @@ class _NeptunMapState extends State<NeptunMap> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: MapLibreMap(
+            gestureRecognizers: mapGestureRecognizers(),
             styleString: const String.fromEnvironment(
               'MAP_STYLE_URL',
               defaultValue: 'https://tiles.openfreemap.org/styles/liberty',
@@ -631,6 +676,8 @@ class _NeptunMapState extends State<NeptunMap> {
               if (mounted) controller = c;
             },
             onStyleLoadedCallback: styled,
+            onCameraMove: cameraMove,
+            onCameraIdle: cameraIdle,
           ),
         ),
       ),
