@@ -116,7 +116,16 @@ function validateNeptun(data){
 
   console.log('PROBE_NEPTUN_REFRESH',first.live.lastSuccessfulSyncAt,'->',second.live.lastSuccessfulSyncAt,'threats',second.live.threats.length);
   const nonHealthy=sources.sourceHealth.filter(source=>source.state!=='HEALTHY').map(source=>({id:source.id,state:source.state,errorCode:source.errorCode}));
-  console.log('PROBE_NON_HEALTHY_SOURCES',JSON.stringify(nonHealthy));
+  const shelterHealth=sources.sourceHealth.find(s=>s.id==='SHELTERS');
+console.log('PROBE_SHELTER_FRESHNESS',JSON.stringify(shelterHealth?{
+  state:shelterHealth.state,
+  lastSuccessfulSyncAt:shelterHealth.lastSuccessfulSyncAt,
+  sourceUpdatedAt:shelterHealth.sourceUpdatedAt,
+  dataDate:shelterHealth.dataDate,
+  fallback:shelterHealth.fallback,
+  errorCode:shelterHealth.errorCode
+}:null));
+console.log('PROBE_NON_HEALTHY_SOURCES',JSON.stringify(nonHealthy));
   console.log('PROBE_ALL_OK');
 })().catch(error=>{
   console.error('PROBE_FAILED',error?.stack||error);
