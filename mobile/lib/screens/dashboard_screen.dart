@@ -246,6 +246,7 @@ class DashboardScreen extends StatelessWidget {
             status: national,
             fresh: nationalFresh,
             prominent: true,
+            onTap: onOpenAlerts,
           ),
           const SizedBox(height: 12),
           _statusCard(
