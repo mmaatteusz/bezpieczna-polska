@@ -5,11 +5,16 @@ import 'package:bezpieczna_polska/ui/safety_event_card.dart';
 SafetyEvent eventWith(
   List<Map<String, dynamic>> sources, {
   Map<String, dynamic>? incident,
-}) => SafetyEvent({
-  'regions': ['04'],
-  'sources': sources,
-  if (incident != null) '_incident': incident,
-});
+}) {
+  final data = <String, dynamic>{
+    'regions': ['04'],
+    'sources': sources,
+  };
+  if (incident != null) {
+    data['_incident'] = incident;
+  }
+  return SafetyEvent(data);
+}
 
 void main() {
   test('regional RSO item is labelled as WCZK through RSO', () {
