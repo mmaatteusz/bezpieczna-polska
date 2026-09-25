@@ -7,10 +7,28 @@ import type {SourceAdapter} from './source-adapter.js';
 export const POLICE_INDEX='https://policja.pl/pol/aktualnosci';
 export const POLICE_RSS='https://policja.pl/dokumenty/rss/1-rss-1.rss';
 export const PSP_INCIDENTS_INDEX='https://www.gov.pl/web/kgpsp/aktualnosci';
-export const POLICE_VERSION='police-rss-incidents/1.0.0';
+export const POLICE_VERSION='police-rss-incidents/1.0.1';
 export const PSP_INCIDENTS_VERSION='psp-govpl-incidents/1.0.0';
 
 const clean=(s:string)=>s.replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();
+function parsePolicePublicationDate(value:string,now:Date){
+  const normalized=value.replace(/\bCEST\b/giu,'+0200').replace(/\bCET\b/giu,'+0100');
+  const withoutWeekday=normalized.replace(/^[^,]{2,16},\s*/u,'');
+  const attempts=[
+    DateTime.fromRFC2822(normalized,{setZone:true}),
+    DateTime.fromHTTP(normalized,{setZone:true}),
+    DateTime.fromISO(normalized,{setZone:true}),
+    DateTime.fromFormat(withoutWeekday,'dd LLL yyyy HH:mm:ss ZZZ',{locale:'pl',setZone:true}),
+    DateTime.fromFormat(withoutWeekday,'dd LLL yyyy HH:mm ZZZ',{locale:'pl',setZone:true}),
+    DateTime.fromFormat(withoutWeekday,'dd LLL yyyy HH:mm:ss ZZZ',{locale:'en',setZone:true}),
+    DateTime.fromFormat(withoutWeekday,'dd LLL yyyy HH:mm ZZZ',{locale:'en',setZone:true}),
+    DateTime.fromFormat(withoutWeekday,'dd.MM.yyyy HH:mm:ss',{zone:'Europe/Warsaw'}),
+    DateTime.fromFormat(withoutWeekday,'dd.MM.yyyy HH:mm',{zone:'Europe/Warsaw'}),
+  ];
+  const parsed=attempts.find(d=>d.isValid);
+  if(!parsed||parsed.toMillis()>now.getTime()+36*3600_000)throw new Error('POLICE_RSS_DATE_INVALID');
+  return parsed;
+}
 const provinceStems:Record<string,string>={
   '02':'dolnośląsk','04':'kujawsko-pomorsk','06':'lubelsk','08':'lubusk',
   '10':'łódzk','12':'małopolsk','14':'mazowieck','16':'opolsk','18':'podkarpack',
@@ -84,8 +102,7 @@ export function parsePoliceRss(xml:string,now=new Date()):PoliceRssItem[]{
     if(!id||seen.has(id))throw new Error('POLICE_RSS_DUPLICATE_ID');seen.add(id);
     let publishedAt:string|null=null,publicationDate:string|null=null;
     if(pubDate){
-      const d=DateTime.fromRFC2822(pubDate,{setZone:true});
-      if(!d.isValid||d.toMillis()>now.getTime()+36*3600_000)throw new Error('POLICE_RSS_DATE_INVALID');
+      const d=parsePolicePublicationDate(pubDate,now);
       publishedAt=d.toUTC().toISO();publicationDate=d.setZone('Europe/Warsaw').toISODate();
     }
     out.push({id,title,description,url:u.href,publishedAt,publicationDate});

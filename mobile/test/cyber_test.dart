@@ -82,6 +82,7 @@ void main() {
         ],
       };
       SharedPreferences.setMockInitialValues({
+        'region': '04',
         'snapshot::04': jsonEncode(snapshot),
       });
       final repo = DataRepository(await SharedPreferences.getInstance());

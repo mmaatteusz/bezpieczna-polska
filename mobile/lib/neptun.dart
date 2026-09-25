@@ -64,13 +64,26 @@ class NeptunData {
             'mig31k',
             'unknown',
           ].contains(t['type']) ||
-          t['title'] is! String ||
+          t['title'] !=
+              const {
+                'uav': 'BSP / dron',
+                'recon': 'Obiekt rozpoznawczy',
+                'missile': 'Rakieta',
+                'ballistic': 'Zagrożenie balistyczne',
+                'kab': 'Kierowana bomba lotnicza',
+                'mig31k': 'MiG-31K',
+                'unknown': 'Nieokreślone zagrożenie',
+              }[t['type']] ||
           !['low', 'medium', 'high'].contains(t['confidenceLevel']) ||
           !['active', 'stale'].contains(t['status']) ||
           t['updatedAt'] is! String ||
           t.containsKey('heading') ||
           t.containsKey('velocity') ||
-          t.containsKey('confirmedAt')) {
+          t.containsKey('confirmedAt') ||
+          t.containsKey('positionQuality') ||
+          t.containsKey('explanationShort') ||
+          t.containsKey('locality') ||
+          t.containsKey('district')) {
         throw const FormatException('Niepoprawny live NEPTUN');
       }
       DateTime.parse(t['updatedAt'] as String);
@@ -103,6 +116,12 @@ class NeptunData {
           rawFeature['properties'] is! Map ||
           rawFeature['properties']['live'] != true ||
           rawFeature['properties']['coarse'] != true ||
+          rawFeature['properties'].containsKey('heading') ||
+          rawFeature['properties'].containsKey('velocity') ||
+          rawFeature['properties'].containsKey('prediction') ||
+          rawFeature['properties'].containsKey('locality') ||
+          rawFeature['properties'].containsKey('district') ||
+          rawFeature['properties'].containsKey('explanationShort') ||
           !liveIds.contains(rawFeature['properties']['threatId'])) {
         throw const FormatException('Niepoprawna mapa live NEPTUN');
       }

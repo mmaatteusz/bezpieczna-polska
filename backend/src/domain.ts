@@ -81,3 +81,10 @@ export function sourceHealth(health:Health[],now=new Date()){
   return {...h,...(fallback?{fallback}:{}),healthStatus:stale?'STALE':h.state,state:stale?'STALE':h.state,lastSuccessfulSyncAt:h.lastSuccess,lastAttemptAt:h.lastAttempt??null,errorCode:h.errorCode??null};
  });
 }
+
+export function publicSourceHealth(health:Health[],now=new Date()){
+ return sourceHealth(health,now).map(h=>{
+  const {uaMetadata:_uaMetadata,neptunMetadata:_neptunMetadata,checkedEventIds:_checkedEventIds,...publicHealth}=h;
+  return publicHealth;
+ });
+}

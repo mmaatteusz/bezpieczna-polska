@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:convert';
 
 import 'package:bezpieczna_polska/model.dart';
@@ -32,16 +33,13 @@ Map<String, dynamic> fixture(DateTime now) {
         {
           'id': 'trk-live-1',
           'type': 'uav',
-          'title': 'BSP testowy',
+          'title': 'BSP / dron',
           'region': 'Obwód testowy',
-          'district': null,
-          'locality': 'Rejon testowy',
           'confidenceLevel': 'high',
           'sourceCount': 3,
           'count': 1,
           'updatedAt': now.toIso8601String(),
           'status': 'active',
-          'explanationShort': 'zagrożenie testowe',
           'advisory': false,
           'areaOnly': false,
           'latitude': 49.1,
@@ -163,6 +161,14 @@ http.Response jsonResponse(Object value, int status) => http.Response.bytes(
 );
 
 void main() {
+  test(
+    'status entry point wording advertises live data without precise-motion claims',
+    () {
+      final source = File('lib/main.dart').readAsStringSync();
+      expect(source, contains('NEPTUN • live + historia'));
+      expect(source, contains('Bez kursu, prędkości i predykcji ruchu'));
+    },
+  );
   TestWidgetsFlutterBinding.ensureInitialized();
   final now = DateTime.utc(2026, 9, 22, 12);
 
@@ -188,6 +194,29 @@ void main() {
           .subtract(const Duration(hours: 2))
           .toIso8601String();
       expect(() => NeptunData.parse(recent), throwsFormatException);
+    },
+  );
+
+  test(
+    'NEPTUN persistence is throttled independently from five-second live refresh',
+    () {
+      final first = NeptunData.parse(fixture(now));
+      final fiveSecondsLater = NeptunData.parse(
+        fixture(now.add(const Duration(seconds: 5))),
+      );
+      final thirtySecondsLater = NeptunData.parse(
+        fixture(now.add(const Duration(seconds: 30))),
+      );
+      expect(shouldPersistNeptunCache(null, first), isTrue);
+      expect(shouldPersistNeptunCache(first, fiveSecondsLater), isFalse);
+      expect(shouldPersistNeptunCache(first, thirtySecondsLater), isTrue);
+
+      final changedState = fixture(now.add(const Duration(seconds: 5)));
+      changedState['live']['state'] = 'STALE';
+      expect(
+        shouldPersistNeptunCache(first, NeptunData.parse(changedState)),
+        isTrue,
+      );
     },
   );
 
@@ -243,7 +272,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('NEPTUN • live'), findsOneWidget);
     expect(find.textContaining('LIVE • 1 aktywnych wpisów'), findsOneWidget);
-    expect(find.text('BSP testowy'), findsOneWidget);
+    expect(find.text('BSP / dron'), findsOneWidget);
     expect(find.textContaining('Dane live: NEPTUN'), findsOneWidget);
     expect(find.text('Historyczny ślad testowy'), findsOneWidget);
     expect(find.text('Timeline i źródła'), findsOneWidget);

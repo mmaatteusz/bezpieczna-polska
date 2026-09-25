@@ -33,6 +33,21 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
   test(
+    'fresh install defaults to national scope until locality is chosen',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final repository = DataRepository(
+        prefs,
+        buildApi: 'https://api.example.org',
+      );
+      expect(repository.region, 'PL');
+    },
+  );
+  test('alert cards are stable for the lifetime of one snapshot', () {
+    final snapshot = Snapshot.parse(jsonEncode(data()));
+    expect(identical(snapshot.alertEvents, snapshot.alertEvents), isTrue);
+  });
+  test(
     'stale data never presents current green',
     () => expect(
       Snapshot.parse(

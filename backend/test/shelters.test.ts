@@ -110,7 +110,7 @@ test('shelter API provides filtered pages, source freshness, exact GeoJSON and h
 });
 
 
-test('nearest shelter POST keeps precise coordinates out of URLs; legacy GET is deprecated',async()=>{
+test('nearest shelter only accepts POST so precise coordinates stay out of URLs',async()=>{
  const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();const b=await batch();await ingest(store,[{...shelterAdapter,sync:async()=>b}]);const app=await buildApp(store);
  try{
   const first=b.shelters![0];
@@ -120,7 +120,7 @@ test('nearest shelter POST keeps precise coordinates out of URLs; legacy GET is 
   assert.ok(body.items[0].distanceMeters<=body.items[1].distanceMeters&&body.items[1].distanceMeters<=body.items[2].distanceMeters);
   assert.equal((await app.inject({method:'POST',url:'/v1/shelters/nearest',payload:{latitude:999,longitude:18}})).statusCode,400);
   const legacy=await app.inject(`/v1/shelters/nearest?lat=${first.latitude}&lon=${first.longitude}&limit=1`);
-  assert.equal(legacy.statusCode,200);assert.equal(legacy.headers.deprecation,'true');assert.match(String(legacy.headers.warning),/Deprecated/);
+  assert.equal(legacy.statusCode,404);
  }finally{await app.close();await db.close();}
 });
 

@@ -3,7 +3,7 @@ import type {SourceAdapter} from './source-adapter.js';
 
 export const NEPTUN_API='https://neptun.in.ua/api/v1/threats';
 export const NEPTUN_HOME='https://neptun.in.ua/';
-export const NEPTUN_LIVE_VERSION='neptun-public-v1/1.0.0';
+export const NEPTUN_LIVE_VERSION='neptun-public-v1/1.0.1';
 export const NEPTUN_PUBLIC_MIN_PRECISION_KM=10;
 
 const timestamp=z.iso.datetime({offset:true});
@@ -54,14 +54,11 @@ export type PublicNeptunThreat={
   type:'uav'|'recon'|'missile'|'ballistic'|'kab'|'mig31k'|'unknown';
   title:string;
   region:string|null;
-  district:string|null;
-  locality:string|null;
   confidenceLevel:'low'|'medium'|'high';
   sourceCount:number;
   count:number|null;
   updatedAt:string;
   status:'active'|'stale';
-  explanationShort:string|null;
   advisory:boolean;
   areaOnly:boolean;
   latitude:number|null;
@@ -69,6 +66,18 @@ export type PublicNeptunThreat={
   precisionKm:number|null;
   sourceUrl:string;
 };
+
+function publicThreatTitle(type:PublicNeptunThreat['type']){
+  return ({
+    uav:'BSP / dron',
+    recon:'Obiekt rozpoznawczy',
+    missile:'Rakieta',
+    ballistic:'Zagrożenie balistyczne',
+    kab:'Kierowana bomba lotnicza',
+    mig31k:'MiG-31K',
+    unknown:'Nieokreślone zagrożenie'
+  } as const)[type];
+}
 
 function coarsePoint(latitude:number,longitude:number,precisionKm:number){
   const latStep=Math.max(0.1,precisionKm/111);
@@ -95,16 +104,13 @@ export function parseNeptunLive(input:unknown,now=new Date()){
     threats.push({
       id:t.id,
       type:t.type,
-      title:t.title,
+      title:publicThreatTitle(t.type),
       region:t.region,
-      district:t.district,
-      locality:t.locality,
       confidenceLevel:t.confidenceLevel,
       sourceCount:t.sourceCount,
       count:t.count,
       updatedAt:t.updatedAt,
       status:t.status,
-      explanationShort:t.explanationShort,
       advisory:t.advisory,
       areaOnly:t.areaOnly,
       latitude:point?.latitude??null,

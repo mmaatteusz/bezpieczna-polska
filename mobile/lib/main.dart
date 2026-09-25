@@ -24,12 +24,16 @@ import 'offline_data_screen.dart';
 import 'build_config.dart';
 import 'app_version.dart';
 
+String? localityRegionSeed(String currentRegion) =>
+    currentRegion == 'PL' ? null : currentRegion;
+
 Future<void> main() async {
   validateBuildConfiguration();
   WidgetsFlutterBinding.ensureInitialized();
   final repository = DataRepository(await SharedPreferences.getInstance());
-  final pushAdapter =
-      await FirebasePushPlatformAdapter.fromBuildConfiguration();
+  final pushAdapter = await safePushPlatformAdapter(
+    FirebasePushPlatformAdapter.fromBuildConfiguration,
+  );
   runApp(
     SafetyApp(
       repository: repository,
@@ -295,7 +299,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     final queryController = TextEditingController();
     String? foundLabel;
     double? foundLatitude, foundLongitude;
-    var selectedRegion = region == 'PL' ? '04' : region;
+    String? selectedRegion = localityRegionSeed(region);
     var searching = false;
     String? validation;
 
@@ -410,7 +414,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.location_on_outlined),
                     title: Text(foundLabel!),
-                    subtitle: Text(regions[selectedRegion] ?? selectedRegion),
+                    subtitle: Text(
+                      selectedRegion == null
+                          ? 'Wybierz województwo'
+                          : regions[selectedRegion] ?? selectedRegion!,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 8),
@@ -452,7 +460,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               onPressed:
                   foundLabel == null ||
                       foundLatitude == null ||
-                      foundLongitude == null
+                      foundLongitude == null ||
+                      selectedRegion == null
                   ? null
                   : () => Navigator.pop(dialogContext, true),
               child: const Text('Ustaw lokalizację'),
@@ -471,14 +480,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         label: foundLabel!,
         latitude: foundLatitude!,
         longitude: foundLongitude!,
-        regionId: selectedRegion,
+        regionId: selectedRegion!,
       );
       if (!mounted) return;
       setState(() {
-        region = selectedRegion;
+        region = selectedRegion!;
         localityLabel = foundLabel;
         localityAround = null;
-        snapshot = widget.repository.cached(selectedRegion);
+        snapshot = widget.repository.cached(selectedRegion!);
         offlinePackageData = null;
         online = false;
         loading = false;
@@ -920,9 +929,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       Card(
         child: ListTile(
           leading: const Icon(Icons.timeline_outlined),
-          title: const Text('NEPTUN • historyczny przebieg'),
+          title: const Text('NEPTUN • live + historia'),
           subtitle: const Text(
-            'Zakończone ślady OSINT, timeline i źródła. Bez aktywnych dokładnych pozycji.',
+            'Bieżące zgrubne zagrożenia oraz zakończone ślady OSINT. Bez kursu, prędkości i predykcji ruchu.',
           ),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(

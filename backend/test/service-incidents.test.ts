@@ -70,6 +70,13 @@ test('PSP index fails closed on contract change',()=>{
  assert.throws(()=>parsePspIndex('<main><article><h2>Aktualności</h2></article></main>'),/CONTRACT_CHANGED/);
 });
 
+test('Police RSS accepts deterministic localized publication dates without loose Date.parse',()=>{
+ const item=parsePoliceRss(rss('Duży pożar magazynu','Ewakuowano budynek i działa wiele zastępów.',policeUrl,'czw., 24 wrz 2026 14:00:00 +0200'),new Date('2026-09-24T14:00:00Z'))[0];
+ assert.equal(item.publishedAt,'2026-09-24T12:00:00.000Z');
+ assert.equal(item.publicationDate,'2026-09-24');
+ assert.throws(()=>parsePoliceRss(rss('Duży pożar magazynu','Ewakuowano budynek.',policeUrl,'niedeterministyczna data'),now),/POLICE_RSS_DATE_INVALID/);
+});
+
 test('Police RSS fails closed on contract change and does not invent time when missing',()=>{
  assert.throws(()=>parsePoliceRss('<rss><channel></channel></rss>',now),/CONTRACT_CHANGED/);
  const item=parsePoliceRss(rss('Duży pożar magazynu','Ewakuowano budynek i działa wiele zastępów.',policeUrl,''),now)[0];

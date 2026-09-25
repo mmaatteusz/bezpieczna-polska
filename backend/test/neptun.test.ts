@@ -67,6 +67,12 @@ test('NEPTUN live parser removes operational motion data and coarsens positions'
  assert.notEqual(point.longitude,input.threats[0].lon);
  assert.equal('heading' in point,false);
  assert.equal('velocity' in point,false);
+ assert.equal('confirmedAt' in point,false);
+ assert.equal('positionQuality' in point,false);
+ assert.equal('explanationShort' in point,false);
+ assert.equal('locality' in point,false);
+ assert.equal('district' in point,false);
+ assert.equal(point.title,'BSP / dron');
  assert.equal(parsed.threats[1].latitude,null);
  assert.equal(parsed.threats[1].longitude,null);
 });
@@ -82,6 +88,9 @@ test('NEPTUN live parser maps new upstream categories to unknown without droppin
  assert.equal(parsed.threats[0].type,'unknown');
  assert.ok(parsed.threats[0].precisionKm!>=NEPTUN_PUBLIC_MIN_PRECISION_KM);
  assert.equal('heading' in parsed.threats[0],false);
+ assert.equal('explanationShort' in parsed.threats[0],false);
+ assert.equal('locality' in parsed.threats[0],false);
+ assert.equal(parsed.threats[0].title,'Nieokreślone zagrożenie');
 });
 
 test('NEPTUN live adapter uses the public endpoint and stores no event object',async()=>{
@@ -133,7 +142,7 @@ test('NEPTUN API is separate from Polish snapshot and admin requires authorizati
  try{
   const n=await app.inject('/v1/neptun');assert.equal(n.statusCode,200);assert.equal(n.json().tracks.length,1);
   const map=await app.inject('/v1/layers/neptun.geojson');assert.equal(map.statusCode,200);assert.equal(map.json().features.length,1);
-  const pl=await app.inject('/v1/snapshot');assert.equal(pl.statusCode,200);assert.equal(pl.json().events.some((e:any)=>String(e.id).startsWith('NEPTUN-')),false);assert.equal(pl.json().capabilities.neptun,true);
+  const pl=await app.inject('/v1/snapshot');assert.equal(pl.statusCode,200);assert.equal(pl.json().events.some((e:any)=>String(e.id).startsWith('NEPTUN-')),false);assert.equal(pl.json().capabilities.neptun,true);assert.ok(pl.json().sources.every((s:any)=>s.neptunMetadata===undefined&&s.uaMetadata===undefined&&s.checkedEventIds===undefined));
   const denied=await app.inject({method:'POST',url:'/admin/neptun',payload:{track:track(),expectedRevision:1,reason:'Correction after public-source review'}});assert.equal(denied.statusCode,401);
   const accepted=await app.inject({method:'POST',url:'/admin/neptun',headers:{authorization:'Bearer '+token},payload:{track:{...track(),directionText:'kierunek skorygowany'},expectedRevision:1,reason:'Correction after public-source review'}});assert.equal(accepted.statusCode,200);
   assert.equal((await store.neptunTrack(track().id))?.revision,2);
