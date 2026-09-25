@@ -59,10 +59,7 @@ void main() {
   });
 
   test('far-future sentinel validity is treated as open ended', () {
-    final event = warning(
-      id: 'sentinel',
-      validTo: '99999-12-31T23:59:59Z',
-    );
+    final event = warning(id: 'sentinel', validTo: '99999-12-31T23:59:59Z');
 
     expect(safetyEventHasOpenEndedValidity(event), isTrue);
     expect(
@@ -71,7 +68,9 @@ void main() {
     );
   });
 
-  testWidgets('warning card never exposes technical year 99999', (tester) async {
+  testWidgets('warning card never exposes technical year 99999', (
+    tester,
+  ) async {
     final event = warning(
       id: 'sentinel-card',
       validTo: '99999-12-31T23:59:59Z',
