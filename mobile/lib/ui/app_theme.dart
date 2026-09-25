@@ -11,8 +11,9 @@ ThemeData buildSafetyTheme(Brightness brightness) {
     useMaterial3: true,
     colorScheme: scheme,
     brightness: brightness,
-    scaffoldBackgroundColor:
-        dark ? const Color(0xFF101A21) : const Color(0xFFF4F7F7),
+    scaffoldBackgroundColor: dark
+        ? const Color(0xFF101A21)
+        : const Color(0xFFF4F7F7),
   );
 
   final rounded20 = RoundedRectangleBorder(
