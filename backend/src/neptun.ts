@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {sourceHealth} from './domain.js';
+import {publicSourceHealth} from './domain.js';
 import type {Store} from './store.js';
 
 const date=z.iso.datetime({offset:true});
@@ -87,7 +87,7 @@ export async function neptunSnapshot(store:Store,now=new Date()){
   return [{type:'Feature' as const,id:t.id,geometry:{type:'LineString' as const,coordinates:coords},properties:{trackId:t.id,title:t.title,objectType:t.objectType,verification:t.verification,endedAt:t.endedAt,directionText:t.directionText,observationCount:t.observations.length,historicalOnly:true}}];
  });
  const raw=(await store.health()).find(h=>h.id==='NEPTUN')??null;
- const health=raw?sourceHealth([raw],now)[0]:null;
+ const health=raw?publicSourceHealth([raw],now)[0]:null;
  const state=health?.state==='HEALTHY'?'LIVE':health?.state==='STALE'?'STALE':health?.state==='BROKEN'?'DOWN':health?.state==='NOT_CONFIGURED'?'NOT_CONFIGURED':'UNAVAILABLE';
  const threats=raw?.neptunMetadata?.threats??[];
  const liveMap={
