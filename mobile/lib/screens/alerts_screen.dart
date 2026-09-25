@@ -282,7 +282,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
                         onPressed: _openSearch,
                         icon: const Icon(Icons.search),
                         label: Text(
-                          query.isEmpty ? 'Szukaj w alertach' : 'Szukaj: $query',
+                          query.isEmpty
+                              ? 'Szukaj w alertach'
+                              : 'Szukaj: $query',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
