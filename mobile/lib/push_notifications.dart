@@ -14,6 +14,16 @@ import 'app_version.dart';
 
 enum PushPermissionState { notDetermined, denied, authorized, provisional }
 
+Future<PushPlatformAdapter?> safePushPlatformAdapter(
+  Future<PushPlatformAdapter?> Function() factory,
+) async {
+  try {
+    return await factory();
+  } catch (_) {
+    return null;
+  }
+}
+
 abstract class PushPlatformAdapter {
   String get platform;
   bool get supported;
