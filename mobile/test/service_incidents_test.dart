@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bezpieczna_polska/main.dart';
@@ -80,7 +79,9 @@ void main() {
     });
     final repo = DataRepository(await SharedPreferences.getInstance());
     await tester.pumpWidget(SafetyApp(repository: repo));
-    await tester.pumpAndSettl    expect(find.text('Duży pożar magazynu'), findsNothing);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Duży pożar magazynu'), findsNothing);
     await tester.tap(find.text('Alerty').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Wszystkie').first);
