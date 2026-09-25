@@ -207,7 +207,7 @@ class DashboardScreen extends StatelessWidget {
             const _InfoBanner(
               icon: Icons.offline_pin_outlined,
               text:
-                  'Tryb offline • ostatnia zapisana kopia. Brak nowych danych nie oznacza braku zagrożenia.',
+                  'OFFLINE • LAST KNOWN GOOD. Brak nowych danych nie oznacza bezpieczeństwa.',
             ),
           ],
           if (error != null) ...[
