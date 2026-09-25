@@ -117,9 +117,8 @@ class SafetyEventCard extends StatelessWidget {
         _ => 'NIEUSTALONE',
       };
 
-  String get originLabel => event.provenance == 'ŹRÓDŁO OFICJALNE'
-      ? 'OFICJALNE'
-      : event.provenance;
+  String get originLabel =>
+      event.provenance == 'ŹRÓDŁO OFICJALNE' ? 'OFICJALNE' : event.provenance;
 
   _CardVisual _visual(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -209,9 +208,7 @@ class SafetyEventCard extends StatelessWidget {
     decoration: BoxDecoration(
       color: Theme.of(context).colorScheme.surface.withAlpha(185),
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(
-        color: Theme.of(context).colorScheme.outlineVariant,
-      ),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
     ),
     child: Text(
       text,
@@ -290,11 +287,12 @@ class SafetyEventCard extends StatelessWidget {
                       children: [
                         Text(
                           visual.label,
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: visual.foreground,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.5,
-                          ),
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: visual.foreground,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
                         ),
                         if (prominent)
                           Text(
@@ -308,10 +306,7 @@ class SafetyEventCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: visual.foreground,
-                  ),
+                  Icon(Icons.chevron_right_rounded, color: visual.foreground),
                 ],
               ),
               SizedBox(height: prominent ? 12 : 9),
@@ -386,10 +381,7 @@ class SafetyEventCard extends StatelessWidget {
                   _secondaryBadge(context, verificationLabel),
                   _secondaryBadge(context, event.badge),
                   if (sourceCount > 1)
-                    _secondaryBadge(
-                      context,
-                      'NIEZALEŻNE ŹRÓDŁA: $sourceCount',
-                    ),
+                    _secondaryBadge(context, 'NIEZALEŻNE ŹRÓDŁA: $sourceCount'),
                   if (event.hasConflictingReports)
                     _secondaryBadge(context, 'RÓŻNICE W KOMUNIKATACH'),
                 ],

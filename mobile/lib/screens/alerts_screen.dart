@@ -117,16 +117,20 @@ class _AlertsScreenState extends State<AlertsScreen> {
       ..sort(_sortEvents);
     final ended = matched.where(safetyEventIsHistorical).toList()
       ..sort(_sortEvents);
-    final other = matched
-        .where(
-          (event) =>
-              !safetyEventIsActive(event) && !safetyEventIsHistorical(event),
-        )
-        .toList()
-      ..sort(_sortEvents);
+    final other =
+        matched
+            .where(
+              (event) =>
+                  !safetyEventIsActive(event) &&
+                  !safetyEventIsHistorical(event),
+            )
+            .toList()
+          ..sort(_sortEvents);
 
     final critical = active
-        .where((event) => safetyVisualLevel(event) == SafetyVisualLevel.critical)
+        .where(
+          (event) => safetyVisualLevel(event) == SafetyVisualLevel.critical,
+        )
         .toList();
     final high = active
         .where((event) => safetyVisualLevel(event) == SafetyVisualLevel.high)
@@ -157,9 +161,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
               Expanded(
                 child: Text(
                   'Alerty',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
               if (critical.isNotEmpty)
@@ -184,7 +188,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
               leading: const Icon(Icons.tune_rounded),
               title: const Text('Filtry i wyszukiwanie'),
               subtitle: Text(
-                lifecycle == 'Aktywne' && category == 'Wszystkie' && query.isEmpty
+                lifecycle == 'Aktywne' &&
+                        category == 'Wszystkie' &&
+                        query.isEmpty
                     ? 'Domyślnie: aktywne alerty'
                     : '$lifecycle • $category${query.isEmpty ? '' : ' • wyszukiwanie'}',
               ),
@@ -222,23 +228,24 @@ class _AlertsScreenState extends State<AlertsScreen> {
                   child: Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: [
-                      'Wszystkie',
-                      'Pogoda',
-                      'Bezpieczeństwo',
-                      'Cyber',
-                      'Granica',
-                      'Inne',
-                    ]
-                        .map(
-                          (value) => FilterChip(
-                            label: Text(value),
-                            selected: category == value,
-                            onSelected: (_) =>
-                                setState(() => category = value),
-                          ),
-                        )
-                        .toList(),
+                    children:
+                        [
+                              'Wszystkie',
+                              'Pogoda',
+                              'Bezpieczeństwo',
+                              'Cyber',
+                              'Granica',
+                              'Inne',
+                            ]
+                            .map(
+                              (value) => FilterChip(
+                                label: Text(value),
+                                selected: category == value,
+                                onSelected: (_) =>
+                                    setState(() => category = value),
+                              ),
+                            )
+                            .toList(),
                   ),
                 ),
               ],

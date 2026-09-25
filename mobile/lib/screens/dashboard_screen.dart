@@ -192,16 +192,16 @@ class DashboardScreen extends StatelessWidget {
     final nationalFresh =
         online && (snapshot?.freshAt(now, national: true) ?? false);
     final localFresh = online && (snapshot?.freshAt(now) ?? false);
-    final active = events
-        .where((event) => safetyEventIsSignificant(event, now))
-        .toList()
-      ..sort((a, b) {
-        final severity = safetyEventPriority(a, now).compareTo(
-          safetyEventPriority(b, now),
-        );
-        if (severity != 0) return severity;
-        return safetyEventTime(b).compareTo(safetyEventTime(a));
-      });
+    final active =
+        events.where((event) => safetyEventIsSignificant(event, now)).toList()
+          ..sort((a, b) {
+            final severity = safetyEventPriority(
+              a,
+              now,
+            ).compareTo(safetyEventPriority(b, now));
+            if (severity != 0) return severity;
+            return safetyEventTime(b).compareTo(safetyEventTime(a));
+          });
     final localRelevant = localityAround == null
         ? 0
         : {
@@ -315,8 +315,7 @@ class DashboardScreen extends StatelessWidget {
             const _EmptyState(
               icon: Icons.cloud_download_outlined,
               title: 'Pobieramy aktualną sytuację',
-              text:
-                  'Możesz przeciągnąć ekran w dół, aby spróbować ponownie.',
+              text: 'Możesz przeciągnąć ekran w dół, aby spróbować ponownie.',
             )
           else if (active.isEmpty)
             const _EmptyState(
@@ -326,13 +325,15 @@ class DashboardScreen extends StatelessWidget {
                   'Aplikacja nadal sprawdza źródła. Brak komunikatu nie jest gwarancją bezpieczeństwa.',
             )
           else
-            ...active.take(5).map(
-              (event) => SafetyEventCard(
-                event: event,
-                compact: true,
-                onTap: () => onOpenEvent(event),
-              ),
-            ),
+            ...active
+                .take(5)
+                .map(
+                  (event) => SafetyEventCard(
+                    event: event,
+                    compact: true,
+                    onTap: () => onOpenEvent(event),
+                  ),
+                ),
         ],
       ),
     );

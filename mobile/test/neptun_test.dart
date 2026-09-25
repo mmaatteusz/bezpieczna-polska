@@ -187,7 +187,9 @@ void main() {
       expect(data.tracks.first['lifecycle'], 'ENDED');
 
       final stale = fixture(now);
-      stale['live']['validUntil'] = now.subtract(const Duration(seconds: 1)).toIso8601String();
+      stale['live']['validUntil'] = now
+          .subtract(const Duration(seconds: 1))
+          .toIso8601String();
       expect(NeptunData.parse(stale).isFreshLive(now), isFalse);
 
       final active = fixture(now);

@@ -31,7 +31,11 @@ class NeptunData {
     final server = DateTime.parse(m['serverTime'] as String);
     final cutoff = server.subtract(Duration(hours: delay.toInt()));
     final live = Map<String, dynamic>.from(m['live'] as Map);
-    for (final key in ['lastSuccessfulSyncAt', 'sourceServerTime', 'validUntil']) {
+    for (final key in [
+      'lastSuccessfulSyncAt',
+      'sourceServerTime',
+      'validUntil',
+    ]) {
       final value = live[key];
       if (value != null && value is! String) {
         throw const FormatException('Niepoprawny czas live NEPTUN');
@@ -252,7 +256,9 @@ class NeptunData {
 
   bool isFreshLive(DateTime now) {
     if (live['state'] != 'LIVE') return false;
-    final sync = DateTime.tryParse(live['lastSuccessfulSyncAt']?.toString() ?? '');
+    final sync = DateTime.tryParse(
+      live['lastSuccessfulSyncAt']?.toString() ?? '',
+    );
     final validUntil = DateTime.tryParse(live['validUntil']?.toString() ?? '');
     if (sync == null || validUntil == null) return false;
     if (sync.isAfter(now.add(const Duration(seconds: 30)))) return false;
@@ -344,7 +350,11 @@ class _NeptunScreenState extends State<NeptunScreen> {
         subtitle: Text(
           '${typeLabel(t['type'] as String)}'
           '${location.isEmpty ? '' : ' • $location'}\n'
-          '${t['advisory'] == true ? 'Obserwacja informacyjna' : current ? 'Aktywne zagrożenie w feedzie NEPTUN' : 'Ostatnio pobrany wpis NEPTUN'}'
+          '${t['advisory'] == true
+              ? 'Obserwacja informacyjna'
+              : current
+              ? 'Aktywne zagrożenie w feedzie NEPTUN'
+              : 'Ostatnio pobrany wpis NEPTUN'}'
           ' • aktualizacja ${when(t['updatedAt'])}'
           '${precision == null ? '' : ' • pozycja zgrubna ≥ $precision km'}',
         ),
@@ -416,7 +426,8 @@ class _NeptunScreenState extends State<NeptunScreen> {
     final threats = snapshot?.liveThreats ?? const <Map<String, dynamic>>[];
     final tracks = snapshot?.tracks ?? const <Map<String, dynamic>>[];
     final liveState = snapshot?.live['state']?.toString() ?? 'UNAVAILABLE';
-    final isLive = online &&
+    final isLive =
+        online &&
         snapshot != null &&
         snapshot!.isFreshLive(DateTime.now().toUtc());
     return Scaffold(
