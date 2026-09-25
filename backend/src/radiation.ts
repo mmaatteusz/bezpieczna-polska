@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {sourceHealth,type Event,type Health} from './domain.js';
+import {publicSourceHealth,sourceHealth,type Event,type Health} from './domain.js';
 // Internal storage contract, NOT a claimed PAA API. No production measurement
 // adapter is enabled until the official source format and geometry are verified.
 export const radiationMeasurementSchema=z.object({
@@ -21,5 +21,5 @@ export function radiationStatus(events:Event[],health:Health[],region='PL',now=n
  const warnings=messages.filter(e=>(!e.validTo?communication?.checkedEventIds?.includes(e.id):true)&&e.officialWarning&&e.radiationAssessment?.state==='WARNING'&&e.lifecycle==='ACTIVE'&&(!e.validTo||Date.parse(e.validTo)>now.getTime())&&(!e.validFrom||Date.parse(e.validFrom)<=now.getTime()));
  const unknown=messages.filter(e=>e.radiationAssessment?.state==='UNDETERMINED');
  const items=measurements.filter(p=>region==='PL'||p.regionId===region).map(p=>({...p,freshness:measurementFreshness(p,measurementHealth,now)}));
- return {schemaVersion:1,regionId:region,communicationState:!fresh?'UNAVAILABLE':warnings.length?'ACTIVE':unknown.length?'UNDETERMINED':'NO_ACTIVE_MESSAGE_IN_WINDOW',measurementState:!measurementHealth?.enabled?'NOT_CONFIGURED':!items.length?'NO_DATA':items.every(p=>p.freshness==='FRESH')?'FRESH':'STALE',sourceHealth:states,activeMessageIds:warnings.map(e=>e.id),messages,measurements:items,complete:false,measuredValuesAffectHazard:false};
+ return {schemaVersion:1,regionId:region,communicationState:!fresh?'UNAVAILABLE':warnings.length?'ACTIVE':unknown.length?'UNDETERMINED':'NO_ACTIVE_MESSAGE_IN_WINDOW',measurementState:!measurementHealth?.enabled?'NOT_CONFIGURED':!items.length?'NO_DATA':items.every(p=>p.freshness==='FRESH')?'FRESH':'STALE',sourceHealth:publicSourceHealth(health.filter(h=>['PAA','PAA_MEASUREMENTS'].includes(h.id)),now),activeMessageIds:warnings.map(e=>e.id),messages,measurements:items,complete:false,measuredValuesAffectHazard:false};
 }
