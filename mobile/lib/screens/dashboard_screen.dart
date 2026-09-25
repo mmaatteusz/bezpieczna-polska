@@ -93,6 +93,18 @@ class DashboardScreen extends StatelessWidget {
     };
   }
 
+  Color _statusAccent(BuildContext context, dynamic status, bool fresh) {
+    final scheme = Theme.of(context).colorScheme;
+    if (!fresh) return scheme.outline;
+    final level = status is Map ? status['hazardLevel']?.toString() : null;
+    return switch (level) {
+      'ACTIVE_DANGER' => scheme.error,
+      'CAUTION' => scheme.tertiary,
+      'NO_ACTIVE_WARNINGS' => scheme.primary,
+      _ => scheme.outline,
+    };
+  }
+
   Widget _statusCard(
     BuildContext context, {
     required String title,
@@ -101,86 +113,338 @@ class DashboardScreen extends StatelessWidget {
     required bool fresh,
     required bool prominent,
     VoidCallback? onTap,
+    String? footer,
   }) {
     final background = _statusBackground(context, status, fresh);
     final foreground = _statusForeground(context, status, fresh);
+    final accent = _statusAccent(context, status, fresh);
     final word = _statusWord(status, fresh);
+    final radius = prominent ? 26.0 : 20.0;
+
     return Material(
       color: background,
-      borderRadius: BorderRadius.circular(prominent ? 24 : 18),
+      borderRadius: BorderRadius.circular(radius),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(prominent ? 24 : 18),
         child: Container(
           width: double.infinity,
-          padding: EdgeInsets.all(prominent ? 21 : 16),
+          padding: EdgeInsets.fromLTRB(
+            prominent ? 20 : 17,
+            prominent ? 19 : 16,
+            prominent ? 18 : 16,
+            prominent ? 19 : 16,
+          ),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(prominent ? 24 : 18),
+            borderRadius: BorderRadius.circular(radius),
             border: Border.all(
-              color: foreground.withAlpha(prominent ? 115 : 70),
-              width: prominent ? 2 : 1,
+              color: accent.withAlpha(prominent ? 125 : 80),
+              width: prominent ? 1.5 : 1,
             ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: prominent ? 48 : 40,
+                    height: prominent ? 48 : 40,
+                    decoration: BoxDecoration(
+                      color: foreground.withAlpha(18),
+                      borderRadius: BorderRadius.circular(prominent ? 16 : 13),
+                    ),
+                    child: Icon(
+                      _statusIcon(status, fresh),
+                      size: prominent ? 30 : 24,
+                      color: foreground,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: foreground,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                          if (subtitle != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: foreground.withAlpha(215),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (onTap != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 7),
+                      child: Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 17,
+                        color: foreground.withAlpha(190),
+                      ),
+                    ),
+                ],
+              ),
+              SizedBox(height: prominent ? 17 : 13),
+              Text(
+                word,
+                style:
+                    (prominent
+                            ? Theme.of(context).textTheme.headlineMedium
+                            : Theme.of(context).textTheme.titleLarge)
+                        ?.copyWith(
+                          color: foreground,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: prominent ? -0.8 : -0.3,
+                          height: 1.05,
+                        ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                _statusDetail(status, fresh),
+                maxLines: prominent ? 3 : 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: foreground,
+                  height: 1.35,
+                ),
+              ),
+              if (footer != null) ...[
+                const SizedBox(height: 13),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: foreground.withAlpha(14),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Text(
+                    footer,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _freshnessLabel() {
+    if (loading || backgroundSync) return 'Aktualizacja…';
+    if (!online) return offlinePackage != null ? 'Tryb offline' : 'Brak sieci';
+    if (snapshot == null) return 'Łączenie…';
+    return 'Dane aktualne';
+  }
+
+  IconData _freshnessIcon() {
+    if (loading || backgroundSync) return Icons.sync_rounded;
+    if (!online) return Icons.cloud_off_outlined;
+    return Icons.cloud_done_outlined;
+  }
+
+  String? _snapshotTime() {
+    final raw = snapshot?.data['serverTime'];
+    if (raw is! String) return null;
+    try {
+      return stamp(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _freshnessPill(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final active = online && !loading && !backgroundSync;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: active
+            ? scheme.primaryContainer.withAlpha(150)
+            : scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: active ? scheme.primary.withAlpha(70) : scheme.outlineVariant,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (loading || backgroundSync)
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            Icon(_freshnessIcon(), size: 16),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              _freshnessLabel(),
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _localitySetupCard(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onChooseLocality,
+        child: Container(
+          padding: const EdgeInsets.all(17),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: scheme.outlineVariant),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                _statusIcon(status, fresh),
-                size: prominent ? 42 : 30,
-                color: foreground,
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: scheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.add_location_alt_outlined,
+                  color: scheme.onSecondaryContainer,
+                ),
               ),
-              SizedBox(width: prominent ? 15 : 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: foreground,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.7,
+                      'Twoja okolica',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: foreground),
-                      ),
-                    ],
-                    SizedBox(height: prominent ? 8 : 5),
-                    Text(
-                      word,
-                      style:
-                          (prominent
-                                  ? Theme.of(context).textTheme.headlineSmall
-                                  : Theme.of(context).textTheme.titleLarge)
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Ustaw miejscowość, aby zobaczyć lokalny status i istotne komunikaty w pobliżu.',
+                    ),
+                    const SizedBox(height: 11),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Ustaw lokalizację',
+                          style: Theme.of(context).textTheme.labelLarge
                               ?.copyWith(
-                                color: foreground,
+                                color: scheme.primary,
                                 fontWeight: FontWeight.w900,
                               ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      _statusDetail(status, fresh),
-                      maxLines: prominent ? 3 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: foreground),
+                        ),
+                        const SizedBox(width: 5),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 18,
+                          color: scheme.primary,
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              if (onTap != null)
-                Icon(Icons.chevron_right_rounded, color: foreground),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _sectionHeader(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required int count,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.35,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Container(
+          constraints: const BoxConstraints(minWidth: 38, minHeight: 34),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: count > 0
+                ? scheme.tertiaryContainer
+                : scheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            '$count',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: count > 0
+                  ? scheme.onTertiaryContainer
+                  : scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -214,78 +478,79 @@ class DashboardScreen extends StatelessWidget {
                 .where((event) => safetyEventIsSignificant(event, now))
                 .map((event) => event.id),
           }.length;
+    final snapshotTime = _snapshotTime();
 
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
         key: const PageStorageKey('dashboard'),
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 26),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 30),
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                child: Text(
-                  'Sytuacja teraz',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Sytuacja teraz',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    if (snapshotTime != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Ostatni odczyt: $snapshotTime',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              if (backgroundSync || loading)
-                const SizedBox(
-                  width: 21,
-                  height: 21,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+              const SizedBox(width: 10),
+              _freshnessPill(context),
             ],
           ),
-          const SizedBox(height: 11),
+          const SizedBox(height: 15),
           _statusCard(
             context,
             title: 'Polska',
+            subtitle: 'Status krajowy',
             status: national,
             fresh: nationalFresh,
             prominent: true,
             onTap: onOpenAlerts,
+            footer: active.isEmpty
+                ? 'Brak istotnych aktywnych komunikatów'
+                : '${active.length} istotnych aktywnych komunikatów',
           ),
           const SizedBox(height: 12),
-          _statusCard(
-            context,
-            title: 'Twoja okolica',
-            subtitle: localityLabel ?? 'Nie wybrano miejscowości',
-            status: local,
-            fresh: localFresh,
-            prominent: false,
-            onTap: onChooseLocality,
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(
-                localityLabel == null
-                    ? Icons.add_location_alt_outlined
-                    : Icons.location_on_outlined,
-                size: 18,
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  localityLabel == null
-                      ? 'Ustaw miejscowość, aby szybciej oceniać swoją okolicę.'
-                      : localityAround == null
-                      ? 'Odświeżamy informacje dla wybranej okolicy.'
-                      : 'Istotne komunikaty lokalne lub regionalne: $localRelevant.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-              TextButton(
-                onPressed: onChooseLocality,
-                child: Text(localityLabel == null ? 'Ustaw' : 'Zmień'),
-              ),
-            ],
-          ),
+          if (localityLabel == null)
+            _localitySetupCard(context)
+          else
+            _statusCard(
+              context,
+              title: 'Twoja okolica',
+              subtitle: localityLabel,
+              status: local,
+              fresh: localFresh,
+              prominent: false,
+              onTap: onChooseLocality,
+              footer: localityAround == null
+                  ? 'Sprawdzanie lokalnych danych…'
+                  : localRelevant == 0
+                  ? 'Brak istotnych komunikatów lokalnych'
+                  : '$localRelevant istotnych komunikatów lokalnych',
+            ),
           if (!online && offlinePackage != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 10),
             const _InfoBanner(
               icon: Icons.offline_pin_outlined,
               text:
@@ -293,31 +558,29 @@ class DashboardScreen extends StatelessWidget {
             ),
           ],
           if (error != null) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 10),
             _InfoBanner(
               icon: Icons.cloud_off_outlined,
               text: 'Nie udało się pobrać świeżych danych. $error',
             ),
           ],
-          const SizedBox(height: 21),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Istotne aktywne zagrożenia',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: onOpenAlerts,
-                icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-                label: const Text('Wszystkie'),
-              ),
-            ],
+          const SizedBox(height: 25),
+          _sectionHeader(
+            context,
+            title: 'Istotne zagrożenia',
+            subtitle: 'Najważniejsze aktywne komunikaty, bez informacyjnego szumu.',
+            count: active.length,
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onOpenAlerts,
+              icon: const Icon(Icons.tune_rounded, size: 18),
+              label: const Text('Wszystkie alerty i filtry'),
+            ),
+          ),
+          const SizedBox(height: 3),
           if (snapshot == null && offlinePackage == null)
             const _EmptyState(
               icon: Icons.cloud_download_outlined,
@@ -353,22 +616,32 @@ class _InfoBanner extends StatelessWidget {
   const _InfoBanner({required this.icon, required this.text});
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 22),
-        const SizedBox(width: 10),
-        Expanded(child: Text(text)),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 21, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _EmptyState extends StatelessWidget {
@@ -382,27 +655,51 @@ class _EmptyState extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 32),
-        const SizedBox(height: 10),
-        Text(
-          title,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 6),
-        Text(text),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(19),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, size: 24, color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  text,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
