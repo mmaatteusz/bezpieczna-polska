@@ -196,15 +196,6 @@ class _AlertsScreenState extends State<AlertsScreen> {
               ),
               childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
               children: [
-                TextField(
-                  decoration: const InputDecoration(
-                    hintText: 'Szukaj alertu',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (value) => setState(() => query = value),
-                ),
-                const SizedBox(height: 11),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Wrap(
@@ -247,6 +238,15 @@ class _AlertsScreenState extends State<AlertsScreen> {
                             )
                             .toList(),
                   ),
+                ),
+                const SizedBox(height: 11),
+                TextField(
+                  decoration: const InputDecoration(
+                    hintText: 'Szukaj alertu',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) => setState(() => query = value),
                 ),
               ],
             ),
