@@ -53,10 +53,13 @@ export function parseRso(xml:string,now=new Date()):Event[]{
 }
 const RSO_XML='https://komunikaty.tvp.pl/komunikatyxml/wszystkie/wszystkie/0?_format=xml';
 export const rsoAdapter:SourceAdapter={
- id:'RSO',version:'1.0.0',minSyncIntervalSeconds:300,
+ id:'RSO',version:'1.0.1',minSyncIntervalSeconds:300,
  async sync({now,fetchText}){
   const xml=await fetchText(RSO_XML),events=parseRso(xml,now);
-  return {events,complete:true,coverage:'ACTIVE_WARNINGS',pagesFetched:1};
+  // The public endpoint is a complete list of RSO communications, not a
+  // verified active-alert contract. Until CAP/OpenAPI semantics are authenticated
+  // and mapped, it must never be evidence that no warning exists.
+  return {events,complete:false,coverage:'RECENT_PUBLICATIONS',pagesFetched:1};
  }
 };
 export async function fetchPublic(url:string):Promise<string>{
