@@ -128,12 +128,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     try {
       seen = Map<String, int>.from(
         jsonDecode(
-              widget.repository.prefs.getString(
-                    'seen:${widget.repository.api}:$region',
-                  ) ??
-                  '{}',
-            )
-            as Map,
+          widget.repository.prefs.getString(
+                'seen:${widget.repository.api}:$region',
+              ) ??
+              '{}',
+        ) as Map,
       );
     } catch (_) {
       seen = {};
@@ -386,8 +385,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                           } catch (_) {
                             update(() {
                               searching = false;
-                              validation =
-                                  'Nie znaleziono miejscowości. Dopisz powiat lub województwo.';
+                              validation = 'Nie znaleziono miejscowości. Dopisz powiat lub województwo.';
                             });
                           }
                         },
@@ -503,9 +501,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     appBar: AppBar(
       title: Text(
         ['Start', 'Alerty', 'Mapa', 'Więcej'][page],
-        style: Theme.of(
-          context,
-        ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        style: Theme.of(context).textTheme.titleLarge
+            ?.copyWith(fontWeight: FontWeight.w700),
       ),
       actions: [
         IconButton(
@@ -554,8 +551,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           region: region,
           openLink: openLink,
           call112: call112,
-          onWatchedLocationsChanged:
-              widget.pushManager?.syncCurrentPreferences,
+          onWatchedLocationsChanged: widget.pushManager?.syncCurrentPreferences,
         ),
       },
     ),
