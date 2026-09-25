@@ -19,6 +19,7 @@ import 'screens/dashboard_screen.dart';
 import 'screens/alerts_screen.dart';
 import 'screens/map_screen.dart';
 import 'screens/more_screen.dart';
+import 'ui/app_theme.dart';
 
 String? localityRegionSeed(String currentRegion) =>
     currentRegion == 'PL' ? null : currentRegion;
@@ -51,19 +52,8 @@ class _SafetyAppState extends State<SafetyApp> {
   Widget build(BuildContext context) => MaterialApp(
     title: 'Bezpieczna Polska',
     debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF127363)),
-      scaffoldBackgroundColor: const Color(0xFFF4F7F7),
-    ),
-    darkTheme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF70D7BF),
-        brightness: Brightness.dark,
-      ),
-      scaffoldBackgroundColor: const Color(0xFF101A21),
-    ),
+    theme: buildSafetyTheme(Brightness.light),
+    darkTheme: buildSafetyTheme(Brightness.dark),
     themeMode: widget.repository.dark ? ThemeMode.dark : ThemeMode.light,
     home: Home(
       repository: widget.repository,
@@ -503,16 +493,16 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: Text(
-        ['Start', 'Mapa', 'Alerty', 'Więcej'][page],
-        style: Theme.of(
-          context,
-        ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        ['Bezpieczna Polska', 'Mapa', 'Alerty', 'Więcej'][page],
       ),
       actions: [
-        IconButton(
-          tooltip: 'Ustawienia',
-          onPressed: settings,
-          icon: const Icon(Icons.settings_outlined),
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: IconButton.filledTonal(
+            tooltip: 'Ustawienia',
+            onPressed: settings,
+            icon: const Icon(Icons.settings_outlined),
+          ),
         ),
       ],
     ),
