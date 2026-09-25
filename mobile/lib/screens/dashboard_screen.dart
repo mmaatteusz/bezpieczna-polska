@@ -195,11 +195,11 @@ class DashboardScreen extends StatelessWidget {
     final active = deduplicateSafetyEventsForDisplay(
       events.where((event) => safetyEventIsSignificant(event, now)),
     )..sort((a, b) {
-            final severity = safetyEventPriority(
-              a,
-              now,
-            ).compareTo(safetyEventPriority(b, now));
-            if (severity != 0) return severity;
+      final severity = safetyEventPriority(
+        a,
+        now,
+      ).compareTo(safetyEventPriority(b, now));
+      if (severity != 0) return severity;
       return safetyEventTime(b).compareTo(safetyEventTime(a));
     });
     final localRelevant = localityAround == null
