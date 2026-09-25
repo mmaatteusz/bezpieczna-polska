@@ -492,9 +492,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: Text(
-        ['Bezpieczna Polska', 'Mapa', 'Alerty', 'Więcej'][page],
-      ),
+      title: Text(['Bezpieczna Polska', 'Mapa', 'Alerty', 'Więcej'][page]),
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 8),
