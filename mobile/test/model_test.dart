@@ -32,11 +32,17 @@ http.Response response(Map<String, dynamic> d) => http.Response(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
-  test('fresh install defaults to national scope until locality is chosen',() async {
-    final prefs=await SharedPreferences.getInstance();
-    final repository=DataRepository(prefs,buildApi:'https://api.example.org');
-    expect(repository.region,'PL');
-  });
+  test(
+    'fresh install defaults to national scope until locality is chosen',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final repository = DataRepository(
+        prefs,
+        buildApi: 'https://api.example.org',
+      );
+      expect(repository.region, 'PL');
+    },
+  );
   test(
     'stale data never presents current green',
     () => expect(
