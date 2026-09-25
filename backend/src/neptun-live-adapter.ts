@@ -3,7 +3,7 @@ import type {SourceAdapter} from './source-adapter.js';
 
 export const NEPTUN_API='https://neptun.in.ua/api/v1/threats';
 export const NEPTUN_HOME='https://neptun.in.ua/';
-export const NEPTUN_LIVE_VERSION='neptun-public-v1/1.0.0';
+export const NEPTUN_LIVE_VERSION='neptun-public-v1/1.0.1';
 export const NEPTUN_PUBLIC_MIN_PRECISION_KM=10;
 
 const timestamp=z.iso.datetime({offset:true});
@@ -61,7 +61,6 @@ export type PublicNeptunThreat={
   count:number|null;
   updatedAt:string;
   status:'active'|'stale';
-  explanationShort:string|null;
   advisory:boolean;
   areaOnly:boolean;
   latitude:number|null;
@@ -104,7 +103,6 @@ export function parseNeptunLive(input:unknown,now=new Date()){
       count:t.count,
       updatedAt:t.updatedAt,
       status:t.status,
-      explanationShort:t.explanationShort,
       advisory:t.advisory,
       areaOnly:t.areaOnly,
       latitude:point?.latitude??null,
