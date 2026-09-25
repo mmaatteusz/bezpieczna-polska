@@ -21,7 +21,7 @@ int independentSourceCount(SafetyEvent event) {
   final families = <String>{};
   for (final source in event.sources) {
     final id = source['id']?.toString() ?? '';
-    families.add(id == 'RSO' || id.startsWith('WCZK-') ? 'WCZK_RSO' : id);
+    families.add(\n      id == 'RSO' || id.startsWith('WCZK-') ? 'WCZK_RSO' : id,\n    );
   }
   return families.length;
 }
@@ -38,22 +38,24 @@ class SafetyEventCard extends StatelessWidget {
     this.compact = false,
   });
 
-  String get verificationLabel => switch (event.data['verification']?.toString()) {
-    'CONFIRMED' => 'POTWIERDZONE',
-    'PROBABLE' => 'PRAWDOPODOBNE',
-    'UNVERIFIED' => 'NIEZWERYFIKOWANE',
-    'REFUTED' => 'ZDEMENTOWANE',
-    'DISPUTED' => 'SPRZECZNE',
-    _ => 'NIEUSTALONE',
-  };
+  String get verificationLabel =>
+      switch (event.data['verification']?.toString()) {
+        'CONFIRMED' => 'POTWIERDZONE',
+        'PROBABLE' => 'PRAWDOPODOBNE',
+        'UNVERIFIED' => 'NIEZWERYFIKOWANE',
+        'REFUTED' => 'ZDEMENTOWANE',
+        'DISPUTED' => 'SPRZECZNE',
+        _ => 'NIEUSTALONE',
+      };
 
-  String get severityLabel => switch (event.data['severity']?.toString()) {
-    'CRITICAL' => 'KRYTYCZNE',
-    'HIGH' || 'SEVERE' => 'WYSOKIE',
-    'ELEVATED' || 'MODERATE' => 'PODWYŻSZONE',
-    'NORMAL' || 'LOW' => 'STANDARDOWE',
-    _ => 'NIEUSTALONE',
-  };
+  String get severityLabel =>
+      switch (event.data['severity']?.toString()) {
+        'CRITICAL' => 'KRYTYCZNE',
+        'HIGH' || 'SEVERE' => 'WYSOKIE',
+        'ELEVATED' || 'MODERATE' => 'PODWYŻSZONE',
+        'NORMAL' || 'LOW' => 'STANDARDOWE',
+        _ => 'NIEUSTALONE',
+      };
 
   Widget _badge(BuildContext context, String text) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
