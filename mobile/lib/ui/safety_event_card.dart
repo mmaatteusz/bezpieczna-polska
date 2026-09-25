@@ -73,7 +73,7 @@ bool safetyEventIsSignificant(SafetyEvent event, [DateTime? at]) {
 
 String _normalizedEventText(Object? value) => (value?.toString() ?? '')
     .toLowerCase()
-    .replaceAll(RegExp(r'\\s+'), ' ')
+    .replaceAll(RegExp(r'\s+'), ' ')
     .trim();
 
 String safetyEventDisplayKey(SafetyEvent event) {
@@ -112,7 +112,7 @@ bool safetyEventHasOpenEndedValidity(SafetyEvent event) {
   final raw = event.data['validTo'];
   if (raw is! String || raw.trim().isEmpty) return false;
 
-  for (final match in RegExp(r'\\d{4,}').allMatches(raw)) {
+  for (final match in RegExp(r'\d{4,}').allMatches(raw)) {
     final value = int.tryParse(match.group(0)!);
     if (value != null && value >= 9000) return true;
   }
