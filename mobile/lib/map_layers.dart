@@ -27,6 +27,11 @@ class MapRequest {
   String get key => jsonEncode(query);
 }
 
+bool mapDatasetChanged(MapRequest? rendered, MapRequest next) =>
+    rendered != null &&
+    (rendered.region != next.region ||
+        rendered.availability != next.availability);
+
 class MapViewport {
   final Map<String, dynamic> data;
   MapViewport._(this.data);
