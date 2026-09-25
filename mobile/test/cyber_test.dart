@@ -91,6 +91,8 @@ void main() {
     expect(find.textContaining('CVE-2026-12345'), findsNothing);
     await tester.tap(find.text('Alerty').last);
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Filtry i wyszukiwanie'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Wszystkie').first);
     await tester.pumpAndSettle();
     expect(find.textContaining('CVE-2026-12345'), findsOneWidget);
