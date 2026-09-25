@@ -21,7 +21,9 @@ int independentSourceCount(SafetyEvent event) {
   final families = <String>{};
   for (final source in event.sources) {
     final id = source['id']?.toString() ?? '';
-    families.add(\n      id == 'RSO' || id.startsWith('WCZK-') ? 'WCZK_RSO' : id,\n    );
+    families.add(
+      id == 'RSO' || id.startsWith('WCZK-') ? 'WCZK_RSO' : id,
+    );
   }
   return families.length;
 }
