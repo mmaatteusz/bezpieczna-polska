@@ -504,7 +504,7 @@ class DataRepository {
               : buildApi)
           .trim()
           .replaceAll(RegExp(r'/+$'), '');
-  String get region => prefs.getString('region') ?? '04';
+  String get region => prefs.getString('region') ?? 'PL';
 
   String? get primaryLocationLabel =>
       prefs.getString('primary_location_label')?.trim().isNotEmpty == true
