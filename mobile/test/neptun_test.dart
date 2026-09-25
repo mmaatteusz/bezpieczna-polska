@@ -32,8 +32,8 @@ Map<String, dynamic> fixture(DateTime now) {
       'threats': [
         {
           'id': 'trk-live-1',
-          'type': 'uav',
-          'title': 'BSP / dron',
+          'type': 'fpv',
+          'title': 'FPV / dron',
           'region': 'Obwód testowy',
           'confidenceLevel': 'high',
           'sourceCount': 3,
@@ -181,8 +181,14 @@ void main() {
       final data = NeptunData.parse(fixture(now));
       expect(data.liveThreats.length, 1);
       expect(data.liveThreats.first['precisionKm'], 10);
+      expect(data.liveThreats.first['type'], 'fpv');
+      expect(data.isFreshLive(now), isTrue);
       expect(data.tracks.length, 1);
       expect(data.tracks.first['lifecycle'], 'ENDED');
+
+      final stale = fixture(now);
+      stale['live']['validUntil'] = now.subtract(const Duration(seconds: 1)).toIso8601String();
+      expect(NeptunData.parse(stale).isFreshLive(now), isFalse);
 
       final active = fixture(now);
       active['tracks'][0]['lifecycle'] = 'ACTIVE';
@@ -273,9 +279,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('NEPTUN • live'), findsOneWidget);
+    expect(find.text('NEPTUN'), findsOneWidget);
     expect(find.textContaining('LIVE • 1 aktywnych wpisów'), findsOneWidget);
-    expect(find.text('BSP / dron'), findsOneWidget);
+    expect(find.text('FPV / dron'), findsOneWidget);
     expect(find.textContaining('Dane live: NEPTUN'), findsOneWidget);
     expect(find.text('Historyczny ślad testowy'), findsOneWidget);
     expect(find.text('Timeline i źródła'), findsOneWidget);
