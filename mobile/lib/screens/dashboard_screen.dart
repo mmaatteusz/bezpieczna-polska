@@ -108,9 +108,8 @@ class DashboardScreen extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 _statusText(status, fresh),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800),
               ),
             ],
           ),
@@ -149,9 +148,8 @@ class DashboardScreen extends StatelessWidget {
                       Expanded(
                         child: Text(
                           'Sytuacja teraz',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                       ),
                       if (backgroundSync || loading)
@@ -209,8 +207,7 @@ class DashboardScreen extends StatelessWidget {
             const SizedBox(height: 8),
             const _InfoBanner(
               icon: Icons.offline_pin_outlined,
-              text:
-                  'Tryb offline • ostatnia zapisana kopia. Brak nowych danych nie oznacza braku zagrożenia.',
+              text: 'Tryb offline • ostatnia zapisana kopia. Brak nowych danych nie oznacza braku zagrożenia.',
             ),
           ],
           if (error != null) ...[
@@ -223,9 +220,8 @@ class DashboardScreen extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Istotne aktywne zagrożenia',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
               TextButton(
@@ -239,15 +235,13 @@ class DashboardScreen extends StatelessWidget {
             const _EmptyState(
               icon: Icons.cloud_download_outlined,
               title: 'Brak pobranych danych',
-              text:
-                  'Aplikacja spróbuje pobrać status automatycznie. Możesz też przeciągnąć ekran w dół.',
+              text: 'Aplikacja spróbuje pobrać status automatycznie. Możesz też przeciągnąć ekran w dół.',
             )
           else if (active.isEmpty)
             const _EmptyState(
               icon: Icons.notifications_none_outlined,
               title: 'Brak istotnych aktywnych komunikatów w pobranych danych',
-              text:
-                  'To nie jest gwarancja bezpieczeństwa — ocena zależy od aktualności oficjalnych źródeł.',
+              text: 'To nie jest gwarancja bezpieczeństwa — ocena zależy od aktualności oficjalnych źródeł.',
             )
           else
             ...active.map(
@@ -307,9 +301,8 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
           Text(text),
