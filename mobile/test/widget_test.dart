@@ -72,6 +72,12 @@ void main() {
     expect(find.text('Diagnostyka źródeł'), findsNothing);
     expect(find.byType(NavigationDestination), findsNWidgets(4));
 
+    await tester.tap(find.text('Polska'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alerty'), findsWidgets);
+    await tester.tap(find.text('Start').last);
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Mapa').last);
     await tester.pumpAndSettle();
     expect(find.byType(MapLibreMap), findsOneWidget);
