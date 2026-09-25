@@ -10,7 +10,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'cached CERT advisory appears in separate cyber section and Alert Center',
+    'cached CERT advisory appears in the Alerts cyber category',
     (tester) async {
       final now = DateTime.now().toUtc();
       final status = {
@@ -90,30 +90,15 @@ void main() {
       await tester.pumpAndSettle();
 
       for (
-        var i = 0;
-        i < 8 && find.text('Cyberbezpieczeństwo').evaluate().isEmpty;
-        i++
-      ) {
-        await tester.drag(find.byType(ListView).first, const Offset(0, -300));
-        await tester.pumpAndSettle();
-      }
-      expect(find.text('Cyberbezpieczeństwo'), findsOneWidget);
-      for (
-        var i = 0;
-        i < 4 && find.textContaining('CVE-2026-12345').evaluate().isEmpty;
-        i++
-      ) {
-        await tester.drag(find.byType(ListView).first, const Offset(0, -180));
-        await tester.pumpAndSettle();
-      }
-      expect(find.textContaining('CVE-2026-12345'), findsOneWidget);
-
-      await tester.tap(find.byIcon(Icons.campaign_outlined).last);
+        expect(find.textContaining('CVE-2026-12345'), findsNothing);
+      await tester.tap(find.text('Alerty').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Wszystkie').first);
       await tester.pumpAndSettle();
       expect(find.textContaining('CVE-2026-12345'), findsOneWidget);
-      await tester.tap(find.text('Wszystkie').last);
+      await tester.tap(find.text('Cyber'));
       await tester.pumpAndSettle();
-      expect(find.text('Cyber'), findsOneWidget);
+      expect(find.textContaining('CVE-2026-12345'), findsOneWidget);
     },
   );
 }
