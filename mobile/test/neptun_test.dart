@@ -164,9 +164,12 @@ void main() {
   test(
     'status entry point wording advertises live data without precise-motion claims',
     () {
-      final source = File('lib/main.dart').readAsStringSync();
-      expect(source, contains('NEPTUN • live + historia'));
-      expect(source, contains('Bez kursu, prędkości i predykcji ruchu'));
+      final source = File('lib/screens/more_screen.dart').readAsStringSync();
+      expect(source, contains("title: 'NEPTUN'"));
+      expect(source, contains('Bieżące zgrubne zagrożenia i historia'));
+      expect(source, isNot(contains('kursu')));
+      expect(source, isNot(contains('prędkości')));
+      expect(source, isNot(contains('predykcji ruchu')));
     },
   );
   TestWidgetsFlutterBinding.ensureInitialized();
