@@ -72,10 +72,8 @@ class MoreScreen extends StatelessWidget {
         subtitle: 'Bieżące zgrubne zagrożenia i historia',
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => NeptunScreen(
-              repository: repository,
-              openSource: openLink,
-            ),
+            builder: (_) =>
+                NeptunScreen(repository: repository, openSource: openLink),
           ),
         ),
       ),
@@ -95,9 +93,8 @@ class MoreScreen extends StatelessWidget {
       const SizedBox(height: 10),
       Text(
         'Pomoc',
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.w800,
-        ),
+        style: Theme.of(context).textTheme.titleLarge
+            ?.copyWith(fontWeight: FontWeight.w800),
       ),
       const SizedBox(height: 8),
       FilledButton.icon(
@@ -118,9 +115,8 @@ class MoreScreen extends StatelessWidget {
       const SizedBox(height: 18),
       Text(
         'Oficjalne informacje',
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
+        style: Theme.of(context).textTheme.titleMedium
+            ?.copyWith(fontWeight: FontWeight.w700),
       ),
       for (final link in const [
         ('Rządowe Centrum Bezpieczeństwa', 'https://www.gov.pl/web/rcb'),
