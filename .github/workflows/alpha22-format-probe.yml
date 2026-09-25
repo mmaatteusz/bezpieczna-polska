@@ -1,0 +1,22 @@
+name: Alpha22 format probe
+on:
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/alpha22-format-probe.yml'
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Show formatter patch
+        working-directory: mobile
+        shell: bash
+        run: |
+          dart format lib test
+          echo '---FORMAT_PATCH_BEGIN---'
+          git diff -- lib/main.dart lib/screens/dashboard_screen.dart lib/screens/more_screen.dart lib/ui/safety_event_card.dart
+          echo '---FORMAT_PATCH_END---'
