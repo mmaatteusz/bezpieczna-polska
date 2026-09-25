@@ -166,7 +166,7 @@ void main() {
           return http.Response(
             jsonEncode({
               'schemaVersion': 1,
-              'regionId': '04',
+              'regionId': request.url.queryParameters['regionId'] ?? 'PL',
               'serverTime': now.toIso8601String(),
               'status': status,
               'nationalStatus': status,

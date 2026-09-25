@@ -33,16 +33,13 @@ Map<String, dynamic> fixture(DateTime now) {
         {
           'id': 'trk-live-1',
           'type': 'uav',
-          'title': 'BSP testowy',
+          'title': 'BSP / dron',
           'region': 'Obwód testowy',
-          'district': null,
-          'locality': 'Rejon testowy',
           'confidenceLevel': 'high',
           'sourceCount': 3,
           'count': 1,
           'updatedAt': now.toIso8601String(),
           'status': 'active',
-          'explanationShort': 'zagrożenie testowe',
           'advisory': false,
           'areaOnly': false,
           'latitude': 49.1,
@@ -275,7 +272,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('NEPTUN • live'), findsOneWidget);
     expect(find.textContaining('LIVE • 1 aktywnych wpisów'), findsOneWidget);
-    expect(find.text('BSP testowy'), findsOneWidget);
+    expect(find.text('BSP / dron'), findsOneWidget);
     expect(find.textContaining('Dane live: NEPTUN'), findsOneWidget);
     expect(find.text('Historyczny ślad testowy'), findsOneWidget);
     expect(find.text('Timeline i źródła'), findsOneWidget);

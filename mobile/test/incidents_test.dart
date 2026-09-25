@@ -124,6 +124,7 @@ void main() {
   testWidgets(
     'Alert Center shows one card for RCB RSO WCZK and retains details',
     (tester) async {
+      SharedPreferences.setMockInitialValues({'region': '04'});
       final raw = fixture();
       final repo = DataRepository(
         await SharedPreferences.getInstance(),

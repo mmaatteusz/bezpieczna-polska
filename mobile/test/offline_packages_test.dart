@@ -530,6 +530,7 @@ void main() {
   testWidgets('offline home never presents LKG as LIVE green status', (
     tester,
   ) async {
+    SharedPreferences.setMockInitialValues({'region': '04'});
     final prefs = await SharedPreferences.getInstance();
     await tester.runAsync(() => OfflinePackageStore(prefs).commit(package()));
     final repo = DataRepository(prefs);
