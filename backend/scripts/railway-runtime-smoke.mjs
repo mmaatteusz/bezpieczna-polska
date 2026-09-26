@@ -1,5 +1,6 @@
 import {readFileSync} from 'node:fs';
 
+// Successful Railway deployment_status events trigger this production smoke audit.
 const packageVersion=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')).version;
 const sleep=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
 const base=(process.env.SMOKE_BASE_URL||'').replace(/\/+$/,'');
