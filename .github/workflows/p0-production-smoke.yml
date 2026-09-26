@@ -1,0 +1,51 @@
+name: P0 production full smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/p0-production-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Full production API smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://api-production-b6560.up.railway.app"
+          EXPECTED_SHA="37323e19d23400429e5e2f513d42ee3527525b49"
+
+          check() {
+            name="$1"
+            path="$2"
+            filter="$3"
+            body="$(mktemp)"
+            code="$(curl --retry 2 --retry-delay 1 --connect-timeout 10 --max-time 30 -sS -o "$body" -w "%{http_code}" "$BASE$path")"
+            if [ "$code" != "200" ]; then
+              echo "FAIL $name HTTP $code"
+              cat "$body"
+              exit 1
+            fi
+            if ! jq -e --arg sha "$EXPECTED_SHA" "$filter" "$body" >/dev/null; then
+              echo "FAIL $name contract"
+              cat "$body"
+              exit 1
+            fi
+            echo "PASS $name HTTP $code"
+          }
+
+          check health "/health" '.ok == true and .environment == "production" and .buildSha == $sha'
+          check ready "/ready" '.ready == true and .database == "postgres" and .postgis == true'
+          check status "/status?regionId=04" '.schemaVersion == 1 and (.evaluatedAt | type == "string") and (.poland | type == "object") and .region.id == "04" and (.sourceHealth | type == "array")'
+          check sources "/v1/sources" '(.sourceHealth | type == "array")'
+          check map_layers "/v1/map/layers" '.schemaVersion == 1 and (.layers | type == "array")'
+          check neptun "/v1/neptun" 'has("mode") and has("live") and has("sourceHealth")'
+          check events_geojson "/v1/layers/events.geojson?regionId=04" '.type == "FeatureCollection" and (.features | type == "array")'
+          check shelters "/v1/shelters?regionId=04&limit=3" '.schemaVersion == 1 and (.items | type == "array") and ((.items | length) <= 3)'
+
+          echo "P0_FULL_SMOKE_OK"
