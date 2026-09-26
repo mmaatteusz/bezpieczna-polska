@@ -77,6 +77,12 @@ bool mapEventIsImgw(SafetyEvent event) => event.sources.any((source) {
   return id == 'IMGW_METEO' || id == 'IMGW_HYDRO';
 });
 
+bool mapEventVisibleForLayers(
+  SafetyEvent event, {
+  required bool showEvents,
+  required bool showImgw,
+}) => mapEventIsImgw(event) ? showImgw : showEvents;
+
 List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
   if (!mapEventIsLive(event, now)) return const [];
 
