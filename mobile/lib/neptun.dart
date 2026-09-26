@@ -289,10 +289,7 @@ String neptunTypeLabel(String value) => switch (value) {
   _ => 'Nieokreślone',
 };
 
-Map<String, dynamic>? neptunThreatForFeature(
-  NeptunData data,
-  dynamic feature,
-) {
+Map<String, dynamic>? neptunThreatForFeature(NeptunData data, dynamic feature) {
   if (feature is! Map || feature['properties'] is! Map) return null;
   final id = feature['properties']['threatId'];
   if (id is! String || id.isEmpty) return null;
@@ -639,11 +636,9 @@ class _NeptunMapState extends State<NeptunMap> {
     final c = controller;
     if (!ready || c == null || !mounted) return;
     try {
-      final features = await c.queryRenderedFeatures(
-        point,
-        const ['neptun-live-points'],
-        null,
-      );
+      final features = await c.queryRenderedFeatures(point, const [
+        'neptun-live-points',
+      ], null);
       if (!mounted || features.isEmpty) return;
       final threat = neptunThreatForFeature(widget.data, features.first);
       if (threat == null) return;
