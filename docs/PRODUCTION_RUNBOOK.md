@@ -152,17 +152,41 @@ Nie wykonuj rollbacku przez samo przepięcie zmiennej SHA bez zmiany kodu deploy
 
 ## Android release
 
-Production:
+Android ma dwa rozdzielone łańcuchy instalacji:
 
 ```text
-package: pl.bezpiecznapolska
+preview:    pl.bezpiecznapolska.preview
+production: pl.bezpiecznapolska
 ```
 
-Preview:
+Nie są to wzajemne aktualizacje. Preview aktualizuje wyłącznie preview, a produkcja wyłącznie produkcję. Dzięki osobnym `applicationId` mogą być zainstalowane równolegle.
 
-```text
-package: pl.bezpiecznapolska.preview
+### Preview signing i update-in-place
+
+Preview ma jeden stały certyfikat podpisujący. CI odmawia zbudowania pakietu `.preview`, jeżeli permanentny signer nie jest dostępny lub jego SHA-256 nie odpowiada przypiętemu fingerprintowi. Zwykły lokalny debug używa `pl.bezpiecznapolska.dev`, więc nie może przypadkiem zatruć łańcucha aktualizacji preview innym kluczem.
+
+Każdy dystrybuowany preview APK dostaje CI-owy, rosnący w czasie bazowy `versionCode`. Dla arm64 split Flutter dodaje offset ABI. Nie należy ręcznie zastępować tego numeru numerem z `pubspec.yaml` w workflowach preview.
+
+Workflow `Verify Android in-place APK update` wykonuje prawdziwy test PackageManagera na emulatorze:
+
+1. buduje dwie APK z tym samym signerem i rosnącym `versionCode`,
+2. instaluje starszą,
+3. zapisuje dane w prywatnym katalogu aplikacji,
+4. wykonuje `adb install -r` nowszej APK bez deinstalacji,
+5. potwierdza nowy `versionCode` i zachowanie danych,
+6. potwierdza, że downgrade do starszego APK jest odrzucony.
+
+`scripts/setup-preview-signing.ps1` nie generuje już zastępczego klucza. Służy wyłącznie do ponownego wgrania sekretów z prywatnego backupu istniejącego signera. Utrata tego backupu nie może być „naprawiana” przez wygenerowanie nowego klucza bez świadomej rotacji i zerwania zgodności aktualizacji.
+
+### Finalny production keystore
+
+Przed pierwszym rozpowszechnieniem `pl.bezpiecznapolska` utwórz finalną tożsamość podpisującą na zaufanym komputerze:
+
+```powershell
+.\scripts\setup-production-signing.ps1
 ```
+
+Skrypt tworzy lub ponownie wykorzystuje prywatny backup w `~/.bezpieczna-polska/production-signing`, ustawia sekrety GitHub oraz zapisuje publiczny fingerprint jako `PRODUCTION_SIGNING_CERT_SHA256`. Backup keystore i pliku credentiali musi istnieć w co najmniej dwóch niezależnych, zaszyfrowanych lokalizacjach.
 
 Build production wymaga:
 
@@ -171,15 +195,24 @@ Build production wymaga:
 - `ANDROID_KEYSTORE_B64`,
 - `ANDROID_KEYSTORE_PASSWORD`,
 - `ANDROID_KEY_ALIAS`,
-- `ANDROID_KEY_PASSWORD`.
+- `ANDROID_KEY_PASSWORD`,
+- `PRODUCTION_SIGNING_CERT_SHA256`.
+
+Release gate przed budową porównuje faktyczny certyfikat z przypiętym SHA-256. APK podpisana innym poprawnym kluczem jest traktowana jako błąd, ponieważ zerwałaby możliwość aktualizacji istniejącej instalacji.
+
+Dla release tagów workflow dodatkowo wymaga, aby build number z `mobile/pubspec.yaml` był większy od maksymalnego build number wcześniejszych tagów. Chroni to zarówno bezpośrednie APK, jak i AAB przed przypadkowym cofnięciem `versionCode`.
+
+Produkcyjny AAB i bezpośredni arm64 APK używają **tego samego `versionCode`**. Produkcyjnego APK nie budujemy z `--split-per-abi`, ponieważ Flutter dodaje wtedy offset ABI (np. +2000 dla arm64), co rozdzieliłoby numerację bezpośredniego APK i Google Play dla tego samego pakietu.
+
+Jeżeli `pl.bezpiecznapolska` zostanie później włączona do Google Play App Signing, certyfikat używany przez Play do podpisywania instalowanych APK musi odpowiadać ustalonej produkcyjnej tożsamości podpisującej, jeśli istnieją już użytkownicy bezpośrednich APK. Nie należy pozwolić Play wygenerować niezależnej tożsamości app-signing dla istniejącego łańcucha bez świadomego planu migracji; klucz upload może być osobny.
 
 Po buildzie sprawdź:
 
 - package id,
 - versionName,
 - versionCode,
-- podpis,
-- SHA-256,
+- fingerprint podpisu,
+- SHA-256 pliku,
 - instalację aktualizacji na istniejącej poprzedniej wersji.
 
 ## Push

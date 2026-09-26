@@ -6,6 +6,9 @@ on:
       - 'backend/**'
       - 'mobile/**'
       - 'docs/**'
+      - 'scripts/configure-preview-signing.sh'
+      - 'scripts/android-preview-build-number.sh'
+      - 'scripts/verify-preview-apk.sh'
       - '.github/workflows/preview-apk.yml'
   push:
     branches: ['stage/**']
@@ -13,6 +16,9 @@ on:
       - 'backend/**'
       - 'mobile/**'
       - 'docs/**'
+      - 'scripts/configure-preview-signing.sh'
+      - 'scripts/android-preview-build-number.sh'
+      - 'scripts/verify-preview-apk.sh'
       - '.github/workflows/preview-apk.yml'
   workflow_dispatch:
 permissions:
@@ -99,10 +105,13 @@ jobs:
         run: flutter test --no-pub --reporter expanded
       - name: Configure stable preview signing
         run: bash scripts/configure-preview-signing.sh
+      - name: Allocate monotonic preview versionCode
+        shell: bash
+        run: echo "PREVIEW_BUILD_NUMBER=$(bash scripts/android-preview-build-number.sh)" >> "$GITHUB_ENV"
       - name: Build Android preview
         working-directory: mobile
         run: >-
-          flutter build apk --debug --split-per-abi --target-platform android-arm64
+          flutter build apk --debug --split-per-abi --target-platform android-arm64 --build-number="$PREVIEW_BUILD_NUMBER"
           --dart-define=APP_ENV=preview
           --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL"
           --dart-define=ENABLE_DEVELOPER_SETTINGS=false
@@ -116,11 +125,9 @@ jobs:
           set -euo pipefail
           mkdir -p output
           VERSION="$(node -p "require('./backend/package.json').version")"
-          BUILD="$(sed -nE 's/^version: [^+]+\+([0-9]+)$/\1/p' mobile/pubspec.yaml)"
-          EXPECTED_CODE="$((2000 + BUILD))"
           cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_preview_arm64.apk
+          bash scripts/verify-preview-apk.sh $(find output -maxdepth 1 -name '*.apk' -print -quit) "$PREVIEW_BUILD_NUMBER" split-arm64
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs output/*.apk | tee output/signature-check.txt
-          grep -F "Signer #1 certificate SHA-256 digest: 1f7f3f2aea7073889563b7461e7dfd8f80929a36fff8138c51a2a9516db153d2" output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
           grep -F "native-code: 'arm64-v8a'" output/package-info.txt
           if grep -E "native-code:.*(armeabi-v7a|x86_64)" output/package-info.txt; then
@@ -128,7 +135,6 @@ jobs:
             exit 1
           fi
           grep -F "versionName='${VERSION}'" output/package-info.txt
-          grep -F "versionCode='${EXPECTED_CODE}'" output/package-info.txt
           grep -F "name='pl.bezpiecznapolska.preview'" output/package-info.txt
           sha256sum output/*.apk | tee output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v7

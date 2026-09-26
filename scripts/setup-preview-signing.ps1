@@ -6,16 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-function New-RandomHex([int]$Bytes = 32) {
-  $buffer = New-Object byte[] $Bytes
-  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-  try {
-    $rng.GetBytes($buffer)
-  } finally {
-    $rng.Dispose()
-  }
-  return (($buffer | ForEach-Object { $_.ToString("x2") }) -join "")
-}
+$ExpectedPreviewCertSha256 = "1f7f3f2aea7073889563b7461e7dfd8f80929a36fff8138c51a2a9516db153d2"
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
   throw "GitHub CLI (gh) is required. Install it, then run: gh auth login"
@@ -25,51 +16,72 @@ if (-not (Get-Command keytool -ErrorAction SilentlyContinue)) {
 }
 
 & gh auth status | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "GitHub CLI is not authenticated." }
 
-$null = New-Item -ItemType Directory -Force -Path $BackupDir
 $keystore = Join-Path $BackupDir "preview-signing.jks"
 $credentials = Join-Path $BackupDir "preview-signing-credentials.txt"
 
-if (Test-Path $keystore) {
-  throw "Refusing to overwrite existing signing key: $keystore. Reuse the existing key for all future preview APKs."
+if (-not (Test-Path $keystore) -or -not (Test-Path $credentials)) {
+  throw @"
+Stable preview signing backup is missing from:
+  $BackupDir
+
+Do NOT generate a replacement key. A new key would make existing
+pl.bezpiecznapolska.preview installations impossible to update in place.
+Recover preview-signing.jks and preview-signing-credentials.txt from backup.
+"@
 }
 
-$alias = "bezpieczna-polska-preview"
-$storePassword = New-RandomHex
-$keyPassword = New-RandomHex
+$values = @{}
+Get-Content $credentials | ForEach-Object {
+  if ($_ -match '^([^=]+)=(.*)$') {
+    $values[$matches[1].Trim()] = $matches[2].Trim()
+  }
+}
 
-& keytool -genkeypair -v -storetype JKS -keystore $keystore -storepass $storePassword -keypass $keyPassword -alias $alias -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Bezpieczna Polska Preview, OU=Android Preview, O=Bezpieczna Polska, C=PL"
+foreach ($name in @("ANDROID_PREVIEW_KEYSTORE_PASSWORD", "ANDROID_PREVIEW_KEY_ALIAS", "ANDROID_PREVIEW_KEY_PASSWORD")) {
+  if (-not $values.ContainsKey($name) -or [string]::IsNullOrWhiteSpace($values[$name])) {
+    throw "Missing $name in $credentials"
+  }
+}
+
+$storePassword = $values["ANDROID_PREVIEW_KEYSTORE_PASSWORD"]
+$alias = $values["ANDROID_PREVIEW_KEY_ALIAS"]
+$keyPassword = $values["ANDROID_PREVIEW_KEY_PASSWORD"]
+
+$tempCert = Join-Path ([IO.Path]::GetTempPath()) ("bp-preview-" + [Guid]::NewGuid().ToString("N") + ".cer")
+try {
+  & keytool -exportcert -keystore $keystore -storepass $storePassword -alias $alias -file $tempCert | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "keytool could not read the preview signing key." }
+  $actualSha256 = (Get-FileHash -Algorithm SHA256 $tempCert).Hash.ToLowerInvariant()
+} finally {
+  Remove-Item $tempCert -Force -ErrorAction SilentlyContinue
+}
+
+if ($actualSha256 -ne $ExpectedPreviewCertSha256) {
+  throw @"
+Preview signing certificate mismatch.
+Expected: $ExpectedPreviewCertSha256
+Actual:   $actualSha256
+
+Refusing to overwrite GitHub secrets with a key that would break in-place updates.
+"@
+}
 
 $keystoreB64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($keystore))
 
 & gh secret set ANDROID_PREVIEW_KEYSTORE_B64 --repo $Repo --body $keystoreB64
+if ($LASTEXITCODE -ne 0) { throw "Failed to set ANDROID_PREVIEW_KEYSTORE_B64" }
 & gh secret set ANDROID_PREVIEW_KEYSTORE_PASSWORD --repo $Repo --body $storePassword
+if ($LASTEXITCODE -ne 0) { throw "Failed to set ANDROID_PREVIEW_KEYSTORE_PASSWORD" }
 & gh secret set ANDROID_PREVIEW_KEY_ALIAS --repo $Repo --body $alias
+if ($LASTEXITCODE -ne 0) { throw "Failed to set ANDROID_PREVIEW_KEY_ALIAS" }
 & gh secret set ANDROID_PREVIEW_KEY_PASSWORD --repo $Repo --body $keyPassword
-
-@"
-Repository: $Repo
-Keystore: $keystore
-ANDROID_PREVIEW_KEYSTORE_PASSWORD=$storePassword
-ANDROID_PREVIEW_KEY_ALIAS=$alias
-ANDROID_PREVIEW_KEY_PASSWORD=$keyPassword
-
-IMPORTANT:
-- Keep this file and preview-signing.jks private and backed up.
-- Never commit either file to the repository.
-- Never replace this key for package pl.bezpiecznapolska.preview unless you intentionally accept that old preview installs will no longer update in-place.
-"@ | Set-Content -Encoding UTF8 $credentials
-
-try {
-  if ([System.Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
-    & icacls $BackupDir /inheritance:r /grant:r "${env:USERNAME}:(OI)(CI)F" | Out-Null
-  }
-} catch {
-  Write-Warning "Could not tighten Windows ACLs automatically. Protect $BackupDir manually."
-}
+if ($LASTEXITCODE -ne 0) { throw "Failed to set ANDROID_PREVIEW_KEY_PASSWORD" }
 
 Write-Host ""
-Write-Host "Stable preview signing secrets are configured for $Repo."
-Write-Host "Private backup: $BackupDir"
-Write-Host "Next: rerun the failed Android GitHub Actions jobs."
-Write-Host "Do not delete the keystore or credentials backup."
+Write-Host "Stable preview signing restored and verified."
+Write-Host "Repository: $Repo"
+Write-Host "Certificate SHA-256: $actualSha256"
+Write-Host "Backup: $BackupDir"
+Write-Host "Existing preview APKs remain on the same signing/update chain."

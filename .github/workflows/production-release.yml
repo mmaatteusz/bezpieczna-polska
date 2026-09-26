@@ -129,8 +129,11 @@ jobs:
       FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
       FIREBASE_MESSAGING_SENDER_ID: ${{ vars.FIREBASE_MESSAGING_SENDER_ID }}
       FIREBASE_ANDROID_APP_ID: ${{ vars.FIREBASE_ANDROID_APP_ID }}
+      PRODUCTION_SIGNING_CERT_SHA256: ${{ vars.PRODUCTION_SIGNING_CERT_SHA256 }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -142,7 +145,7 @@ jobs:
         id: signing
         shell: bash
         run: |
-          if [[ -n "$API_BASE_URL" && -n "$BACKEND_SHA" && -n "$ANDROID_KEYSTORE_B64" && -n "$ANDROID_KEYSTORE_PASSWORD" && -n "$ANDROID_KEY_ALIAS" && -n "$ANDROID_KEY_PASSWORD" && -n "$FIREBASE_API_KEY" && -n "$FIREBASE_PROJECT_ID" && -n "$FIREBASE_MESSAGING_SENDER_ID" && -n "$FIREBASE_ANDROID_APP_ID" ]]; then
+          if [[ -n "$API_BASE_URL" && -n "$BACKEND_SHA" && -n "$ANDROID_KEYSTORE_B64" && -n "$ANDROID_KEYSTORE_PASSWORD" && -n "$ANDROID_KEY_ALIAS" && -n "$ANDROID_KEY_PASSWORD" && -n "$FIREBASE_API_KEY" && -n "$FIREBASE_PROJECT_ID" && -n "$FIREBASE_MESSAGING_SENDER_ID" && -n "$FIREBASE_ANDROID_APP_ID" && -n "$PRODUCTION_SIGNING_CERT_SHA256" ]]; then
             echo 'ready=true' >> "$GITHUB_OUTPUT"
           else
             echo 'ready=false' >> "$GITHUB_OUTPUT"
@@ -156,6 +159,9 @@ jobs:
       - name: Validate deployed production API and version
         if: steps.signing.outputs.ready == 'true'
         run: node scripts/validate-release.mjs --production
+      - name: Reject non-monotonic production Android versionCode
+        if: steps.signing.outputs.ready == 'true' && startsWith(github.ref, 'refs/tags/')
+        run: node scripts/check-production-version-history.mjs
       - uses: actions/setup-java@v6
         if: steps.signing.outputs.ready == 'true'
         with:
@@ -174,13 +180,27 @@ jobs:
           umask 077
           echo "$ANDROID_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/release.jks"
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+          ACTUAL_CERT_SHA256="$(
+            keytool -exportcert               -keystore "$RUNNER_TEMP/release.jks"               -storepass "$ANDROID_KEYSTORE_PASSWORD"               -alias "$ANDROID_KEY_ALIAS" |
+              sha256sum |
+              awk '{print $1}'
+          )"
+          if [[ "$ACTUAL_CERT_SHA256" != "$PRODUCTION_SIGNING_CERT_SHA256" ]]; then
+            echo "Production signing certificate mismatch." >&2
+            echo "Expected: $PRODUCTION_SIGNING_CERT_SHA256" >&2
+            echo "Actual:   $ACTUAL_CERT_SHA256" >&2
+            echo "Refusing to create an APK that would break the production update chain." >&2
+            exit 1
+          fi
+          echo "Pinned production signer verified: $ACTUAL_CERT_SHA256" >> "$GITHUB_STEP_SUMMARY"
       - name: Build signed AAB and optional release APK
         if: steps.signing.outputs.ready == 'true'
         working-directory: mobile
         run: |
           flutter pub get
           flutter build appbundle --release --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
-          flutter build apk --release --split-per-abi --target-platform android-arm64 --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
+          flutter build apk --release --target-platform android-arm64 --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
       - name: Verify signatures, identifiers and SHA-256
         if: steps.signing.outputs.ready == 'true'
         shell: bash
@@ -189,11 +209,12 @@ jobs:
           mkdir -p output
           VERSION="$(node -p "require('./backend/package.json').version")"
           BUILD="$(sed -nE 's/^version: [^+]+\+([0-9]+)$/\1/p' mobile/pubspec.yaml)"
-          EXPECTED_CODE="$((2000 + BUILD))"
+          EXPECTED_CODE="$BUILD"
           cp mobile/build/app/outputs/bundle/release/app-release.aab "output/Bezpieczna_Polska_${VERSION}.aab"
-          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "output/Bezpieczna_Polska_${VERSION}-arm64.apk"
+          cp mobile/build/app/outputs/flutter-apk/app-release.apk "output/Bezpieczna_Polska_${VERSION}-arm64.apk"
           jarsigner -verify -strict output/*.aab
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs output/*.apk | tee output/signature-check.txt
+          grep -F "Signer #1 certificate SHA-256 digest: $PRODUCTION_SIGNING_CERT_SHA256" output/signature-check.txt
           grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk | tee output/package-info.txt
           grep -F "name='pl.bezpiecznapolska'" output/package-info.txt

@@ -1,0 +1,117 @@
+name: Verify Android in-place APK update
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - 'scripts/configure-preview-signing.sh'
+      - 'scripts/android-preview-build-number.sh'
+      - 'scripts/verify-preview-apk.sh'
+      - 'scripts/verify-android-inplace-update.sh'
+      - '.github/workflows/android-update-compat.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - 'scripts/configure-preview-signing.sh'
+      - 'scripts/android-preview-build-number.sh'
+      - 'scripts/verify-preview-apk.sh'
+      - 'scripts/verify-android-inplace-update.sh'
+      - '.github/workflows/android-update-compat.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-update-compat-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  BP_ENV: preview
+  PREVIEW_API_BASE_URL: ${{ vars.PREVIEW_API_BASE_URL || 'https://api-production-b6560.up.railway.app' }}
+  ANDROID_PREVIEW_KEYSTORE_B64: ${{ secrets.ANDROID_PREVIEW_KEYSTORE_B64 }}
+  ANDROID_PREVIEW_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_PREVIEW_KEYSTORE_PASSWORD }}
+  ANDROID_PREVIEW_KEY_ALIAS: ${{ secrets.ANDROID_PREVIEW_KEY_ALIAS }}
+  ANDROID_PREVIEW_KEY_PASSWORD: ${{ secrets.ANDROID_PREVIEW_KEY_PASSWORD }}
+
+jobs:
+  update-in-place:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+
+      - name: Configure stable preview signing
+        run: bash scripts/configure-preview-signing.sh
+
+      - name: Allocate monotonic preview build numbers
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_BUILD="$(bash scripts/android-preview-build-number.sh)"
+          NEXT_BUILD="$((BASE_BUILD + 1))"
+          echo "BASE_BUILD=$BASE_BUILD" >> "$GITHUB_ENV"
+          echo "NEXT_BUILD=$NEXT_BUILD" >> "$GITHUB_ENV"
+          echo "Testing update $BASE_BUILD -> $NEXT_BUILD" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build two signed x86_64 preview APKs
+        working-directory: mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter build apk --debug --target-platform android-x64 \
+            --build-number="$BASE_BUILD" \
+            --dart-define=APP_ENV=preview \
+            --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL" \
+            --dart-define=ENABLE_DEVELOPER_SETTINGS=true
+          cp build/app/outputs/flutter-apk/app-debug.apk ../base-preview.apk
+
+          flutter build apk --debug --target-platform android-x64 \
+            --build-number="$NEXT_BUILD" \
+            --dart-define=APP_ENV=preview \
+            --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL" \
+            --dart-define=ENABLE_DEVELOPER_SETTINGS=true
+          cp build/app/outputs/flutter-apk/app-debug.apk ../update-preview.apk
+
+      - name: Verify both APK identities before installation
+        shell: bash
+        run: |
+          bash scripts/verify-preview-apk.sh base-preview.apk "$BASE_BUILD" plain
+          bash scripts/verify-preview-apk.sh update-preview.apk "$NEXT_BUILD" plain
+
+      - name: Enable KVM acceleration
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -e /dev/kvm
+
+      - name: Install old APK, update in place, and preserve app data
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 29
+          arch: x86_64
+          cores: 2
+          ram-size: 2048M
+          disable-linux-hw-accel: false
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash scripts/verify-android-inplace-update.sh base-preview.apk update-preview.apk

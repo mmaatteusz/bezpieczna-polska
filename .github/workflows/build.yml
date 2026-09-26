@@ -54,12 +54,15 @@ jobs:
         working-directory: mobile
       - name: Configure stable preview signing
         run: bash scripts/configure-preview-signing.sh
+      - name: Allocate monotonic preview versionCode
+        shell: bash
+        run: echo "PREVIEW_BUILD_NUMBER=$(bash scripts/android-preview-build-number.sh)" >> "$GITHUB_ENV"
       - run: flutter analyze --no-pub && flutter test --no-pub
         working-directory: mobile
       - name: Build with backend from repository build configuration
         env:
           API_BASE_URL: ${{ vars.API_BASE_URL }}
-        run: flutter build apk --no-pub --debug --split-per-abi --target-platform android-arm64 --dart-define=APP_ENV=preview --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false
+        run: flutter build apk --no-pub --debug --split-per-abi --target-platform android-arm64 --dart-define=APP_ENV=preview --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --build-number="$PREVIEW_BUILD_NUMBER"
         working-directory: mobile
       - name: Verify APK and prepare download
         shell: bash
@@ -68,8 +71,8 @@ jobs:
           test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner" || sdkmanager 'build-tools;36.0.0'
           mkdir -p output
           cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_preview_arm64.apk
+          bash scripts/verify-preview-apk.sh $(find output -maxdepth 1 -name '*.apk' -print -quit) "$PREVIEW_BUILD_NUMBER" split-arm64
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs output/*.apk | tee output/signature-check.txt
-          grep -F "Signer #1 certificate SHA-256 digest: 1f7f3f2aea7073889563b7461e7dfd8f80929a36fff8138c51a2a9516db153d2" output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
           cd output
           sha256sum *.apk > SHA256SUMS.txt

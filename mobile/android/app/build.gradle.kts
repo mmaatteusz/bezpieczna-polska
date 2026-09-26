@@ -4,12 +4,19 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val bpEnv = providers.environmentVariable("BP_ENV").orElse("preview").get()
+val bpEnv = providers.environmentVariable("BP_ENV").orElse("development").get()
 require(bpEnv in setOf("development", "preview", "production")) { "Invalid BP_ENV" }
 val releaseKeys = listOf("ANDROID_KEYSTORE_PATH", "ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD")
 val hasReleaseKeys = releaseKeys.all { !System.getenv(it).isNullOrBlank() }
 val previewKeys = listOf("ANDROID_PREVIEW_KEYSTORE_PATH", "ANDROID_PREVIEW_KEYSTORE_PASSWORD", "ANDROID_PREVIEW_KEY_ALIAS", "ANDROID_PREVIEW_KEY_PASSWORD")
 val hasPreviewKeys = previewKeys.all { !System.getenv(it).isNullOrBlank() }
+
+if (bpEnv == "preview" && !hasPreviewKeys) {
+    throw GradleException(
+        "BP_ENV=preview requires the permanent preview signing key. " +
+            "Use BP_ENV=development for local debug builds instead of producing an incompatible preview APK."
+    )
+}
 
 android {
     namespace = "pl.bezpiecznapolska.bezpieczna_polska"
