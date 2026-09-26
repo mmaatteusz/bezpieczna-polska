@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -278,7 +279,117 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     return null;
   }
 
+  Future<({
+    String label,
+    double latitude,
+    double longitude,
+    String regionId,
+  })?> _localityFromGps() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return null;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return null;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      final marks = await Geocoding().placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+        locale: const Locale('pl', 'PL'),
+      );
+      if (marks.isEmpty) return null;
+
+      final mark = marks.first;
+      final regionId = regionFromPlacemark(mark);
+      if (regionId == null) return null;
+
+      final labelParts = <String>[
+        if ((mark.locality ?? '').trim().isNotEmpty) mark.locality!.trim(),
+        if ((mark.subAdministrativeArea ?? '').trim().isNotEmpty &&
+            mark.subAdministrativeArea!.trim() != mark.locality?.trim())
+          mark.subAdministrativeArea!.trim(),
+      ];
+      if (labelParts.isEmpty) return null;
+
+      final label = labelParts.toSet().join(', ');
+      return (
+        label: label.length > 80 ? label.substring(0, 80) : label,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        regionId: regionId,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _applyPrimaryLocation({
+    required String label,
+    required double latitude,
+    required double longitude,
+    required String regionId,
+  }) async {
+    ++generation;
+    await widget.repository.setPrimaryLocation(
+      label: label,
+      latitude: latitude,
+      longitude: longitude,
+      regionId: regionId,
+    );
+    if (!mounted) return;
+    setState(() {
+      region = regionId;
+      localityLabel = label;
+      localityAround = null;
+      snapshot = widget.repository.cached(regionId);
+      offlinePackageData = null;
+      online = false;
+      loading = false;
+      error = null;
+      loadSeen();
+    });
+    await loadOffline();
+    if (widget.pushManager != null) {
+      unawaited(widget.pushManager!.syncCurrentPreferences());
+    }
+    if (widget.repository.api.isNotEmpty) unawaited(startupSync());
+  }
+
   Future<void> chooseLocality() async {
+    final gps = await _localityFromGps();
+    if (!mounted) return;
+    if (gps != null) {
+      await _applyPrimaryLocation(
+        label: gps.label,
+        latitude: gps.latitude,
+        longitude: gps.longitude,
+        regionId: gps.regionId,
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Nie udało się ustalić lokalizacji z GPS. Ustaw miejscowość ręcznie.',
+        ),
+      ),
+    );
+    await chooseLocalityManually();
+  }
+
+  Future<void> chooseLocalityManually() async {
     var queryText = '';
     String? foundLabel;
     double? foundLatitude, foundLongitude;
@@ -457,31 +568,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     if (saved == true &&
         foundLabel != null &&
         foundLatitude != null &&
-        foundLongitude != null) {
-      ++generation;
-      await widget.repository.setPrimaryLocation(
+        foundLongitude != null &&
+        selectedRegion != null) {
+      await _applyPrimaryLocation(
         label: foundLabel!,
         latitude: foundLatitude!,
         longitude: foundLongitude!,
         regionId: selectedRegion!,
       );
-      if (!mounted) return;
-      setState(() {
-        region = selectedRegion!;
-        localityLabel = foundLabel;
-        localityAround = null;
-        snapshot = widget.repository.cached(selectedRegion!);
-        offlinePackageData = null;
-        online = false;
-        loading = false;
-        error = null;
-        loadSeen();
-      });
-      await loadOffline();
-      if (widget.pushManager != null) {
-        unawaited(widget.pushManager!.syncCurrentPreferences());
-      }
-      if (widget.repository.api.isNotEmpty) unawaited(startupSync());
     }
   }
 
