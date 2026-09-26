@@ -35,7 +35,10 @@ void main() {
       data.communicationText(now.add(const Duration(minutes: 15)), true),
       contains('STALE'),
     );
-    expect(data.measurementText(now, true), contains('nie jest obecnie dostępne'));
+    expect(
+      data.measurementText(now, true),
+      contains('nie jest obecnie dostępne'),
+    );
     final warning = RadiationData.parse({
       ...radiation(now),
       'communicationState': 'ACTIVE',
