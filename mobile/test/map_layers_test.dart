@@ -96,6 +96,48 @@ void main() {
     },
   );
 
+  test('live map hides point events immediately after their validity ends', () {
+    final now = DateTime.parse('2026-09-26T08:00:00Z');
+    SafetyEvent event({
+      String lifecycle = 'ACTIVE',
+      String context = 'ACTUAL',
+      String verification = 'CONFIRMED',
+      String? validTo,
+      bool point = true,
+    }) => SafetyEvent({
+      'id': 'map-test',
+      'title': 'Test',
+      'description': 'Test',
+      'revision': 1,
+      'regions': ['04'],
+      'sources': const [],
+      'lifecycle': lifecycle,
+      'messageContext': context,
+      'verification': verification,
+      'validTo': validTo,
+      if (point) 'latitude': 53.1,
+      if (point) 'longitude': 18.0,
+    });
+
+    expect(
+      mapEventIsLive(
+        event(validTo: now.add(const Duration(minutes: 1)).toIso8601String()),
+        now,
+      ),
+      isTrue,
+    );
+    expect(
+      mapEventIsLive(
+        event(validTo: now.subtract(const Duration(seconds: 1)).toIso8601String()),
+        now,
+      ),
+      isFalse,
+    );
+    expect(mapEventIsLive(event(lifecycle: 'ENDED'), now), isFalse);
+    expect(mapEventIsLive(event(verification: 'REFUTED'), now), isFalse);
+    expect(mapEventIsLive(event(point: false), now), isFalse);
+  });
+
   test(
     'backend bbox/filter sent automatically; offline retains last known good only for same viewport',
     () async {
