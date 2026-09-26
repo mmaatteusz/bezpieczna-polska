@@ -1,0 +1,35 @@
+name: Format full mobile tree hotfix
+
+on:
+  push:
+    branches:
+      - hotfix/national-alert-map-markers
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: hotfix/national-alert-map-markers
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Match CI formatter exactly
+        run: |
+          cd mobile
+          dart format lib test
+          cd ..
+          if git diff --quiet -- mobile; then
+            echo "Already formatted"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile
+          git commit -m "Match CI Dart formatting"
+          git push
