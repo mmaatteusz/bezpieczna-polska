@@ -170,7 +170,7 @@ class _ShelterMapState extends State<ShelterMap> {
     }
     if (showRadiation &&
         (oldWidget.radiation != widget.radiation ||
-            oldWidget.radiationOnline != currentRadiationOnline)) {
+            oldWidget.radiationOnline != widget.radiationOnline)) {
       idle();
     }
     if (oldWidget.events != widget.events ||
@@ -1143,7 +1143,7 @@ class _ShelterMapState extends State<ShelterMap> {
             currentRadiation == null
                 ? message
                 : RadiationData.parse(
-                    widget.radiation,
+                    currentRadiation,
                   ).measurementText(DateTime.now(), currentRadiationOnline),
           ),
           const Text(
@@ -1172,7 +1172,13 @@ class _ShelterMapState extends State<ShelterMap> {
             child: Row(
               children: [
                 TextButton.icon(
-                  onPressed: refresh,
+                  onPressed: () {
+                    if (showRadiation) {
+                      unawaited(refreshRadiationSnapshot(force: true));
+                    } else {
+                      unawaited(refresh());
+                    }
+                  },
                   icon: const Icon(Icons.refresh),
                   label: const Text('Odśwież'),
                 ),
