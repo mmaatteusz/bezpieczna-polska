@@ -5,6 +5,7 @@ import {policeAdapter,pspIncidentsAdapter,isAllowedPoliceUrl,} from './service-i
 import {sgAdapter,isAllowedSgUrl} from './sg-adapter.js';
 import {certAdapter,CERT_FEED,CSIRT_GOV_RSS_PAGE} from './cyber-adapter.js';
 import {paaAdapter} from './paa-adapter.js';
+import {paaMeasurementsAdapter,isAllowedPaaMeasurementsUrl} from './paa-measurements-adapter.js';
 import {imgwMeteoAdapter,imgwHydroAdapter,isAllowedImgwUrl} from './imgw-adapter.js';
 import {wczkAdapters,WCZK_PODKARPACKIE} from './wczk-adapter.js';
 import {securityLevelsAdapter} from './security-level-adapter.js';
@@ -21,9 +22,9 @@ export async function initializeSources(store:Store){
  const existing=await store.health();
  for(const s of SOURCES){
   const previous=existing.find(h=>h.id===s.id);
-  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
+  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?10800:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
   else if(!s.enabled)await store.setHealth({...previous,...s,state:'NOT_CONFIGURED',complete:false});
-  else await store.setHealth({...previous,...s,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900});
+  else await store.setHealth({...previous,...s,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?10800:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900});
  }
 }
 export function messageContext(text:string):Event['messageContext']{return /ćwicz|cwicz|exercise/i.test(text)?'EXERCISE':/test syren|test systemu/i.test(text)?'TEST':'UNKNOWN';}
@@ -66,14 +67,14 @@ export const rsoAdapter:SourceAdapter={
 export async function fetchPublic(url:string):Promise<string>{
  if(isAllowedUaUrl(url))return fetchUa(url);
  const shelterMeta=[SHELTER_DATASET,SHELTER_RESOURCE].includes(url),shelterCurrent=url===SHELTER_ORIGIN_CSV,certFeed=url===CERT_FEED,csirtRssPage=url===CSIRT_GOV_RSS_PAGE,sgSource=isAllowedSgUrl(url),policeSource=isAllowedPoliceUrl(url);
- const imgwSource=isAllowedImgwUrl(url),neptunSource=url===NEPTUN_API;
- const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterMeta&&!shelterCurrent&&!certFeed&&!csirtRssPage&&!sgSource&&!policeSource&&!imgwSource&&!neptunSource&&url!==UA_BOUNDARY_QUERY&&url!==WCZK_PODKARPACKIE&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
+ const imgwSource=isAllowedImgwUrl(url),neptunSource=url===NEPTUN_API,paaMeasurementsSource=isAllowedPaaMeasurementsUrl(url);
+ const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterMeta&&!shelterCurrent&&!certFeed&&!csirtRssPage&&!sgSource&&!policeSource&&!imgwSource&&!neptunSource&&!paaMeasurementsSource&&url!==UA_BOUNDARY_QUERY&&url!==WCZK_PODKARPACKIE&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
  if(shelterCurrent&&(u.hostname!=='gdziesieukryc.pl'||u.pathname!=='/PS_XML/punkty_schronienia.csv'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(certFeed&&(u.hostname!=='moje.cert.pl'||u.pathname!=='/advisory_feed/advisory/feed/'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(csirtRssPage&&(u.hostname!=='www.csirt.gov.pl'||u.pathname!=='/cer/rss'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(sgSource&&!isAllowedSgUrl(u.href))throw new Error('SOURCE_URL_DENIED');
  if(policeSource&&!isAllowedPoliceUrl(u.href))throw new Error('SOURCE_URL_DENIED');
- const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(shelterCurrent?90000:20000),headers:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/rss+xml,application/xml,application/json,text/csv'}});
+ const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(shelterCurrent?90000:paaMeasurementsSource?30000:20000),headers:paaMeasurementsSource?{'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36','Accept':'application/json,text/plain,*/*','Accept-Language':'pl-PL,pl;q=0.9,en;q=0.8','Referer':'https://monitoring.paa.gov.pl/maps-portal/'}:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/rss+xml,application/xml,application/json,text/csv'}});
  if(!response.ok){
   if(imgwSource&&response.status===404){
    const errorBody=await response.text();
@@ -97,7 +98,7 @@ export async function fetchPublicBytes(url:string):Promise<Uint8Array>{
 }
 // Sharing the same coordinator prevents timer/admin overlap on this Store.
 const running = new WeakMap<Store, Promise<void>>();
-export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters,imgwMeteoAdapter,imgwHydroAdapter,paaAdapter,certAdapter,sgAdapter,policeAdapter,pspIncidentsAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
+export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters,imgwMeteoAdapter,imgwHydroAdapter,paaAdapter,paaMeasurementsAdapter,certAdapter,sgAdapter,policeAdapter,pspIncidentsAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
  const existing=running.get(store);if(existing)return existing;
  const task=syncSources(store,adapters,fetchText,fetchBytes).finally(()=>running.delete(store));
  running.set(store,task);return task;
@@ -118,8 +119,12 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
    const items=batch.events.map(e=>eventSchema.parse(e));
    if(items.some(e=>e.isDemo||!e.sources.some(s=>s.id===adapter.id)))throw new Error('SOURCE_INVALID_EVENT');
    const published=items.map(e=>e.publishedAt??(e.securityLevel?.publishedAt?e.securityLevel.publishedAt:null)).filter((v):v is string=>v!==null).sort();
-   const health:Health={...previous,...batch.metadata,...(batch.uaMetadata?{uaMetadata:batch.uaMetadata}:{}),...(batch.neptunMetadata?{neptunMetadata:batch.neptunMetadata}:{}),...(adapter.id==='PAA'?{checkedEventIds:items.map(e=>e.id)}:{}),enabled:true,state:'HEALTHY',lastAttempt,lastSuccess:new Date().toISOString(),lastItemTime:batch.neptunMetadata?.serverTime??batch.metadata?.sourceUpdatedAt??published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:batch.complete,coverage:batch.coverage,pagesFetched:batch.pagesFetched,itemCount:batch.shelters?.length??items.length,errorCode:null,adapterVersion:adapter.version};
-   if(batch.shelters){
+   const measurementTimes=(batch.radiationMeasurements??[]).map(p=>p.measuredAt).sort();
+   const health:Health={...previous,...batch.metadata,...(batch.uaMetadata?{uaMetadata:batch.uaMetadata}:{}),...(batch.neptunMetadata?{neptunMetadata:batch.neptunMetadata}:{}),...(adapter.id==='PAA'?{checkedEventIds:items.map(e=>e.id)}:{}),enabled:true,state:'HEALTHY',lastAttempt,lastSuccess:new Date().toISOString(),lastItemTime:batch.neptunMetadata?.serverTime??batch.metadata?.sourceUpdatedAt??measurementTimes.at(-1)??published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:batch.complete,coverage:batch.coverage,pagesFetched:batch.pagesFetched,itemCount:batch.radiationMeasurements?.length??batch.shelters?.length??items.length,errorCode:null,adapterVersion:adapter.version};
+   if(batch.radiationMeasurements){
+    if(adapter.id!=='PAA_MEASUREMENTS'||items.length||batch.shelters||batch.coverage!=='MEASUREMENT_NETWORK'||!batch.complete||!batch.radiationMeasurements.length)throw new Error('SOURCE_INVALID_BATCH');
+    await store.applyRadiationSync(batch.radiationMeasurements,health);
+   }else if(batch.shelters){
     if(adapter.id!=='SHELTERS'||items.length||batch.coverage!=='FACILITY_CATALOG'||!batch.complete||!batch.metadata)throw new Error('SOURCE_INVALID_BATCH');
     if(previous.sourceUpdatedAt&&Date.parse(batch.metadata.sourceUpdatedAt)<Date.parse(previous.sourceUpdatedAt))throw new Error('SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD');
     await store.applyShelterSync(batch.shelters,health);
