@@ -27,6 +27,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     needs: verify
+    env:
+      ANDROID_PREVIEW_KEYSTORE_B64: ${{ secrets.ANDROID_PREVIEW_KEYSTORE_B64 }}
+      ANDROID_PREVIEW_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_PREVIEW_KEYSTORE_PASSWORD }}
+      ANDROID_PREVIEW_KEY_ALIAS: ${{ secrets.ANDROID_PREVIEW_KEY_ALIAS }}
+      ANDROID_PREVIEW_KEY_PASSWORD: ${{ secrets.ANDROID_PREVIEW_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -47,6 +52,8 @@ jobs:
           cache: true
       - run: flutter pub get
         working-directory: mobile
+      - name: Configure stable preview signing
+        run: bash scripts/configure-preview-signing.sh
       - run: flutter analyze --no-pub && flutter test --no-pub
         working-directory: mobile
       - name: Build with backend from repository build configuration
@@ -61,7 +68,8 @@ jobs:
           test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner" || sdkmanager 'build-tools;36.0.0'
           mkdir -p output
           cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_preview_arm64.apk
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose output/*.apk | tee output/signature-check.txt
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs output/*.apk | tee output/signature-check.txt
+          grep -F "Signer #1 certificate SHA-256 digest: 1f7f3f2aea7073889563b7461e7dfd8f80929a36fff8138c51a2a9516db153d2" output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
           cd output
           sha256sum *.apk > SHA256SUMS.txt
