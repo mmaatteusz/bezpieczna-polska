@@ -16,6 +16,7 @@ jobs:
       - name: Show formatter diff
         working-directory: mobile
         run: |
+          flutter pub get
           dart format lib/shelter_map.dart
           git diff -- lib/shelter_map.dart
       - uses: actions/upload-artifact@v7
