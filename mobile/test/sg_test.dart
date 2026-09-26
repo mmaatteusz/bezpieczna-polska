@@ -91,12 +91,33 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Wszystkie').first);
       await tester.pumpAndSettle();
+      final alertsScroll = find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await tester.scrollUntilVisible(
+        find.text('Utrudnienia na przejściu granicznym w Hrebennem'),
+        250,
+        scrollable: alertsScroll,
+      );
       expect(
         find.text('Utrudnienia na przejściu granicznym w Hrebennem'),
         findsOneWidget,
       );
+      await tester.scrollUntilVisible(
+        find.text('Filtry i wyszukiwanie'),
+        -250,
+        scrollable: alertsScroll,
+      );
       await tester.tap(find.text('Granica'));
       await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Utrudnienia na przejściu granicznym w Hrebennem'),
+        250,
+        scrollable: alertsScroll,
+      );
       expect(
         find.text('Utrudnienia na przejściu granicznym w Hrebennem'),
         findsOneWidget,
