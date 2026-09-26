@@ -354,6 +354,13 @@ class _AlertsScreenState extends State<AlertsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  'Filtry i wyszukiwanie',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 9),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -368,31 +375,27 @@ class _AlertsScreenState extends State<AlertsScreen> {
                       .toList(),
                 ),
                 const SizedBox(height: 9),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children:
-                        [
-                              'Wszystkie',
-                              'Pogoda',
-                              'Bezpieczeństwo',
-                              'Cyber',
-                              'Granica',
-                              'Inne',
-                            ]
-                            .map(
-                              (value) => Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: FilterChip(
-                                  label: Text(value),
-                                  selected: category == value,
-                                  onSelected: (_) =>
-                                      setState(() => category = value),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                  ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children:
+                      [
+                            'Wszystkie',
+                            'Pogoda',
+                            'Bezpieczeństwo',
+                            'Cyber',
+                            'Granica',
+                            'Inne',
+                          ]
+                          .map(
+                            (value) => FilterChip(
+                              label: Text(value),
+                              selected: category == value,
+                              onSelected: (_) =>
+                                  setState(() => category = value),
+                            ),
+                          )
+                          .toList(),
                 ),
                 if (query.isNotEmpty) ...[
                   const SizedBox(height: 4),
