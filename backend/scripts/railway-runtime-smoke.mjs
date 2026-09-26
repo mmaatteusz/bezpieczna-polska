@@ -1,6 +1,6 @@
 import {readFileSync} from 'node:fs';
 
-// End-to-end probe note: changing this file intentionally exercises Railway's backend watch path and GitHub autodeploy.
+// End-to-end probe note: backend changes intentionally exercise Railway autodeploy; the workflow also audits main pushes as a fallback when deployment_status is missing.
 const packageVersion=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')).version;
 const sleep=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
 const base=(process.env.SMOKE_BASE_URL||'').replace(/\/+$/,'');
