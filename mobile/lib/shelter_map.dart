@@ -93,13 +93,29 @@ class _ShelterMapState extends State<ShelterMap> {
   bool showEvents = true, showWatched = true;
   bool ready = false, loading = false, online = false, fallbackStyle = false;
   bool overviewMode = false, nationalEventsLoading = false;
+  bool radiationRefreshRunning = false, radiationOverrideOnline = false;
   int ticket = 0;
   String availability = 'ALL', message = 'Przygotowywanie mapy…';
   MapViewport? viewport;
   MapRequest? renderedRequest;
   Snapshot? nationalSnapshot;
-  DateTime? nationalEventsUpdatedAt;
+  DateTime? nationalEventsUpdatedAt, radiationLastFetch;
+  Map<String, dynamic>? radiationOverride;
   ShelterMapProvider get provider => ShelterMapProvider(widget.repository);
+  Map<String, dynamic>? get currentRadiation =>
+      radiationOverride ?? widget.radiation;
+  bool get currentRadiationOnline =>
+      radiationOverride != null ? radiationOverrideOnline : widget.radiationOnline;
+
+  bool get currentRadiationHasPoints {
+    final raw = currentRadiation;
+    if (raw == null) return false;
+    try {
+      return (RadiationData.parse(raw).data['measurements'] as List).isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
 
   List<SafetyEvent> get contextEvents => overviewMode
       ? (widget.region == 'PL'
@@ -133,6 +149,9 @@ class _ShelterMapState extends State<ShelterMap> {
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (!mounted) return;
       setState(() {});
+      if (showRadiation) {
+        unawaited(refreshRadiationSnapshot());
+      }
       if (overviewMode) {
         unawaited(refresh());
       } else {
@@ -144,9 +163,14 @@ class _ShelterMapState extends State<ShelterMap> {
   @override
   void didUpdateWidget(covariant ShelterMap oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.radiation != widget.radiation) {
+      radiationOverride = null;
+      radiationOverrideOnline = false;
+      radiationLastFetch = null;
+    }
     if (showRadiation &&
         (oldWidget.radiation != widget.radiation ||
-            oldWidget.radiationOnline != widget.radiationOnline)) {
+            oldWidget.radiationOnline != currentRadiationOnline)) {
       idle();
     }
     if (oldWidget.events != widget.events ||
@@ -159,6 +183,40 @@ class _ShelterMapState extends State<ShelterMap> {
           : widget.repository.cached('PL');
       nationalEventsUpdatedAt = null;
       idle();
+    }
+  }
+
+  Future<void> refreshRadiationSnapshot({bool force = false}) async {
+    if (!mounted || !showRadiation || radiationRefreshRunning) return;
+    final now = DateTime.now();
+    final retryAfter = currentRadiationHasPoints
+        ? const Duration(minutes: 5)
+        : const Duration(minutes: 1);
+    if (!force &&
+        radiationLastFetch != null &&
+        now.difference(radiationLastFetch!) < retryAfter) {
+      return;
+    }
+    radiationRefreshRunning = true;
+    radiationLastFetch = now;
+    try {
+      final snapshot = await widget.repository.refresh(widget.region);
+      final raw = snapshot.data['radiation'];
+      if (raw is! Map) throw const FormatException('Brak danych PAA');
+      final normalized = Map<String, dynamic>.from(raw);
+      RadiationData.parse(normalized);
+      if (!mounted) return;
+      setState(() {
+        radiationOverride = normalized;
+        radiationOverrideOnline = true;
+      });
+    } catch (_) {
+      if (mounted && radiationOverride != null) {
+        setState(() => radiationOverrideOnline = false);
+      }
+    } finally {
+      radiationRefreshRunning = false;
+      if (mounted) unawaited(refresh());
     }
   }
 
@@ -453,9 +511,9 @@ class _ShelterMapState extends State<ShelterMap> {
       }
       if (showRadiation) {
         try {
-          final data = widget.radiation == null
+          final data = currentRadiation == null
               ? null
-              : RadiationData.parse(widget.radiation);
+              : RadiationData.parse(currentRadiation);
           final items = (data?.data['measurements'] as List? ?? []).cast<Map>();
           final visible = items
               .where(
@@ -590,16 +648,16 @@ class _ShelterMapState extends State<ShelterMap> {
         ], null);
         if (points.isNotEmpty && mounted) {
           final p = (points.first as Map)['properties'] as Map;
-          final data = widget.radiation == null
+          final data = currentRadiation == null
               ? null
-              : RadiationData.parse(widget.radiation);
+              : RadiationData.parse(currentRadiation);
           await showModalBottomSheet<void>(
             context: context,
             builder: (_) => SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Text(
-                  '${p['name']}\n${p['value']} ${p['unit']}\nPomiar: ${stamp(p['measuredAt'])}\n${data?.measurementText(DateTime.now(), widget.radiationOnline) ?? 'STALE'}\nPomiar nie jest alarmem.',
+                  '${p['name']}\n${p['value']} ${p['unit']}\nPomiar: ${stamp(p['measuredAt'])}\n${data?.measurementText(DateTime.now(), currentRadiationOnline) ?? 'STALE'}\nPomiar nie jest alarmem.',
                 ),
               ),
             ),
@@ -895,7 +953,11 @@ class _ShelterMapState extends State<ShelterMap> {
                   onChanged: (value) {
                     setState(() => showRadiation = value);
                     update(() {});
-                    unawaited(refresh());
+                    if (value) {
+                      unawaited(refreshRadiationSnapshot(force: true));
+                    } else {
+                      unawaited(refresh());
+                    }
                   },
                 ),
                 DropdownButtonFormField<String>(
@@ -1078,11 +1140,11 @@ class _ShelterMapState extends State<ShelterMap> {
         ),
         if (!widget.ukraine && showRadiation) ...[
           Text(
-            widget.radiation == null
+            currentRadiation == null
                 ? message
                 : RadiationData.parse(
                     widget.radiation,
-                  ).measurementText(DateTime.now(), widget.radiationOnline),
+                  ).measurementText(DateTime.now(), currentRadiationOnline),
           ),
           const Text(
             'Komunikaty PAA są dostępne w Statusie i Alert Center. Brak punktów na mapie nie oznacza braku zagrożenia.',
