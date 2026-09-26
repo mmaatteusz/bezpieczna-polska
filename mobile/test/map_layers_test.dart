@@ -81,6 +81,83 @@ void main() {
     expect(mapShowsShelters(5.2), isFalse);
   });
 
+  test('regional alerts without coordinates get symbolic overview markers', () {
+    final now = DateTime.utc(2026, 9, 26, 10);
+    final event = SafetyEvent({
+      'id': 'RCB-test',
+      'title': 'Alert RCB — test',
+      'description': 'Test regionalnego zakresu.',
+      'revision': 1,
+      'regions': ['04', '14'],
+      'sources': [
+        {
+          'id': 'RCB',
+          'name': 'Rządowe Centrum Bezpieczeństwa',
+          'url': 'https://www.gov.pl/web/rcb',
+          'tier': 1,
+        },
+      ],
+      'lifecycle': 'ACTIVE',
+      'messageContext': 'ACTUAL',
+      'verification': 'CONFIRMED',
+      'validTo': now.add(const Duration(hours: 2)).toIso8601String(),
+      'latitude': null,
+      'longitude': null,
+    });
+
+    final features = mapEventFeatures(event, now);
+
+    expect(features, hasLength(2));
+    expect(
+      features.map((feature) => feature['properties']['regionId']).toSet(),
+      {'04', '14'},
+    );
+    expect(
+      features.every(
+        (feature) =>
+            feature['properties']['mapLocationKind'] == 'REGION_SCOPE',
+      ),
+      isTrue,
+    );
+    expect(features.every((feature) => feature['geometry']['type'] == 'Point'), isTrue);
+  });
+
+  test('exact event points stay exact and expired events disappear', () {
+    final now = DateTime.utc(2026, 9, 26, 10);
+    final event = SafetyEvent({
+      'id': 'point-test',
+      'title': 'Punkt testowy',
+      'description': 'Test punktu.',
+      'revision': 1,
+      'regions': ['04'],
+      'sources': [
+        {
+          'id': 'TEST',
+          'name': 'Test',
+          'url': 'https://example.com',
+          'tier': 1,
+        },
+      ],
+      'lifecycle': 'ACTIVE',
+      'messageContext': 'ACTUAL',
+      'verification': 'CONFIRMED',
+      'validTo': now.add(const Duration(hours: 2)).toIso8601String(),
+      'latitude': 53.1,
+      'longitude': 18.2,
+    });
+
+    final features = mapEventFeatures(event, now);
+    expect(features, hasLength(1));
+    expect(features.single['geometry']['coordinates'], [18.2, 53.1]);
+    expect(
+      features.single['properties']['mapLocationKind'],
+      'EVENT_POINT',
+    );
+
+    event.data['validTo'] = now.subtract(const Duration(seconds: 1)).toIso8601String();
+    expect(mapEventFeatures(event, now), isEmpty);
+  });
+
   test('shelter viewport is not limited by the selected status region', () {
     final q = shelterViewportRequest([14.0, 49.0, 24.2, 55.0], 5.2, 'ALL');
     expect(q.region, 'PL');
