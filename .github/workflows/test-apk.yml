@@ -13,6 +13,10 @@ env:
   FLUTTER_SUPPRESS_ANALYTICS: 'true'
   BP_ENV: preview
   PREVIEW_API_BASE_URL: https://api-production-b6560.up.railway.app
+  ANDROID_PREVIEW_KEYSTORE_B64: ${{ secrets.ANDROID_PREVIEW_KEYSTORE_B64 }}
+  ANDROID_PREVIEW_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_PREVIEW_KEYSTORE_PASSWORD }}
+  ANDROID_PREVIEW_KEY_ALIAS: ${{ secrets.ANDROID_PREVIEW_KEY_ALIAS }}
+  ANDROID_PREVIEW_KEY_PASSWORD: ${{ secrets.ANDROID_PREVIEW_KEY_PASSWORD }}
 
 jobs:
   apk:
@@ -29,6 +33,8 @@ jobs:
           flutter-version: '3.47.4'
           channel: stable
           cache: true
+      - name: Configure stable preview signing
+        run: bash scripts/configure-preview-signing.sh
       - name: Build current main-compatible preview APK
         working-directory: mobile
         run: |
@@ -43,7 +49,14 @@ jobs:
           set -euo pipefail
           mkdir -p output
           VERSION="$(node -p "require('./backend/package.json').version")"
+          BUILD="$(sed -nE 's/^version: [^+]+\+([0-9]+)$/\1/p' mobile/pubspec.yaml)"
+          EXPECTED_CODE="$((2000 + BUILD))"
           cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk "output/Bezpieczna_Polska_${VERSION}-test-arm64.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs output/*.apk | tee output/signature-check.txt
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
+          grep -F "Signer #1 certificate SHA-256 digest: 1f7f3f2aea7073889563b7461e7dfd8f80929a36fff8138c51a2a9516db153d2" output/signature-check.txt
+          grep -F "name='pl.bezpiecznapolska.preview'" output/package-info.txt
+          grep -F "versionCode='${EXPECTED_CODE}'" output/package-info.txt
           sha256sum output/*.apk > output/SHA256SUMS.txt
       - uses: actions/upload-artifact@v7
         with:
