@@ -27,6 +27,12 @@ class MapRequest {
   String get key => jsonEncode(query);
 }
 
+MapRequest shelterViewportRequest(
+  List<double> bbox,
+  double zoom, [
+  String availability = 'ALL',
+]) => MapRequest(bbox, zoom, 'PL', availability);
+
 bool mapDatasetChanged(MapRequest? rendered, MapRequest next) =>
     rendered != null &&
     (rendered.region != next.region ||
