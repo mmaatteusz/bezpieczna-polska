@@ -77,24 +77,26 @@ void main() {
     expect(features.single['properties']['mapCategory'], 'ALERT');
   });
 
-  test('IMGW warning is classified for the blue map layer', () {
-    final event = eventFixture(
-      id: 'imgw-event',
-      regions: ['04'],
-      validTo: now.add(const Duration(hours: 2)),
-      sourceId: 'IMGW_METEO',
-    );
+  test('IMGW meteo and hydro warnings use the blue map layer', () {
+    for (final sourceId in ['IMGW_METEO', 'IMGW_HYDRO']) {
+      final event = eventFixture(
+        id: 'imgw-event-$sourceId',
+        regions: ['04'],
+        validTo: now.add(const Duration(hours: 2)),
+        sourceId: sourceId,
+      );
 
-    final features = mapEventFeatures(event, now);
+      final features = mapEventFeatures(event, now);
 
-    expect(features, isNotEmpty);
-    expect(
-      features.every(
-        (feature) => feature['properties']['mapCategory'] == 'IMGW',
-      ),
-      isTrue,
-    );
-    expect(mapEventIsImgw(event), isTrue);
+      expect(features, isNotEmpty);
+      expect(
+        features.every(
+          (feature) => feature['properties']['mapCategory'] == 'IMGW',
+        ),
+        isTrue,
+      );
+      expect(mapEventIsImgw(event), isTrue);
+    }
   });
 
   test('expired event is not rendered on overview map', () {
