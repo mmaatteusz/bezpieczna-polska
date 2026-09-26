@@ -74,12 +74,10 @@ void main() {
     expect(find.text('Diagnostyka źródeł'), findsNothing);
     expect(find.byType(NavigationDestination), findsNWidgets(4));
 
-    await tester.tap(find.text('Ustaw lokalizację'));
-    await tester.pumpAndSettle();
-    expect(find.text('Wybierz swoją okolicę'), findsOneWidget);
-    await tester.tap(find.text('Anuluj'));
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
+    expect(
+      find.textContaining('Najpierw spróbujemy ustalić miejscowość z GPS'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Polska'));
     await tester.pumpAndSettle();
@@ -128,6 +126,38 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets(
+    'configured locality card scrolls to warnings instead of reopening picker',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({
+        'region': '04',
+        'primary_location_label': 'Bydgoszcz',
+        'primary_location_latitude': 53.1235,
+        'primary_location_longitude': 18.0084,
+      });
+      final r = DataRepository(await SharedPreferences.getInstance());
+      await tester.pumpWidget(SafetyApp(repository: r));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ustaw lokalizację'), findsNothing);
+      final warnings = find.text('Istotne zagrożenia');
+      final before = tester.getTopLeft(warnings).dy;
+
+      await tester.tap(find.text('Twoja okolica'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Wybierz swoją okolicę'), findsNothing);
+      expect(tester.getTopLeft(warnings).dy, lessThan(before));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('200 percent font on phone does not overflow status', (
     tester,

@@ -360,7 +360,7 @@ class DashboardScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Ustaw miejscowość, aby zobaczyć lokalny status i istotne komunikaty w pobliżu.',
+                      'Najpierw spróbujemy ustalić miejscowość z GPS. Jeśli to się nie uda, wpiszesz ją ręcznie.',
                     ),
                     const SizedBox(height: 11),
                     Row(
@@ -480,6 +480,18 @@ class DashboardScreen extends StatelessWidget {
           }.length;
     final snapshotTime = _snapshotTime();
 
+    BuildContext? threatsSectionContext;
+    void scrollToThreats() {
+      final target = threatsSectionContext;
+      if (target == null) return;
+      Scrollable.ensureVisible(
+        target,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
@@ -541,7 +553,7 @@ class DashboardScreen extends StatelessWidget {
               status: local,
               fresh: localFresh,
               prominent: false,
-              onTap: onChooseLocality,
+              onTap: scrollToThreats,
               footer: localityAround == null
                   ? 'Sprawdzanie lokalnych danych…'
                   : localRelevant == 0
@@ -564,12 +576,17 @@ class DashboardScreen extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 25),
-          _sectionHeader(
-            context,
-            title: 'Istotne zagrożenia',
-            subtitle:
-                'Najważniejsze aktywne komunikaty, bez informacyjnego szumu.',
-            count: active.length,
+          Builder(
+            builder: (sectionContext) {
+              threatsSectionContext = sectionContext;
+              return _sectionHeader(
+                sectionContext,
+                title: 'Istotne zagrożenia',
+                subtitle:
+                    'Najważniejsze aktywne komunikaty, bez informacyjnego szumu.',
+                count: active.length,
+              );
+            },
           ),
           const SizedBox(height: 8),
           Align(
