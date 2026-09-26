@@ -212,6 +212,24 @@ void main() {
     },
   );
 
+  test('NEPTUN map tap resolves the live threat behind a red point', () {
+    final data = NeptunData.parse(fixture(now));
+    final feature = (data.live['map']['features'] as List).first;
+    final threat = neptunThreatForFeature(data, feature);
+
+    expect(threat, isNotNull);
+    expect(threat!['id'], 'trk-live-1');
+    expect(threat['title'], 'FPV / dron');
+    expect(neptunTypeLabel(threat['type'] as String), 'FPV / dron');
+    expect(
+      neptunThreatForFeature(data, {
+        'properties': {'threatId': 'missing'},
+      }),
+      isNull,
+    );
+    expect(neptunThreatForFeature(data, const <String, dynamic>{}), isNull);
+  });
+
   test(
     'NEPTUN persistence is throttled independently from five-second live refresh',
     () {
