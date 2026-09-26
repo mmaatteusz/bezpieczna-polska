@@ -93,9 +93,18 @@ void main() {
     expect(find.byTooltip('Wróć do wybranej miejscowości'), findsOneWidget);
     final legend = find.byKey(const ValueKey('map-legend'));
     expect(legend, findsOneWidget);
-    expect(find.descendant(of: legend, matching: find.text('Alerty')), findsOneWidget);
-    expect(find.descendant(of: legend, matching: find.text('IMGW')), findsOneWidget);
-    expect(find.descendant(of: legend, matching: find.text('Schrony')), findsOneWidget);
+    expect(
+      find.descendant(of: legend, matching: find.text('Alerty')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: legend, matching: find.text('IMGW')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: legend, matching: find.text('Schrony')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Więcej').last);
     await tester.pumpAndSettle();
