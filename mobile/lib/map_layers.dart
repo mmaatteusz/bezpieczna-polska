@@ -129,6 +129,125 @@ List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
   ];
 }
 
+
+class GpsInterferenceViewport {
+  final Map<String, dynamic> data;
+
+  GpsInterferenceViewport._(this.data);
+
+  Map<String, dynamic> get metadata =>
+      Map<String, dynamic>.from(data['metadata'] as Map);
+
+  String get dataDate => metadata['dataDate']?.toString() ?? '';
+
+  factory GpsInterferenceViewport.parse(String text, List<double> bbox) {
+    final root = jsonDecode(text);
+    if (root is! Map) {
+      throw const FormatException('Niepoprawna warstwa zakłóceń GPS');
+    }
+    final data = Map<String, dynamic>.from(root);
+    final metadata = data['metadata'];
+    final features = data['features'];
+    if (data['type'] != 'FeatureCollection' ||
+        metadata is! Map ||
+        metadata['schemaVersion'] != 1 ||
+        metadata['layerId'] != 'gps_interference' ||
+        metadata['authority'] != 'OSINT' ||
+        metadata['provider'] != 'GPSJAM' ||
+        features is! List ||
+        features.length > 10000) {
+      throw const FormatException('Niepoprawna warstwa zakłóceń GPS');
+    }
+    final sourceBox = (metadata['bbox'] as List?)?.cast<num>();
+    if (sourceBox == null ||
+        sourceBox.length != 4 ||
+        List.generate(
+          4,
+          (i) => (sourceBox[i].toDouble() - bbox[i]).abs() > 0.000001,
+        ).contains(true)) {
+      throw const FormatException('Błędny obszar zakłóceń GPS');
+    }
+    if (DateTime.tryParse(metadata['dataDate']?.toString() ?? '') == null) {
+      throw const FormatException('Błędna data zakłóceń GPS');
+    }
+    for (final raw in features) {
+      if (raw is! Map ||
+          raw['type'] != 'Feature' ||
+          raw['geometry'] is! Map ||
+          raw['properties'] is! Map) {
+        throw const FormatException('Błędny kafelek zakłóceń GPS');
+      }
+      final geometry = raw['geometry'] as Map;
+      final properties = raw['properties'] as Map;
+      final coordinates = geometry['coordinates'];
+      if (geometry['type'] != 'Polygon' ||
+          coordinates is! List ||
+          coordinates.isEmpty ||
+          !const {'LOW', 'MEDIUM', 'HIGH'}.contains(properties['level']) ||
+          properties['percentBad'] is! num ||
+          properties['goodAircraft'] is! num ||
+          properties['badAircraft'] is! num) {
+        throw const FormatException('Błędny kafelek zakłóceń GPS');
+      }
+    }
+    return GpsInterferenceViewport._(data);
+  }
+}
+
+class GpsInterferenceProvider {
+  final DataRepository repository;
+
+  GpsInterferenceProvider(this.repository);
+
+  Future<GpsInterferenceViewport> fetch(List<double> bbox) async {
+    Uri uri;
+    try {
+      uri = DataRepository.validateApi(repository.api);
+    } catch (_) {
+      throw const ApiFailure(ApiFailureKind.notConfigured);
+    }
+    late http.Response response;
+    try {
+      response = await repository.client
+          .get(
+            uri.replace(
+              path: '${uri.path}/v1/map/gps-interference',
+              queryParameters: {
+                'bbox': bbox.map((v) => v.toStringAsFixed(6)).join(','),
+              },
+            ),
+            headers: {'Accept': 'application/geo+json,application/json'},
+          )
+          .timeout(const Duration(seconds: 20));
+    } on TimeoutException {
+      throw const ApiFailure(ApiFailureKind.timeout);
+    } on http.ClientException {
+      throw const ApiFailure(ApiFailureKind.network);
+    } catch (error) {
+      if (error is ApiFailure) rethrow;
+      throw const ApiFailure(ApiFailureKind.network);
+    }
+    if (response.statusCode == 429) {
+      throw const ApiFailure(ApiFailureKind.rateLimited, 429);
+    }
+    if (response.statusCode >= 500) {
+      throw ApiFailure(ApiFailureKind.server, response.statusCode);
+    }
+    if (response.statusCode != 200 ||
+        response.bodyBytes.length > 4 * 1024 * 1024) {
+      throw ApiFailure(ApiFailureKind.invalidResponse, response.statusCode);
+    }
+    try {
+      return GpsInterferenceViewport.parse(
+        utf8.decode(response.bodyBytes),
+        bbox,
+      );
+    } catch (_) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+  }
+}
+
 class MapViewport {
   final Map<String, dynamic> data;
   MapViewport._(this.data);
