@@ -112,9 +112,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
     final needle = query.trim().toLowerCase();
     if (needle.isEmpty) return true;
 
-    final areaText = _safeAreas(event)
-        .map((code) => regions[code] ?? code)
-        .join(' ');
+    final areaText = _safeAreas(
+      event,
+    ).map((code) => regions[code] ?? code).join(' ');
     final text =
         '${event.title} ${event.description} ${safetySourceLabel(event)} $areaText'
             .toLowerCase();
@@ -189,15 +189,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
         buckets.keys
             .where((key) => regions.containsKey(key) && key != 'PL')
             .toList()
-          ..sort(
-            (a, b) => (regions[a] ?? a).compareTo(regions[b] ?? b),
-          );
+          ..sort((a, b) => (regions[a] ?? a).compareTo(regions[b] ?? b));
     for (final key in provinceKeys) {
-      addSection(
-        key,
-        regions[key]!,
-        'Alerty przypisane do tego województwa.',
-      );
+      addSection(key, regions[key]!, 'Alerty przypisane do tego województwa.');
     }
 
     addSection(
@@ -254,9 +248,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
               ),
               child: Text(
                 '${section.items.length}',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
           ],
@@ -267,9 +261,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
     for (final item in section.items) {
       entries.add(
         (context) => SafetyEventCard(
-          key: ValueKey(
-            'alert-card-${section.key}-${item.event.id}',
-          ),
+          key: ValueKey('alert-card-${section.key}-${item.event.id}'),
           event: item.event,
           groupedCount: item.groupedCount,
           areaOverride: item.areas,
@@ -434,9 +426,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
           items.isEmpty
               ? 'Brak komunikatów w wybranym widoku'
               : '${items.length} komunikatów • $affectedProvinceCount województw',
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
       ),
     ];
