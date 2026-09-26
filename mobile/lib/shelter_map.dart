@@ -903,14 +903,14 @@ class _ShelterMapState extends State<ShelterMap> {
                   },
                 ),
                 DropdownButtonFormField<String>(
-                    key: ValueKey(availability),
-                    initialValue: availability,
-                    decoration: const InputDecoration(
+                  key: ValueKey(availability),
+                  initialValue: availability,
+                  decoration: const InputDecoration(
                       labelText: 'Punkty schronienia',
                       border: OutlineInputBorder(),
                     ),
-                    items: const [
-                      DropdownMenuItem(value: 'ALL', child: Text('Wszystkie')),
+                  items: const [
+                    DropdownMenuItem(value: 'ALL', child: Text('Wszystkie')),
                       DropdownMenuItem(
                         value: '24H',
                         child: Text('Całodobowe wg źródła'),
@@ -928,13 +928,13 @@ class _ShelterMapState extends State<ShelterMap> {
                         child: Text('Dostępność nieustalona'),
                       ),
                     ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => availability = value);
-                      update(() {});
-                      unawaited(refresh());
-                    },
-                  ),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() => availability = value);
+                    update(() {});
+                    unawaited(refresh());
+                  },
+                ),
                 const SizedBox(height: 12),
                 const Text(
                   'Czerwone: alerty • niebieskie: IMGW • zielone: schronienia • pomarańczowe: obserwowane miejsca • fioletowe: PAA',
