@@ -44,11 +44,20 @@ class _ShelterMapState extends State<ShelterMap> {
   bool showRadiation = false, locating = false;
   bool showEvents = true, showWatched = true;
   bool ready = false, loading = false, online = false, fallbackStyle = false;
+  bool overviewMode = false, nationalEventsLoading = false;
   int ticket = 0;
   String availability = 'ALL', message = 'Przygotowywanie mapy…';
   MapViewport? viewport;
   MapRequest? renderedRequest;
+  Snapshot? nationalSnapshot;
+  DateTime? nationalEventsUpdatedAt;
   ShelterMapProvider get provider => ShelterMapProvider(widget.repository);
+
+  List<SafetyEvent> get contextEvents => overviewMode
+      ? (widget.region == 'PL'
+            ? widget.events
+            : nationalSnapshot?.alertEvents ?? widget.events)
+      : widget.events;
   LatLng get homeTarget {
     final lat = widget.repository.primaryLocationLatitude;
     final lon = widget.repository.primaryLocationLongitude;
@@ -70,10 +79,17 @@ class _ShelterMapState extends State<ShelterMap> {
   @override
   void initState() {
     super.initState();
+    if (widget.region != 'PL') {
+      nationalSnapshot = widget.repository.cached('PL');
+    }
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (!mounted) return;
       setState(() {});
-      unawaited(syncContextLayers());
+      if (overviewMode) {
+        unawaited(refresh());
+      } else {
+        unawaited(syncContextLayers());
+      }
     });
   }
 
@@ -90,6 +106,10 @@ class _ShelterMapState extends State<ShelterMap> {
       unawaited(syncContextLayers());
     }
     if (oldWidget.region != widget.region) {
+      nationalSnapshot = widget.region == 'PL'
+          ? null
+          : widget.repository.cached('PL');
+      nationalEventsUpdatedAt = null;
       idle();
     }
   }
@@ -272,13 +292,35 @@ class _ShelterMapState extends State<ShelterMap> {
     });
   }
 
+  Future<void> refreshNationalEvents() async {
+    if (widget.region == 'PL' ||
+        widget.repository.api.isEmpty ||
+        nationalEventsLoading) {
+      return;
+    }
+    final now = DateTime.now();
+    if (nationalEventsUpdatedAt != null &&
+        now.difference(nationalEventsUpdatedAt!) < const Duration(minutes: 1)) {
+      return;
+    }
+    nationalEventsLoading = true;
+    try {
+      nationalSnapshot = await widget.repository.refresh('PL');
+      nationalEventsUpdatedAt = DateTime.now();
+    } catch (_) {
+      nationalSnapshot ??= widget.repository.cached('PL');
+    } finally {
+      nationalEventsLoading = false;
+    }
+  }
+
   Future<void> syncContextLayers() async {
     final c = controller;
     if (!ready || c == null || widget.ukraine) return;
 
     final now = DateTime.now();
     final eventFeatures = showEvents && !showRadiation
-        ? widget.events
+        ? contextEvents
               .where((event) => mapEventIsLive(event, now))
               .map(
                 (event) => {
@@ -382,10 +424,30 @@ class _ShelterMapState extends State<ShelterMap> {
         return;
       }
       await c.setGeoJsonSource('radiation', empty);
+      final zoom = (c.cameraPosition?.zoom ?? 5).clamp(0, 22).toDouble();
+      if (!mapShowsShelters(zoom)) {
+        if (!overviewMode) {
+          setState(() => overviewMode = true);
+        }
+        await c.setGeoJsonSource('shelters', empty);
+        viewport = null;
+        renderedRequest = null;
+        await refreshNationalEvents();
+        await syncContextLayers();
+        if (!mounted || current != ticket) return;
+        setState(() {
+          message =
+              'Widok Polski: schronienia są ukryte przy tym oddaleniu. Pokazuję aktywne zdarzenia jako czerwone punkty.';
+        });
+        return;
+      }
+      if (overviewMode) {
+        setState(() => overviewMode = false);
+      }
       await syncContextLayers();
       request = shelterViewportRequest(
         [west, south, east, north],
-        (c.cameraPosition?.zoom ?? 5).clamp(0, 22).toDouble(),
+        zoom,
         availability,
       );
       // Keep the previous viewport during ordinary pan/zoom so markers do not
@@ -487,7 +549,7 @@ class _ShelterMapState extends State<ShelterMap> {
         );
         final eventId = properties['eventId']?.toString();
         if (eventId != null) {
-          for (final event in widget.events) {
+          for (final event in contextEvents) {
             if (event.id == eventId) {
               widget.openEvent(event);
               return;
@@ -918,6 +980,8 @@ class _ShelterMapState extends State<ShelterMap> {
                         child: Text(
                           showRadiation
                               ? 'PAA'
+                              : overviewMode
+                              ? 'ZDARZENIA • POLSKA'
                               : online && viewport != null
                               ? fresh
                                     ? 'LIVE'
@@ -979,7 +1043,9 @@ class _ShelterMapState extends State<ShelterMap> {
                 ),
                 const Spacer(),
                 Text(
-                  viewport == null
+                  overviewMode
+                      ? 'Aktywne zdarzenia'
+                      : viewport == null
                       ? ''
                       : online
                       ? fresh
