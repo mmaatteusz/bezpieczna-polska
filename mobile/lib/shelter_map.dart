@@ -175,9 +175,13 @@ class _ShelterMapState extends State<ShelterMap> {
     styleFallback?.cancel();
     try {
       if (!widget.ukraine) {
-        final voivodeships = jsonDecode(
-          await rootBundle.loadString('assets/poland_voivodeships_min.geojson'),
-        ) as Map<String, dynamic>;
+        final voivodeships =
+            jsonDecode(
+                  await rootBundle.loadString(
+                    'assets/poland_voivodeships_min.geojson',
+                  ),
+                )
+                as Map<String, dynamic>;
         await c.addSource(
           'voivodeships',
           GeojsonSourceProperties(data: voivodeships),
