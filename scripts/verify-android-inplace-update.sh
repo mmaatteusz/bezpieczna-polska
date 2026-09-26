@@ -12,15 +12,15 @@ echo "Installing base APK versionCode=$BASE_BUILD"
 adb install "$BASE_APK"
 adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=$BASE_BUILD"
 
-adb shell run-as "$PACKAGE" sh -c 'mkdir -p files && printf keep-me > files/update-sentinel'
-SENTINEL="$(adb shell run-as "$PACKAGE" cat files/update-sentinel | tr -d '\r')"
+adb shell "run-as $PACKAGE sh -c 'mkdir -p files && printf keep-me > files/update-sentinel'"
+SENTINEL="$(adb shell "run-as $PACKAGE cat files/update-sentinel" | tr -d '\r')"
 test "$SENTINEL" = "keep-me"
 
 echo "Updating in place to versionCode=$NEXT_BUILD"
 adb install -r "$UPDATE_APK"
 adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=$NEXT_BUILD"
 
-SENTINEL="$(adb shell run-as "$PACKAGE" cat files/update-sentinel | tr -d '\r')"
+SENTINEL="$(adb shell "run-as $PACKAGE cat files/update-sentinel" | tr -d '\r')"
 test "$SENTINEL" = "keep-me"
 
 echo "Confirming Android rejects downgrade without -d"
