@@ -74,6 +74,13 @@ void main() {
     expect(find.text('Diagnostyka źródeł'), findsNothing);
     expect(find.byType(NavigationDestination), findsNWidgets(4));
 
+    await tester.tap(find.text('Ustaw lokalizację'));
+    await tester.pumpAndSettle();
+    expect(find.text('Wybierz swoją okolicę'), findsOneWidget);
+    await tester.tap(find.text('Anuluj'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
     await tester.tap(find.text('Polska'));
     await tester.pumpAndSettle();
     expect(find.text('Alerty'), findsWidgets);
@@ -161,6 +168,9 @@ void main() {
       await tester.tap(find.text('Developer Settings'));
       await tester.pumpAndSettle();
       expect(find.text('Backend URL (HTTPS)'), findsOneWidget);
+      await tester.tap(find.text('Anuluj'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },
   );
