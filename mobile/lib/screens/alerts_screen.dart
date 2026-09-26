@@ -62,8 +62,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
     return safetyEventTime(b).compareTo(safetyEventTime(a));
   }
 
-  List<WidgetBuilder> _sectionEntries(
-    BuildContext context, {
+  List<WidgetBuilder> _sectionEntries({
     required String title,
     required String subtitle,
     required IconData icon,
@@ -343,7 +342,6 @@ class _AlertsScreenState extends State<AlertsScreen> {
       entries
         ..addAll(
           _sectionEntries(
-            context,
             title: 'Krytyczne',
             subtitle: 'Bezpośrednie zagrożenia wymagające najwyższej uwagi.',
             icon: Icons.report_rounded,
@@ -352,7 +350,6 @@ class _AlertsScreenState extends State<AlertsScreen> {
         )
         ..addAll(
           _sectionEntries(
-            context,
             title: 'Wysokie',
             subtitle: 'Poważne aktywne ostrzeżenia.',
             icon: Icons.warning_amber_rounded,
@@ -361,7 +358,6 @@ class _AlertsScreenState extends State<AlertsScreen> {
         )
         ..addAll(
           _sectionEntries(
-            context,
             title: 'Pozostałe aktywne',
             subtitle: 'Ostrzeżenia i informacje o niższym priorytecie.',
             icon: Icons.notifications_active_outlined,
@@ -373,7 +369,6 @@ class _AlertsScreenState extends State<AlertsScreen> {
     if (lifecycle == 'Wszystkie') {
       entries.addAll(
         _sectionEntries(
-          context,
           title: 'Inne komunikaty',
           subtitle: 'Zaplanowane lub o nieustalonej ważności.',
           icon: Icons.schedule_outlined,
@@ -385,7 +380,6 @@ class _AlertsScreenState extends State<AlertsScreen> {
     if (lifecycle != 'Aktywne') {
       entries.addAll(
         _sectionEntries(
-          context,
           title: 'Zakończone i historyczne',
           subtitle: 'Wyciszone komunikaty, które nie są już aktywne.',
           icon: Icons.history_rounded,
