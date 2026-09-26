@@ -120,11 +120,15 @@ jobs:
             adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=$BASE_BUILD"
 
             adb shell "run-as $PACKAGE sh -c 'mkdir -p files && printf keep-me > files/update-sentinel'"
-            test "$(adb shell "run-as $PACKAGE cat files/update-sentinel" | tr -d '\r')" = "keep-me"
+            SENTINEL="$(adb shell "run-as $PACKAGE cat files/update-sentinel")"
+            SENTINEL="$(printf '%s' "$SENTINEL" | tr -d '\r')"
+            test "$SENTINEL" = "keep-me"
 
             adb install -r update-preview.apk
             adb shell dumpsys package "$PACKAGE" | grep -F "versionCode=$NEXT_BUILD"
-            test "$(adb shell "run-as $PACKAGE cat files/update-sentinel" | tr -d '\r')" = "keep-me"
+            SENTINEL="$(adb shell "run-as $PACKAGE cat files/update-sentinel")"
+            SENTINEL="$(printf '%s' "$SENTINEL" | tr -d '\r')"
+            test "$SENTINEL" = "keep-me"
 
             if adb install -r base-preview.apk; then
               echo "Unexpected downgrade/reinstall to the lower versionCode was accepted" >&2
