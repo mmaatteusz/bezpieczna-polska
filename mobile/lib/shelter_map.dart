@@ -383,10 +383,9 @@ class _ShelterMapState extends State<ShelterMap> {
       }
       await c.setGeoJsonSource('radiation', empty);
       await syncContextLayers();
-      request = MapRequest(
+      request = shelterViewportRequest(
         [west, south, east, north],
         (c.cameraPosition?.zoom ?? 5).clamp(0, 22).toDouble(),
-        widget.region,
         availability,
       );
       // Keep the previous viewport during ordinary pan/zoom so markers do not
@@ -413,9 +412,21 @@ class _ShelterMapState extends State<ShelterMap> {
     } catch (failure) {
       if (!mounted || current != ticket) return;
       final cached = request == null ? null : provider.cached(request);
-      final offline = cached == null && request != null
-          ? await provider.offline(request)
-          : null;
+      MapViewport? offline;
+      MapRequest? fallbackRequest = request;
+      if (cached == null && request != null) {
+        offline = await provider.offline(request);
+        if (offline == null && widget.region != 'PL') {
+          final regionalRequest = MapRequest(
+            request.bbox,
+            request.zoom,
+            widget.region,
+            request.availability,
+          );
+          offline = await provider.offline(regionalRequest);
+          if (offline != null) fallbackRequest = regionalRequest;
+        }
+      }
       final fallback = cached ?? offline;
       if (fallback != null) {
         await c.setGeoJsonSource('shelters', fallback.data);
@@ -426,7 +437,7 @@ class _ShelterMapState extends State<ShelterMap> {
       if (!mounted || current != ticket) return;
       setState(() {
         viewport = fallback;
-        renderedRequest = fallback == null ? null : request;
+        renderedRequest = fallback == null ? null : fallbackRequest;
         online = false;
         message = fallback == null
             ? apiFailureMessage(failure)
