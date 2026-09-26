@@ -200,7 +200,7 @@ jobs:
         run: |
           flutter pub get
           flutter build appbundle --release --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
-          flutter build apk --release --split-per-abi --target-platform android-arm64 --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
+          flutter build apk --release --target-platform android-arm64 --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
       - name: Verify signatures, identifiers and SHA-256
         if: steps.signing.outputs.ready == 'true'
         shell: bash
@@ -209,9 +209,9 @@ jobs:
           mkdir -p output
           VERSION="$(node -p "require('./backend/package.json').version")"
           BUILD="$(sed -nE 's/^version: [^+]+\+([0-9]+)$/\1/p' mobile/pubspec.yaml)"
-          EXPECTED_CODE="$((2000 + BUILD))"
+          EXPECTED_CODE="$BUILD"
           cp mobile/build/app/outputs/bundle/release/app-release.aab "output/Bezpieczna_Polska_${VERSION}.aab"
-          cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "output/Bezpieczna_Polska_${VERSION}-arm64.apk"
+          cp mobile/build/app/outputs/flutter-apk/app-release.apk "output/Bezpieczna_Polska_${VERSION}-arm64.apk"
           jarsigner -verify -strict output/*.aab
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs output/*.apk | tee output/signature-check.txt
           grep -F "Signer #1 certificate SHA-256 digest: $PRODUCTION_SIGNING_CERT_SHA256" output/signature-check.txt
