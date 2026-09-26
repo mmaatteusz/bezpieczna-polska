@@ -123,22 +123,25 @@ void main() {
     expect(result, hasLength(2));
   });
 
-  test('Start keeps non-IMGW warnings separate unless they are exact duplicates', () {
-    final result = groupSafetyEventsForDashboard([
-      warning(
-        id: 'rso-1',
-        title: 'Ostrzeżenie',
-        description: 'Pierwszy komunikat.',
-      ),
-      warning(
-        id: 'rso-2',
-        title: 'Ostrzeżenie',
-        description: 'Drugi komunikat.',
-      ),
-    ]);
+  test(
+    'Start keeps non-IMGW warnings separate unless they are exact duplicates',
+    () {
+      final result = groupSafetyEventsForDashboard([
+        warning(
+          id: 'rso-1',
+          title: 'Ostrzeżenie',
+          description: 'Pierwszy komunikat.',
+        ),
+        warning(
+          id: 'rso-2',
+          title: 'Ostrzeżenie',
+          description: 'Drugi komunikat.',
+        ),
+      ]);
 
-    expect(result, hasLength(2));
-  });
+      expect(result, hasLength(2));
+    },
+  );
 
   test('far-future sentinel validity is treated as open ended', () {
     final event = warning(id: 'sentinel', validTo: '99999-12-31T23:59:59Z');
