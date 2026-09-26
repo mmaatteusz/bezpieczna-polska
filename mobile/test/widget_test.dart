@@ -129,6 +129,38 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets(
+    'configured locality card scrolls to warnings instead of reopening picker',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({
+        'region': '04',
+        'primary_location_label': 'Bydgoszcz',
+        'primary_location_latitude': 53.1235,
+        'primary_location_longitude': 18.0084,
+      });
+      final r = DataRepository(await SharedPreferences.getInstance());
+      await tester.pumpWidget(SafetyApp(repository: r));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ustaw lokalizację'), findsNothing);
+      final warnings = find.text('Istotne zagrożenia');
+      final before = tester.getTopLeft(warnings).dy;
+
+      await tester.tap(find.text('Twoja okolica'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Wybierz swoją okolicę'), findsNothing);
+      expect(tester.getTopLeft(warnings).dy, lessThan(before));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
   testWidgets('200 percent font on phone does not overflow status', (
     tester,
   ) async {
