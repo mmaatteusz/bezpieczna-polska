@@ -5,14 +5,19 @@ import '../model.dart';
 enum SafetyVisualLevel { critical, high, warning, information, historical }
 
 String safetySourceLabel(SafetyEvent event) {
-  final ids = event.sources.map((source) => source['id']?.toString()).toSet();
+  final sources = event.sources;
+  if (sources.isEmpty) return 'Źródło oficjalne';
+
+  final ids = sources.map((source) => source['id']?.toString()).toSet();
   final hasRso = ids.contains('RSO');
   final hasWczk = ids.any((id) => id != null && id.startsWith('WCZK-'));
   if (hasRso && hasWczk) return 'WCZK / RSO • ten sam komunikat';
   if (hasRso && event.areas.isNotEmpty && !event.areas.contains('PL')) {
     return 'WCZK • przez RSO';
   }
-  return event.sources.first['name']?.toString() ?? 'Źródło oficjalne';
+
+  final name = sources.first['name']?.toString().trim() ?? '';
+  return name.isEmpty ? 'Źródło oficjalne' : name;
 }
 
 int independentSourceCount(SafetyEvent event) {
