@@ -106,7 +106,7 @@ class RadiationData {
               now
                       .difference(DateTime.parse(p['measuredAt'] as String))
                       .inSeconds <
-                  900 &&
+                  10800 &&
               !DateTime.parse(
                 p['measuredAt'] as String,
               ).isAfter(now.add(const Duration(seconds: 30))),
