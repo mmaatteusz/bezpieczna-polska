@@ -64,7 +64,7 @@ void main() {
           'id': 'PAA_MEASUREMENTS',
           'state': 'HEALTHY',
           'lastSuccess': now.toIso8601String(),
-          'maxAgeSeconds': 900,
+          'maxAgeSeconds': 10800,
         },
       ],
     };
