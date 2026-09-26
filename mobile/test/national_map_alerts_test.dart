@@ -113,27 +113,15 @@ void main() {
     );
 
     expect(
-      mapEventVisibleForLayers(
-        imgw,
-        showEvents: true,
-        showImgw: false,
-      ),
+      mapEventVisibleForLayers(imgw, showEvents: true, showImgw: false),
       isFalse,
     );
     expect(
-      mapEventVisibleForLayers(
-        rcb,
-        showEvents: true,
-        showImgw: false,
-      ),
+      mapEventVisibleForLayers(rcb, showEvents: true, showImgw: false),
       isTrue,
     );
     expect(
-      mapEventVisibleForLayers(
-        imgw,
-        showEvents: false,
-        showImgw: true,
-      ),
+      mapEventVisibleForLayers(imgw, showEvents: false, showImgw: true),
       isTrue,
     );
   });
