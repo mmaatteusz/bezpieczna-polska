@@ -129,7 +129,6 @@ List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
   ];
 }
 
-
 class GpsInterferenceViewport {
   final Map<String, dynamic> data;
 
