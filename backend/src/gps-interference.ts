@@ -42,7 +42,7 @@ function utcDate(daysAgo:number,now=new Date()){
   return d.toISOString().slice(0,10);
 }
 
-export function defaultGpsInterferenceDate(now=new Date())=>utcDate(1,now);
+export function defaultGpsInterferenceDate(now=new Date()){return utcDate(1,now);}
 
 export function gpsJamPercent(good:number,bad:number){
   const total=good+bad;
