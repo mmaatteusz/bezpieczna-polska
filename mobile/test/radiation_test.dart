@@ -35,7 +35,10 @@ void main() {
       data.communicationText(now.add(const Duration(minutes: 15)), true),
       contains('STALE'),
     );
-    expect(data.measurementText(now, true), contains('niezweryfikowany'));
+    expect(
+      data.measurementText(now, true),
+      contains('nie jest obecnie dostępne'),
+    );
     final warning = RadiationData.parse({
       ...radiation(now),
       'communicationState': 'ACTIVE',
@@ -64,7 +67,7 @@ void main() {
           'id': 'PAA_MEASUREMENTS',
           'state': 'HEALTHY',
           'lastSuccess': now.toIso8601String(),
-          'maxAgeSeconds': 900,
+          'maxAgeSeconds': 10800,
         },
       ],
     };
@@ -72,7 +75,11 @@ void main() {
     expect(data.measurementText(now, true), 'Dane pomiarowe aktualne');
     expect(data.measurementText(now, false), contains('STALE'));
     expect(
-      data.measurementText(now.add(const Duration(hours: 1)), true),
+      data.measurementText(now.add(const Duration(hours: 2)), true),
+      'Dane pomiarowe aktualne',
+    );
+    expect(
+      data.measurementText(now.add(const Duration(hours: 4)), true),
       contains('STALE'),
     );
     for (final bad in [

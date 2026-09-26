@@ -35,7 +35,7 @@ test('disabled sources are not synchronized and stay out of public source list',
    assert.ok(ids.includes('RCB'));
    assert.ok(!ids.includes('UA'));
    assert.ok(!ids.includes('CSIRT_GOV'));
-   assert.ok(!ids.includes('PAA_MEASUREMENTS'));
+   assert.ok(ids.includes('PAA_MEASUREMENTS'));
    assert.ok(!ids.includes('WCZK-04'));
    assert.ok(ids.includes('WCZK-18'));
   }finally{await app.close();}

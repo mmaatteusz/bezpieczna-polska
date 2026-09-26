@@ -4,6 +4,7 @@ import {readFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {parsePaaArticle,parsePaaIndex,paaAdapter,PAA_INDEX} from '../src/paa-adapter.js';
+import {parsePaaMeasurements,paaMeasurementsAdapter,paaMeasurementsUrl,isAllowedPaaMeasurementsUrl} from '../src/paa-measurements-adapter.js';
 import {radiationMeasurementSchema,radiationStatus,type RadiationMeasurement} from '../src/radiation.js';
 import {computeStatus,sourceHealth,type Health} from '../src/domain.js';
 import {Store,openDb} from '../src/store.js';
@@ -15,6 +16,14 @@ const warning=()=>parsePaaArticle(article('Komunikat PAA — zagrożenie radiacy
 const health=(id='PAA'):Health=>({checkedEventIds:[warning().id],id,name:id,url:PAA_INDEX,state:'HEALTHY',lastSuccess:now.toISOString(),lastFailure:null,lastItemTime:null,lastAttempt:now.toISOString(),failureCount:0,responseTime:1,maxAgeSeconds:900,complete:false,enabled:true});
 const measurement:RadiationMeasurement={stationId:'TEST-ONLY',name:'Syntetyczna stacja testowa',latitude:53.12,longitude:18.01,measuredAt:now.toISOString(),value:100,unit:'nSv/h',sourceUpdatedAt:now.toISOString(),regionId:'04'};
 const fixture=readFileSync('test/fixtures/paa/information.html','utf8');
+const measurementGeoJson=(tipDate='2026-09-21 11:00')=>JSON.stringify({
+ type:'FeatureCollection',
+ features:[{
+  type:'Feature',
+  geometry:{type:'Point',coordinates:[18.01,53.12]},
+  properties:{id:'station-1',stacja:'Bydgoszcz',tip_date:tipDate,tip_value:'0.100 µSv/h'}
+ }]
+});
 test('PAA official indexes and fail-closed structure',()=>{
  for(const file of ['index.html','index-2.html','index-3.html'])assert.equal(parsePaaIndex(readFileSync('test/fixtures/paa/'+file,'utf8')).urls.length,10);
  assert.throws(()=>parsePaaIndex('<main>new format</main>'),/CONTRACT/);
@@ -42,6 +51,47 @@ test('STALE and DOWN preserve uncertainty and affect coverage',()=>{
  }
  assert.equal(sourceHealth([health()],new Date(now.getTime()+900000))[0].state,'STALE');
 });
+test('PAA measurement health never changes the national hazard verdict',()=>{
+ const complete={...health('RCB'),id:'RCB',name:'RCB',complete:true,coverage:'ACTIVE_WARNINGS' as const};
+ const broken={...health('PAA_MEASUREMENTS'),state:'BROKEN' as const,complete:false,coverage:'MEASUREMENT_NETWORK' as const};
+ assert.equal(computeStatus([],[complete,broken],'PL',now).hazardLevel,'NO_ACTIVE_WARNINGS');
+ assert.equal(computeStatus([],[complete,broken],'PL',now).coverageState,'COMPLETE_FOR_CONFIGURED_SCOPE');
+});
+test('PAA WFS measurement contract maps official GeoJSON without inventing alarm semantics',()=>{
+ const items=parsePaaMeasurements(measurementGeoJson(),now);
+ assert.equal(items.length,1);
+ assert.equal(items[0].stationId,'station-1');
+ assert.equal(items[0].name,'Bydgoszcz');
+ assert.equal(items[0].latitude,53.12);
+ assert.equal(items[0].longitude,18.01);
+ assert.equal(items[0].measuredAt,'2026-09-21T11:00:00.000Z');
+ assert.equal(items[0].value,0.1);
+ assert.equal(items[0].unit,'µSv/h');
+ assert.equal(items[0].regionId,null);
+ const url=paaMeasurementsUrl(now);
+ assert.ok(isAllowedPaaMeasurementsUrl(url));
+ assert.equal(isAllowedPaaMeasurementsUrl('https://evil.example/geoserver/ows?service=WFS'),false);
+ assert.throws(()=>parsePaaMeasurements('{"type":"FeatureCollection","features":[]}',now),/EMPTY/);
+ assert.throws(()=>parsePaaMeasurements(measurementGeoJson().replace('[18.01,53.12]','[2,90]'),now),/GEOMETRY/);
+ assert.throws(()=>parsePaaMeasurements(measurementGeoJson().replace('0.100 µSv/h','bad'),now),/CONTRACT/);
+});
+test('PAA measurement adapter persists live points and health without creating Events',async()=>{
+ const store=new Store(openDb(undefined,':memory:'));await store.init();
+ try{
+  const d=new Date();
+  const pad=(n:number)=>String(n).padStart(2,'0');
+  const tip=`${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  await ingest(store,[paaMeasurementsAdapter],async()=>measurementGeoJson(tip));
+  const items=await store.radiationMeasurements();
+  assert.equal(items.length,1);
+  assert.equal(items[0].name,'Bydgoszcz');
+  assert.equal((await store.events()).length,0);
+  const h=(await store.health()).find(h=>h.id==='PAA_MEASUREMENTS')!;
+  assert.equal(h.state,'HEALTHY');
+  assert.equal(h.itemCount,1);
+  assert.equal(h.coverage,'MEASUREMENT_NETWORK');
+ }finally{await store.db.close();}
+});
 test('Normal/large readings never create Events; fresh, stale, missing data',()=>{
  for(const value of [0,100,101,100000]){const data=radiationStatus([],[health(),health('PAA_MEASUREMENTS')],'04',now,[{...measurement,value}]);assert.equal(data.measurementState,'FRESH');assert.equal(data.messages.length,0);assert.equal(data.measuredValuesAffectHazard,false);assert.equal(computeStatus([],[health(),health('PAA_MEASUREMENTS')],'PL',now).hazardLevel,'UNKNOWN');}
  assert.equal(radiationStatus([],[health('PAA_MEASUREMENTS')],'04',now).measurementState,'NO_DATA');assert.equal(radiationStatus([],[],'04',now).measurementState,'NOT_CONFIGURED');assert.equal(radiationStatus([],[health('PAA_MEASUREMENTS')],'04',new Date(now.getTime()+900000),[measurement]).measurementState,'STALE');
@@ -61,7 +111,7 @@ test('Failed endpoint/format keep LKG; resync/restart without duplicates',async(
   for(const code of ['SOURCE_HTTP_503','SOURCE_SYNC_FAILED','PAA_ARTICLE_CONTRACT_CHANGED']){await ingest(store,[{...adapter,async sync(){throw new Error(code);}}]);const h=(await store.health()).find(h=>h.id==='PAA')!;assert.equal(h.state,'BROKEN');assert.equal(h.errorCode,code);assert.ok(h.lastAttempt);assert.ok(h.lastSuccess);assert.equal((await store.events()).length,1);}
   await store.db.close();store=new Store(openDb(undefined,path));await store.init();await initializeSources(store);assert.equal((await store.events()).length,1);assert.equal((await store.health()).find(h=>h.id==='PAA')!.state,'BROKEN');
   await ingest(store,[adapter]);assert.equal((await store.timeline(warning().id)).length,1);
-  const app=await buildApp(store);try{const snap=(await app.inject('/v1/snapshot?regionId=04')).json();assert.equal(snap.radiation.messages.length,1);assert.equal(snap.capabilities.paaMeasurements,false);assert.equal((await app.inject('/v1/layers/events.geojson?source=PAA')).json().features.length,0);}finally{await app.close();}
+  const app=await buildApp(store);try{const snap=(await app.inject('/v1/snapshot?regionId=04')).json();assert.equal(snap.radiation.messages.length,1);assert.equal(snap.capabilities.paaMeasurements,true);assert.equal((await app.inject('/v1/layers/events.geojson?source=PAA')).json().features.length,0);}finally{await app.close();}
  }finally{await store.db.close();rmSync(dir,{recursive:true,force:true});}
 });
 test('Measurement atomic LKG, idempotence, restart; no Event writes',async()=>{
