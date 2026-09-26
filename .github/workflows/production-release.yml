@@ -132,6 +132,8 @@ jobs:
       PRODUCTION_SIGNING_CERT_SHA256: ${{ vars.PRODUCTION_SIGNING_CERT_SHA256 }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -157,6 +159,9 @@ jobs:
       - name: Validate deployed production API and version
         if: steps.signing.outputs.ready == 'true'
         run: node scripts/validate-release.mjs --production
+      - name: Reject non-monotonic production Android versionCode
+        if: steps.signing.outputs.ready == 'true' && startsWith(github.ref, 'refs/tags/')
+        run: node scripts/check-production-version-history.mjs
       - uses: actions/setup-java@v6
         if: steps.signing.outputs.ready == 'true'
         with:
