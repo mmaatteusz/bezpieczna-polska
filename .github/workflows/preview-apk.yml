@@ -6,6 +6,9 @@ on:
       - 'backend/**'
       - 'mobile/**'
       - 'docs/**'
+      - 'scripts/configure-preview-signing.sh'
+      - 'scripts/android-preview-build-number.sh'
+      - 'scripts/verify-preview-apk.sh'
       - '.github/workflows/preview-apk.yml'
   push:
     branches: ['stage/**']
@@ -13,6 +16,9 @@ on:
       - 'backend/**'
       - 'mobile/**'
       - 'docs/**'
+      - 'scripts/configure-preview-signing.sh'
+      - 'scripts/android-preview-build-number.sh'
+      - 'scripts/verify-preview-apk.sh'
       - '.github/workflows/preview-apk.yml'
   workflow_dispatch:
 permissions:
