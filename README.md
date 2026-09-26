@@ -1,104 +1,223 @@
-> Alpha.18 (branch / PR #22) — audyt kompletności źródeł i hardening runtime: jawne źródła częściowe/niepodłączone, wersjonowane migracje, lease workerów, prywatniejszy nearest shelter oraz file-backed offline storage. Merge do `main` dopiero po pełnym CI GREEN. [Audyt etapu](docs/ALPHA18_SOURCE_AUDIT.md).
-
 # Bezpieczna Polska
 
-**Bezpieczna Polska** to cywilny system świadomości sytuacyjnej dla Polski. Łączy oficjalne komunikaty i dane służb, aby odpowiedzieć użytkownikowi: **co się dzieje, czy dotyczy Polski lub jego regionu, jak aktualna i wiarygodna jest informacja, co zrobić oraz gdzie znajduje się najbliższe schronienie**.
+**Bezpieczna Polska** to aplikacja mobilna i backend do cywilnej świadomości sytuacyjnej dla Polski. Łączy oficjalne komunikaty i dane wielu instytucji, zachowuje źródło i historię zmian oraz pokazuje użytkownikowi najważniejsze informacje: **co się dzieje, gdzie, jak świeże są dane, jak wiarygodne jest źródło i gdzie znajdują się schronienia**.
 
-Aplikacja nie jest zwykłym agregatorem newsów ani mapą wojny. Zachowuje pochodzenie komunikatów, historię korekt, stan źródeł i nie interpretuje braku danych jako braku zagrożenia.
+Projekt jest w fazie **0.1.0-alpha.22**. Android jest obecnie główną platformą rozwojową. Kod produkcyjny i preview korzysta z jednego backendu HTTP, a część funkcji może działać z ostatnio zapisanych danych offline.
 
-Aktualna wersja brancha: **0.1.0-alpha.18 — wersja rozwojowa, nie pełne MVP i jeszcze nie stan `main`.**
+> **Stan po audycie 2026-09-26:** kod na `main` przechodzi aktualne workflowy CI, większość skonfigurowanych źródeł na Railway raportuje HEALTHY, ale środowisko Railway wymaga uporządkowania. Główna usługa `api` jest nadal przypięta do `stage/alpha22-android-gui-wczk`, a nie do `main`. Szczegóły: [AUDIT_2026-09-26.md](docs/AUDIT_2026-09-26.md).
 
-### Co działa w kodzie alpha.18
+## Najważniejsze funkcje
 
-- Status Polski i status lokalny z wyjaśnieniem „Dlaczego taki status?”.
-- Oficjalne źródła i integracje: RCB, RSO, WCZK, stopnie alarmowe RP, IMGW-PIB (ostrzeżenia meteo i hydro), PAA, CERT Polska, Straż Graniczna, Policja i PSP.
-- Katalog schronień PSP/dane.gov.pl z PostGIS, wyszukiwaniem, mapą, nearest shelter i pakietami offline regionu. W alpha.18 duże payloady pakietów są przechowywane w plikach aplikacji zamiast w `SharedPreferences`; nowe pakiety używają SHA-256, a odczyt legacy CRC32/LKG pozostaje kompatybilny. Dostępność bieżących danych PSP zależy od oficjalnego serwera.
-- Alert Center, korelacja i deduplikacja zdarzeń, rewizje i historia korekt.
-- **Obserwowane lokalizacje** zapisywane lokalnie na urządzeniu.
-- **„Wokół mnie”** z jednorazowym GPS uruchamianym wyłącznie przez użytkownika — bez ciągłego śledzenia i bez historii ruchu.
-- Odległość do zdarzenia jest liczona wyłącznie wtedy, gdy źródło dostarcza wiarygodną geometrię. Brak geometrii nie jest traktowany jako brak zdarzeń w pobliżu.
-- Oddzielny moduł alarmów Ukrainy z historią i administracyjną warstwą mapy; pobieranie live wymaga klucza UkraineAlarm.
-- **NEPTUN** pokazuje wyłącznie historyczne, zakończone i zgrubne ślady OSINT z timeline, źródłem każdej obserwacji i korektami.
-- **Push FCM/APNs** ma opt-in permission flow, szyfrowaną rejestrację urządzenia, preferencje kategorii oraz trwały outbox z retry; wysyłka wymaga sekretów providera na backendzie i konfiguracji platform mobilnych.
-- Konfiguracje development / preview / production, produkcyjne migracje PostGIS, `/health` i `/ready`, metryki i logi, skrypty backup/restore z testem, szablon Compose + Caddy/HTTPS, release gate oraz ścieżka podpisywania Androida są przygotowane w kodzie i CI. [Runbook](docs/PRODUCTION_RUNBOOK.md).
-- Preview APK jest budowany jako **arm64-v8a only**.
+- status Polski i wybranego województwa,
+- Alert Center z deduplikacją i korelacją komunikatów,
+- mapa Polski z alertami, zdarzeniami, schronieniami i granicami województw,
+- oddzielna mapa Ukrainy,
+- live NEPTUN z odświeżaniem backendu co 5 s i publikacją pozycji zgrubnych,
+- schronienia PSP/dane.gov.pl, wyszukiwanie w obszarze mapy i najbliższe schronienie,
+- jednorazowe `Wokół mnie` z GPS uruchamianym przez użytkownika,
+- obserwowane lokalizacje,
+- stopnie alarmowe RP,
+- dane PAA, IMGW, CERT Polska, Straży Granicznej, Policji i PSP,
+- historia rewizji zdarzeń i incydentów,
+- pakiety danych offline dla regionu,
+- obsługa push w backendzie i aplikacji; prawdziwa wysyłka wymaga konfiguracji providerów.
 
-### Co wymaga konfiguracji
+## Architektura
 
-- Bieżące alarmy Ukrainy wymagają autoryzowanego `UKRAINE_ALARM_API_KEY`; brak klucza daje jawny `NOT_CONFIGURED`.
-- Wysyłki FCM/APNs wymagają kluczy providera, klucza szyfrowania tokenów oraz konfiguracji Firebase/APNs w aplikacji i urządzeniach. CI testuje kontrakty bez prawdziwych wysyłek.
-- Kandydat na podpisany Android release wymaga prawdziwego publicznego HTTPS backendu, SHA wdrożonej wersji i klucza podpisu właściciela; bez nich bramka wydania odmawia artefaktu.
-
-### Czego jeszcze nie wdrożono i ograniczenia
-
-- Nie ma publicznego hostingu, prawdziwej domeny, skonfigurowanych sekretów produkcyjnych ani wydania podpisanego kluczem właściciela. Szablon wdrożenia i zielony CI nie oznaczają działającej usługi publicznej.
-- iOS ma wspólny kod Flutter i konfigurację buildów, ale brak fizycznej walidacji podpisanego iOS release; panel administratora z MFA nie istnieje.
-- PAA measurements pozostają wyłączone do czasu zweryfikowanego stabilnego publicznego kontraktu.
-- CSIRT GOV pozostaje jawnie `NOT_CONFIGURED`, dopóki oficjalna lista kanałów RSS jest pusta.
-- Niezależny fallback PSP i pełne pokrycie WCZK wszystkich województw nadal wymagają pracy.
-- Część źródeł jest ograniczona do publikacji publicznych i nie stanowi pełnego operacyjnego rejestru zdarzeń.
-- Pakiety offline zawierają dane bezpieczeństwa i overlaye, ale nadal **nie zawierają pełnego podkładu mapowego offline**; `basemapIncluded=false` pozostaje jawne.
-- Brak nowych danych lub brak geometrii **nie oznacza bezpieczeństwa**.
-
-## Uruchomienie
-
-Backend wymaga Node.js 24:
-
-```sh
-cd backend
-npm ci
-npm run build
-npm test
-npm run ingest
-npm start
+```text
+Flutter Android/iOS
+        |
+        | HTTPS JSON / GeoJSON
+        v
+Fastify / Node.js 24
+        |
+        +-- adaptery źródeł
+        +-- korelacja / deduplikacja
+        +-- source health
+        +-- historia rewizji
+        +-- push outbox
+        |
+        v
+PostgreSQL + PostGIS 17
 ```
 
-API domyślnie słucha na `127.0.0.1:8080`. `GET /v1/snapshot?regionId=04` zawiera Kujawsko-Pomorskie i osobny status Polski.
-`GET /status?regionId=04` zwraca osobno `poland`, `region` i `sourceHealth`. Pobieranie RCB startuje automatycznie i powtarza się co 5 minut; wykaz PSP odświeża się przy starcie i nie częściej niż co 6 godzin po poprawnej synchronizacji; `ENABLE_INGESTION=false` wyłącza harmonogram. `DATABASE_URL` wybiera PostgreSQL z PostGIS. Produkcja wymaga PostGIS; SQLite pozostaje wyłącznie dla testów i lokalnego developmentu.
-`ADMIN_TOKEN` minimum 32 losowe znaki, wyłącznie na backendzie. Admin endpointy należy dodatkowo izolować sieciowo; panel MFA nie jest zaimplementowany.
+Backend działa jako pojedyncza usługa API z workerami ingestion uruchamianymi w procesie aplikacji. Zwykłe źródła są sprawdzane cyklicznie, a NEPTUN ma osobny worker 5-sekundowy. Dostęp do równoległych workerów jest chroniony lease w bazie.
+
+## Źródła i moduły
+
+| Moduł | Implementacja | Stan wg audytu Railway 2026-09-26 |
+|---|---|---|
+| RCB | oficjalne komunikaty i artykuły | HEALTHY |
+| RSO | pełny publiczny eksport XML | HEALTHY |
+| WCZK | RSO dla 16 województw + bezpośredni mirror Podkarpackiego | WCZK-18 HEALTHY; pozostałe przez RSO |
+| Stopnie alarmowe RP | RCB / gov.pl | HEALTHY |
+| IMGW meteo | oficjalne API | HEALTHY |
+| IMGW hydro | oficjalne API | HEALTHY |
+| PAA | komunikaty PAA | HEALTHY |
+| PAA measurements | brak stabilnego zweryfikowanego kontraktu | wyłączone |
+| CERT Polska | oficjalny RSS | HEALTHY |
+| CSIRT GOV | brak publicznego feedu użytecznego dla aplikacji | NOT_CONFIGURED |
+| Straż Graniczna | oficjalne aktualności, filtr operacyjny | HEALTHY |
+| Policja | oficjalny RSS, filtr zdarzeń | HEALTHY |
+| PSP incidents | centralne aktualności KG PSP, filtr zdarzeń | HEALTHY |
+| Schronienia | PSP / dane.gov.pl + PostGIS | HEALTHY |
+| UkraineAlarm | oficjalne API v3 | NOT_CONFIGURED na Railway — brak klucza |
+| NEPTUN | publiczny live feed | HEALTHY |
+| Push | FCM/APNs + outbox | kod gotowy; providery nie są skonfigurowane na Railway |
+
+**Ważne:** stan HEALTHY oznacza, że adapter poprawnie wykonał ostatni cykl synchronizacji. Nie oznacza, że dane danego źródła są kompletne dla wszystkich rodzajów zdarzeń.
+
+## Railway — aktualny stan
+
+Projekt Railway: **Bezpieczna Polska**.
+
+Główne elementy:
+
+- `api` — publiczne API: `api-production-b6560.up.railway.app`,
+- `PostGIS 17` — baza używana przez `DATABASE_URL`,
+- `PostGIS 17-x_Uh` — osierocona druga baza, nieużywana przez `api`,
+- `api-alpha20-smoke` — historyczny serwis smoke,
+- `alpha20-runtime-probe` — historyczny one-shot probe.
+
+### Znany drift wdrożenia
+
+Na dzień audytu:
+
+- `main`: `659d90335f62e72a9c5548d06c9dd86cc9715768`,
+- Railway `api`: branch `stage/alpha22-android-gui-wczk`,
+- deployment Railway: `83ed7b28d737f4c7c2ea72f6f0de76827345d299`.
+
+To oznacza, że **Railway nie śledzi obecnie `main`**. Nowe poprawki scalone do `main` nie muszą pojawić się na backendzie, dopóki konfiguracja źródła usługi nie zostanie poprawiona i backend nie zostanie ponownie wdrożony.
+
+## API
+
+Najważniejsze endpointy:
+
+```text
+GET  /health
+GET  /ready
+GET  /status?regionId=04
+GET  /v1/snapshot?regionId=04
+GET  /v1/sources
+GET  /v1/map/layers
+GET  /v1/layers/events.geojson
+GET  /v1/shelters
+GET  /v1/map/shelters
+POST /v1/shelters/nearest
+POST /v1/around
+GET  /v1/radiation
+GET  /v1/ukraine
+GET  /v1/neptun
+GET  /v1/layers/neptun.geojson
+GET  /v1/events/:id/timeline
+GET  /v1/incidents/:id/timeline
+GET  /v1/incidents/:id/history
+```
+
+Endpointy administracyjne wymagają `ADMIN_TOKEN` i są rate-limitowane.
+
+## Android
+
+Aplikacja Flutter ma cztery główne sekcje:
+
+- Sytuacja teraz,
+- Alerty,
+- Mapa,
+- Więcej.
+
+Preview używa osobnego identyfikatora pakietu `pl.bezpiecznapolska.preview`. Produkcja używa `pl.bezpiecznapolska`.
+
+Aktualny preview APK jest budowany jako **arm64-v8a only**. Do budowy wymagany jest JDK 21.
 
 ```sh
 cd mobile
 flutter pub get
 flutter analyze
 flutter test
-cd ..
-API_BASE_URL=https://<wdrożony-backend> bash scripts/build-android.sh
 ```
 
-Adres backendu jest dostarczany wyłącznie przez konfigurację buildu `API_BASE_URL`. Ręczne nadpisanie jest dostępne w Developer Settings w odpowiednim buildzie. Normalny użytkownik nie konfiguruje serwera. Skrypt wydania wymaga działającego backendu i poprawnej synchronizacji RCB.
-Bez backendu aplikacja pokazuje brak danych. Nie korzysta bezpośrednio z API ostrzeżeń i nie udaje bieżącej oceny.
+Build preview:
 
-## Stan
+```sh
+API_BASE_URL=https://api-production-b6560.up.railway.app bash scripts/build-android.sh
+```
 
-- RCB: SourceAdapter listy komunikatów (3 strony) i pełnych artykułów, data publikacji, obszar odbiorców, ćwiczenia/odwołania, transakcyjna synchronizacja i diagnostyka źródła. To publikacje, nie kompletna lista aktywnych ostrzeżeń.
-- PSP/dane.gov.pl: pełny import oficjalnego wykazu, PostGIS, wyszukiwanie adresu/gminy, stronicowanie, GeoJSON i ograniczona kopia offline. Szczegóły: [etap PSP](docs/SHELTERS_STAGE.md).
-- RSO: publiczny pełny eksport XML jest podłączony do SourceAdaptera i synchronizowany co 5 minut. Komunikaty są prezentowane jako osobne źródło; aplikacja nie zgaduje, że każdy wpis RSO oznacza bezpośrednie zagrożenie.
-- WCZK: rejestr 16 centrów, działający adapter Podkarpackiego oraz korelacja/deduplikacja RCB–RSO–WCZK z zachowaniem oryginalnych komunikatów.
-- IMGW-PIB: oficjalne bieżące endpointy ostrzeżeń meteorologicznych i hydrologicznych są podłączone jako dwa niezależne źródła. TERYT/obszary są mapowane do województw bez wymyślania geometrii; stopnie 1–3 wpływają na status wyłącznie w okresie ważności. Wymagana atrybucja IMGW jest pokazana w UI.
-- PAA: oficjalne komunikaty radiacyjne są podłączone; pomiary stacji pozostają wyłączone, dopóki nie ma zweryfikowanego stabilnego publicznego kontraktu danych.
-- CERT Polska: oficjalny RSS komunikatów bezpieczeństwa działa jako osobna kategoria CYBER. Publiczna lista RSS CSIRT GOV jest obecnie pusta, więc integracja pozostaje NOT_CONFIGURED.
-- Straż Graniczna: oficjalne Aktualności są filtrowane konserwatywnie do operacyjnych informacji o zamknięciach, ograniczeniach, kontrolach i utrudnieniach granicznych; zwykłe newsy służbowe są odrzucane.
-- Policja / PSP: oficjalny RSS Aktualności Policji oraz centralne Aktualności KG PSP są filtrowane do istotnych zdarzeń sytuacyjnych (m.in. duże pożary, eksplozje, HAZMAT, rozległe ratownictwo i poważne bezpieczeństwo publiczne). Publikacje służb są osobną warstwą informacyjną i nie podnoszą automatycznie statusu całego regionu.
-- Alpha.11: obserwowane lokalizacje są zapisywane lokalnie na urządzeniu; „Wokół mnie” używa jednorazowego GPS wyłącznie po akcji użytkownika. `POST /v1/around` przyjmuje współrzędne w ciele JSON (nie w URL), liczy odległość tylko dla Eventów z geometrią źródłową, a komunikaty krajowe/wojewódzkie pokazuje osobno bez udawania odległości. Brak geometrii nie jest interpretowany jako brak zdarzeń w pobliżu.
-- Alpha.12: alarmy Ukrainy są oddzielone od statusu Polski; API i mapa zachowują historię oraz stan źródła.
-- Alpha.13: NEPTUN przechowuje osobne, append-only rewizje historycznych śladów OSINT. Publiczne API nie udostępnia śladów przed upływem 24 h od zakończenia i zgrubnia geometrię do deklarowanej niepewności co najmniej 10 km. Brak skonfigurowanego automatycznego feedu jest jawny.
-- Alpha.14: Push jest transportem nad wersjonowanymi Eventami/Incidentami. Tokeny są szyfrowane na backendzie, ponowna synchronizacja nie spamuje, UA jest oddzielną kategorią opt-in, a NEPTUN nie generuje operacyjnych powiadomień.
-- Źródła zachowują oryginalną treść. Niepewna interpretacja nie podnosi automatycznie statusu.
-- Historia wersji, korekty, widoczny timeline komunikatu, wyjaśnienie „Dlaczego taki status?”, stan źródeł, deterministyczne statusy, kopie offline, mapa MapLibre z zapytaniami bbox i klastrami PostGIS, systemowy Share Sheet dla „Jestem bezpieczny” oraz 112 wymagające działania użytkownika.
-- Brakuje: pełnego offline tilesetu, RLS, panelu administratora z MFA i wdrożenia produkcyjnego.
+## Backend
 
-Aktualny stan wydania: [runbook alpha.16](docs/PRODUCTION_RUNBOOK.md). Hosting HTTPS nie został jeszcze uruchomiony.
+Wymagany Node.js 24.
 
-Dokumentacja: [architektura](docs/ARCHITECTURE.md), [źródła](docs/SOURCES.md), [walidacja](docs/VALIDATION.md).
-APK preview ma osobny identyfikator `pl.bezpiecznapolska.preview`. Podpis debug nie jest kluczem wydania do sklepu.
+```sh
+cd backend
+npm ci
+npm run build
+npm test
+npm start
+```
 
-## Przed produkcją
+Produkcja wymaga PostgreSQL z PostGIS. SQLite jest przeznaczony tylko do testów i lokalnego developmentu.
 
-Ukończyć zakres MVP, umowy/licencje źródeł, hosting z HTTPS i backupem, testy push i działania offline na prawdziwych telefonach, audyt bezpieczeństwa, politykę prywatności i podpis wydawcy. iOS wymaga macOS, konta Apple Developer i osobnej walidacji.
+## CI
 
-Nigdy nie commitować sekretów, kluczy, `.env`, baz użytkowników ani tokenów.
+Dla aktualnego `main` po commicie `659d9033...` zakończyły się sukcesem:
 
-## Etap stopni alarmowych i MapLibre
+- Production infrastructure and release gate,
+- Verify iOS native build,
+- Build preview APK and offline regression,
+- Verify PSP shelter stage,
+- Verify RCB stage.
 
-Adapter oficjalnego HTML RCB obsługuje równoległe stopnie PHYSICAL/CRP i zakresy infrastrukturalne. `/status` zwraca osobne listy dla Polski i regionu; stopnie nie powodują automatycznie RED. Mapa używa `/v1/map/shelters?bbox=minLon,minLat,maxLon,maxLat&zoom=10`, indeksu PostGIS, klastrów i ograniczonego cache telefonu. Budowanie Androida wymaga JDK 21. Szczegóły, prawdziwe dane i ograniczenia: [raport etapu](docs/SECURITY_LEVELS_MAP_STAGE.md).
+CI testuje backend, Fluttera, PostGIS i część kontraktów live. Należy jednak pamiętać, że część live-checków źródeł jest celowo nieblokująca; zielony CI nie jest równoważny z potwierdzeniem, że każdy zewnętrzny serwis działa w danej chwili.
+
+## Offline
+
+Pakiety offline przechowują dane bezpieczeństwa, zdarzenia i dane schronień dla regionu. Nie zawierają pełnego podkładu mapowego offline.
+
+Brak internetu nie może być interpretowany jako brak zagrożeń. Interfejs powinien jasno odróżniać:
+
+- dane aktualne,
+- dane zapisane lokalnie,
+- dane STALE,
+- brak danych.
+
+## Bezpieczeństwo i prywatność
+
+- GPS jest używany na żądanie użytkownika.
+- Precyzyjne współrzędne dla `around` i nearest shelter są przesyłane w body POST, nie w URL.
+- Tokeny push są szyfrowane po stronie backendu.
+- Sekrety nie powinny trafiać do repozytorium.
+- Produkcja ma HSTS, nagłówki bezpieczeństwa i rate limiting.
+- Brak danych ze źródła nie jest interpretowany jako brak zagrożenia.
+
+## Co jest dobre
+
+Projekt ma rozbudowane testy kontraktów, wyraźny model source health, fail-closed przy zmianach kontraktów, PostGIS dla operacji przestrzennych, historię rewizji, rozdzielenie danych Polski/Ukrainy oraz rozsądne ograniczenie precyzji NEPTUN. Frontend jest podzielony na osobne ekrany zamiast jednego dużego pliku i ma testy regresyjne dla map, alertów, źródeł, offline, push i NEPTUN.
+
+## Co wymaga poprawy
+
+Najważniejsze zadania po audycie:
+
+1. przepiąć Railway `api` z `stage/alpha22-android-gui-wczk` na `main` i wdrażać tylko zweryfikowany HEAD,
+2. zsynchronizować `BUILD_SHA` z realnym deploymentem,
+3. usunąć lub zarchiwizować osierocone `PostGIS 17-x_Uh`, `api-alpha20-smoke` i `alpha20-runtime-probe`,
+4. zaktualizować runtime audit, który nadal zawiera historyczne oczekiwania alpha.21 / stare SHA,
+5. skonfigurować UkraineAlarm albo jawnie pozostawić ten moduł wyłączony,
+6. skonfigurować FCM/APNs przed uznaniem push za działający produkcyjnie,
+7. dodać pełniejszy test runtime wszystkich krytycznych źródeł jako blokujący release, a nie tylko informacyjny,
+8. utrzymać monitoring świeżości schronień i zewnętrznych feedów,
+9. dokończyć politykę prywatności, release signing i proces dystrybucji Androida.
+
+## Dokumentacja
+
+- [Audyt 2026-09-26](docs/AUDIT_2026-09-26.md)
+- [Architektura](docs/ARCHITECTURE.md)
+- [Źródła](docs/SOURCES.md)
+- [Runbook produkcyjny](docs/PRODUCTION_RUNBOOK.md)
+- [Walidacja](docs/VALIDATION.md)
+- [WCZK / RSO — ponowna weryfikacja](docs/WCZK_REVERIFY_2026-09-25.md)
+- [Roadmap](docs/ROADMAP.md)
+
+## Status projektu
+
+**Alpha.22 — aktywnie rozwijany.** Kod `main` jest w znacznie lepszym stanie niż sugerował stary README, ale przed publicznym wydaniem należy usunąć drift Railway i potwierdzić działanie funkcji zależnych od sekretów/providerów.
+
+Nigdy nie commituj sekretów, tokenów, keystore, kluczy API ani danych użytkowników.
