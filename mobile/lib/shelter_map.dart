@@ -219,9 +219,13 @@ class _ShelterMapState extends State<ShelterMap> {
     styleFallback?.cancel();
     try {
       if (!widget.ukraine) {
-        final voivodeships = jsonDecode(
-          await rootBundle.loadString('assets/poland_voivodeships_min.geojson'),
-        ) as Map<String, dynamic>;
+        final voivodeships =
+            jsonDecode(
+                  await rootBundle.loadString(
+                    'assets/poland_voivodeships_min.geojson',
+                  ),
+                )
+                as Map<String, dynamic>;
         await c.addSource(
           'voivodeships',
           GeojsonSourceProperties(data: voivodeships),
@@ -497,7 +501,8 @@ class _ShelterMapState extends State<ShelterMap> {
         await syncContextLayers();
         if (!mounted || current != ticket) return;
         setState(() {
-          message = 'Widok Polski: schronienia są ukryte przy tym oddaleniu. Czerwone punkty oznaczają alerty, a niebieskie ostrzeżenia IMGW. Zdarzenie bez dokładnej lokalizacji jest oznaczone symbolicznie dla właściwego województwa.';
+          message =
+              'Widok Polski: schronienia są ukryte przy tym oddaleniu. Czerwone punkty oznaczają alerty, a niebieskie ostrzeżenia IMGW. Zdarzenie bez dokładnej lokalizacji jest oznaczone symbolicznie dla właściwego województwa.';
         });
         return;
       }
@@ -527,7 +532,9 @@ class _ShelterMapState extends State<ShelterMap> {
         viewport = result;
         renderedRequest = request;
         online = true;
-        message = result.freshAt(DateTime.now()) ? '' : 'Połączono z serwerem, ale źródłowy wykaz schronień jest oznaczony jako STALE.';
+        message = result.freshAt(DateTime.now())
+            ? ''
+            : 'Połączono z serwerem, ale źródłowy wykaz schronień jest oznaczony jako STALE.';
       });
     } catch (failure) {
       if (!mounted || current != ticket) return;
@@ -1030,9 +1037,9 @@ class _ShelterMapState extends State<ShelterMap> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Material(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHigh,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHigh,
                           borderRadius: BorderRadius.circular(10),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
@@ -1071,8 +1078,9 @@ class _ShelterMapState extends State<ShelterMap> {
           Text(
             widget.radiation == null
                 ? message
-                : RadiationData.parse(widget.radiation)
-                      .measurementText(DateTime.now(), widget.radiationOnline),
+                : RadiationData.parse(
+                    widget.radiation,
+                  ).measurementText(DateTime.now(), widget.radiationOnline),
           ),
           const Text(
             'Komunikaty PAA są dostępne w Statusie i Alert Center. Brak punktów na mapie nie oznacza braku zagrożenia.',
