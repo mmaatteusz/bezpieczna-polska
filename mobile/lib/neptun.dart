@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show Point;
 
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -277,6 +278,30 @@ class NeptunData {
   }
 }
 
+String neptunTypeLabel(String value) => switch (value) {
+  'uav' => 'BSP / dron',
+  'fpv' => 'FPV / dron',
+  'recon' => 'Rozpoznanie',
+  'missile' => 'Rakieta',
+  'ballistic' => 'Balistyka',
+  'kab' => 'KAB',
+  'mig31k' => 'MiG-31K',
+  _ => 'Nieokreślone',
+};
+
+Map<String, dynamic>? neptunThreatForFeature(
+  NeptunData data,
+  dynamic feature,
+) {
+  if (feature is! Map || feature['properties'] is! Map) return null;
+  final id = feature['properties']['threatId'];
+  if (id is! String || id.isEmpty) return null;
+  for (final threat in data.liveThreats) {
+    if (threat['id'] == id) return threat;
+  }
+  return null;
+}
+
 class NeptunScreen extends StatefulWidget {
   final DataRepository repository;
   final void Function(String) openSource;
@@ -347,16 +372,7 @@ class _NeptunScreenState extends State<NeptunScreen> {
 
   String when(dynamic value) => value is String ? stamp(value) : 'Nie podano';
 
-  String typeLabel(String value) => switch (value) {
-    'uav' => 'BSP / dron',
-    'fpv' => 'FPV / dron',
-    'recon' => 'Rozpoznanie',
-    'missile' => 'Rakieta',
-    'ballistic' => 'Balistyka',
-    'kab' => 'KAB',
-    'mig31k' => 'MiG-31K',
-    _ => 'Nieokreślone',
-  };
+  String typeLabel(String value) => neptunTypeLabel(value);
 
   Widget liveCard(Map<String, dynamic> t, {required bool current}) {
     final location = (t['region'] as String?)?.trim() ?? '';
@@ -612,6 +628,77 @@ class _NeptunMapState extends State<NeptunMap> {
     }
   }
 
+  String confidenceLabel(dynamic value) => switch (value) {
+    'high' => 'wysoka',
+    'medium' => 'średnia',
+    'low' => 'niska',
+    _ => 'nieokreślona',
+  };
+
+  Future<void> handleMapTap(Point<double> point, LatLng _) async {
+    final c = controller;
+    if (!ready || c == null || !mounted) return;
+    try {
+      final features = await c.queryRenderedFeatures(
+        point,
+        const ['neptun-live-points'],
+        null,
+      );
+      if (!mounted || features.isEmpty) return;
+      final threat = neptunThreatForFeature(widget.data, features.first);
+      if (threat == null) return;
+      final location = (threat['region'] as String?)?.trim() ?? '';
+      final precision = threat['precisionKm'];
+      final sourceCount = threat['sourceCount'];
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.radar),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        threat['title'] as String,
+                        style: Theme.of(sheetContext).textTheme.titleLarge,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text('Typ: ${neptunTypeLabel(threat['type'] as String)}'),
+                if (location.isNotEmpty) Text('Obszar: $location'),
+                Text(
+                  'Status: ${threat['status'] == 'active' ? 'aktywny' : 'nieaktualny / STALE'}',
+                ),
+                Text('Aktualizacja: ${stamp(threat['updatedAt'] as String)}'),
+                Text(
+                  'Pewność: ${confidenceLabel(threat['confidenceLevel'])}'
+                  '${sourceCount is num ? ' • źródła: $sourceCount' : ''}',
+                ),
+                if (precision is num)
+                  Text('Pozycja celowo zgrubna: ≥ ${precision.toString()} km'),
+                const SizedBox(height: 10),
+                const Text(
+                  'NEPTUN jest źródłem informacyjnym. Aplikacja nie pokazuje kursu, prędkości ani predykcji ruchu.',
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      // A tap must never break map interaction if the style is reloading.
+    }
+  }
+
   Future<void> styled() async {
     if (!mounted) return;
     final c = controller;
@@ -678,6 +765,8 @@ class _NeptunMapState extends State<NeptunMap> {
             onStyleLoadedCallback: styled,
             onCameraMove: cameraMove,
             onCameraIdle: cameraIdle,
+            onMapClick: (point, coordinates) =>
+                unawaited(handleMapTap(point, coordinates)),
           ),
         ),
       ),
