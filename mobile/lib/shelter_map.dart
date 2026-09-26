@@ -456,36 +456,41 @@ class _ShelterMapState extends State<ShelterMap> {
         throw const FormatException('Obszar poza zakresem');
       }
       if (showRadiation) {
-        final data = widget.radiation == null
-            ? null
-            : RadiationData.parse(widget.radiation);
-        final items = (data?.data['measurements'] as List? ?? []).cast<Map>();
-        final visible = items
-            .where(
-              (p) =>
-                  p['latitude'] is num &&
-                  p['longitude'] is num &&
-                  p['longitude'] >= west &&
-                  p['longitude'] <= east &&
-                  p['latitude'] >= south &&
-                  p['latitude'] <= north,
-            )
-            .toList();
-        await c.setGeoJsonSource('radiation', {
-          'type': 'FeatureCollection',
-          'features': visible
-              .map(
-                (p) => {
-                  'type': 'Feature',
-                  'geometry': {
-                    'type': 'Point',
-                    'coordinates': [p['longitude'], p['latitude']],
-                  },
-                  'properties': Map<String, dynamic>.from(p),
-                },
+        try {
+          final data = widget.radiation == null
+              ? null
+              : RadiationData.parse(widget.radiation);
+          final items = (data?.data['measurements'] as List? ?? []).cast<Map>();
+          final visible = items
+              .where(
+                (p) =>
+                    p['latitude'] is num &&
+                    p['longitude'] is num &&
+                    p['longitude'] >= west &&
+                    p['longitude'] <= east &&
+                    p['latitude'] >= south &&
+                    p['latitude'] <= north,
               )
-              .toList(),
-        });
+              .toList();
+          await c.setGeoJsonSource('radiation', {
+            'type': 'FeatureCollection',
+            'features': visible
+                .map(
+                  (p) => {
+                    'type': 'Feature',
+                    'geometry': {
+                      'type': 'Point',
+                      'coordinates': [p['longitude'], p['latitude']],
+                    },
+                    'properties': Map<String, dynamic>.from(p),
+                  },
+                )
+                .toList(),
+          });
+        } catch (_) {
+          // A broken PAA payload must never break shelters/events on the map.
+          await c.setGeoJsonSource('radiation', empty);
+        }
       } else {
         await c.setGeoJsonSource('radiation', empty);
       }
