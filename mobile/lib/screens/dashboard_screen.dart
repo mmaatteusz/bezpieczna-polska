@@ -360,7 +360,7 @@ class DashboardScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Ustaw miejscowość, aby zobaczyć lokalny status i istotne komunikaty w pobliżu.',
+                      'Najpierw spróbujemy ustalić miejscowość z GPS. Jeśli to się nie uda, wpiszesz ją ręcznie.',
                     ),
                     const SizedBox(height: 11),
                     Row(
