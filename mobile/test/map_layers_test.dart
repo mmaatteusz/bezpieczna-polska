@@ -74,6 +74,13 @@ void main() {
       );
     },
   );
+  test('shelter viewport is not limited by the selected status region', () {
+    final q = shelterViewportRequest([14.0, 49.0, 24.2, 55.0], 5.2, 'ALL');
+    expect(q.region, 'PL');
+    expect(q.query['regionId'], 'PL');
+    expect(q.bbox, [14.0, 49.0, 24.2, 55.0]);
+  });
+
   test(
     'pan and zoom keep rendered markers but region/filter changes invalidate them',
     () {
