@@ -147,7 +147,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final matched = widget.events.where(_matchesTextAndCategory).toList();
+    final displayEvents = deduplicateSafetyEventsForDisplay(widget.events);
+    final matched = displayEvents.where(_matchesTextAndCategory).toList();
     final active = matched.where(safetyEventIsActive).toList()
       ..sort(_sortEvents);
     final ended = matched.where(safetyEventIsHistorical).toList()
