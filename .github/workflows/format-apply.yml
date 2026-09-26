@@ -22,12 +22,14 @@ jobs:
           flutter-version: '3.47.4'
           cache: true
       - name: Format and commit
+        working-directory: mobile
         run: |
-          dart format mobile/lib/shelter_map.dart
-          if ! git diff --quiet -- mobile/lib/shelter_map.dart; then
+          flutter pub get
+          dart format lib/shelter_map.dart
+          if ! git diff --quiet -- lib/shelter_map.dart; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add mobile/lib/shelter_map.dart
+            git add lib/shelter_map.dart
             git commit -m "style(map): apply Dart formatter"
             git push origin HEAD:stage/paa-measurements
           fi
