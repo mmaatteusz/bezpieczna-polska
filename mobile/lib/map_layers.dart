@@ -42,15 +42,78 @@ bool mapDatasetChanged(MapRequest? rendered, MapRequest next) =>
     (rendered.region != next.region ||
         rendered.availability != next.availability);
 
+const Map<String, List<double>> mapRegionAnchors = {
+  'PL': [19.4803, 52.0693],
+  '02': [17.0385, 51.1079],
+  '04': [18.35, 53.05],
+  '06': [22.5684, 51.2465],
+  '08': [15.5062, 51.9356],
+  '10': [19.4560, 51.7592],
+  '12': [19.9450, 50.0647],
+  '14': [21.0122, 52.2297],
+  '16': [17.9213, 50.6751],
+  '18': [21.9990, 50.0413],
+  '20': [23.1688, 53.1325],
+  '22': [18.6466, 54.3520],
+  '24': [19.0238, 50.2649],
+  '26': [20.6286, 50.8661],
+  '28': [20.4801, 53.7784],
+  '30': [16.9252, 52.4064],
+  '32': [14.5528, 53.4285],
+};
+
 bool mapEventIsLive(SafetyEvent event, DateTime now) {
-  if (!event.hasPoint ||
-      event.data['lifecycle'] != 'ACTIVE' ||
+  if (event.data['lifecycle'] != 'ACTIVE' ||
       event.data['messageContext'] != 'ACTUAL' ||
       event.data['verification'] == 'REFUTED') {
     return false;
   }
   final validTo = DateTime.tryParse(event.data['validTo']?.toString() ?? '');
   return validTo == null || validTo.isAfter(now);
+}
+
+List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
+  if (!mapEventIsLive(event, now)) return const [];
+
+  if (event.hasPoint) {
+    return [
+      {
+        'type': 'Feature',
+        'geometry': {
+          'type': 'Point',
+          'coordinates': [
+            (event.data['longitude'] as num).toDouble(),
+            (event.data['latitude'] as num).toDouble(),
+          ],
+        },
+        'properties': {
+          'eventId': event.id,
+          'title': event.title,
+          'mapLocationKind': 'EVENT_POINT',
+        },
+      },
+    ];
+  }
+
+  final regionIds = event.areas.contains('PL')
+      ? const ['PL']
+      : event.areas.where(mapRegionAnchors.containsKey).toSet().toList();
+  return [
+    for (final regionId in regionIds)
+      {
+        'type': 'Feature',
+        'geometry': {
+          'type': 'Point',
+          'coordinates': mapRegionAnchors[regionId],
+        },
+        'properties': {
+          'eventId': event.id,
+          'title': event.title,
+          'mapLocationKind': 'REGION_SCOPE',
+          'regionId': regionId,
+        },
+      },
+  ];
 }
 
 class MapViewport {
