@@ -72,7 +72,11 @@ void main() {
     expect(data.measurementText(now, true), 'Dane pomiarowe aktualne');
     expect(data.measurementText(now, false), contains('STALE'));
     expect(
-      data.measurementText(now.add(const Duration(hours: 1)), true),
+      data.measurementText(now.add(const Duration(hours: 2)), true),
+      'Dane pomiarowe aktualne',
+    );
+    expect(
+      data.measurementText(now.add(const Duration(hours: 4)), true),
       contains('STALE'),
     );
     for (final bad in [
