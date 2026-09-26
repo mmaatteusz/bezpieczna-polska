@@ -459,7 +459,7 @@ class DashboardScreen extends StatelessWidget {
     final nationalFresh =
         online && (snapshot?.freshAt(now, national: true) ?? false);
     final localFresh = online && (snapshot?.freshAt(now) ?? false);
-    final active =
+    final activeEvents =
         deduplicateSafetyEventsForDisplay(
           events.where((event) => safetyEventIsSignificant(event, now)),
         )..sort((a, b) {
@@ -470,6 +470,11 @@ class DashboardScreen extends StatelessWidget {
           if (severity != 0) return severity;
           return safetyEventTime(b).compareTo(safetyEventTime(a));
         });
+    final active = groupSafetyEventsForDashboard(activeEvents);
+    final groupedWarningCount = active.fold<int>(
+      0,
+      (sum, group) => sum + (group.count - 1),
+    );
     final localRelevant = localityAround == null
         ? 0
         : {
@@ -543,7 +548,9 @@ class DashboardScreen extends StatelessWidget {
             onTap: onOpenAlerts,
             footer: active.isEmpty
                 ? 'Brak istotnych aktywnych komunikatów'
-                : '${active.length} istotnych aktywnych komunikatów',
+                : groupedWarningCount == 0
+                ? '${active.length} istotnych aktywnych komunikatów'
+                : '${active.length} grup zagrożeń • połączono $groupedWarningCount podobnych komunikatów',
           ),
           const SizedBox(height: 12),
           if (localityLabel == null)
@@ -624,10 +631,14 @@ class DashboardScreen extends StatelessWidget {
             ...active
                 .take(5)
                 .map(
-                  (event) => SafetyEventCard(
-                    event: event,
+                  (group) => SafetyEventCard(
+                    event: group.primary,
                     compact: true,
-                    onTap: () => onOpenEvent(event),
+                    groupedCount: group.count,
+                    areaOverride: group.areas,
+                    onTap: group.count > 1
+                        ? onOpenAlerts
+                        : () => onOpenEvent(group.primary),
                   ),
                 ),
         ],

@@ -113,6 +113,94 @@ List<SafetyEvent> deduplicateSafetyEventsForDisplay(
   return result;
 }
 
+class SafetyEventDisplayGroup {
+  final SafetyEvent primary;
+  final List<SafetyEvent> events;
+
+  const SafetyEventDisplayGroup({required this.primary, required this.events});
+
+  int get count => events.length;
+
+  List<String> get areas {
+    final values = <String>{};
+    for (final event in events) {
+      values.addAll(event.areas);
+    }
+    final result = values.toList()..sort();
+    return result;
+  }
+}
+
+String? _dashboardGroupingKey(SafetyEvent event) {
+  final ids = event.sources
+      .map((source) => source['id']?.toString() ?? '')
+      .toSet();
+  final family = ids.contains('IMGW_HYDRO')
+      ? 'IMGW_HYDRO'
+      : ids.contains('IMGW_METEO')
+      ? 'IMGW_METEO'
+      : null;
+  if (family == null || event.areas.isEmpty) return null;
+
+  final title = _normalizedEventText(event.title);
+  if (title.isEmpty) return null;
+
+  final validity = safetyEventHasOpenEndedValidity(event)
+      ? 'OPEN_ENDED'
+      : event.data['validTo']?.toString() ?? '';
+  return [
+    family,
+    title,
+    event.data['severity']?.toString() ?? '',
+    event.data['messageContext']?.toString() ?? '',
+    validity,
+  ].join('|');
+}
+
+bool _areasOverlap(Iterable<String> a, Iterable<String> b) {
+  final left = a.toSet();
+  return b.any(left.contains);
+}
+
+List<SafetyEventDisplayGroup> groupSafetyEventsForDashboard(
+  Iterable<SafetyEvent> events,
+) {
+  final deduplicated = deduplicateSafetyEventsForDisplay(events);
+  final groups = <SafetyEventDisplayGroup>[];
+  final keys = <String?>[];
+  final groupAreas = <Set<String>>[];
+
+  for (final event in deduplicated) {
+    final key = _dashboardGroupingKey(event);
+    var match = -1;
+    if (key != null) {
+      for (var i = 0; i < groups.length; i++) {
+        if (keys[i] == key && _areasOverlap(groupAreas[i], event.areas)) {
+          match = i;
+          break;
+        }
+      }
+    }
+
+    if (match < 0) {
+      groups.add(SafetyEventDisplayGroup(primary: event, events: [event]));
+      keys.add(key);
+      groupAreas.add(event.areas.toSet());
+      continue;
+    }
+
+    final current = groups[match];
+    final mergedEvents = [...current.events, event];
+    groups[match] = SafetyEventDisplayGroup(
+      primary: current.primary,
+      events: mergedEvents,
+    );
+    groupAreas[match].addAll(event.areas);
+  }
+
+  return groups;
+}
+
 bool safetyEventHasOpenEndedValidity(SafetyEvent event) {
   final raw = event.data['validTo'];
   if (raw is! String || raw.trim().isEmpty) return false;
@@ -166,12 +254,16 @@ class SafetyEventCard extends StatelessWidget {
   final SafetyEvent event;
   final VoidCallback onTap;
   final bool compact;
+  final int groupedCount;
+  final List<String>? areaOverride;
 
   const SafetyEventCard({
     super.key,
     required this.event,
     required this.onTap,
     this.compact = false,
+    this.groupedCount = 1,
+    this.areaOverride,
   });
 
   String get verificationLabel =>
@@ -248,9 +340,12 @@ class SafetyEventCard extends StatelessWidget {
     };
   }
 
-  String _areaLabel() => event.areas.isEmpty
-      ? 'Obszar nieustalony'
-      : event.areas.map((r) => regions[r] ?? r).join(', ');
+  String _areaLabel() {
+    final areas = areaOverride ?? event.areas;
+    return areas.isEmpty
+        ? 'Obszar nieustalony'
+        : areas.map((r) => regions[r] ?? r).join(', ');
+  }
 
   String _timeLabel() => safetyEventTimeLabel(event);
 
@@ -439,6 +534,11 @@ class SafetyEventCard extends StatelessWidget {
                   _secondaryBadge(context, originLabel),
                   _secondaryBadge(context, verificationLabel),
                   _secondaryBadge(context, event.badge),
+                  if (groupedCount > 1)
+                    _secondaryBadge(
+                      context,
+                      'POWIĄZANE KOMUNIKATY: $groupedCount',
+                    ),
                   if (sourceCount > 1)
                     _secondaryBadge(context, 'NIEZALEŻNE ŹRÓDŁA: $sourceCount'),
                   if (event.hasConflictingReports)
