@@ -125,7 +125,8 @@ void main() {
         id: 'numeric-validity',
         validTo: '2099-09-26T18:00:00Z',
       ).data,
-    )..['validTo'] = 99999;
+    );
+    raw['validTo'] = 99999;
     final event = SafetyEvent(raw);
 
     await tester.pumpWidget(
