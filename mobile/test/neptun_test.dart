@@ -212,6 +212,11 @@ void main() {
     },
   );
 
+  test('NEPTUN map forwards feature taps to the map tap handler', () {
+    final source = File('lib/neptun.dart').readAsStringSync();
+    expect(source, contains('featureTapsTriggersMapClick: true'));
+  });
+
   test('NEPTUN map tap resolves the live threat behind a red point', () {
     final data = NeptunData.parse(fixture(now));
     final feature = (data.live['map']['features'] as List).first;
