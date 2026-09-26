@@ -929,7 +929,7 @@ class _ShelterMapState extends State<ShelterMap> {
                   child: FilledButton.icon(
                     onPressed: () {
                       Navigator.of(context).pop();
-                      unawaited(widget.openLink(navigationUrl));
+                      widget.openLink(navigationUrl);
                     },
                     icon: const Icon(Icons.navigation_outlined),
                     label: const Text('Nawiguj do schronu'),
