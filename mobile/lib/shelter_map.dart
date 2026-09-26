@@ -40,7 +40,7 @@ class ShelterMap extends StatefulWidget {
 
 class _ShelterMapState extends State<ShelterMap> {
   MapLibreMapController? controller;
-  Timer? debounce, clock, styleFallback;
+  Timer? debounce, clock, styleFallback, onlineRetry;
   bool showRadiation = false, locating = false;
   bool showEvents = true, showWatched = true;
   bool ready = false, loading = false, online = false, fallbackStyle = false;
@@ -71,7 +71,9 @@ class _ShelterMapState extends State<ShelterMap> {
   void initState() {
     super.initState();
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() {});
+      unawaited(syncContextLayers());
     });
   }
 
@@ -100,6 +102,7 @@ class _ShelterMapState extends State<ShelterMap> {
     debounce?.cancel();
     clock?.cancel();
     styleFallback?.cancel();
+    onlineRetry?.cancel();
     super.dispose();
   }
 
@@ -253,13 +256,30 @@ class _ShelterMapState extends State<ShelterMap> {
     debounce = Timer(const Duration(milliseconds: 350), refresh);
   }
 
+  void scheduleOnlineRetry() {
+    onlineRetry?.cancel();
+    if (!mounted || widget.ukraine || showRadiation || !ready) return;
+    onlineRetry = Timer(const Duration(seconds: 15), () {
+      if (!mounted ||
+          !ready ||
+          loading ||
+          online ||
+          showRadiation ||
+          widget.ukraine) {
+        return;
+      }
+      unawaited(refresh());
+    });
+  }
+
   Future<void> syncContextLayers() async {
     final c = controller;
     if (!ready || c == null || widget.ukraine) return;
 
+    final now = DateTime.now();
     final eventFeatures = showEvents && !showRadiation
         ? widget.events
-              .where((event) => event.hasPoint)
+              .where((event) => mapEventIsLive(event, now))
               .map(
                 (event) => {
                   'type': 'Feature',
@@ -384,11 +404,14 @@ class _ShelterMapState extends State<ShelterMap> {
       if (!mounted || current != ticket) return;
       await c.setGeoJsonSource('shelters', result.data);
       if (!mounted || current != ticket) return;
+      onlineRetry?.cancel();
       setState(() {
         viewport = result;
         renderedRequest = request;
         online = true;
-        message = '';
+        message = result.freshAt(DateTime.now())
+            ? ''
+            : 'Połączono z serwerem, ale źródłowy wykaz schronień jest oznaczony jako STALE.';
       });
     } catch (failure) {
       if (!mounted || current != ticket) return;
@@ -414,6 +437,7 @@ class _ShelterMapState extends State<ShelterMap> {
             ? 'OFFLINE • lokalny overlay schronień z pakietu z ${stamp(offline.metadata['offlinePackageTimestamp'])}. Podkład bazowy OpenFreeMap nie jest częścią pakietu i może być niedostępny. Brak nowych danych nie oznacza bezpieczeństwa.'
             : 'Pokazano zapisaną kopię viewportu. ${apiFailureMessage(failure)}';
       });
+      scheduleOnlineRetry();
     } finally {
       if (mounted && current == ticket) setState(() => loading = false);
     }
@@ -886,8 +910,10 @@ class _ShelterMapState extends State<ShelterMap> {
                         child: Text(
                           showRadiation
                               ? 'PAA'
-                              : fresh
-                              ? 'LIVE'
+                              : online && viewport != null
+                              ? fresh
+                                    ? 'LIVE'
+                                    : 'ONLINE / źródło STALE'
                               : viewport != null
                               ? 'OFFLINE / zapisane'
                               : 'Ładowanie danych',
@@ -947,8 +973,10 @@ class _ShelterMapState extends State<ShelterMap> {
                 Text(
                   viewport == null
                       ? ''
-                      : fresh
-                      ? 'Dane bieżące'
+                      : online
+                      ? fresh
+                            ? 'Dane bieżące'
+                            : 'Połączono • źródło STALE'
                       : 'Ostatnia zapisana kopia',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
