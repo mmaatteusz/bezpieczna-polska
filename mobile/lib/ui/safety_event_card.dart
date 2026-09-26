@@ -367,8 +367,9 @@ class SafetyEventCard extends StatelessWidget {
     ),
     child: Text(
       text,
-      style: Theme.of(context).textTheme.labelSmall
-          ?.copyWith(fontWeight: FontWeight.w600),
+      style: Theme.of(
+        context,
+      ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
     ),
   );
 
@@ -481,8 +482,9 @@ class SafetyEventCard extends StatelessWidget {
                 event.description,
                 maxLines: compact ? 2 : (prominent ? 5 : 4),
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: visual.foreground),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: visual.foreground),
               ),
               const SizedBox(height: 11),
               _meta(context, Icons.location_on_outlined, _areaLabel()),
