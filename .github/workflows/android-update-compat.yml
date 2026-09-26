@@ -84,6 +84,13 @@ jobs:
           bash scripts/verify-preview-apk.sh base-preview.apk "$BASE_BUILD" plain
           bash scripts/verify-preview-apk.sh update-preview.apk "$NEXT_BUILD" plain
 
+      - name: Enable KVM acceleration
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Install old APK, update in place, and preserve app data
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
