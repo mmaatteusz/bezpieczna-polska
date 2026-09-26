@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'model.dart';
 import 'event_details.dart';
 import 'source_status.dart';
+import 'security_levels.dart';
 import 'push_notifications.dart';
 import 'offline_packages.dart';
 import 'offline_repository.dart';
@@ -616,6 +617,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             onRefresh: startupSync,
             onChooseLocality: chooseLocality,
             onOpenAlerts: () => _selectPage(2),
+            onOpenSecurityLevels: openSecurityLevels,
             onOpenEvent: details,
           ),
           visitedPages.contains(1)
@@ -733,6 +735,19 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         );
       }
     }
+  }
+
+  void openSecurityLevels() {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => SecurityLevelsScreen(
+          snapshot: snapshot,
+          online: online,
+          openSource: (url) => unawaited(openLink(url)),
+        ),
+      ),
+    );
   }
 
   void openSources() {
