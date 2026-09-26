@@ -74,6 +74,13 @@ void main() {
       );
     },
   );
+  test('shelters are hidden on national overview zoom levels', () {
+    expect(mapShowsShelters(10.5), isTrue);
+    expect(mapShowsShelters(8.0), isTrue);
+    expect(mapShowsShelters(7.9), isFalse);
+    expect(mapShowsShelters(5.2), isFalse);
+  });
+
   test('shelter viewport is not limited by the selected status region', () {
     final q = shelterViewportRequest([14.0, 49.0, 24.2, 55.0], 5.2, 'ALL');
     expect(q.region, 'PL');
