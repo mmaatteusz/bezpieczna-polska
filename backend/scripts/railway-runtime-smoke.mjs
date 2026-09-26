@@ -1,6 +1,5 @@
 import {readFileSync} from 'node:fs';
 
-// End-to-end probe note: changing this file intentionally exercises Railway's backend watch path and GitHub autodeploy.
 const packageVersion=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')).version;
 const sleep=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
 const base=(process.env.SMOKE_BASE_URL||'').replace(/\/+$/,'');
