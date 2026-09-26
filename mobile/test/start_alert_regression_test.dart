@@ -93,7 +93,10 @@ void main() {
   testWidgets('malformed alert card falls back instead of red ErrorWidget', (
     tester,
   ) async {
-    final event = warning(id: 'malformed-card', validTo: '2099-01-01T00:00:00Z');
+    final event = warning(
+      id: 'malformed-card',
+      validTo: '2099-01-01T00:00:00Z',
+    );
     event.data['regions'] = null;
 
     await tester.pumpWidget(
@@ -148,5 +151,4 @@ void main() {
     expect(find.byType(ErrorWidget), findsNothing);
     expect(tester.takeException(), isNull);
   });
-
 }
