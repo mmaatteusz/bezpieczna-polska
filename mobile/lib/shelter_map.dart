@@ -91,17 +91,22 @@ class _ShelterMapState extends State<ShelterMap> {
   Timer? debounce, clock, styleFallback, onlineRetry;
   bool showRadiation = false, locating = false;
   bool showEvents = true, showImgw = true, showWatched = true;
+  bool showGpsInterference = false, gpsInterferenceLoading = false;
   bool ready = false, loading = false, online = false, fallbackStyle = false;
   bool overviewMode = false, nationalEventsLoading = false;
   bool radiationRefreshRunning = false, radiationOverrideOnline = false;
-  int ticket = 0;
+  int ticket = 0, gpsInterferenceTicket = 0;
   String availability = 'ALL', message = 'Przygotowywanie mapy…';
+  String? gpsInterferenceError;
   MapViewport? viewport;
+  GpsInterferenceViewport? gpsInterference;
   MapRequest? renderedRequest;
   Snapshot? nationalSnapshot;
   DateTime? nationalEventsUpdatedAt, radiationLastFetch;
   Map<String, dynamic>? radiationOverride;
   ShelterMapProvider get provider => ShelterMapProvider(widget.repository);
+  GpsInterferenceProvider get gpsInterferenceProvider =>
+      GpsInterferenceProvider(widget.repository);
   Map<String, dynamic>? get currentRadiation =>
       radiationOverride ?? widget.radiation;
   bool get currentRadiationOnline => radiationOverride != null
@@ -301,6 +306,27 @@ class _ShelterMapState extends State<ShelterMap> {
           ),
         );
       }
+      await c.addSource(
+        'gps-interference',
+        GeojsonSourceProperties(data: empty),
+      );
+      await c.addFillLayer(
+        'gps-interference',
+        'gps-interference-fill',
+        const FillLayerProperties(
+          fillColor: [
+            'match',
+            ['get', 'level'],
+            'HIGH',
+            '#e53935',
+            'MEDIUM',
+            '#fdd835',
+            '#43a047',
+          ],
+          fillOpacity: 0.42,
+          fillOutlineColor: '#455a64',
+        ),
+      );
       await c.addSource('radiation', GeojsonSourceProperties(data: empty));
       await c.addCircleLayer(
         'radiation',
@@ -501,6 +527,67 @@ class _ShelterMapState extends State<ShelterMap> {
     });
   }
 
+  Future<void> refreshGpsInterferenceForCurrentViewport() async {
+    final c = controller;
+    if (!ready || c == null || widget.ukraine || !showGpsInterference) return;
+    final bounds = await c.getVisibleRegion();
+    final west = bounds.southwest.longitude.clamp(-180, 180).toDouble();
+    final east = bounds.northeast.longitude.clamp(-180, 180).toDouble();
+    final south = bounds.southwest.latitude.clamp(-85, 85).toDouble();
+    final north = bounds.northeast.latitude.clamp(-85, 85).toDouble();
+    if (west >= east || south >= north) return;
+    await refreshGpsInterferenceForBounds([west, south, east, north]);
+  }
+
+  Future<void> refreshGpsInterferenceForBounds(List<double> bbox) async {
+    final c = controller;
+    if (!ready || c == null || widget.ukraine || !showGpsInterference) return;
+    final current = ++gpsInterferenceTicket;
+    if (mounted) {
+      setState(() {
+        gpsInterferenceLoading = true;
+        gpsInterferenceError = null;
+      });
+    }
+    try {
+      final result = await gpsInterferenceProvider.fetch(bbox);
+      if (!mounted || current != gpsInterferenceTicket || !showGpsInterference) {
+        return;
+      }
+      await c.setGeoJsonSource('gps-interference', result.data);
+      if (!mounted || current != gpsInterferenceTicket) return;
+      setState(() {
+        gpsInterference = result;
+        gpsInterferenceError = null;
+      });
+    } catch (failure) {
+      if (!mounted || current != gpsInterferenceTicket) return;
+      if (gpsInterference == null) {
+        await c.setGeoJsonSource('gps-interference', empty);
+      }
+      setState(() => gpsInterferenceError = apiFailureMessage(failure));
+    } finally {
+      if (mounted && current == gpsInterferenceTicket) {
+        setState(() => gpsInterferenceLoading = false);
+      }
+    }
+  }
+
+  Future<void> setGpsInterferenceVisible(bool value) async {
+    setState(() {
+      showGpsInterference = value;
+      gpsInterferenceError = null;
+    });
+    if (!value) {
+      gpsInterferenceTicket++;
+      gpsInterference = null;
+      gpsInterferenceLoading = false;
+      await controller?.setGeoJsonSource('gps-interference', empty);
+      return;
+    }
+    await refreshGpsInterferenceForCurrentViewport();
+  }
+
   Future<void> refresh() async {
     final c = controller;
     if (!ready || c == null || widget.ukraine) return;
@@ -516,6 +603,11 @@ class _ShelterMapState extends State<ShelterMap> {
           north = bounds.northeast.latitude.clamp(-85, 85).toDouble();
       if (west >= east || south >= north) {
         throw const FormatException('Obszar poza zakresem');
+      }
+      if (showGpsInterference) {
+        unawaited(
+          refreshGpsInterferenceForBounds([west, south, east, north]),
+        );
       }
       if (showRadiation) {
         try {
@@ -666,6 +758,54 @@ class _ShelterMapState extends State<ShelterMap> {
                 padding: const EdgeInsets.all(20),
                 child: Text(
                   '${p['name']}\n${p['value']} ${p['unit']}\nPomiar: ${stamp(p['measuredAt'])}\n${data?.measurementText(DateTime.now(), currentRadiationOnline) ?? 'STALE'}\nPomiar nie jest alarmem.',
+                ),
+              ),
+            ),
+          );
+          return;
+        }
+      }
+      if (showGpsInterference) {
+        final gpsHits = await c.queryRenderedFeatures(
+          point,
+          ['gps-interference-fill'],
+          null,
+        );
+        if (gpsHits.isNotEmpty && mounted) {
+          final properties = Map<String, dynamic>.from(
+            (gpsHits.first as Map)['properties'] as Map,
+          );
+          await showModalBottomSheet<void>(
+            context: context,
+            builder: (context) => SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Zakłócenia GPS/GNSS',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Poziom: ${properties['level']}'),
+                    Text(
+                      'Obniżona dokładność: ${properties['percentBad']}%',
+                    ),
+                    Text(
+                      'Samoloty: ${properties['goodAircraft']} prawidłowych / ${properties['badAircraft']} z obniżoną dokładnością',
+                    ),
+                    Text('Dzień: ${properties['date']} UTC'),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'To wskaźnik obniżonej dokładności nawigacji raportowanej przez statki powietrzne. Nie potwierdza przyczyny ani celowego zagłuszania.',
+                    ),
+                    TextButton(
+                      onPressed: () => widget.openLink('https://gpsjam.org/faq'),
+                      child: const Text('Źródło i metodologia: GPSJAM'),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1029,6 +1169,18 @@ class _ShelterMapState extends State<ShelterMap> {
   @override
   Widget build(BuildContext context) {
     final fresh = online && viewport?.freshAt(DateTime.now()) == true;
+    Widget gpsLegend(Color color, String label) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 11,
+          height: 11,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(label, style: Theme.of(context).textTheme.labelSmall),
+      ],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1159,6 +1311,98 @@ class _ShelterMapState extends State<ShelterMap> {
             ),
           ),
         ),
+        if (!widget.ukraine) ...[
+          const SizedBox(height: 10),
+          Card(
+            elevation: 0,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilterChip(
+                          avatar: const Icon(Icons.satellite_alt_outlined),
+                          label: Text(
+                            showGpsInterference
+                                ? 'Zakłócenia GPS/GNSS — włączone'
+                                : 'Zakłócenia GPS/GNSS',
+                          ),
+                          selected: showGpsInterference,
+                          onSelected: (value) {
+                            unawaited(setGpsInterferenceVisible(value));
+                          },
+                        ),
+                      ),
+                      if (gpsInterferenceLoading)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 10),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (showGpsInterference) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      gpsInterference == null
+                          ? 'Ładowanie dobowej mapy zakłóceń…'
+                          : 'Dane dobowe: ${gpsInterference!.dataDate} UTC',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Wrap(
+                      spacing: 14,
+                      runSpacing: 6,
+                      children: [
+                        gpsLegend(const Color(0xff43a047), 'Niskie 0–2%'),
+                        gpsLegend(const Color(0xfffdd835), 'Średnie >2–10%'),
+                        gpsLegend(const Color(0xffe53935), 'Wysokie >10%'),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    const Text(
+                      'Kolorowe heksy pokazują obszary, w których samoloty raportowały obniżoną dokładność nawigacji. Dane są agregowane dobowo i nie dowodzą celowego zagłuszania.',
+                    ),
+                    if (gpsInterferenceError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          'Warstwa chwilowo niedostępna: $gpsInterferenceError',
+                        ),
+                      ),
+                    Row(
+                      children: [
+                        TextButton.icon(
+                          onPressed: gpsInterferenceLoading
+                              ? null
+                              : () => unawaited(
+                                  refreshGpsInterferenceForCurrentViewport(),
+                                ),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Odśwież'),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () =>
+                              widget.openLink('https://gpsjam.org/faq'),
+                          child: const Text('GPSJAM'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
         if (!widget.ukraine && showRadiation) ...[
           Text(
             currentRadiation == null
