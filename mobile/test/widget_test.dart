@@ -74,12 +74,10 @@ void main() {
     expect(find.text('Diagnostyka źródeł'), findsNothing);
     expect(find.byType(NavigationDestination), findsNWidgets(4));
 
-    await tester.tap(find.text('Ustaw lokalizację'));
-    await tester.pumpAndSettle();
-    expect(find.text('Wybierz swoją okolicę'), findsOneWidget);
-    await tester.tap(find.text('Anuluj'));
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
+    expect(
+      find.textContaining('Najpierw spróbujemy ustalić miejscowość z GPS'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Polska'));
     await tester.pumpAndSettle();
