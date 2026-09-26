@@ -99,6 +99,45 @@ void main() {
     }
   });
 
+  test('IMGW visibility can be toggled independently from other events', () {
+    final imgw = eventFixture(
+      id: 'imgw-toggle',
+      regions: ['04'],
+      validTo: now.add(const Duration(hours: 2)),
+      sourceId: 'IMGW_METEO',
+    );
+    final rcb = eventFixture(
+      id: 'rcb-toggle',
+      regions: ['04'],
+      validTo: now.add(const Duration(hours: 2)),
+    );
+
+    expect(
+      mapEventVisibleForLayers(
+        imgw,
+        showEvents: true,
+        showImgw: false,
+      ),
+      isFalse,
+    );
+    expect(
+      mapEventVisibleForLayers(
+        rcb,
+        showEvents: true,
+        showImgw: false,
+      ),
+      isTrue,
+    );
+    expect(
+      mapEventVisibleForLayers(
+        imgw,
+        showEvents: false,
+        showImgw: true,
+      ),
+      isTrue,
+    );
+  });
+
   test('expired event is not rendered on overview map', () {
     final event = eventFixture(
       id: 'expired-event',
