@@ -4,7 +4,7 @@ import {Store} from './store.js';
 import {shelterSchema} from './shelter.js';
 // Shared discovery contract: disabled providers never return fabricated data.
 export const mapLayers=[
- {id:'radiation',sourceId:'PAA',authority:'OFFICIAL_PL',enabled:true,measurementsEnabled:false},
+ {id:'radiation',sourceId:'PAA_MEASUREMENTS',authority:'OFFICIAL_PL',enabled:true,measurementsEnabled:true},
  {id:'shelters',sourceId:'SHELTERS',authority:'OFFICIAL_PL',enabled:true},
  ...['RCB','WCZK','RSO_WCZK','border','police_PSP'].map(id=>({id,sourceId:id,authority:'OFFICIAL_PL',enabled:false})),
  {id:'Ukraine_alerts',sourceId:'UA',authority:'OFFICIAL_FOREIGN',enabled:false,geometry:'ADMINISTRATIVE_POLYGONS_ONLY',integrationNote:'UkraineAlarm pozostaje ukryty do czasu skonfigurowania i zweryfikowania klucza API.'},
