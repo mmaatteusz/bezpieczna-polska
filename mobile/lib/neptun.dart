@@ -762,6 +762,7 @@ class _NeptunMapState extends State<NeptunMap> {
             onCameraIdle: cameraIdle,
             onMapClick: (point, coordinates) =>
                 unawaited(handleMapTap(point, coordinates)),
+            featureTapsTriggersMapClick: true,
           ),
         ),
       ),
