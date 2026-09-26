@@ -23,8 +23,7 @@ jobs:
     if: >-
       github.event_name != 'deployment_status' ||
       (github.event.deployment_status.state == 'success' &&
-       github.event.deployment.environment == 'production' &&
-       github.event.deployment.ref == 'main')
+       github.event.deployment.environment == 'production')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
