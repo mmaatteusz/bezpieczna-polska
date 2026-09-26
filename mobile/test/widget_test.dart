@@ -94,6 +94,7 @@ void main() {
 
     await tester.tap(find.text('Więcej').last);
     await tester.pumpAndSettle();
+    expect(find.text('Stopnie alarmowe'), findsOneWidget);
     expect(find.text('Schronienia'), findsOneWidget);
     expect(find.text('NEPTUN'), findsOneWidget);
     expect(find.text('Obserwowane miejsca'), findsOneWidget);
