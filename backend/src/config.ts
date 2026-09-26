@@ -15,12 +15,14 @@ export function serverConfig(env:NodeJS.ProcessEnv=process.env){
  const stage=env.APP_ENV??'development';
  if(!['development','preview','production'].includes(stage))throw new Error('Invalid APP_ENV');
  const production=stage==='production';
+ const railwayGitSha=/^[a-f0-9]{40}$/.test(env.RAILWAY_GIT_COMMIT_SHA??'')?env.RAILWAY_GIT_COMMIT_SHA:undefined;
+ const buildSha=railwayGitSha??env.BUILD_SHA;
  if(production){
   if(env.NODE_ENV!=='production')throw new Error('Production requires NODE_ENV=production');
   if(!env.DATABASE_URL||!/^postgres(?:ql)?:\/\//.test(env.DATABASE_URL))throw new Error('Production requires PostgreSQL');
   if(!env.ADMIN_TOKEN||env.ADMIN_TOKEN.length<32||new Set(env.ADMIN_TOKEN).size<12)throw new Error('Production requires a strong ADMIN_TOKEN');
   publicHttpsUrl(env.PUBLIC_BASE_URL??'');
-  if(!/^[a-f0-9]{40}$/.test(env.BUILD_SHA??''))throw new Error('Production requires a 40-character BUILD_SHA');
+  if(!/^[a-f0-9]{40}$/.test(buildSha??''))throw new Error('Production requires a 40-character BUILD_SHA');
   if(env.TRUST_PROXY!=='true')throw new Error('Production reverse proxy must be trusted explicitly');
   const pushKey=env.PUSH_TOKEN_ENCRYPTION_KEY;
   const pushKeyBytes=pushKey?Buffer.from(pushKey,/^[a-f0-9]{64}$/i.test(pushKey)?'hex':'base64'):null;
@@ -38,5 +40,5 @@ export function serverConfig(env:NodeJS.ProcessEnv=process.env){
  if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid PORT');
  const poolMax=Number(env.PG_POOL_MAX??10);
  if(!Number.isInteger(poolMax)||poolMax<1||poolMax>50)throw new Error('Invalid PG_POOL_MAX');
- return {stage:stage as AppEnv,production,port,host:env.HOST??(production?'0.0.0.0':'127.0.0.1'),buildSha:env.BUILD_SHA??'unknown'};
+ return {stage:stage as AppEnv,production,port,host:env.HOST??(production?'0.0.0.0':'127.0.0.1'),buildSha:buildSha??'unknown'};
 }
