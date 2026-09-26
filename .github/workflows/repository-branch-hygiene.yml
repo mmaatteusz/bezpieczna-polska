@@ -1,0 +1,91 @@
+name: Repository branch hygiene
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repository-branch-hygiene
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete merged and known obsolete branches
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const defaultBranch = context.payload.repository?.default_branch || 'main';
+
+            // One-time leftovers verified during the 2026-09-26 cleanup.
+            // They are deleted only while they still point at the exact audited SHA.
+            const obsoleteHeads = new Map([
+              ['docs/project-audit-2026-09-26', '130fa4d26d76ca12b59a1bfa69501bb00507b800'],
+              ['fix/runtime-audit-final', '19fce07038aec5535e5251e55974dadd6efeed17'],
+              ['fix/runtime-audit-shelters-stale', 'eed1abdc6d5e02ba659f06606c477121a31adf74'],
+              ['hotfix/map-interaction-neptun', '42b1aa789459069178beba20a087a17d376189de'],
+              ['hotfix/national-alert-map-markers', 'b29aa2a5a0a5cd68c5d6d6f6d5d31185939b1fb6'],
+              ['hotfix/runtime-audit-push-fallback', '8b14914d6a806ade917cac4838faf7b72546f186'],
+              ['stage/android-update-reliability', '18dbe57fb8c5177713d4b5033cce6c25c35fd283'],
+            ]);
+
+            const branches = await github.paginate(github.rest.repos.listBranches, {
+              owner,
+              repo,
+              per_page: 100,
+            });
+
+            const deleted = [];
+            const kept = [];
+
+            for (const branch of branches) {
+              if (branch.name === defaultBranch) continue;
+
+              let shouldDelete = obsoleteHeads.get(branch.name) === branch.commit.sha;
+
+              if (!shouldDelete) {
+                try {
+                  const comparison = await github.rest.repos.compareCommitsWithBasehead({
+                    owner,
+                    repo,
+                    basehead: `${branch.name}...${defaultBranch}`,
+                  });
+                  shouldDelete =
+                    comparison.data.status === 'identical' ||
+                    (comparison.data.status === 'ahead' &&
+                      comparison.data.behind_by === 0);
+                } catch (error) {
+                  core.warning(`Cannot compare ${branch.name}: ${error.message}`);
+                }
+              }
+
+              if (!shouldDelete) {
+                kept.push(branch.name);
+                continue;
+              }
+
+              try {
+                await github.rest.git.deleteRef({
+                  owner,
+                  repo,
+                  ref: `heads/${branch.name}`,
+                });
+                deleted.push(branch.name);
+              } catch (error) {
+                core.warning(`Cannot delete ${branch.name}: ${error.message}`);
+              }
+            }
+
+            core.summary
+              .addHeading('Repository branch hygiene')
+              .addRaw(`Deleted: ${deleted.length}\n\n`)
+              .addCodeBlock(deleted.join('\n') || '(none)')
+              .addRaw(`\nKept non-main branches: ${kept.length}\n\n`)
+              .addCodeBlock(kept.join('\n') || '(none)');
+            await core.summary.write();
