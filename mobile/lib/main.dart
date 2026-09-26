@@ -483,7 +483,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       }
       if (widget.repository.api.isNotEmpty) unawaited(startupSync());
     }
-
   }
 
   List<SafetyEvent> get events => snapshot?.alertEvents ?? [];
