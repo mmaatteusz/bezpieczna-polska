@@ -24,13 +24,13 @@ class _MapLegend extends StatelessWidget {
     borderRadius: BorderRadius.circular(12),
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 14,
+        runSpacing: 6,
         children: const [
           _MapLegendItem(color: Color(0xffb3261e), label: 'Alerty'),
-          SizedBox(width: 14),
           _MapLegendItem(color: Color(0xff1565c0), label: 'IMGW'),
-          SizedBox(width: 14),
           _MapLegendItem(color: Color(0xff2e7d32), label: 'Schrony'),
         ],
       ),
@@ -45,27 +45,17 @@ class _MapLegendItem extends StatelessWidget {
   const _MapLegendItem({required this.color, required this.label});
 
   @override
-  Widget build(BuildContext context) => Flexible(
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 5),
-        Flexible(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.fade,
-            softWrap: false,
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
-        ),
-      ],
-    ),
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 5),
+      Text(label, style: Theme.of(context).textTheme.labelSmall),
+    ],
   );
 }
 
