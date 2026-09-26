@@ -15,7 +15,7 @@ const bounds=z.tuple([
 
 export const gpsInterferenceQuery=z.object({
   bbox:z.string()
-    .regex(/^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/)
+    .regex(/^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/)
     .transform(v=>v.split(',').map(Number))
     .pipe(bounds)
     .refine(v=>(v[2]-v[0])<=60&&(v[3]-v[1])<=40,'BBOX_TOO_LARGE'),
