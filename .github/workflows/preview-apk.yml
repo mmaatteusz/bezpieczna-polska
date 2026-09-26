@@ -98,18 +98,7 @@ jobs:
         working-directory: mobile
         run: flutter test --no-pub --reporter expanded
       - name: Configure stable preview signing
-        shell: bash
-        run: |
-          set -euo pipefail
-          for key in ANDROID_PREVIEW_KEYSTORE_B64 ANDROID_PREVIEW_KEYSTORE_PASSWORD ANDROID_PREVIEW_KEY_ALIAS ANDROID_PREVIEW_KEY_PASSWORD; do
-            if [[ -z "${!key:-}" ]]; then
-              echo "Missing required GitHub secret: $key" >&2
-              exit 1
-            fi
-          done
-          echo "$ANDROID_PREVIEW_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/preview-signing.jks"
-          echo "ANDROID_PREVIEW_KEYSTORE_PATH=$RUNNER_TEMP/preview-signing.jks" >> "$GITHUB_ENV"
-          keytool -list -keystore "$RUNNER_TEMP/preview-signing.jks" -storepass "$ANDROID_PREVIEW_KEYSTORE_PASSWORD" -alias "$ANDROID_PREVIEW_KEY_ALIAS" >/dev/null
+        run: bash scripts/configure-preview-signing.sh
       - name: Build Android preview
         working-directory: mobile
         run: >-
@@ -131,6 +120,7 @@ jobs:
           EXPECTED_CODE="$((2000 + BUILD))"
           cp mobile/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk output/Bezpieczna_Polska_preview_arm64.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs output/*.apk | tee output/signature-check.txt
+          grep -F "Signer #1 certificate SHA-256 digest: 1f7f3f2aea7073889563b7461e7dfd8f80929a36fff8138c51a2a9516db153d2" output/signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging output/*.apk > output/package-info.txt
           grep -F "native-code: 'arm64-v8a'" output/package-info.txt
           if grep -E "native-code:.*(armeabi-v7a|x86_64)" output/package-info.txt; then
