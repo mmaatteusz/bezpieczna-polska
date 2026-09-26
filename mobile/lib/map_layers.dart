@@ -72,6 +72,11 @@ bool mapEventIsLive(SafetyEvent event, DateTime now) {
   return validTo == null || validTo.isAfter(now);
 }
 
+bool mapEventIsImgw(SafetyEvent event) => event.sources.any((source) {
+  final id = source['id']?.toString();
+  return id == 'IMGW_METEO' || id == 'IMGW_HYDRO';
+});
+
 List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
   if (!mapEventIsLive(event, now)) return const [];
 
@@ -90,6 +95,7 @@ List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
           'eventId': event.id,
           'title': event.title,
           'mapLocationKind': 'EVENT_POINT',
+          'mapCategory': mapEventIsImgw(event) ? 'IMGW' : 'ALERT',
         },
       },
     ];
@@ -110,6 +116,7 @@ List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
           'eventId': event.id,
           'title': event.title,
           'mapLocationKind': 'REGION_SCOPE',
+          'mapCategory': mapEventIsImgw(event) ? 'IMGW' : 'ALERT',
           'regionId': regionId,
         },
       },
