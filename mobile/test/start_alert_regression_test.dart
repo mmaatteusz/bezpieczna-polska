@@ -56,62 +56,63 @@ void main() {
     expect(first, isNot('PL'));
   });
 
-  testWidgets('Alerts renders voivodeship sections without duplicating multi-region cards', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1080, 2400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
+  testWidgets(
+    'Alerts renders voivodeship sections without duplicating multi-region cards',
+    (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
 
-    final events = [
-      warning(
-        id: 'kp',
-        title: 'Alert kujawsko-pomorski',
-        validTo: '2099-01-01T00:00:00Z',
-        regions: const ['04'],
-      ),
-      warning(
-        id: 'maz',
-        title: 'Alert mazowiecki',
-        validTo: '2099-01-01T00:00:00Z',
-        regions: const ['14'],
-      ),
-      warning(
-        id: 'multi',
-        title: 'Alert wieloregionalny',
-        validTo: '2099-01-01T00:00:00Z',
-        regions: const ['04', '14', '30'],
-      ),
-    ];
+      final events = [
+        warning(
+          id: 'kp',
+          title: 'Alert kujawsko-pomorski',
+          validTo: '2099-01-01T00:00:00Z',
+          regions: const ['04'],
+        ),
+        warning(
+          id: 'maz',
+          title: 'Alert mazowiecki',
+          validTo: '2099-01-01T00:00:00Z',
+          regions: const ['14'],
+        ),
+        warning(
+          id: 'multi',
+          title: 'Alert wieloregionalny',
+          validTo: '2099-01-01T00:00:00Z',
+          regions: const ['04', '14', '30'],
+        ),
+      ];
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: AlertsScreen(
-            events: events,
-            onOpenEvent: (_) {},
-            onRefresh: () async {},
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AlertsScreen(
+              events: events,
+              onOpenEvent: (_) {},
+              onRefresh: () async {},
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('alert-region-04')), findsOneWidget);
-    expect(find.byKey(const ValueKey('alert-region-14')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('alert-region-__MULTI_REGION__')),
-      findsOneWidget,
-    );
-    expect(find.text('Alert kujawsko-pomorski'), findsOneWidget);
-    expect(find.text('Alert mazowiecki'), findsOneWidget);
-    expect(find.text('Alert wieloregionalny'), findsOneWidget);
-    expect(find.byType(ErrorWidget), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
+      expect(find.byKey(const ValueKey('alert-region-04')), findsOneWidget);
+      expect(find.byKey(const ValueKey('alert-region-14')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('alert-region-__MULTI_REGION__')),
+        findsOneWidget,
+      );
+      expect(find.text('Alert kujawsko-pomorski'), findsOneWidget);
+      expect(find.text('Alert mazowiecki'), findsOneWidget);
+      expect(find.text('Alert wieloregionalny'), findsOneWidget);
+      expect(find.byType(ErrorWidget), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   test('Start display collapses semantic duplicates with different ids', () {
     final duplicates = List.generate(
