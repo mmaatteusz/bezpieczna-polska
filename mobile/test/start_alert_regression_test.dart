@@ -9,16 +9,19 @@ SafetyEvent warning({
   String title = 'Silne burze',
   String description = 'Możliwe silne porywy wiatru i intensywne opady.',
   String validTo = '2026-09-26T18:00:00Z',
+  List<String> regions = const ['04'],
+  String sourceId = 'RSO',
+  String sourceName = 'Regionalny System Ostrzegania',
 }) => SafetyEvent({
   'id': id,
   'title': title,
   'description': description,
   'revision': 1,
-  'regions': ['04'],
+  'regions': regions,
   'sources': [
     {
-      'id': 'RSO',
-      'name': 'Regionalny System Ostrzegania',
+      'id': sourceId,
+      'name': sourceName,
       'url': 'https://example.org/warning',
       'tier': 1,
     },
@@ -53,6 +56,84 @@ void main() {
         id: 'warning-2',
         title: 'Silny wiatr',
         description: 'Możliwe porywy przekraczające 90 km/h.',
+      ),
+    ]);
+
+    expect(result, hasLength(2));
+  });
+
+  test('Start groups overlapping IMGW hydro warnings with the same hazard', () {
+    final result = groupSafetyEventsForDashboard([
+      warning(
+        id: 'hydro-1',
+        title: 'IMGW: Susza hydrologiczna',
+        description: 'Niskie przepływy na odcinku Wisły.',
+        validTo: '99999-12-31T23:59:59Z',
+        regions: const ['04'],
+        sourceId: 'IMGW_HYDRO',
+        sourceName: 'IMGW-PIB — ostrzeżenia hydrologiczne',
+      ),
+      warning(
+        id: 'hydro-2',
+        title: 'IMGW: Susza hydrologiczna',
+        description: 'Niskie przepływy w zlewni Wisły.',
+        validTo: '99999-12-31T23:59:59Z',
+        regions: const ['04', '14'],
+        sourceId: 'IMGW_HYDRO',
+        sourceName: 'IMGW-PIB — ostrzeżenia hydrologiczne',
+      ),
+      warning(
+        id: 'hydro-3',
+        title: 'IMGW: Susza hydrologiczna',
+        description: 'Niskie przepływy w zlewni Wełny.',
+        validTo: '99999-12-31T23:59:59Z',
+        regions: const ['04', '30'],
+        sourceId: 'IMGW_HYDRO',
+        sourceName: 'IMGW-PIB — ostrzeżenia hydrologiczne',
+      ),
+    ]);
+
+    expect(result, hasLength(1));
+    expect(result.single.count, 3);
+    expect(result.single.areas, ['04', '14', '30']);
+    expect(result.single.primary.id, 'hydro-1');
+  });
+
+  test('Start does not group same IMGW title for disjoint regions', () {
+    final result = groupSafetyEventsForDashboard([
+      warning(
+        id: 'hydro-1',
+        title: 'IMGW: Susza hydrologiczna',
+        validTo: '99999-12-31T23:59:59Z',
+        regions: const ['04'],
+        sourceId: 'IMGW_HYDRO',
+        sourceName: 'IMGW-PIB — ostrzeżenia hydrologiczne',
+      ),
+      warning(
+        id: 'hydro-2',
+        title: 'IMGW: Susza hydrologiczna',
+        description: 'Inna zlewnia.',
+        validTo: '99999-12-31T23:59:59Z',
+        regions: const ['18'],
+        sourceId: 'IMGW_HYDRO',
+        sourceName: 'IMGW-PIB — ostrzeżenia hydrologiczne',
+      ),
+    ]);
+
+    expect(result, hasLength(2));
+  });
+
+  test('Start keeps non-IMGW warnings separate unless they are exact duplicates', () {
+    final result = groupSafetyEventsForDashboard([
+      warning(
+        id: 'rso-1',
+        title: 'Ostrzeżenie',
+        description: 'Pierwszy komunikat.',
+      ),
+      warning(
+        id: 'rso-2',
+        title: 'Ostrzeżenie',
+        description: 'Drugi komunikat.',
       ),
     ]);
 
