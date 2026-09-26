@@ -1,0 +1,36 @@
+name: Temporary Dart 3.13 format fix
+
+on:
+  push:
+    branches:
+      - fix/dashboard-imgw-grouping
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/dashboard-imgw-grouping
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+      - name: Format with CI Dart version
+        run: |
+          flutter --version
+          dart format mobile/lib/ui/safety_event_card.dart mobile/test/start_alert_regression_test.dart
+      - name: Commit formatting
+        run: |
+          if git diff --quiet -- mobile/lib/ui/safety_event_card.dart mobile/test/start_alert_regression_test.dart; then
+            echo "Already formatted"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile/lib/ui/safety_event_card.dart mobile/test/start_alert_regression_test.dart
+          git commit -m "Format IMGW grouping with CI Dart 3.13"
+          git push origin HEAD:fix/dashboard-imgw-grouping
