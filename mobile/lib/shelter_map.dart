@@ -321,20 +321,7 @@ class _ShelterMapState extends State<ShelterMap> {
     final now = DateTime.now();
     final eventFeatures = showEvents && !showRadiation
         ? contextEvents
-              .where((event) => mapEventIsLive(event, now))
-              .map(
-                (event) => {
-                  'type': 'Feature',
-                  'geometry': {
-                    'type': 'Point',
-                    'coordinates': [
-                      (event.data['longitude'] as num).toDouble(),
-                      (event.data['latitude'] as num).toDouble(),
-                    ],
-                  },
-                  'properties': {'eventId': event.id, 'title': event.title},
-                },
-              )
+              .expand((event) => mapEventFeatures(event, now))
               .toList()
         : <Map<String, dynamic>>[];
     final watchedFeatures = showWatched && !showRadiation
@@ -438,7 +425,7 @@ class _ShelterMapState extends State<ShelterMap> {
         if (!mounted || current != ticket) return;
         setState(() {
           message =
-              'Widok Polski: schronienia są ukryte przy tym oddaleniu. Pokazuję aktywne zdarzenia jako czerwone punkty.';
+              'Widok Polski: schronienia są ukryte przy tym oddaleniu. Pokazuję aktywne zdarzenia jako czerwone punkty; alerty regionalne bez dokładnej lokalizacji są oznaczone symbolicznie w obrębie województwa.';
         });
         return;
       }
