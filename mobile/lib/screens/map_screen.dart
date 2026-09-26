@@ -45,7 +45,8 @@ class SafetyMapScreen extends StatelessWidget {
         padding: EdgeInsets.symmetric(horizontal: 4),
         child: Text(
           'Warstwy mapy obejmują zdarzenia, punkty schronienia i dane PAA. '
-          'GPS jest używany tylko po Twojej akcji.',
+          'W menu warstw dostępny jest też oficjalny monitoring zakłóceń GNSS / GPS RTGMS. '
+          'Lokalizacja telefonu jest używana tylko po Twojej akcji.',
         ),
       ),
     ],
