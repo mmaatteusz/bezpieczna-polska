@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bezpieczna_polska/main.dart';
@@ -86,10 +87,36 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Wszystkie').first);
     await tester.pumpAndSettle();
+    final alertsScroll = find
+        .descendant(
+          of: find.byType(ListView),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.text('Duży pożar magazynu'),
+      250,
+      scrollable: alertsScroll,
+    );
     expect(find.text('Duży pożar magazynu'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Filtry i wyszukiwanie'),
+      -250,
+      scrollable: alertsScroll,
+    );
     await tester.tap(find.text('Bezpieczeństwo'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Duży pożar magazynu'),
+      250,
+      scrollable: alertsScroll,
+    );
     expect(find.text('Duży pożar magazynu'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Filtry i wyszukiwanie'),
+      -250,
+      scrollable: alertsScroll,
+    );
     expect(find.text('Pogoda'), findsOneWidget);
     expect(find.text('Cyber'), findsOneWidget);
     expect(find.text('Granica'), findsOneWidget);

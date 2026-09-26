@@ -62,52 +62,59 @@ class _AlertsScreenState extends State<AlertsScreen> {
     return safetyEventTime(b).compareTo(safetyEventTime(a));
   }
 
-  Widget _section(
-    BuildContext context, {
+  List<WidgetBuilder> _sectionEntries({
     required String title,
     required String subtitle,
     required IconData icon,
     required List<SafetyEvent> events,
   }) {
-    if (events.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(icon, size: 23),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+    if (events.isEmpty) return const <WidgetBuilder>[];
+
+    final entries = <WidgetBuilder>[
+      (context) => Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(icon, size: 23),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
-              ),
-              Text(
-                '${events.length}',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 9),
-          ...events.map(
-            (event) => SafetyEventCard(
-              event: event,
-              onTap: () => widget.onOpenEvent(event),
+                Text(
+                  '${events.length}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 2),
+            Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 9),
+          ],
+        ),
       ),
-    );
+    ];
+
+    for (final event in events) {
+      entries.add(
+        (context) => SafetyEventCard(
+          key: ValueKey('alert-card-${event.id}'),
+          event: event,
+          onTap: () => widget.onOpenEvent(event),
+        ),
+      );
+    }
+    return entries;
   }
 
   Future<void> _openSearch() async {
@@ -186,180 +193,199 @@ class _AlertsScreenState extends State<AlertsScreen> {
       _ => matched.length,
     };
 
-    return RefreshIndicator(
-      onRefresh: widget.onRefresh,
-      child: ListView(
-        key: const PageStorageKey('alerts'),
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 26),
+    final entries = <WidgetBuilder>[
+      (context) => Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Alerty',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+          Expanded(
+            child: Text(
+              'Alerty',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+            ),
+          ),
+          if (critical.isNotEmpty)
+            Semantics(
+              label: '${critical.length} krytycznych aktywnych alertów',
+              child: Chip(
+                avatar: const Icon(Icons.report_rounded, size: 18),
+                label: Text('${critical.length} KRYTYCZNE'),
               ),
-              if (critical.isNotEmpty)
-                Semantics(
-                  label: '${critical.length} krytycznych aktywnych alertów',
-                  child: Chip(
-                    avatar: const Icon(Icons.report_rounded, size: 18),
-                    label: Text('${critical.length} KRYTYCZNE'),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Najpoważniejsze aktywne zagrożenia są zawsze na górze.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 10),
-          Card(
-            elevation: 0,
-            child: ExpansionTile(
-              leading: const Icon(Icons.tune_rounded),
-              title: const Text('Filtry i wyszukiwanie'),
-              subtitle: Text(
-                lifecycle == 'Aktywne' &&
-                        category == 'Wszystkie' &&
-                        query.isEmpty
-                    ? 'Domyślnie: aktywne alerty'
-                    : '$lifecycle • $category${query.isEmpty ? '' : ' • wyszukiwanie'}',
-              ),
-              childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: ['Aktywne', 'Wszystkie', 'Zakończone']
-                        .map(
-                          (value) => ChoiceChip(
-                            label: Text(value),
-                            selected: lifecycle == value,
-                            onSelected: (_) =>
-                                setState(() => lifecycle = value),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-                const SizedBox(height: 9),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children:
-                        [
-                              'Wszystkie',
-                              'Pogoda',
-                              'Bezpieczeństwo',
-                              'Cyber',
-                              'Granica',
-                              'Inne',
-                            ]
-                            .map(
-                              (value) => FilterChip(
-                                label: Text(value),
-                                selected: category == value,
-                                onSelected: (_) =>
-                                    setState(() => category = value),
-                              ),
-                            )
-                            .toList(),
-                  ),
-                ),
-                const SizedBox(height: 11),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _openSearch,
-                        icon: const Icon(Icons.search),
-                        label: Text(
-                          query.isEmpty
-                              ? 'Szukaj w alertach'
-                              : 'Szukaj: $query',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                    if (query.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: 'Wyczyść wyszukiwanie',
-                        onPressed: () => setState(() => query = ''),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '$visibleCount komunikatów w wybranym widoku',
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-          if (visibleCount == 0)
-            const Padding(
-              padding: EdgeInsets.only(top: 14),
-              child: Card(
-                child: ListTile(
-                  leading: Icon(Icons.notifications_none_outlined),
-                  title: Text('Brak alertów dla wybranego widoku'),
-                  subtitle: Text('Zmień filtry albo wyszukiwane hasło.'),
-                ),
-              ),
-            ),
-          if (lifecycle != 'Zakończone') ...[
-            _section(
-              context,
-              title: 'Krytyczne',
-              subtitle: 'Bezpośrednie zagrożenia wymagające najwyższej uwagi.',
-              icon: Icons.report_rounded,
-              events: critical,
-            ),
-            _section(
-              context,
-              title: 'Wysokie',
-              subtitle: 'Poważne aktywne ostrzeżenia.',
-              icon: Icons.warning_amber_rounded,
-              events: high,
-            ),
-            _section(
-              context,
-              title: 'Pozostałe aktywne',
-              subtitle: 'Ostrzeżenia i informacje o niższym priorytecie.',
-              icon: Icons.notifications_active_outlined,
-              events: remaining,
-            ),
-          ],
-          if (lifecycle == 'Wszystkie')
-            _section(
-              context,
-              title: 'Inne komunikaty',
-              subtitle: 'Zaplanowane lub o nieustalonej ważności.',
-              icon: Icons.schedule_outlined,
-              events: other,
-            ),
-          if (lifecycle != 'Aktywne')
-            _section(
-              context,
-              title: 'Zakończone i historyczne',
-              subtitle: 'Wyciszone komunikaty, które nie są już aktywne.',
-              icon: Icons.history_rounded,
-              events: ended,
             ),
         ],
+      ),
+      (context) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          'Najpoważniejsze aktywne zagrożenia są zawsze na górze.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      ),
+      (context) => Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Card(
+          elevation: 0,
+          child: ExpansionTile(
+            leading: const Icon(Icons.tune_rounded),
+            title: const Text('Filtry i wyszukiwanie'),
+            subtitle: Text(
+              lifecycle == 'Aktywne' && category == 'Wszystkie' && query.isEmpty
+                  ? 'Domyślnie: aktywne alerty'
+                  : '$lifecycle • $category${query.isEmpty ? '' : ' • wyszukiwanie'}',
+            ),
+            childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: ['Aktywne', 'Wszystkie', 'Zakończone']
+                      .map(
+                        (value) => ChoiceChip(
+                          label: Text(value),
+                          selected: lifecycle == value,
+                          onSelected: (_) => setState(() => lifecycle = value),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+              const SizedBox(height: 9),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children:
+                      [
+                            'Wszystkie',
+                            'Pogoda',
+                            'Bezpieczeństwo',
+                            'Cyber',
+                            'Granica',
+                            'Inne',
+                          ]
+                          .map(
+                            (value) => FilterChip(
+                              label: Text(value),
+                              selected: category == value,
+                              onSelected: (_) =>
+                                  setState(() => category = value),
+                            ),
+                          )
+                          .toList(),
+                ),
+              ),
+              const SizedBox(height: 11),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _openSearch,
+                      icon: const Icon(Icons.search),
+                      label: Text(
+                        query.isEmpty ? 'Szukaj w alertach' : 'Szukaj: $query',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  if (query.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'Wyczyść wyszukiwanie',
+                      onPressed: () => setState(() => query = ''),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      (context) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          '$visibleCount komunikatów w wybranym widoku',
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
+      ),
+    ];
+
+    if (visibleCount == 0) {
+      entries.add(
+        (context) => const Padding(
+          padding: EdgeInsets.only(top: 14),
+          child: Card(
+            child: ListTile(
+              leading: Icon(Icons.notifications_none_outlined),
+              title: Text('Brak alertów dla wybranego widoku'),
+              subtitle: Text('Zmień filtry albo wyszukiwane hasło.'),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (lifecycle != 'Zakończone') {
+      entries
+        ..addAll(
+          _sectionEntries(
+            title: 'Krytyczne',
+            subtitle: 'Bezpośrednie zagrożenia wymagające najwyższej uwagi.',
+            icon: Icons.report_rounded,
+            events: critical,
+          ),
+        )
+        ..addAll(
+          _sectionEntries(
+            title: 'Wysokie',
+            subtitle: 'Poważne aktywne ostrzeżenia.',
+            icon: Icons.warning_amber_rounded,
+            events: high,
+          ),
+        )
+        ..addAll(
+          _sectionEntries(
+            title: 'Pozostałe aktywne',
+            subtitle: 'Ostrzeżenia i informacje o niższym priorytecie.',
+            icon: Icons.notifications_active_outlined,
+            events: remaining,
+          ),
+        );
+    }
+
+    if (lifecycle == 'Wszystkie') {
+      entries.addAll(
+        _sectionEntries(
+          title: 'Inne komunikaty',
+          subtitle: 'Zaplanowane lub o nieustalonej ważności.',
+          icon: Icons.schedule_outlined,
+          events: other,
+        ),
+      );
+    }
+
+    if (lifecycle != 'Aktywne') {
+      entries.addAll(
+        _sectionEntries(
+          title: 'Zakończone i historyczne',
+          subtitle: 'Wyciszone komunikaty, które nie są już aktywne.',
+          icon: Icons.history_rounded,
+          events: ended,
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: widget.onRefresh,
+      child: ListView.builder(
+        key: const PageStorageKey('alerts'),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 26),
+        itemCount: entries.length,
+        itemBuilder: (context, index) => entries[index](context),
       ),
     );
   }

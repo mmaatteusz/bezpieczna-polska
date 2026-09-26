@@ -299,8 +299,7 @@ class SafetyEventCard extends StatelessWidget {
     ],
   );
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildCard(BuildContext context) {
     final visual = _visual(context);
     final sourceCount = independentSourceCount(event);
     final level = safetyVisualLevel(event);
@@ -451,5 +450,58 @@ class SafetyEventCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    try {
+      return _buildCard(context);
+    } catch (error, stackTrace) {
+      assert(() {
+        debugPrint('SafetyEventCard render failure: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        return true;
+      }());
+
+      final rawTitle = event.data['title']?.toString().trim() ?? '';
+      return Card(
+        margin: EdgeInsets.only(bottom: compact ? 10 : 12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.warning_amber_rounded),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Nie udało się wyświetlić szczegółów komunikatu',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      if (rawTitle.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          rawTitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const SizedBox(height: 4),
+                      const Text('Dotknij, aby spróbować otworzyć szczegóły.'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
   }
 }
