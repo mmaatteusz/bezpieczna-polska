@@ -24,7 +24,7 @@ permissions:
 
 concurrency:
   group: android-update-compat-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   CI: 'true'
@@ -72,10 +72,18 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
-          flutter build apk --debug --target-platform android-x64             --build-number="$BASE_BUILD"             --dart-define=APP_ENV=preview             --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL"             --dart-define=ENABLE_DEVELOPER_SETTINGS=true
+          flutter build apk --debug --target-platform android-x64 \
+            --build-number="$BASE_BUILD" \
+            --dart-define=APP_ENV=preview \
+            --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL" \
+            --dart-define=ENABLE_DEVELOPER_SETTINGS=true
           cp build/app/outputs/flutter-apk/app-debug.apk ../base-preview.apk
 
-          flutter build apk --debug --target-platform android-x64             --build-number="$NEXT_BUILD"             --dart-define=APP_ENV=preview             --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL"             --dart-define=ENABLE_DEVELOPER_SETTINGS=true
+          flutter build apk --debug --target-platform android-x64 \
+            --build-number="$NEXT_BUILD" \
+            --dart-define=APP_ENV=preview \
+            --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL" \
+            --dart-define=ENABLE_DEVELOPER_SETTINGS=true
           cp build/app/outputs/flutter-apk/app-debug.apk ../update-preview.apk
 
       - name: Verify both APK identities before installation
@@ -83,13 +91,6 @@ jobs:
         run: |
           bash scripts/verify-preview-apk.sh base-preview.apk "$BASE_BUILD" plain
           bash scripts/verify-preview-apk.sh update-preview.apk "$NEXT_BUILD" plain
-
-      - name: Enable KVM acceleration
-        shell: bash
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
 
       - name: Enable KVM acceleration
         shell: bash
