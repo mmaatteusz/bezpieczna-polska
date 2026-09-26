@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bezpieczna_polska/model.dart';
+import 'package:bezpieczna_polska/screens/alerts_screen.dart';
 import 'package:bezpieczna_polska/ui/safety_event_card.dart';
 
 SafetyEvent warning({
@@ -88,4 +89,64 @@ void main() {
     expect(find.textContaining('99999'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('malformed alert card falls back instead of red ErrorWidget', (
+    tester,
+  ) async {
+    final event = warning(id: 'malformed-card', validTo: '2099-01-01T00:00:00Z');
+    event.data['regions'] = null;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SafetyEventCard(event: event, onTap: () {}),
+        ),
+      ),
+    );
+
+    expect(
+      find.text('Nie udało się wyświetlić szczegółów komunikatu'),
+      findsOneWidget,
+    );
+    expect(find.byType(ErrorWidget), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Alerts keeps long scrolling lists stable', (tester) async {
+    final events = List.generate(
+      80,
+      (index) => warning(
+        id: 'scroll-$index',
+        title: 'Alert przewijania $index',
+        description: 'Treść testowa $index',
+        validTo: '2099-01-01T00:00:00Z',
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AlertsScreen(
+            events: events,
+            onOpenEvent: (_) {},
+            onRefresh: () async {},
+          ),
+        ),
+      ),
+    );
+
+    final list = find.byType(ListView);
+    expect(list, findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Alert przewijania 79'),
+      500,
+      scrollable: find.descendant(of: list, matching: find.byType(Scrollable)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alert przewijania 79'), findsOneWidget);
+    expect(find.byType(ErrorWidget), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
 }
