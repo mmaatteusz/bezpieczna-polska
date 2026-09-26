@@ -76,6 +76,29 @@ void main() {
     },
   );
   testWidgets(
+    'dashboard summary separates nationwide levels from scoped infrastructure',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SecurityLevelsSummaryCard(
+              snapshot: Snapshot.parse(jsonEncode(levelsData())),
+              online: true,
+              now: DateTime.parse('2026-09-20T12:30:00Z'),
+              onTap: () {},
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Stopnie alarmowe'), findsOneWidget);
+      expect(find.textContaining('BRAVO'), findsWidgets);
+      expect(find.textContaining('dodatkowe stopnie dotyczą'), findsOneWidget);
+      expect(find.textContaining('Dane RCB'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'offline section labels saved copy, source links, infrastructure and 200 percent text',
     (tester) async {
       await tester.pumpWidget(
