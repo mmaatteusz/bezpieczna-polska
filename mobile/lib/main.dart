@@ -25,6 +25,13 @@ import 'ui/app_theme.dart';
 String? localityRegionSeed(String currentRegion) =>
     currentRegion == 'PL' ? null : currentRegion;
 
+typedef _ResolvedLocality = ({
+  String label,
+  double latitude,
+  double longitude,
+  String regionId,
+});
+
 Future<void> main() async {
   validateBuildConfiguration();
   WidgetsFlutterBinding.ensureInitialized();
@@ -279,12 +286,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     return null;
   }
 
-  Future<({
-    String label,
-    double latitude,
-    double longitude,
-    String regionId,
-  })?> _localityFromGps() async {
+  Future<_ResolvedLocality?> _localityFromGps() async {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) return null;
 
@@ -314,11 +316,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       final regionId = regionFromPlacemark(mark);
       if (regionId == null) return null;
 
+      final locality = (mark.locality ?? '').trim();
+      final county = (mark.subAdministrativeArea ?? '').trim();
       final labelParts = <String>[
-        if ((mark.locality ?? '').trim().isNotEmpty) mark.locality!.trim(),
-        if ((mark.subAdministrativeArea ?? '').trim().isNotEmpty &&
-            mark.subAdministrativeArea!.trim() != mark.locality?.trim())
-          mark.subAdministrativeArea!.trim(),
+        if (locality.isNotEmpty) locality,
+        if (county.isNotEmpty && county != locality) county,
       ];
       if (labelParts.isEmpty) return null;
 
