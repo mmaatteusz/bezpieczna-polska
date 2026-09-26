@@ -8,8 +8,13 @@ node "$bp_root/scripts/check-backend.mjs"
 # package is reserved for CI, where the permanent preview signer is available.
 export BP_ENV="${BP_ENV:-development}"
 if [[ "$BP_ENV" == "preview" ]]; then
-  echo "Refusing an implicit local preview build. Use the CI preview artifact or configure the permanent preview signer explicitly." >&2
-  exit 1
+  for key in ANDROID_PREVIEW_KEYSTORE_PATH ANDROID_PREVIEW_KEYSTORE_PASSWORD ANDROID_PREVIEW_KEY_ALIAS ANDROID_PREVIEW_KEY_PASSWORD; do
+    if [[ -z "${!key:-}" ]]; then
+      echo "BP_ENV=preview requires the permanent preview signer ($key is missing)." >&2
+      echo "Use the CI preview artifact or configure the stable preview keystore explicitly." >&2
+      exit 1
+    fi
+  done
 fi
 
 cd "$bp_root/mobile"
