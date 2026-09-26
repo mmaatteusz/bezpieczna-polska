@@ -1,50 +1,225 @@
-# Alpha.16 — production runbook
+# Production runbook — Bezpieczna Polska
 
-Stan: repozytorium przygotowane do wdrożenia. Hosting, domena, klucze podpisu i certyfikaty Apple muszą pochodzić od właściciela. Nie ma wdrożonej usługi ani podpisanego artefaktu sklepowego.
+Aktualny kod: **0.1.0-alpha.22**.
 
-## Konfiguracja
+Ten dokument opisuje docelowy sposób wdrożenia. Stan faktycznego Railway z 2026-09-26 jest opisany w [AUDIT_2026-09-26.md](AUDIT_2026-09-26.md).
 
-- `APP_ENV=production`, `NODE_ENV=production`, `TRUST_PROXY=true`, `BUILD_SHA` (pełne 40 znaków commita), `PUBLIC_BASE_URL=https://<własna domena API>`.
-- `DATABASE_URL` — prywatny PostgreSQL/PostGIS 17 (URI z zakodowanymi znakami specjalnymi hasła), `PG_POOL_MAX` domyślnie 10, `ADMIN_TOKEN` co najmniej 32 losowe znaki.
-- Compose: `POSTGRES_PASSWORD`, `API_DOMAIN`, `DATABASE_URL`, `ADMIN_TOKEN`, `BUILD_SHA`; `DATABASE_URL` musi kierować na kontener `database:5432/bezpieczna`.
-- Opcjonalnie `UKRAINE_ALARM_API_KEY` dla live UkraineAlarm oraz `PUSH_TOKEN_ENCRYPTION_KEY` (32 bajty hex/base64), `FCM_SERVICE_ACCOUNT_JSON`, komplet `APNS_KEY_ID`/`APNS_TEAM_ID`/`APNS_BUNDLE_ID`/`APNS_PRIVATE_KEY_P8` dla push. Bez klucza UkraineAlarm źródło UA jest `NOT_CONFIGURED`; bez providerów push pozostaje jawnie niedostępny. Obecny `compose.yaml` **nie przekazuje tych opcjonalnych zmiennych** do `api` automatycznie: operator musi dostarczyć je przez bezpieczny override/konfigurację usługi poza repo. Zmienne powłoki same w sobie nie włączają integracji w kontenerze.
-- `ENABLE_INGESTION=false` wstrzymuje harmonogram; nie usuwa ostatniej poprawnej kopii. Sekrety przekazuj przez menedżer sekretów lub plik poza repo, nigdy przez commit.
+## Wymagane zmienne backendu
 
-## Wdrożenie
+W production wymagane są co najmniej:
 
-Skieruj rzeczywistą domenę na serwer i otwórz 80/443. Caddy w `deploy/compose.https.yaml` wystawia HTTPS i nie przepuszcza `/admin/*`. Backend nasłuchuje tylko na localhost serwera oraz wewnątrz sieci Compose. Z repozytorium przy konkretnym commicie uruchom:
+- `APP_ENV=production`,
+- `NODE_ENV=production`,
+- `TRUST_PROXY=true`,
+- `BUILD_SHA=<pełny 40-znakowy SHA wdrożonego commita>`,
+- `PUBLIC_BASE_URL=https://<publiczny-host-api>`,
+- `DATABASE_URL=<PostgreSQL/PostGIS 17>`,
+- `ADMIN_TOKEN=<min. 32 losowe znaki>`.
 
-```sh
-docker compose -f compose.yaml -f deploy/compose.https.yaml up -d --build
-docker compose -f compose.yaml -f deploy/compose.https.yaml ps
-curl -fsS https://<własna domena API>/health
-curl -fsS https://<własna domena API>/ready
+Opcjonalne moduły:
+
+- `UKRAINE_ALARM_API_KEY` — oficjalny live UkraineAlarm,
+- `PUSH_TOKEN_ENCRYPTION_KEY` — wymagany do uruchomienia PushService,
+- `FCM_SERVICE_ACCOUNT_JSON` — Android push,
+- `APNS_KEY_ID`,
+- `APNS_TEAM_ID`,
+- `APNS_BUNDLE_ID`,
+- `APNS_PRIVATE_KEY_P8` — iOS push.
+
+`ENABLE_INGESTION=false` wyłącza cykliczną synchronizację, ale nie usuwa ostatnich danych.
+
+## Railway — zasada wdrożenia
+
+Produkcja powinna korzystać z jednego źródła prawdy:
+
+```text
+GitHub main -> Railway api -> production PostGIS
 ```
 
-`migrate` kończy się przed uruchomieniem `api`; produkcyjny `server` sprawdza wersję schematu i PostGIS, a sam nie wykonuje DDL. Migracja jest idempotentna i nie usuwa danych. `/ready` ocenia bazę; `/readyz` zachowuje starszy, ostrzejszy kontrakt synchronizacji źródeł dla preview. `/v1/sources` pokazuje ostatnie powodzenie, błąd adaptera i STALE. Administracyjne `/admin/metrics` wymaga bearer `ADMIN_TOKEN` i nie jest wystawiane przez Caddy. Metryki liczą żądania, błędy 5xx i czasy na wzorzec trasy, bez współrzędnych URL. Logi JSON na stdout obejmują czas, poziom, request ID, trasę i czas wykonania; logi błędów adaptera nie zawierają sekretów.
+Nie należy utrzymywać produkcyjnego API przypiętego do brancha etapowego po zakończeniu danego etapu.
 
-## Backup i restore
+Po każdym wdrożeniu sprawdź:
 
-`backup` wykonuje pierwszy backup przy starcie i następny po 24 h od zakończenia poprzedniego uruchomienia. `pg_dump -Fc --compress=6` zapisuje `bezpieczna-*.dump` z `*.sha256` na osobnym wolumenie `backups-data`, retencja plików starszych niż 14 dni. Zadbaj dodatkowo o szyfrowaną kopię poza hostem: sam wolumen nie chroni przed awarią serwera. Monitoruj, czy pojawiają się nowe pliki i czy odtwarzanie nadal przechodzi.
-
-Odzyskanie: zatrzymaj zapis do starej bazy, skopiuj plik i jego `.sha256`, utwórz **nową pustą bazę**, następnie:
-
-```sh
-RESTORE_DATABASE_URL='postgresql://<konto>@<host>/<nowa_pusta_baza>' bash backend/scripts/restore.sh /backups/bezpieczna-YYYYMMDDTHHMMSSZ.dump
+```text
+Railway source branch == main
+deployment commit == BUILD_SHA
+deployment commit == oczekiwany GitHub main HEAD
 ```
 
-Skrypt weryfikuje SHA-256, odmawia nadpisania niepustej bazy, odtwarza w jednej transakcji i sprawdza PostGIS. Sprawdź `source_health`, rewizje i `/ready` na nowej bazie przed przełączeniem `DATABASE_URL`. CI tworzy dwie izolowane bazy, odtwarza prawdziwy wiersz i porównuje jego zawartość.
+Jeżeli którykolwiek z tych warunków nie jest spełniony, deployment jest niespójny.
 
-## Rollback i rotacja
+## Aktualny Railway podczas audytu 2026-09-26
 
-Zachowaj SHA poprzedniego obrazu/commita. Po nieudanym wdrożeniu wróć do tego commita i ponownie zbuduj `api`; migracje alpha.16 są dodatnie. Przy przyszłej niekompatybilnej migracji przywróć backup do **nowej** bazy i zmień `DATABASE_URL`, po zatrzymaniu zapisów. Rotując hasło DB lub `ADMIN_TOKEN`, uaktualnij sekrety usługi, uruchom ją ponownie i sprawdź `/ready`. Rotacja `PUSH_TOKEN_ENCRYPTION_KEY` bez migracji zaszyfrowanych tokenów wymaga ponownej rejestracji urządzeń, więc zaplanuj ją osobno.
+Główna usługa:
 
-## Wydanie mobilne
+```text
+api
+https://api-production-b6560.up.railway.app
+```
 
-Tag `v0.1.0-alpha.16-rc.N` uruchamia pełną regresję. Ustaw GitHub variables `PRODUCTION_API_BASE_URL` (realny HTTPS) i `PRODUCTION_BACKEND_SHA` (wdrożony backend 0.1.0-alpha.16), a także secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Workflow sprawdza `/health` wdrożonego backendu i dopiero wtedy buduje AAB oraz testowy release APK; sprawdza podpis i SHA-256. Bez tych danych raportuje brak artefaktu produkcyjnego. Identyfikator Android production: `pl.bezpiecznapolska`; preview: `pl.bezpiecznapolska.preview`; development: `pl.bezpiecznapolska.dev`. Nigdy nie umieszczaj keystore w repo.
+Aktywna baza:
 
-iOS: Debug/Profile używa `pl.bezpiecznapolska.preview`, Release `pl.bezpiecznapolska.bezpiecznaPolska`; uruchom z właściwym `--dart-define=APP_ENV=preview|production` oraz `API_BASE_URL`. Wydanie podpisanego IPA wymaga macOS, Apple Developer, certyfikatów i provisioning profile. CI Linux testuje wspólny kod Dart, nie podpisuje IPA.
+```text
+PostGIS 17
+service id: 9e760220-ba2e-4cea-b2b4-3fb4403a5102
+```
 
-## Diagnostyka
+Znany problem:
 
-Sprawdź `/health` (wersja/SHA), `/ready` (baza/PostGIS), `/v1/sources` (źródła), logi `docker compose logs api migrate backup gateway` oraz wolne miejsce wolumenów. Brak świeżego źródła jest stanem STALE, nie zielonym potwierdzeniem bezpieczeństwa. 503 `/ready` oznacza bazę lub PostGIS; błędy źródeł przy 200 `/ready` diagnozuj oddzielnie. Sprawdź, czy gateway posiada prawdziwy certyfikat HTTPS.
+```text
+api source branch: stage/alpha22-android-gui-wczk
+main: 659d90335f62e72a9c5548d06c9dd86cc9715768
+deployed commit: 83ed7b28d737f4c7c2ea72f6f0de76827345d299
+```
+
+Przed uznaniem Railway za poprawnie zsynchronizowany produkcyjnie należy przepiąć usługę na `main` i wykonać kontrolowany redeploy.
+
+## Migracje
+
+Railway `api` ma pre-deploy command:
+
+```sh
+node dist/migrate.js
+```
+
+Po migracji backend uruchamia `/ready`, które sprawdza bazę i PostGIS.
+
+Migracje muszą pozostać idempotentne. Przy zmianach destrukcyjnych najpierw wykonaj backup i odtwórz go na nowej bazie testowej.
+
+## Healthcheck
+
+Podstawowy zestaw:
+
+```sh
+curl -fsS https://<api>/health
+curl -fsS https://<api>/ready
+curl -fsS https://<api>/v1/sources
+curl -fsS "https://<api>/v1/snapshot?regionId=04"
+curl -fsS https://<api>/v1/neptun
+```
+
+Interpretacja:
+
+- `/health` — wersja i SHA,
+- `/ready` — baza, migracje, PostGIS,
+- `/v1/sources` — świeżość i błędy źródeł,
+- `/v1/snapshot` — kontrakt aplikacji,
+- `/v1/neptun` — stan osobnego workera NEPTUN.
+
+`/ready=200` nie oznacza, że wszystkie źródła zewnętrzne są HEALTHY.
+
+## Minimalny runtime gate przed wydaniem APK
+
+Release powinien zostać zablokowany, jeżeli:
+
+1. `/health.version` nie odpowiada oczekiwanej wersji,
+2. `/health.buildSha` nie odpowiada wdrożonemu SHA,
+3. `/ready` nie zwraca PostGIS,
+4. RCB jest BROKEN/STALE ponad dopuszczalne okno,
+5. wymagany moduł mapy nie działa,
+6. NEPTUN jest wymagany w danym release, ale nie przechodzi live contractu,
+7. schronienia nie mają żadnej poprawnej kopii,
+8. backend odpowiada z innego deploymentu niż zadeklarowany.
+
+Moduły opcjonalne muszą być jawnie oznaczone jako NOT_CONFIGURED, a nie udawać HEALTHY.
+
+## Backup
+
+Backup musi obejmować aktywną bazę wskazaną przez `DATABASE_URL`.
+
+Przed usunięciem dodatkowej/uszkodzonej instancji PostGIS wykonaj backup i upewnij się, że nie zawiera jedynej kopii danych.
+
+Przykład restore:
+
+```sh
+RESTORE_DATABASE_URL='postgresql://<konto>@<host>/<pusta_baza>' \
+  bash backend/scripts/restore.sh /backups/bezpieczna-YYYYMMDDTHHMMSSZ.dump
+```
+
+Po restore:
+
+- sprawdź PostGIS,
+- sprawdź `source_health`,
+- sprawdź rewizje,
+- uruchom `/ready`,
+- wykonaj runtime smoke.
+
+## Rollback
+
+Rollback powinien wskazywać konkretny commit/obraz, a `BUILD_SHA` musi zostać ustawiony na faktycznie uruchamianą wersję.
+
+Nie wykonuj rollbacku przez samo przepięcie zmiennej SHA bez zmiany kodu deploymentu.
+
+## Android release
+
+Production:
+
+```text
+package: pl.bezpiecznapolska
+```
+
+Preview:
+
+```text
+package: pl.bezpiecznapolska.preview
+```
+
+Build production wymaga:
+
+- poprawnego `PRODUCTION_API_BASE_URL`,
+- oczekiwanego `PRODUCTION_BACKEND_SHA`,
+- `ANDROID_KEYSTORE_B64`,
+- `ANDROID_KEYSTORE_PASSWORD`,
+- `ANDROID_KEY_ALIAS`,
+- `ANDROID_KEY_PASSWORD`.
+
+Po buildzie sprawdź:
+
+- package id,
+- versionName,
+- versionCode,
+- podpis,
+- SHA-256,
+- instalację aktualizacji na istniejącej poprzedniej wersji.
+
+## Push
+
+Push jest produkcyjnie gotowy dopiero, gdy:
+
+- istnieje `PUSH_TOKEN_ENCRYPTION_KEY`,
+- FCM/APNs provider jest skonfigurowany,
+- aplikacja uzyskuje token,
+- rejestracja urządzenia działa,
+- outbox przechodzi z PENDING/RETRY do DELIVERED w realnym teście.
+
+Sam zielony test jednostkowy nie oznacza działającego push.
+
+## UkraineAlarm
+
+Brak `UKRAINE_ALARM_API_KEY` oznacza oczekiwane `NOT_CONFIGURED`.
+
+Nie należy prezentować modułu jako live, jeżeli klucz nie jest skonfigurowany.
+
+## Sprzątanie Railway
+
+Po potwierdzeniu backupów i zależności usuń lub zarchiwizuj historyczne elementy:
+
+- `PostGIS 17-x_Uh` — podczas audytu nieużywany przez `api`,
+- `api-alpha20-smoke`,
+- `alpha20-runtime-probe`.
+
+Docelowo production powinien być prosty do zrozumienia bez wiedzy o starych etapach alpha.20/21.
+
+## Sekrety
+
+Nigdy nie commituj:
+
+- `.env`,
+- tokenów API,
+- `ADMIN_TOKEN`,
+- keystore,
+- kluczy Firebase/APNs,
+- credentiali bazy,
+- baz danych użytkowników.
+
+Dokumentacja ma opisywać **nazwy** zmiennych, nie ich wartości.
