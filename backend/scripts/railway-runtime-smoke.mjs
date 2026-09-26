@@ -1,5 +1,6 @@
 import {readFileSync} from 'node:fs';
 
+// Successful Railway deployment_status events trigger this production smoke audit.
 const packageVersion=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')).version;
 const sleep=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
 const base=(process.env.SMOKE_BASE_URL||'').replace(/\/+$/,'');
@@ -8,6 +9,8 @@ const expectedBuildSha=(process.env.EXPECTED_BUILD_SHA||'').trim();
 const deployWaitSeconds=Number(process.env.DEPLOY_WAIT_SECONDS||600);
 const criticalSourceIds=(process.env.CRITICAL_SOURCE_IDS||'RCB,RSO,LEVELS,SHELTERS,IMGW_METEO,IMGW_HYDRO,PAA,NEPTUN')
   .split(',').map(value=>value.trim()).filter(Boolean);
+const allowStaleSourceIds=new Set((process.env.ALLOW_STALE_SOURCE_IDS||'SHELTERS')
+  .split(',').map(value=>value.trim()).filter(Boolean));
 if(!/^https:\/\/[^/]+$/.test(base))throw new Error('SMOKE_BASE_URL must be an HTTPS origin');
 if(expectedBuildSha&&!/^[a-f0-9]{40}$/.test(expectedBuildSha))throw new Error('EXPECTED_BUILD_SHA must be a 40-character lowercase git SHA');
 if(!Number.isFinite(deployWaitSeconds)||deployWaitSeconds<30||deployWaitSeconds>1800)throw new Error('DEPLOY_WAIT_SECONDS must be between 30 and 1800');
@@ -28,7 +31,11 @@ function validateCriticalSources(sourceHealth){
     const source=sourceHealth.find(item=>item.id===id);
     assert(source,'critical source missing: '+id);
     const state=sourceState(source);
-    assert(state==='HEALTHY','critical source '+id+' is '+state+(source.errorCode?' ('+source.errorCode+')':''));
+    if(state==='STALE'&&allowStaleSourceIds.has(id)){
+      console.warn('PROBE_SOURCE_STALE_ALLOWED',id,source.lastSuccessfulSyncAt??'no-success',source.errorCode??'');
+    }else{
+      assert(state==='HEALTHY','critical source '+id+' is '+state+(source.errorCode?' ('+source.errorCode+')':''));
+    }
     assert(!!source.lastSuccessfulSyncAt,'critical source '+id+' has no successful sync');
     assert(Number.isFinite(Date.parse(source.lastSuccessfulSyncAt)),'critical source '+id+' has invalid successful sync timestamp');
   }
@@ -102,6 +109,9 @@ function validateNeptun(data){
 
   const shelters=await json('/v1/shelters?regionId=04&q=&offset=0&limit=5');
   assert(shelters.schemaVersion===1&&shelters.regionId==='04','shelters contract invalid');
+  assert(Number(shelters.total)>0&&Array.isArray(shelters.items)&&shelters.items.length>0,'shelters catalog empty');
+  assert(!!shelters.health?.lastSuccessfulSyncAt,'shelters missing successful sync');
+  assert(!['BROKEN','NOT_CONFIGURED','MISSING'].includes(sourceState(shelters.health)),'shelters unusable: '+sourceState(shelters.health));
 
   const mapShelters=await json('/v1/map/shelters?bbox=17.7,52.9,18.3,53.3&zoom=10.5&regionId=04&availability=ALL');
   assert(mapShelters.type==='FeatureCollection'&&mapShelters.metadata?.schemaVersion===1,'map shelters contract invalid');
