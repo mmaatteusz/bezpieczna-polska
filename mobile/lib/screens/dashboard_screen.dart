@@ -546,12 +546,6 @@ class DashboardScreen extends StatelessWidget {
                 : '${active.length} istotnych aktywnych komunikatów',
           ),
           const SizedBox(height: 12),
-          SecurityLevelsSummaryCard(
-            snapshot: snapshot,
-            online: online,
-            onTap: onOpenSecurityLevels,
-          ),
-          const SizedBox(height: 12),
           if (localityLabel == null)
             _localitySetupCard(context)
           else
@@ -584,6 +578,12 @@ class DashboardScreen extends StatelessWidget {
               text: 'Nie udało się pobrać świeżych danych. $error',
             ),
           ],
+          const SizedBox(height: 12),
+          SecurityLevelsSummaryCard(
+            snapshot: snapshot,
+            online: online,
+            onTap: onOpenSecurityLevels,
+          ),
           const SizedBox(height: 25),
           Builder(
             builder: (sectionContext) {
