@@ -3,11 +3,19 @@ import assert from 'node:assert/strict';
 import {latLngToCell} from 'h3-js';
 import {
   defaultGpsInterferenceDate,
+  gpsInterferenceQuery,
   gpsInterferenceViewport,
   gpsJamLevel,
   gpsJamPercent,
   parseGpsJamCsv,
 } from '../src/gps-interference.js';
+
+test('GPS interference query accepts a four-coordinate bbox',()=>{
+  const parsed=gpsInterferenceQuery.parse({bbox:'14,49,24,55'});
+  assert.deepEqual(parsed.bbox,[14,49,24,55]);
+  assert.equal(gpsInterferenceQuery.safeParse({bbox:'14,49,24'}).success,false);
+  assert.equal(gpsInterferenceQuery.safeParse({bbox:'24,49,14,55'}).success,false);
+});
 
 test('GPSJAM percentage and thresholds follow the published methodology',()=>{
   assert.equal(gpsJamPercent(99,1),0);
