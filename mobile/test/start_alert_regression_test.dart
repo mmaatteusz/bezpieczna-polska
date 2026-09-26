@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bezpieczna_polska/model.dart';
+import 'package:bezpieczna_polska/screens/alerts_screen.dart';
 import 'package:bezpieczna_polska/ui/safety_event_card.dart';
 
 SafetyEvent warning({
@@ -66,6 +67,79 @@ void main() {
       safetyEventTimeLabel(event, DateTime.utc(2026, 9, 25)),
       'Obowiązuje do odwołania',
     );
+  });
+
+  testWidgets('alerts screen collapses duplicates and remains scrollable', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final duplicateWarnings = List.generate(
+      6,
+      (index) => warning(
+        id: 'duplicate-$index',
+        validTo: '2099-09-26T18:00:00Z',
+      ),
+    );
+    final uniqueWarnings = List.generate(
+      8,
+      (index) => warning(
+        id: 'unique-$index',
+        title: 'Ostrzeżenie $index',
+        description: 'Treść ostrzeżenia numer $index.',
+        validTo: '2099-09-26T18:00:00Z',
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AlertsScreen(
+            events: [...duplicateWarnings, ...uniqueWarnings],
+            onOpenEvent: (_) {},
+            onRefresh: () async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('14 komunikatów w wybranym widoku'), findsNothing);
+    expect(find.text('9 komunikatów w wybranym widoku'), findsOneWidget);
+    expect(find.text('Silne burze'), findsOneWidget);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -1500));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('warning card tolerates non-string validity metadata', (
+    tester,
+  ) async {
+    final raw = Map<String, dynamic>.from(
+      warning(
+        id: 'numeric-validity',
+        validTo: '2099-09-26T18:00:00Z',
+      ).data,
+    )..['validTo'] = 99999;
+    final event = SafetyEvent(raw);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: SafetyEventCard(event: event, onTap: () {}),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('warning card never exposes technical year 99999', (
