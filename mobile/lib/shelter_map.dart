@@ -981,6 +981,20 @@ class _ShelterMapState extends State<ShelterMap> {
                     }
                   },
                 ),
+                const Divider(height: 20),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.satellite_alt_outlined),
+                  title: const Text('Zakłócenia GNSS / GPS'),
+                  subtitle: const Text(
+                    'LIVE • oficjalny RTGMS (IŁ-PIB / GUGiK) • status stacji co 1 min',
+                  ),
+                  trailing: const Icon(Icons.open_in_new_rounded),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    widget.openLink('https://www.rtgms.pl/map');
+                  },
+                ),
                 DropdownButtonFormField<String>(
                   key: ValueKey(availability),
                   initialValue: availability,
