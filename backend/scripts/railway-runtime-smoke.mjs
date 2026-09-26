@@ -1,8 +1,16 @@
+import {readFileSync} from 'node:fs';
+
+const packageVersion=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')).version;
 const sleep=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
 const base=(process.env.SMOKE_BASE_URL||'').replace(/\/+$/,'');
-const expectedVersion=process.env.EXPECTED_VERSION||'0.1.0-alpha.20';
-const expectedBuildSha=process.env.EXPECTED_BUILD_SHA||'';
+const expectedVersion=process.env.EXPECTED_VERSION||packageVersion;
+const expectedBuildSha=(process.env.EXPECTED_BUILD_SHA||'').trim();
+const deployWaitSeconds=Number(process.env.DEPLOY_WAIT_SECONDS||600);
+const criticalSourceIds=(process.env.CRITICAL_SOURCE_IDS||'RCB,RSO,LEVELS,SHELTERS,IMGW_METEO,IMGW_HYDRO,PAA,NEPTUN')
+  .split(',').map(value=>value.trim()).filter(Boolean);
 if(!/^https:\/\/[^/]+$/.test(base))throw new Error('SMOKE_BASE_URL must be an HTTPS origin');
+if(expectedBuildSha&&!/^[a-f0-9]{40}$/.test(expectedBuildSha))throw new Error('EXPECTED_BUILD_SHA must be a 40-character lowercase git SHA');
+if(!Number.isFinite(deployWaitSeconds)||deployWaitSeconds<30||deployWaitSeconds>1800)throw new Error('DEPLOY_WAIT_SECONDS must be between 30 and 1800');
 
 async function json(path,options){
   const response=await fetch(base+path,options);
@@ -14,6 +22,18 @@ async function json(path,options){
   return body;
 }
 function assert(value,message){if(!value)throw new Error(message);}
+function sourceState(source){return source?.healthStatus??source?.state??'MISSING';}
+function validateCriticalSources(sourceHealth){
+  for(const id of criticalSourceIds){
+    const source=sourceHealth.find(item=>item.id===id);
+    assert(source,'critical source missing: '+id);
+    const state=sourceState(source);
+    assert(state==='HEALTHY','critical source '+id+' is '+state+(source.errorCode?' ('+source.errorCode+')':''));
+    assert(!!source.lastSuccessfulSyncAt,'critical source '+id+' has no successful sync');
+    assert(Number.isFinite(Date.parse(source.lastSuccessfulSyncAt)),'critical source '+id+' has invalid successful sync timestamp');
+  }
+  console.log('PROBE_CRITICAL_SOURCES_OK',criticalSourceIds.join(','));
+}
 
 function validateNeptun(data){
   assert(data.schemaVersion===2&&data.mode==='LIVE_AND_HISTORY','NEPTUN schema/mode invalid');
@@ -35,25 +55,38 @@ function validateNeptun(data){
 }
 
 (async()=>{
-  let reachable=false;
-  for(let attempt=0;attempt<30;attempt++){
+  const deadline=Date.now()+deployWaitSeconds*1000;
+  let converged=false;
+  let lastSeen='unreachable';
+  while(Date.now()<deadline){
     try{
       const response=await fetch(base+'/health');
-      if(response.ok){reachable=true;break;}
-    }catch{}
-    await sleep(1000);
+      if(response.ok){
+        const candidate=await response.json();
+        lastSeen='version='+candidate.version+' buildSha='+candidate.buildSha;
+        if(candidate.version===expectedVersion&&(!expectedBuildSha||candidate.buildSha===expectedBuildSha)){
+          converged=true;
+          break;
+        }
+      }else lastSeen='HTTP '+response.status;
+    }catch(error){
+      lastSeen=error instanceof Error?error.message:String(error);
+    }
+    await sleep(5000);
   }
-  assert(reachable,'smoke API did not become reachable');
+  assert(converged,'production runtime did not converge before timeout; expected version='+expectedVersion+(expectedBuildSha?' buildSha='+expectedBuildSha:'')+' lastSeen='+lastSeen);
 
   const health=await json('/health');
   assert(health.version===expectedVersion,'wrong version '+health.version);
   if(expectedBuildSha)assert(health.buildSha===expectedBuildSha,'wrong buildSha '+health.buildSha);
+  console.log('PROBE_RUNTIME_IDENTITY',JSON.stringify({version:health.version,buildSha:health.buildSha,environment:health.environment}));
 
   const ready=await json('/ready');
   assert(ready.database==='postgres'&&ready.postgis===true,'PostGIS not ready');
 
   const sources=await json('/v1/sources');
   assert(Array.isArray(sources.sourceHealth),'sources contract invalid');
+  validateCriticalSources(sources.sourceHealth);
 
   const layers=await json('/v1/map/layers');
   const neptunLayer=layers.layers?.find(layer=>layer.id==='NEPTUN');
