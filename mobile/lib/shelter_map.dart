@@ -551,7 +551,9 @@ class _ShelterMapState extends State<ShelterMap> {
     }
     try {
       final result = await gpsInterferenceProvider.fetch(bbox);
-      if (!mounted || current != gpsInterferenceTicket || !showGpsInterference) {
+      if (!mounted ||
+          current != gpsInterferenceTicket ||
+          !showGpsInterference) {
         return;
       }
       await c.setGeoJsonSource('gps-interference', result.data);
@@ -605,9 +607,7 @@ class _ShelterMapState extends State<ShelterMap> {
         throw const FormatException('Obszar poza zakresem');
       }
       if (showGpsInterference) {
-        unawaited(
-          refreshGpsInterferenceForBounds([west, south, east, north]),
-        );
+        unawaited(refreshGpsInterferenceForBounds([west, south, east, north]));
       }
       if (showRadiation) {
         try {
@@ -766,11 +766,9 @@ class _ShelterMapState extends State<ShelterMap> {
         }
       }
       if (showGpsInterference) {
-        final gpsHits = await c.queryRenderedFeatures(
-          point,
-          ['gps-interference-fill'],
-          null,
-        );
+        final gpsHits = await c.queryRenderedFeatures(point, [
+          'gps-interference-fill',
+        ], null);
         if (gpsHits.isNotEmpty && mounted) {
           final properties = Map<String, dynamic>.from(
             (gpsHits.first as Map)['properties'] as Map,
@@ -790,9 +788,7 @@ class _ShelterMapState extends State<ShelterMap> {
                     ),
                     const SizedBox(height: 8),
                     Text('Poziom: ${properties['level']}'),
-                    Text(
-                      'Obniżona dokładność: ${properties['percentBad']}%',
-                    ),
+                    Text('Obniżona dokładność: ${properties['percentBad']}%'),
                     Text(
                       'Samoloty: ${properties['goodAircraft']} prawidłowych / ${properties['badAircraft']} z obniżoną dokładnością',
                     ),
@@ -802,7 +798,8 @@ class _ShelterMapState extends State<ShelterMap> {
                       'To wskaźnik obniżonej dokładności nawigacji raportowanej przez statki powietrzne. Nie potwierdza przyczyny ani celowego zagłuszania.',
                     ),
                     TextButton(
-                      onPressed: () => widget.openLink('https://gpsjam.org/faq'),
+                      onPressed: () =>
+                          widget.openLink('https://gpsjam.org/faq'),
                       child: const Text('Źródło i metodologia: GPSJAM'),
                     ),
                   ],
