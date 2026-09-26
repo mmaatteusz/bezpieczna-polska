@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../model.dart';
 import '../ui/safety_event_card.dart';
 
+const _multiRegionKey = '__MULTI_REGION__';
+const _otherRegionKey = '__OTHER_REGION__';
+
 class AlertsScreen extends StatefulWidget {
   final List<SafetyEvent> events;
   final void Function(SafetyEvent) onOpenEvent;
@@ -17,6 +20,55 @@ class AlertsScreen extends StatefulWidget {
 
   @override
   State<AlertsScreen> createState() => _AlertsScreenState();
+}
+
+class _AlertDisplayItem {
+  final SafetyEvent event;
+  final int groupedCount;
+  final List<String> areas;
+
+  const _AlertDisplayItem({
+    required this.event,
+    required this.groupedCount,
+    required this.areas,
+  });
+}
+
+class _AlertRegionSection {
+  final String key;
+  final String title;
+  final String subtitle;
+  final List<_AlertDisplayItem> items;
+
+  const _AlertRegionSection({
+    required this.key,
+    required this.title,
+    required this.subtitle,
+    required this.items,
+  });
+}
+
+List<String> alertRegionCodesForDisplay(Iterable<String> rawAreas) {
+  final values = <String>{};
+  for (final code in rawAreas) {
+    if (code == 'PL' || regions.containsKey(code)) values.add(code);
+  }
+  final result = values.toList()
+    ..sort((a, b) {
+      if (a == 'PL') return -1;
+      if (b == 'PL') return 1;
+      return (regions[a] ?? a).compareTo(regions[b] ?? b);
+    });
+  return result;
+}
+
+String alertRegionBucketForDisplay(Iterable<String> rawAreas) {
+  final areas = alertRegionCodesForDisplay(rawAreas);
+  if (areas.contains('PL')) return 'PL';
+  final provinceCodes = areas.where((code) => code != 'PL').toList();
+  if (provinceCodes.length == 1) return provinceCodes.single;
+  if (provinceCodes.length > 1) return _multiRegionKey;
+  return _otherRegionKey;
 }
 
 class _AlertsScreenState extends State<AlertsScreen> {
@@ -47,73 +99,177 @@ class _AlertsScreenState extends State<AlertsScreen> {
     return 'Inne';
   }
 
+  List<String> _safeAreas(SafetyEvent event) {
+    final raw = event.data['regions'];
+    if (raw is! List) return const <String>[];
+    return alertRegionCodesForDisplay(raw.whereType<String>());
+  }
+
   bool _matchesTextAndCategory(SafetyEvent event) {
+    if (category != 'Wszystkie' && _categoryOf(event) != category) {
+      return false;
+    }
     final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return true;
+
+    final areaText = _safeAreas(
+      event,
+    ).map((code) => regions[code] ?? code).join(' ');
     final text =
-        '${event.title} ${event.description} ${safetySourceLabel(event)}'
+        '${event.title} ${event.description} ${safetySourceLabel(event)} $areaText'
             .toLowerCase();
-    return (category == 'Wszystkie' || _categoryOf(event) == category) &&
-        text.contains(needle);
+    return text.contains(needle);
   }
 
-  int _sortEvents(SafetyEvent a, SafetyEvent b) {
-    final severity = safetyEventPriority(a).compareTo(safetyEventPriority(b));
+  bool _matchesLifecycle(SafetyEvent event) => switch (lifecycle) {
+    'Aktywne' => safetyEventIsActive(event),
+    'Zakończone' => safetyEventIsHistorical(event),
+    _ => true,
+  };
+
+  int _sortItems(_AlertDisplayItem a, _AlertDisplayItem b) {
+    final severity = safetyEventPriority(
+      a.event,
+    ).compareTo(safetyEventPriority(b.event));
     if (severity != 0) return severity;
-    return safetyEventTime(b).compareTo(safetyEventTime(a));
+    return safetyEventTime(b.event).compareTo(safetyEventTime(a.event));
   }
 
-  List<WidgetBuilder> _sectionEntries({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required List<SafetyEvent> events,
-  }) {
-    if (events.isEmpty) return const <WidgetBuilder>[];
+  List<_AlertDisplayItem> _displayItems() {
+    final filtered = widget.events
+        .where(_matchesTextAndCategory)
+        .where(_matchesLifecycle)
+        .toList();
 
+    final grouped = groupSafetyEventsForDashboard(filtered);
+    return grouped
+        .map(
+          (group) => _AlertDisplayItem(
+            event: group.primary,
+            groupedCount: group.count,
+            areas: alertRegionCodesForDisplay(group.areas),
+          ),
+        )
+        .toList();
+  }
+
+  List<_AlertRegionSection> _regionSections(List<_AlertDisplayItem> items) {
+    final buckets = <String, List<_AlertDisplayItem>>{};
+
+    for (final item in items) {
+      final key = alertRegionBucketForDisplay(item.areas);
+      buckets.putIfAbsent(key, () => <_AlertDisplayItem>[]).add(item);
+    }
+    for (final bucket in buckets.values) {
+      bucket.sort(_sortItems);
+    }
+
+    final sections = <_AlertRegionSection>[];
+
+    void addSection(String key, String title, String subtitle) {
+      final bucket = buckets[key];
+      if (bucket == null || bucket.isEmpty) return;
+      sections.add(
+        _AlertRegionSection(
+          key: key,
+          title: title,
+          subtitle: subtitle,
+          items: bucket,
+        ),
+      );
+    }
+
+    addSection(
+      'PL',
+      'Cała Polska',
+      'Komunikaty obowiązujące na poziomie ogólnokrajowym.',
+    );
+
+    final provinceKeys =
+        buckets.keys
+            .where((key) => regions.containsKey(key) && key != 'PL')
+            .toList()
+          ..sort((a, b) => (regions[a] ?? a).compareTo(regions[b] ?? b));
+    for (final key in provinceKeys) {
+      addSection(key, regions[key]!, 'Alerty przypisane do tego województwa.');
+    }
+
+    addSection(
+      _multiRegionKey,
+      'Kilka województw',
+      'Jeden komunikat obejmuje więcej niż jedno województwo — nie jest powielany na liście.',
+    );
+    addSection(
+      _otherRegionKey,
+      'Obszar nieustalony',
+      'Źródło nie przypisało komunikatu do konkretnego województwa.',
+    );
+
+    return sections;
+  }
+
+  List<WidgetBuilder> _sectionEntries(_AlertRegionSection section) {
     final entries = <WidgetBuilder>[
       (context) => Padding(
-        padding: const EdgeInsets.only(top: 16),
-        child: Column(
+        key: ValueKey('alert-region-${section.key}'),
+        padding: const EdgeInsets.only(top: 18, bottom: 8),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(icon, size: 23),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
+            const Padding(
+              padding: EdgeInsets.only(top: 1),
+              child: Icon(Icons.location_on_outlined, size: 23),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    section.title,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                ),
-                Text(
-                  '${events.length}',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+                  const SizedBox(height: 2),
+                  Text(
+                    section.subtitle,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(height: 2),
-            Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 9),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '${section.items.length}',
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
           ],
         ),
       ),
     ];
 
-    for (final event in events) {
+    for (final item in section.items) {
       entries.add(
         (context) => SafetyEventCard(
-          key: ValueKey('alert-card-${event.id}'),
-          event: event,
-          onTap: () => widget.onOpenEvent(event),
+          key: ValueKey('alert-card-${section.key}-${item.event.id}'),
+          event: item.event,
+          groupedCount: item.groupedCount,
+          areaOverride: item.areas,
+          onTap: () => widget.onOpenEvent(item.event),
         ),
       );
     }
+
     return entries;
   }
 
@@ -128,7 +284,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
           autofocus: true,
           textInputAction: TextInputAction.search,
           decoration: const InputDecoration(
-            hintText: 'Tytuł, opis albo źródło',
+            hintText: 'Tytuł, opis, źródło albo województwo',
             prefixIcon: Icon(Icons.search),
             border: OutlineInputBorder(),
           ),
@@ -154,44 +310,15 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final displayEvents = deduplicateSafetyEventsForDisplay(widget.events);
-    final matched = displayEvents.where(_matchesTextAndCategory).toList();
-    final active = matched.where(safetyEventIsActive).toList()
-      ..sort(_sortEvents);
-    final ended = matched.where(safetyEventIsHistorical).toList()
-      ..sort(_sortEvents);
-    final other =
-        matched
-            .where(
-              (event) =>
-                  !safetyEventIsActive(event) &&
-                  !safetyEventIsHistorical(event),
-            )
-            .toList()
-          ..sort(_sortEvents);
-
-    final critical = active
-        .where(
-          (event) => safetyVisualLevel(event) == SafetyVisualLevel.critical,
-        )
-        .toList();
-    final high = active
-        .where((event) => safetyVisualLevel(event) == SafetyVisualLevel.high)
-        .toList();
-    final remaining = active
-        .where(
-          (event) => !{
-            SafetyVisualLevel.critical,
-            SafetyVisualLevel.high,
-          }.contains(safetyVisualLevel(event)),
-        )
-        .toList();
-
-    final visibleCount = switch (lifecycle) {
-      'Aktywne' => active.length,
-      'Zakończone' => ended.length,
-      _ => matched.length,
-    };
+    final items = _displayItems();
+    final sections = _regionSections(items);
+    final affectedProvinces = <String>{};
+    for (final item in items) {
+      affectedProvinces.addAll(
+        item.areas.where((code) => code != 'PL' && regions.containsKey(code)),
+      );
+    }
+    final affectedProvinceCount = affectedProvinces.length;
 
     final entries = <WidgetBuilder>[
       (context) => Row(
@@ -204,40 +331,37 @@ class _AlertsScreenState extends State<AlertsScreen> {
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
             ),
           ),
-          if (critical.isNotEmpty)
-            Semantics(
-              label: '${critical.length} krytycznych aktywnych alertów',
-              child: Chip(
-                avatar: const Icon(Icons.report_rounded, size: 18),
-                label: Text('${critical.length} KRYTYCZNE'),
-              ),
-            ),
+          IconButton(
+            tooltip: 'Szukaj w alertach',
+            onPressed: _openSearch,
+            icon: const Icon(Icons.search_rounded),
+          ),
         ],
       ),
       (context) => Padding(
         padding: const EdgeInsets.only(top: 4),
         child: Text(
-          'Najpoważniejsze aktywne zagrożenia są zawsze na górze.',
+          'Komunikaty są uporządkowane według województw, a nie według sztucznego rankingu ważności.',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
       ),
       (context) => Padding(
-        padding: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.only(top: 12),
         child: Card(
           elevation: 0,
-          child: ExpansionTile(
-            leading: const Icon(Icons.tune_rounded),
-            title: const Text('Filtry i wyszukiwanie'),
-            subtitle: Text(
-              lifecycle == 'Aktywne' && category == 'Wszystkie' && query.isEmpty
-                  ? 'Domyślnie: aktywne alerty'
-                  : '$lifecycle • $category${query.isEmpty ? '' : ' • wyszukiwanie'}',
-            ),
-            childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Wrap(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Filtry i wyszukiwanie',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 9),
+                Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: ['Aktywne', 'Wszystkie', 'Zakończone']
@@ -250,11 +374,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
                       )
                       .toList(),
                 ),
-              ),
-              const SizedBox(height: 9),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Wrap(
+                const SizedBox(height: 9),
+                Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children:
@@ -276,45 +397,46 @@ class _AlertsScreenState extends State<AlertsScreen> {
                           )
                           .toList(),
                 ),
-              ),
-              const SizedBox(height: 11),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _openSearch,
-                      icon: const Icon(Icons.search),
-                      label: Text(
-                        query.isEmpty ? 'Szukaj w alertach' : 'Szukaj: $query',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                if (query.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.search, size: 18),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Szukasz: $query',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
+                      IconButton(
+                        tooltip: 'Wyczyść wyszukiwanie',
+                        onPressed: () => setState(() => query = ''),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
                   ),
-                  if (query.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    IconButton(
-                      tooltip: 'Wyczyść wyszukiwanie',
-                      onPressed: () => setState(() => query = ''),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
                 ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
       (context) => Padding(
-        padding: const EdgeInsets.only(top: 4),
+        padding: const EdgeInsets.only(top: 10),
         child: Text(
-          '$visibleCount komunikatów w wybranym widoku',
-          style: Theme.of(context).textTheme.labelLarge,
+          items.isEmpty
+              ? 'Brak komunikatów w wybranym widoku'
+              : '${items.length} komunikatów • $affectedProvinceCount województw',
+          style: Theme.of(
+            context,
+          ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
       ),
     ];
 
-    if (visibleCount == 0) {
+    if (items.isEmpty) {
       entries.add(
         (context) => const Padding(
           padding: EdgeInsets.only(top: 14),
@@ -327,62 +449,16 @@ class _AlertsScreenState extends State<AlertsScreen> {
           ),
         ),
       );
-    }
-
-    if (lifecycle != 'Zakończone') {
-      entries
-        ..addAll(
-          _sectionEntries(
-            title: 'Krytyczne',
-            subtitle: 'Bezpośrednie zagrożenia wymagające najwyższej uwagi.',
-            icon: Icons.report_rounded,
-            events: critical,
-          ),
-        )
-        ..addAll(
-          _sectionEntries(
-            title: 'Wysokie',
-            subtitle: 'Poważne aktywne ostrzeżenia.',
-            icon: Icons.warning_amber_rounded,
-            events: high,
-          ),
-        )
-        ..addAll(
-          _sectionEntries(
-            title: 'Pozostałe aktywne',
-            subtitle: 'Ostrzeżenia i informacje o niższym priorytecie.',
-            icon: Icons.notifications_active_outlined,
-            events: remaining,
-          ),
-        );
-    }
-
-    if (lifecycle == 'Wszystkie') {
-      entries.addAll(
-        _sectionEntries(
-          title: 'Inne komunikaty',
-          subtitle: 'Zaplanowane lub o nieustalonej ważności.',
-          icon: Icons.schedule_outlined,
-          events: other,
-        ),
-      );
-    }
-
-    if (lifecycle != 'Aktywne') {
-      entries.addAll(
-        _sectionEntries(
-          title: 'Zakończone i historyczne',
-          subtitle: 'Wyciszone komunikaty, które nie są już aktywne.',
-          icon: Icons.history_rounded,
-          events: ended,
-        ),
-      );
+    } else {
+      for (final section in sections) {
+        entries.addAll(_sectionEntries(section));
+      }
     }
 
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
       child: ListView.builder(
-        key: const PageStorageKey('alerts'),
+        key: const PageStorageKey('alerts-by-region'),
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 26),
         itemCount: entries.length,
         itemBuilder: (context, index) => entries[index](context),
