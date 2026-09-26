@@ -94,7 +94,7 @@ class RadiationData {
 
   String measurementText(DateTime now, bool online) {
     if (data['measurementState'] == 'NOT_CONFIGURED') {
-      return 'Pomiary PAA: integracja niedostępna — format źródła niezweryfikowany';
+      return 'Pomiary PAA: źródło pomiarowe nie jest obecnie dostępne';
     }
     final items = data['measurements'] as List;
     if (items.isEmpty) return 'Pomiary PAA: brak danych';
