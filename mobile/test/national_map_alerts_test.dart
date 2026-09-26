@@ -8,6 +8,7 @@ SafetyEvent eventFixture({
   double? latitude,
   double? longitude,
   DateTime? validTo,
+  String sourceId = 'RCB',
 }) {
   return SafetyEvent({
     'id': id,
@@ -17,8 +18,10 @@ SafetyEvent eventFixture({
     'regions': regions,
     'sources': [
       {
-        'id': 'RCB',
-        'name': 'Rządowe Centrum Bezpieczeństwa',
+        'id': sourceId,
+        'name': sourceId.startsWith('IMGW')
+            ? 'IMGW-PIB'
+            : 'Rządowe Centrum Bezpieczeństwa',
         'url': 'https://www.gov.pl/web/rcb',
         'tier': 1,
       },
@@ -71,6 +74,29 @@ void main() {
     expect(features, hasLength(1));
     expect(features.single['geometry']['coordinates'], [18.2, 53.1]);
     expect(features.single['properties']['mapLocationKind'], 'EVENT_POINT');
+    expect(features.single['properties']['mapCategory'], 'ALERT');
+  });
+
+  test('IMGW meteo and hydro warnings use the blue map layer', () {
+    for (final sourceId in ['IMGW_METEO', 'IMGW_HYDRO']) {
+      final event = eventFixture(
+        id: 'imgw-event-$sourceId',
+        regions: ['04'],
+        validTo: now.add(const Duration(hours: 2)),
+        sourceId: sourceId,
+      );
+
+      final features = mapEventFeatures(event, now);
+
+      expect(features, isNotEmpty);
+      expect(
+        features.every(
+          (feature) => feature['properties']['mapCategory'] == 'IMGW',
+        ),
+        isTrue,
+      );
+      expect(mapEventIsImgw(event), isTrue);
+    }
   });
 
   test('expired event is not rendered on overview map', () {

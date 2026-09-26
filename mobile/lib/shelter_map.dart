@@ -14,6 +14,51 @@ import 'map_layers.dart';
 import 'model.dart';
 import 'shelters.dart';
 
+class _MapLegend extends StatelessWidget {
+  const _MapLegend();
+
+  @override
+  Widget build(BuildContext context) => Material(
+    key: const ValueKey('map-legend'),
+    color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
+    borderRadius: BorderRadius.circular(12),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 14,
+        runSpacing: 6,
+        children: const [
+          _MapLegendItem(color: Color(0xffb3261e), label: 'Alerty'),
+          _MapLegendItem(color: Color(0xff1565c0), label: 'IMGW'),
+          _MapLegendItem(color: Color(0xff2e7d32), label: 'Schrony'),
+        ],
+      ),
+    ),
+  );
+}
+
+class _MapLegendItem extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _MapLegendItem({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 5),
+      Text(label, style: Theme.of(context).textTheme.labelSmall),
+    ],
+  );
+}
+
 class ShelterMap extends StatefulWidget {
   final DataRepository repository;
   final String region;
@@ -207,7 +252,7 @@ class _ShelterMapState extends State<ShelterMap> {
         'shelters',
         'shelter-points',
         const CircleLayerProperties(
-          circleColor: '#25877b',
+          circleColor: '#2e7d32',
           circleRadius: 6,
           circleStrokeColor: '#ffffff',
           circleStrokeWidth: 1,
@@ -222,7 +267,7 @@ class _ShelterMapState extends State<ShelterMap> {
         'shelters',
         'shelter-clusters',
         const CircleLayerProperties(
-          circleColor: '#205f73',
+          circleColor: '#1b5e20',
           circleRadius: 19,
           circleStrokeColor: '#ffffff',
           circleStrokeWidth: 1,
@@ -254,20 +299,40 @@ class _ShelterMapState extends State<ShelterMap> {
       await c.addSource('events', GeojsonSourceProperties(data: empty));
       await c.addCircleLayer(
         'events',
-        'event-points',
+        'event-alert-points',
         const CircleLayerProperties(
           circleColor: '#b3261e',
           circleRadius: 8,
           circleStrokeColor: '#ffffff',
           circleStrokeWidth: 2,
         ),
+        filter: [
+          '==',
+          ['get', 'mapCategory'],
+          'ALERT',
+        ],
+      );
+      await c.addCircleLayer(
+        'events',
+        'event-imgw-points',
+        const CircleLayerProperties(
+          circleColor: '#1565c0',
+          circleRadius: 8,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: 2,
+        ),
+        filter: [
+          '==',
+          ['get', 'mapCategory'],
+          'IMGW',
+        ],
       );
       await c.addSource('watched', GeojsonSourceProperties(data: empty));
       await c.addCircleLayer(
         'watched',
         'watched-points',
         const CircleLayerProperties(
-          circleColor: '#315da8',
+          circleColor: '#ef6c00',
           circleRadius: 7,
           circleStrokeColor: '#ffffff',
           circleStrokeWidth: 2,
@@ -278,7 +343,7 @@ class _ShelterMapState extends State<ShelterMap> {
         'user-location',
         'user-location-point',
         const CircleLayerProperties(
-          circleColor: '#1565c0',
+          circleColor: '#37474f',
           circleRadius: 8,
           circleStrokeColor: '#ffffff',
           circleStrokeWidth: 3,
@@ -447,7 +512,7 @@ class _ShelterMapState extends State<ShelterMap> {
         if (!mounted || current != ticket) return;
         setState(() {
           message =
-              'Widok Polski: schronienia są ukryte przy tym oddaleniu. Pokazuję aktywne zdarzenia jako czerwone punkty. Alert bez dokładnej lokalizacji jest oznaczony symbolicznie dla właściwego województwa.';
+              'Widok Polski: schronienia są ukryte przy tym oddaleniu. Czerwone punkty oznaczają alerty, a niebieskie ostrzeżenia IMGW. Zdarzenie bez dokładnej lokalizacji jest oznaczone symbolicznie dla właściwego województwa.';
         });
         return;
       }
@@ -550,7 +615,8 @@ class _ShelterMapState extends State<ShelterMap> {
         return;
       }
       final contextHits = await c.queryRenderedFeatures(point, [
-        'event-points',
+        'event-alert-points',
+        'event-imgw-points',
         'watched-points',
       ], null);
       if (contextHits.isNotEmpty && mounted) {
@@ -879,7 +945,7 @@ class _ShelterMapState extends State<ShelterMap> {
                   ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Czerwone: zdarzenia • zielone: schronienia • niebieskie: obserwowane miejsca • fioletowe: PAA',
+                  'Czerwone: alerty • niebieskie: IMGW • zielone: schronienia • pomarańczowe: obserwowane miejsca • fioletowe: PAA',
                 ),
               ],
             ),
@@ -978,30 +1044,43 @@ class _ShelterMapState extends State<ShelterMap> {
                 if (!widget.ukraine)
                   Positioned(
                     left: 8,
+                    right: 8,
                     bottom: 8,
-                    child: Material(
-                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(10),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Material(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(10),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            child: Text(
+                              showRadiation
+                                  ? 'PAA'
+                                  : overviewMode
+                                  ? 'ZDARZENIA • POLSKA'
+                                  : online && viewport != null
+                                  ? fresh
+                                        ? 'LIVE'
+                                        : 'ONLINE / źródło STALE'
+                                  : viewport != null
+                                  ? 'OFFLINE / zapisane'
+                                  : 'Ładowanie danych',
+                              style: Theme.of(context).textTheme.labelMedium,
+                            ),
+                          ),
                         ),
-                        child: Text(
-                          showRadiation
-                              ? 'PAA'
-                              : overviewMode
-                              ? 'ZDARZENIA • POLSKA'
-                              : online && viewport != null
-                              ? fresh
-                                    ? 'LIVE'
-                                    : 'ONLINE / źródło STALE'
-                              : viewport != null
-                              ? 'OFFLINE / zapisane'
-                              : 'Ładowanie danych',
-                          style: Theme.of(context).textTheme.labelMedium,
-                        ),
-                      ),
+                        if (!showRadiation) ...[
+                          const SizedBox(height: 6),
+                          const _MapLegend(),
+                        ],
+                      ],
                     ),
                   ),
                 if (loading)
