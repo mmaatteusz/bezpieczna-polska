@@ -20,6 +20,6 @@ export function radiationStatus(events:Event[],health:Health[],region='PL',now=n
  const fresh=communication?.state==='HEALTHY';
  const warnings=messages.filter(e=>(!e.validTo?communication?.checkedEventIds?.includes(e.id):true)&&e.officialWarning&&e.radiationAssessment?.state==='WARNING'&&e.lifecycle==='ACTIVE'&&(!e.validTo||Date.parse(e.validTo)>now.getTime())&&(!e.validFrom||Date.parse(e.validFrom)<=now.getTime()));
  const unknown=messages.filter(e=>e.radiationAssessment?.state==='UNDETERMINED');
- const items=measurements.filter(p=>region==='PL'||p.regionId===region).map(p=>({...p,freshness:measurementFreshness(p,measurementHealth,now)}));
+ const items=measurements.filter(p=>region==='PL'||p.regionId===null||p.regionId===region).map(p=>({...p,freshness:measurementFreshness(p,measurementHealth,now)}));
  return {schemaVersion:1,regionId:region,communicationState:!fresh?'UNAVAILABLE':warnings.length?'ACTIVE':unknown.length?'UNDETERMINED':'NO_ACTIVE_MESSAGE_IN_WINDOW',measurementState:!measurementHealth?.enabled?'NOT_CONFIGURED':!items.length?'NO_DATA':items.every(p=>p.freshness==='FRESH')?'FRESH':'STALE',sourceHealth:publicSourceHealth(health.filter(h=>['PAA','PAA_MEASUREMENTS'].includes(h.id)),now),activeMessageIds:warnings.map(e=>e.id),messages,measurements:items,complete:false,measuredValuesAffectHazard:false};
 }
