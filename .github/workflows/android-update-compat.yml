@@ -8,6 +8,7 @@ on:
       - 'scripts/configure-preview-signing.sh'
       - 'scripts/android-preview-build-number.sh'
       - 'scripts/verify-preview-apk.sh'
+      - 'scripts/verify-android-inplace-update.sh'
       - '.github/workflows/android-update-compat.yml'
   pull_request:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - 'scripts/configure-preview-signing.sh'
       - 'scripts/android-preview-build-number.sh'
       - 'scripts/verify-preview-apk.sh'
+      - 'scripts/verify-android-inplace-update.sh'
       - '.github/workflows/android-update-compat.yml'
   workflow_dispatch:
 
@@ -112,13 +114,4 @@ jobs:
           emulator-boot-timeout: 600
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: |
-            adb install base-preview.apk
-            adb shell dumpsys package pl.bezpiecznapolska.preview | grep -F "versionCode=$BASE_BUILD"
-            adb shell "run-as pl.bezpiecznapolska.preview sh -c 'mkdir -p files && printf keep-me > files/update-sentinel'"
-            test "$(adb shell 'run-as pl.bezpiecznapolska.preview cat files/update-sentinel' | tr -d '\r')" = "keep-me"
-            adb install -r update-preview.apk
-            adb shell dumpsys package pl.bezpiecznapolska.preview | grep -F "versionCode=$NEXT_BUILD"
-            test "$(adb shell 'run-as pl.bezpiecznapolska.preview cat files/update-sentinel' | tr -d '\r')" = "keep-me"
-            if adb install -r base-preview.apk; then echo "Unexpected downgrade/reinstall to the lower versionCode was accepted" >&2; exit 1; else echo "Expected downgrade rejection confirmed."; fi
-            echo "Android PackageManager accepted the signed in-place update and preserved app data." | tee -a "$GITHUB_STEP_SUMMARY"
+          script: bash scripts/verify-android-inplace-update.sh base-preview.apk update-preview.apk
