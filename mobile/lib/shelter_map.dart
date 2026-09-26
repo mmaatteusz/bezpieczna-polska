@@ -327,10 +327,7 @@ class _ShelterMapState extends State<ShelterMap> {
     final c = controller;
     if (!ready || c == null || widget.ukraine) return;
     final current = ++ticket;
-    setState(() {
-      loading = true;
-      online = false;
-    });
+    setState(() => loading = true);
     MapRequest? request;
     try {
       final bounds = await c.getVisibleRegion();
