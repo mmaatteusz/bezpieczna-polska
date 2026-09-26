@@ -107,7 +107,7 @@ class SafetyEvent {
     if (data['verification'] == 'REFUTED') return 'INFORMACJA ZDEMENTOWANA';
     if (data['messageContext'] == 'EXERCISE') return 'ĆWICZENIA';
     if (data['messageContext'] == 'TEST') return 'TEST';
-    final end = DateTime.tryParse(data['validTo'] as String? ?? '');
+    final end = DateTime.tryParse(data['validTo']?.toString() ?? '');
     if (data['lifecycle'] == 'EXPIRED' ||
         (data['lifecycle'] == 'ACTIVE' &&
             end != null &&
