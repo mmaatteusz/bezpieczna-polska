@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../model.dart';
 import '../offline_packages.dart';
+import '../security_levels.dart';
 import '../ui/safety_event_card.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -18,6 +19,7 @@ class DashboardScreen extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final VoidCallback onChooseLocality;
   final VoidCallback onOpenAlerts;
+  final VoidCallback onOpenSecurityLevels;
   final void Function(SafetyEvent) onOpenEvent;
 
   const DashboardScreen({
@@ -35,6 +37,7 @@ class DashboardScreen extends StatelessWidget {
     required this.onRefresh,
     required this.onChooseLocality,
     required this.onOpenAlerts,
+    required this.onOpenSecurityLevels,
     required this.onOpenEvent,
   });
 
@@ -541,6 +544,12 @@ class DashboardScreen extends StatelessWidget {
             footer: active.isEmpty
                 ? 'Brak istotnych aktywnych komunikatów'
                 : '${active.length} istotnych aktywnych komunikatów',
+          ),
+          const SizedBox(height: 12),
+          SecurityLevelsSummaryCard(
+            snapshot: snapshot,
+            online: online,
+            onTap: onOpenSecurityLevels,
           ),
           const SizedBox(height: 12),
           if (localityLabel == null)
