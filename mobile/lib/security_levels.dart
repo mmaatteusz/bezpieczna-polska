@@ -53,7 +53,7 @@ class SecurityLevel {
   String get scope => data['scope'] as String;
   String get area => data['area'] as String;
   String get sourceUrl => data['sourceUrl'] as String;
-  String get label => '${level}${type == 'CRP' ? '-CRP' : ''}';
+  String get label => '$level${type == 'CRP' ? '-CRP' : ''}';
 
   String get scopeLabel => switch (scope) {
     'NATIONAL' => 'Cała Polska',
