@@ -1,10 +1,7 @@
 name: Audit production runtime
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'backend/**'
+  deployment_status:
   schedule:
     - cron: '17 */6 * * *'
   workflow_dispatch:
@@ -18,15 +15,22 @@ permissions:
   contents: read
 
 concurrency:
-  group: audit-production-runtime
+  group: audit-production-runtime-${{ github.event.deployment.sha || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   smoke:
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment.environment == 'production' &&
+       github.event.deployment.ref == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.deployment.sha || github.event.inputs.expected_sha || github.sha }}
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -37,7 +41,7 @@ jobs:
         working-directory: backend
         env:
           SMOKE_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL || 'https://api-production-b6560.up.railway.app' }}
-          EXPECTED_BUILD_SHA: ${{ github.event_name == 'push' && github.sha || github.event.inputs.expected_sha || '' }}
+          EXPECTED_BUILD_SHA: ${{ github.event.deployment.sha || github.event.inputs.expected_sha || '' }}
           DEPLOY_WAIT_SECONDS: '600'
           CRITICAL_SOURCE_IDS: RCB,RSO,LEVELS,SHELTERS,IMGW_METEO,IMGW_HYDRO,PAA,NEPTUN
         run: node scripts/railway-runtime-smoke.mjs
