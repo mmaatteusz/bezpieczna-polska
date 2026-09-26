@@ -90,7 +90,7 @@ class _ShelterMapState extends State<ShelterMap> {
   MapLibreMapController? controller;
   Timer? debounce, clock, styleFallback, onlineRetry;
   bool showRadiation = false, locating = false;
-  bool showEvents = true, showWatched = true;
+  bool showEvents = true, showImgw = true, showWatched = true;
   bool ready = false, loading = false, online = false, fallbackStyle = false;
   bool overviewMode = false, nationalEventsLoading = false;
   bool radiationRefreshRunning = false, radiationOverrideOnline = false;
@@ -463,9 +463,16 @@ class _ShelterMapState extends State<ShelterMap> {
     if (!ready || c == null || widget.ukraine) return;
 
     final now = DateTime.now();
-    final eventFeatures = showEvents
-        ? contextEvents.expand((event) => mapEventFeatures(event, now)).toList()
-        : <Map<String, dynamic>>[];
+    final eventFeatures = contextEvents
+        .where(
+          (event) => mapEventVisibleForLayers(
+            event,
+            showEvents: showEvents,
+            showImgw: showImgw,
+          ),
+        )
+        .expand((event) => mapEventFeatures(event, now))
+        .toList();
     final watchedFeatures = showWatched
         ? widget.watchedLocations
               .map(
@@ -932,6 +939,19 @@ class _ShelterMapState extends State<ShelterMap> {
                   value: showEvents,
                   onChanged: (value) {
                     setState(() => showEvents = value);
+                    update(() {});
+                    unawaited(syncContextLayers());
+                  },
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('IMGW'),
+                  subtitle: const Text(
+                    'Ostrzeżenia meteorologiczne i hydrologiczne',
+                  ),
+                  value: showImgw,
+                  onChanged: (value) {
+                    setState(() => showImgw = value);
                     update(() {});
                     unawaited(syncContextLayers());
                   },
