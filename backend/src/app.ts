@@ -4,6 +4,7 @@ import {bearerSecret,pushDeviceIdSchema,pushPreferencesSchema,pushRegisterSchema
 import {aroundLocation,aroundQuerySchema} from './around.js';
 import {radiationStatus} from './radiation.js';
 import {mapLayers,mapQuery,shelterViewport} from './map-layers.js';
+import {gpsInterferenceQuery,gpsInterferenceViewport} from './gps-interference.js';
 import {securityLevelStatus} from './security-level.js';
 import Fastify from 'fastify';import rateLimit from '@fastify/rate-limit';import {timingSafeEqual} from 'node:crypto';import {z} from 'zod';
 import {APP_VERSION,type AppEnv} from './config.js';
@@ -30,6 +31,7 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
  });
  app.get('/v1/map/layers',async()=>({schemaVersion:1,layers:mapLayers}));
  app.get('/v1/map/shelters',async(req,reply)=>{const q=mapQuery.parse(req.query);if(store.db.kind!=='postgres')return reply.code(503).send({error:'POSTGIS_REQUIRED'});return shelterViewport(store,q);});
+ app.get('/v1/map/gps-interference',{config:{rateLimit:{max:120,timeWindow:'1 minute'}}},async(req,reply)=>{try{return await gpsInterferenceViewport(gpsInterferenceQuery.parse(req.query));}catch(error){const code=error instanceof Error?error.message:'GPSJAM_DATA_UNAVAILABLE';if(code==='GPSJAM_DATA_UNAVAILABLE'||code.startsWith('GPSJAM_HTTP_'))return reply.code(503).send({error:code});throw error;}});
  app.get('/v1/radiation',async req=>{const {regionId}=regionQuery.parse(req.query),s=await store.snapshot();return radiationStatus(s.events,s.health,regionId,new Date(),s.radiationMeasurements);});
  app.get('/v1/ukraine',async()=>ukraineSnapshot(store));
  app.get('/v1/layers/ukraine.geojson',async()=>{const s=await ukraineSnapshot(store);return {...s.map,metadata:{coverage:s.coverage,sourceHealth:s.sourceHealth,validUntil:s.validUntil}};});

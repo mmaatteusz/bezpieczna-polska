@@ -189,6 +189,68 @@ void main() {
       expect(provider.cached(latest), isNull);
     },
   );
+  test(
+    'GPS interference provider validates dedicated GeoJSON endpoint',
+    () async {
+      final bbox = [14.0, 49.0, 24.0, 55.0];
+      final payload = {
+        'type': 'FeatureCollection',
+        'metadata': {
+          'schemaVersion': 1,
+          'layerId': 'gps_interference',
+          'authority': 'OSINT',
+          'provider': 'GPSJAM',
+          'dataDate': '2026-09-25',
+          'bbox': bbox,
+        },
+        'features': [
+          {
+            'type': 'Feature',
+            'id': '841e805ffffffff',
+            'geometry': {
+              'type': 'Polygon',
+              'coordinates': [
+                [
+                  [18.0, 52.0],
+                  [18.2, 52.0],
+                  [18.3, 52.2],
+                  [18.2, 52.4],
+                  [18.0, 52.4],
+                  [17.9, 52.2],
+                  [18.0, 52.0],
+                ],
+              ],
+            },
+            'properties': {
+              'h3': '841e805ffffffff',
+              'level': 'HIGH',
+              'percentBad': 14.2,
+              'goodAircraft': 80,
+              'badAircraft': 20,
+              'date': '2026-09-25',
+            },
+          },
+        ],
+      };
+      final repo = DataRepository(
+        await SharedPreferences.getInstance(),
+        buildApi: 'https://build.example',
+        client: MockClient((r) async {
+          expect(r.url.path, '/v1/map/gps-interference');
+          expect(
+            r.url.queryParameters['bbox'],
+            '14.000000,49.000000,24.000000,55.000000',
+          );
+          return response(payload);
+        }),
+      );
+      final result = await GpsInterferenceProvider(repo).fetch(bbox);
+      expect(result.dataDate, '2026-09-25');
+      expect(result.data['features'], hasLength(1));
+      expect(result.metadata['authority'], 'OSINT');
+    },
+  );
+
   test('clear data during fetch prevents cache resurrection', () async {
     final pending = Completer<http.Response>();
     final repo = DataRepository(
