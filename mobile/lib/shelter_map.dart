@@ -906,28 +906,28 @@ class _ShelterMapState extends State<ShelterMap> {
                   key: ValueKey(availability),
                   initialValue: availability,
                   decoration: const InputDecoration(
-                      labelText: 'Punkty schronienia',
-                      border: OutlineInputBorder(),
-                    ),
+                    labelText: 'Punkty schronienia',
+                    border: OutlineInputBorder(),
+                  ),
                   items: const [
                     DropdownMenuItem(value: 'ALL', child: Text('Wszystkie')),
-                      DropdownMenuItem(
-                        value: '24H',
-                        child: Text('Całodobowe wg źródła'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'ON_REQUEST',
-                        child: Text('Na żądanie'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'LIMITED_HOURS',
-                        child: Text('Określone godziny'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'UNKNOWN',
-                        child: Text('Dostępność nieustalona'),
-                      ),
-                    ],
+                    DropdownMenuItem(
+                      value: '24H',
+                      child: Text('Całodobowe wg źródła'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'ON_REQUEST',
+                      child: Text('Na żądanie'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'LIMITED_HOURS',
+                      child: Text('Określone godziny'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'UNKNOWN',
+                      child: Text('Dostępność nieustalona'),
+                    ),
+                  ],
                   onChanged: (value) {
                     if (value == null) return;
                     setState(() => availability = value);
