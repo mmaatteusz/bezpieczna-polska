@@ -51,6 +51,12 @@ test('STALE and DOWN preserve uncertainty and affect coverage',()=>{
  }
  assert.equal(sourceHealth([health()],new Date(now.getTime()+900000))[0].state,'STALE');
 });
+test('PAA measurement health never changes the national hazard verdict',()=>{
+ const complete={...health('RCB'),id:'RCB',name:'RCB',complete:true,coverage:'ACTIVE_WARNINGS' as const};
+ const broken={...health('PAA_MEASUREMENTS'),state:'BROKEN' as const,complete:false,coverage:'MEASUREMENT_NETWORK' as const};
+ assert.equal(computeStatus([],[complete,broken],'PL',now).hazardLevel,'NO_ACTIVE_WARNINGS');
+ assert.equal(computeStatus([],[complete,broken],'PL',now).coverageState,'COMPLETE_FOR_CONFIGURED_SCOPE');
+});
 test('PAA WFS measurement contract maps official GeoJSON without inventing alarm semantics',()=>{
  const items=parsePaaMeasurements(measurementGeoJson(),now);
  assert.equal(items.length,1);
