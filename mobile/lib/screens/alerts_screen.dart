@@ -84,20 +84,14 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 Expanded(
                   child: Text(
                     title,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: Theme.of(context).textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w900),
                   ),
                 ),
                 Text(
                   '${events.length}',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ],
             ),
@@ -203,9 +197,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
           Expanded(
             child: Text(
               'Alerty',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
+              style: Theme.of(context).textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w900),
             ),
           ),
           if (critical.isNotEmpty)
@@ -233,9 +226,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
             leading: const Icon(Icons.tune_rounded),
             title: const Text('Filtry i wyszukiwanie'),
             subtitle: Text(
-              lifecycle == 'Aktywne' &&
-                      category == 'Wszystkie' &&
-                      query.isEmpty
+              lifecycle == 'Aktywne' && category == 'Wszystkie' && query.isEmpty
                   ? 'Domyślnie: aktywne alerty'
                   : '$lifecycle • $category${query.isEmpty ? '' : ' • wyszukiwanie'}',
             ),
@@ -251,8 +242,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                         (value) => ChoiceChip(
                           label: Text(value),
                           selected: lifecycle == value,
-                          onSelected: (_) =>
-                              setState(() => lifecycle = value),
+                          onSelected: (_) => setState(() => lifecycle = value),
                         ),
                       )
                       .toList(),
@@ -292,9 +282,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                       onPressed: _openSearch,
                       icon: const Icon(Icons.search),
                       label: Text(
-                        query.isEmpty
-                            ? 'Szukaj w alertach'
-                            : 'Szukaj: $query',
+                        query.isEmpty ? 'Szukaj w alertach' : 'Szukaj: $query',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
