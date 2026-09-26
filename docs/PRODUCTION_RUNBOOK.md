@@ -48,13 +48,17 @@ deployment commit == oczekiwany GitHub main HEAD
 
 Jeżeli którykolwiek z tych warunków nie jest spełniony, deployment jest niespójny.
 
-## Aktualny Railway podczas audytu 2026-09-26
+## Aktualny Railway — 2026-09-26
 
 Główna usługa:
 
 ```text
 api
 https://api-production-b6560.up.railway.app
+source repo: mmaatteusz/bezpieczna-polska
+source branch: main
+root: /backend
+healthcheck: /ready
 ```
 
 Aktywna baza:
@@ -64,15 +68,9 @@ PostGIS 17
 service id: 9e760220-ba2e-4cea-b2b4-3fb4403a5102
 ```
 
-Znany problem:
+Wcześniejszy drift do `stage/alpha22-android-gui-wczk` został usunięty. Railway obserwuje `backend/**`, więc commit zmieniający wyłącznie aplikację mobilną może mieć deployment `SKIPPED` — jest to oczekiwane.
 
-```text
-api source branch: stage/alpha22-android-gui-wczk
-main: 659d90335f62e72a9c5548d06c9dd86cc9715768
-deployed commit: 83ed7b28d737f4c7c2ea72f6f0de76827345d299
-```
-
-Przed uznaniem Railway za poprawnie zsynchronizowany produkcyjnie należy przepiąć usługę na `main` i wykonać kontrolowany redeploy.
+Po deployowalnej zmianie backendu runtime audit czeka, aż `/health.buildSha` zrówna się z oczekiwanym commitem, a następnie wykonuje pełny smoke produkcji.
 
 ## Migracje
 
