@@ -135,15 +135,13 @@ class _ShelterMapState extends State<ShelterMap> {
         await c.setStyle(offlineStyle);
         if (mounted) {
           setState(
-            () => message =
-                'OFFLINE MAPA • podkład sieciowy nie odpowiedział. Uruchomiono lokalne płótno dla zapisanych overlayów.',
+            () => message = 'OFFLINE MAPA • podkład sieciowy nie odpowiedział. Uruchomiono lokalne płótno dla zapisanych overlayów.',
           );
         }
       } catch (_) {
         if (mounted) {
           setState(
-            () => message =
-                'Nie udało się uruchomić ani podkładu online, ani lokalnego płótna mapy.',
+            () => message = 'Nie udało się uruchomić ani podkładu online, ani lokalnego płótna mapy.',
           );
         }
       }
@@ -320,9 +318,7 @@ class _ShelterMapState extends State<ShelterMap> {
 
     final now = DateTime.now();
     final eventFeatures = showEvents && !showRadiation
-        ? contextEvents
-              .expand((event) => mapEventFeatures(event, now))
-              .toList()
+        ? contextEvents.expand((event) => mapEventFeatures(event, now)).toList()
         : <Map<String, dynamic>>[];
     final watchedFeatures = showWatched && !showRadiation
         ? widget.watchedLocations
@@ -424,8 +420,7 @@ class _ShelterMapState extends State<ShelterMap> {
         await syncContextLayers();
         if (!mounted || current != ticket) return;
         setState(() {
-          message =
-              'Widok Polski: schronienia są ukryte przy tym oddaleniu. Pokazuję aktywne zdarzenia jako czerwone punkty; alerty regionalne bez dokładnej lokalizacji są oznaczone symbolicznie w obrębie województwa.';
+          message = 'Widok Polski: schronienia są ukryte przy tym oddaleniu. Pokazuję aktywne zdarzenia jako czerwone punkty; alerty regionalne bez dokładnej lokalizacji są oznaczone symbolicznie w obrębie województwa.';
         });
         return;
       }
@@ -455,9 +450,7 @@ class _ShelterMapState extends State<ShelterMap> {
         viewport = result;
         renderedRequest = request;
         online = true;
-        message = result.freshAt(DateTime.now())
-            ? ''
-            : 'Połączono z serwerem, ale źródłowy wykaz schronień jest oznaczony jako STALE.';
+        message = result.freshAt(DateTime.now()) ? '' : 'Połączono z serwerem, ale źródłowy wykaz schronień jest oznaczony jako STALE.';
       });
     } catch (failure) {
       if (!mounted || current != ticket) return;
@@ -995,9 +988,8 @@ class _ShelterMapState extends State<ShelterMap> {
           Text(
             widget.radiation == null
                 ? message
-                : RadiationData.parse(
-                    widget.radiation,
-                  ).measurementText(DateTime.now(), widget.radiationOnline),
+                : RadiationData.parse(widget.radiation)
+                      .measurementText(DateTime.now(), widget.radiationOnline),
           ),
           const Text(
             'Komunikaty PAA są dostępne w Statusie i Alert Center. Brak punktów na mapie nie oznacza braku zagrożenia.',

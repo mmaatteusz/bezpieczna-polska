@@ -11,9 +11,9 @@ import 'package:bezpieczna_polska/map_layers.dart';
 
 final request = MapRequest([17.8, 53, 18.3, 53.3], 10, '04');
 Map<String, dynamic> fixture(MapRequest q) {
-  final shelter =
-      jsonDecode(File('test/fixtures/shelters.json').readAsStringSync())
-          as Map<String, dynamic>;
+  final shelter = jsonDecode(
+    File('test/fixtures/shelters.json').readAsStringSync(),
+  ) as Map<String, dynamic>;
   return {
     'type': 'FeatureCollection',
     'metadata': {
@@ -52,28 +52,25 @@ http.Response response(Map<String, dynamic> data) => http.Response(
 );
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
-  test(
-    'real PSP fixture: bounded viewport, health expiry, invalid region and incomplete clusters',
-    () {
-      final data = fixture(request),
-          v = MapViewport.parse(jsonEncode(data), request);
-      expect(v.data['features'].length, 3);
-      expect(v.freshAt(DateTime.parse('2026-09-19T12:30:00Z')), isTrue);
-      expect(v.freshAt(DateTime.parse('2026-09-22T12:30:00Z')), isFalse);
-      expect(
-        () => MapViewport.parse(
-          jsonEncode(data),
-          MapRequest(request.bbox, 10, '02'),
-        ),
-        throwsFormatException,
-      );
-      data['metadata']['total'] = 4;
-      expect(
-        () => MapViewport.parse(jsonEncode(data), request),
-        throwsFormatException,
-      );
-    },
-  );
+  test('real PSP fixture: bounded viewport, health expiry, invalid region and incomplete clusters', () {
+    final data = fixture(request),
+        v = MapViewport.parse(jsonEncode(data), request);
+    expect(v.data['features'].length, 3);
+    expect(v.freshAt(DateTime.parse('2026-09-19T12:30:00Z')), isTrue);
+    expect(v.freshAt(DateTime.parse('2026-09-22T12:30:00Z')), isFalse);
+    expect(
+      () => MapViewport.parse(
+        jsonEncode(data),
+        MapRequest(request.bbox, 10, '02'),
+      ),
+      throwsFormatException,
+    );
+    data['metadata']['total'] = 4;
+    expect(
+      () => MapViewport.parse(jsonEncode(data), request),
+      throwsFormatException,
+    );
+  });
   test('shelters are hidden on national overview zoom levels', () {
     expect(mapShowsShelters(10.5), isTrue);
     expect(mapShowsShelters(8.0), isTrue);
@@ -114,12 +111,14 @@ void main() {
     );
     expect(
       features.every(
-        (feature) =>
-            feature['properties']['mapLocationKind'] == 'REGION_SCOPE',
+        (feature) => feature['properties']['mapLocationKind'] == 'REGION_SCOPE',
       ),
       isTrue,
     );
-    expect(features.every((feature) => feature['geometry']['type'] == 'Point'), isTrue);
+    expect(
+      features.every((feature) => feature['geometry']['type'] == 'Point'),
+      isTrue,
+    );
   });
 
   test('exact event points stay exact and expired events disappear', () {
@@ -131,12 +130,7 @@ void main() {
       'revision': 1,
       'regions': ['04'],
       'sources': [
-        {
-          'id': 'TEST',
-          'name': 'Test',
-          'url': 'https://example.com',
-          'tier': 1,
-        },
+        {'id': 'TEST', 'name': 'Test', 'url': 'https://example.com', 'tier': 1},
       ],
       'lifecycle': 'ACTIVE',
       'messageContext': 'ACTUAL',
@@ -149,12 +143,11 @@ void main() {
     final features = mapEventFeatures(event, now);
     expect(features, hasLength(1));
     expect(features.single['geometry']['coordinates'], [18.2, 53.1]);
-    expect(
-      features.single['properties']['mapLocationKind'],
-      'EVENT_POINT',
-    );
+    expect(features.single['properties']['mapLocationKind'], 'EVENT_POINT');
 
-    event.data['validTo'] = now.subtract(const Duration(seconds: 1)).toIso8601String();
+    event.data['validTo'] = now
+        .subtract(const Duration(seconds: 1))
+        .toIso8601String();
     expect(mapEventFeatures(event, now), isEmpty);
   });
 
@@ -165,56 +158,47 @@ void main() {
     expect(q.bbox, [14.0, 49.0, 24.2, 55.0]);
   });
 
-  test(
-    'pan and zoom keep rendered markers but region/filter changes invalidate them',
-    () {
-      final rendered = MapRequest([17.8, 53, 18.3, 53.3], 10, '04', 'ALL');
-      expect(
-        mapDatasetChanged(
-          rendered,
-          MapRequest([17.9, 53.05, 18.4, 53.35], 11, '04', 'ALL'),
-        ),
-        isFalse,
-      );
-      expect(
-        mapDatasetChanged(rendered, MapRequest(rendered.bbox, 10, '14', 'ALL')),
-        isTrue,
-      );
-      expect(
-        mapDatasetChanged(rendered, MapRequest(rendered.bbox, 10, '04', '24H')),
-        isTrue,
-      );
-    },
-  );
+  test('pan and zoom keep rendered markers but region/filter changes invalidate them', () {
+    final rendered = MapRequest([17.8, 53, 18.3, 53.3], 10, '04', 'ALL');
+    expect(
+      mapDatasetChanged(
+        rendered,
+        MapRequest([17.9, 53.05, 18.4, 53.35], 11, '04', 'ALL'),
+      ),
+      isFalse,
+    );
+    expect(
+      mapDatasetChanged(rendered, MapRequest(rendered.bbox, 10, '14', 'ALL')),
+      isTrue,
+    );
+    expect(
+      mapDatasetChanged(rendered, MapRequest(rendered.bbox, 10, '04', '24H')),
+      isTrue,
+    );
+  });
 
-  test(
-    'backend bbox/filter sent automatically; offline retains last known good only for same viewport',
-    () async {
-      var fail = false;
-      final repo = DataRepository(
-        await SharedPreferences.getInstance(),
-        buildApi: 'https://build.example',
-        client: MockClient((r) async {
-          expect(r.url.path, '/v1/map/shelters');
-          expect(r.url.queryParameters, request.query);
-          if (fail) throw Exception('offline');
-          return response(fixture(request));
-        }),
-      );
-      final provider = ShelterMapProvider(repo);
-      await provider.fetch(request);
-      fail = true;
-      await expectLater(provider.fetch(request), throwsException);
-      expect(provider.cached(request), isNotNull);
-      expect(provider.cached(MapRequest([18, 53, 19, 54], 10, '04')), isNull);
-      expect(
-        provider.cached(MapRequest(request.bbox, 10, '04', '24H')),
-        isNull,
-      );
-      await repo.clearData();
-      expect(provider.cached(request), isNull);
-    },
-  );
+  test('backend bbox/filter sent automatically; offline retains last known good only for same viewport', () async {
+    var fail = false;
+    final repo = DataRepository(
+      await SharedPreferences.getInstance(),
+      buildApi: 'https://build.example',
+      client: MockClient((r) async {
+        expect(r.url.path, '/v1/map/shelters');
+        expect(r.url.queryParameters, request.query);
+        if (fail) throw Exception('offline');
+        return response(fixture(request));
+      }),
+    );
+    final provider = ShelterMapProvider(repo);
+    await provider.fetch(request);
+    fail = true;
+    await expectLater(provider.fetch(request), throwsException);
+    expect(provider.cached(request), isNotNull);
+    expect(provider.cached(MapRequest([18, 53, 19, 54], 10, '04')), isNull);
+    expect(provider.cached(MapRequest(request.bbox, 10, '04', '24H')), isNull);
+    await repo.clearData();
+    expect(provider.cached(request), isNull);
+  });
   test(
     'bad response keeps valid cache and cache is bounded to four viewports',
     () async {

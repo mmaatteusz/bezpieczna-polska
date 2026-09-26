@@ -72,10 +72,7 @@ bool mapEventIsLive(SafetyEvent event, DateTime now) {
   return validTo == null || validTo.isAfter(now);
 }
 
-List<Map<String, dynamic>> mapEventFeatures(
-  SafetyEvent event,
-  DateTime now,
-) {
+List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
   if (!mapEventIsLive(event, now)) return const [];
 
   if (event.hasPoint) {
