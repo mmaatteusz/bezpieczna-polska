@@ -1,9 +1,11 @@
 import 'radiation.dart';
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
@@ -172,6 +174,28 @@ class _ShelterMapState extends State<ShelterMap> {
     if (c == null) return;
     styleFallback?.cancel();
     try {
+      if (!widget.ukraine) {
+        final voivodeships =
+            jsonDecode(
+                  await rootBundle.loadString(
+                    'assets/poland_voivodeships_min.geojson',
+                  ),
+                )
+                as Map<String, dynamic>;
+        await c.addSource(
+          'voivodeships',
+          GeojsonSourceProperties(data: voivodeships),
+        );
+        await c.addLineLayer(
+          'voivodeships',
+          'voivodeship-borders',
+          const LineLayerProperties(
+            lineColor: '#5f6b73',
+            lineWidth: 1.0,
+            lineOpacity: 0.30,
+          ),
+        );
+      }
       await c.addSource('radiation', GeojsonSourceProperties(data: empty));
       await c.addCircleLayer(
         'radiation',

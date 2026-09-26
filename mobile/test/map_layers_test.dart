@@ -52,6 +52,24 @@ http.Response response(Map<String, dynamic> data) => http.Response(
 );
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test('Poland map boundary asset contains all 16 voivodeships', () {
+    final data =
+        jsonDecode(
+              File('assets/poland_voivodeships_min.geojson').readAsStringSync(),
+            )
+            as Map<String, dynamic>;
+    final features = (data['features'] as List).cast<Map>();
+    expect(data['type'], 'FeatureCollection');
+    expect(features, hasLength(16));
+    expect(
+      features
+          .map((feature) => (feature['properties'] as Map)['nazwa'])
+          .whereType<String>()
+          .toSet(),
+      hasLength(16),
+    );
+  });
   test(
     'real PSP fixture: bounded viewport, health expiry, invalid region and incomplete clusters',
     () {
