@@ -136,11 +136,13 @@ flutter analyze
 flutter test
 ```
 
-Build preview:
+Lokalny build używa domyślnie osobnego pakietu developerskiego `pl.bezpiecznapolska.dev`, żeby przypadkowy debug keystore nie zerwał zgodności aktualizacji preview:
 
 ```sh
 API_BASE_URL=https://api-production-b6560.up.railway.app bash scripts/build-android.sh
 ```
+
+Dystrybuowalny preview `pl.bezpiecznapolska.preview` należy pobierać z GitHub Actions. Jest podpisywany stałym preview keystore, dostaje monotoniczny CI `versionCode` i przechodzi osobny test aktualizacji APK „na siebie” przez Android PackageManager.
 
 ## Backend
 
