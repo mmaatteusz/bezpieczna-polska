@@ -33,6 +33,10 @@ MapRequest shelterViewportRequest(
   String availability = 'ALL',
 ]) => MapRequest(bbox, zoom, 'PL', availability);
 
+const double shelterDetailZoom = 8.0;
+
+bool mapShowsShelters(double zoom) => zoom >= shelterDetailZoom;
+
 bool mapDatasetChanged(MapRequest? rendered, MapRequest next) =>
     rendered != null &&
     (rendered.region != next.region ||
