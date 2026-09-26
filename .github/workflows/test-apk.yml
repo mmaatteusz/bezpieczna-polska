@@ -42,7 +42,7 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          flutter build apk --debug --split-per-abi --target-platform android-arm64 \ --build-number="$PREVIEW_BUILD_NUMBER"
+          flutter build apk --debug --split-per-abi --target-platform android-arm64 --build-number="$PREVIEW_BUILD_NUMBER" \
             --dart-define=APP_ENV=preview \
             --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL" \
             --dart-define=ENABLE_DEVELOPER_SETTINGS=true
