@@ -1,5 +1,6 @@
 import {readFileSync} from 'node:fs';
 
+// Touchpoint for end-to-end verification of Railway backend autodeploy and runtime-audit convergence.
 const packageVersion=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')).version;
 const sleep=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
 const base=(process.env.SMOKE_BASE_URL||'').replace(/\/+$/,'');
