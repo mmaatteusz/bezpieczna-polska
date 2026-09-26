@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Preview APKs from different workflows share one package/signing identity.
-# Use UTC epoch minutes so every later CI build gets a non-decreasing base
-# versionCode regardless of which workflow produced it.
+# Use UTC epoch seconds so later CI builds get a strictly increasing base
+# versionCode in normal operation, regardless of which workflow produced them.
 epoch_seconds="${SOURCE_DATE_EPOCH:-$(date -u +%s)}"
 
 if ! [[ "$epoch_seconds" =~ ^[0-9]+$ ]]; then
@@ -11,7 +11,7 @@ if ! [[ "$epoch_seconds" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-build_number=$((epoch_seconds / 60))
+build_number=$epoch_seconds
 
 # Android's documented maximum versionCode is 2,100,000,000.
 # Flutter split-per-ABI arm64 builds add 2000 to the base build number,
