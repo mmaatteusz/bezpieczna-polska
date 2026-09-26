@@ -202,6 +202,8 @@ Release gate przed budową porównuje faktyczny certyfikat z przypiętym SHA-256
 
 Dla release tagów workflow dodatkowo wymaga, aby build number z `mobile/pubspec.yaml` był większy od maksymalnego build number wcześniejszych tagów. Chroni to zarówno bezpośrednie APK, jak i AAB przed przypadkowym cofnięciem `versionCode`.
 
+Produkcyjny AAB i bezpośredni arm64 APK używają **tego samego `versionCode`**. Produkcyjnego APK nie budujemy z `--split-per-abi`, ponieważ Flutter dodaje wtedy offset ABI (np. +2000 dla arm64), co rozdzieliłoby numerację bezpośredniego APK i Google Play dla tego samego pakietu.
+
 Po buildzie sprawdź:
 
 - package id,
