@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../model.dart';
 import '../neptun.dart';
+import '../security_levels.dart';
 import '../shelter_panel.dart';
 import '../watched_locations_panel.dart';
 
@@ -25,6 +28,18 @@ class MoreScreen extends StatelessWidget {
     required this.call112,
     this.onWatchedLocationsChanged,
   });
+
+  void _openSecurityLevels(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SecurityLevelsScreen(
+          snapshot: snapshot,
+          online: online,
+          openSource: (url) => unawaited(openLink(url)),
+        ),
+      ),
+    );
+  }
 
   void _openShelters(BuildContext context) {
     Navigator.of(context).push(
@@ -56,6 +71,12 @@ class MoreScreen extends StatelessWidget {
     key: const PageStorageKey('more'),
     padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
     children: [
+      _ActionCard(
+        icon: Icons.security_outlined,
+        title: 'Stopnie alarmowe',
+        subtitle: 'BRAVO, CHARLIE i CRP — zakres, termin i oficjalne źródło',
+        onTap: () => _openSecurityLevels(context),
+      ),
       _ActionCard(
         icon: Icons.home_work_outlined,
         title: 'Schronienia',
