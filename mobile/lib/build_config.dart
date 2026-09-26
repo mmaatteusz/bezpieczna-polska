@@ -30,12 +30,10 @@ void validateBuildConfiguration({
       !host.contains('.') ||
       host == 'localhost' ||
       host.endsWith('.localhost') ||
-      RegExp(
-        r'(^|\.)(local|test|example|invalid|example\.(com|org|net))$',
-      ).hasMatch(host) ||
-      RegExp(
-        r'(^|[.-])(dev|development|staging|preview)([.-]|$)',
-      ).hasMatch(host) ||
+      RegExp(r'(^|\.)(local|test|example|invalid|example\.(com|org|net))$')
+          .hasMatch(host) ||
+      RegExp(r'(^|[.-])(dev|development|staging|preview)([.-]|$)')
+          .hasMatch(host) ||
       RegExp(
         r'^(127\.|10\.|192\.168\.|169\.254\.|0\.|172\.(1[6-9]|2\d|3[01])\.)',
       ).hasMatch(host) ||

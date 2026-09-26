@@ -12,9 +12,9 @@ import 'package:bezpieczna_polska/security_levels.dart';
 import 'model_test.dart' show data, response;
 
 Map<String, dynamic> levelsData() {
-  final report =
-      jsonDecode(File('test/fixtures/security-levels.json').readAsStringSync())
-          as Map;
+  final report = jsonDecode(
+    File('test/fixtures/security-levels.json').readAsStringSync(),
+  ) as Map;
   final status = report['status'] as Map;
   return {
     ...data(),
@@ -45,36 +45,32 @@ void main() {
     expect(levelsFresh(d, false, now), isFalse);
     expect(levelsFresh(d, true, now.add(const Duration(hours: 3))), isFalse);
     expect(
-      SecurityLevel.parse(
-        (d['securityLevels'] as List).first,
-      ).validAt(DateTime.parse('2026-12-01')),
+      SecurityLevel.parse((d['securityLevels'] as List).first)
+          .validAt(DateTime.parse('2026-12-01')),
       isFalse,
     );
   });
-  test(
-    'cache persists, malformed source does not overwrite, region/server isolation',
-    () async {
-      final prefs = await SharedPreferences.getInstance();
-      var fail = false;
-      final r = DataRepository(
-        prefs,
-        buildApi: 'https://api.example',
-        client: MockClient(
-          (_) async => fail ? http.Response('{}', 200) : response(levelsData()),
-        ),
-      );
-      await r.refresh('04');
-      expect(r.cached('04')!.data['securityLevels'], hasLength(3));
-      fail = true;
-      await expectLater(r.refresh('04'), throwsA(anything));
-      expect(r.cached('04')!.data['securityLevels'], hasLength(3));
-      expect(r.cached('14'), isNull);
-      await r.setDeveloperApi('https://other.example');
-      expect(r.cached('04'), isNull);
-      await r.clearData();
-      expect(prefs.getKeys().where((k) => k.startsWith('snapshot:')), isEmpty);
-    },
-  );
+  test('cache persists, malformed source does not overwrite, region/server isolation', () async {
+    final prefs = await SharedPreferences.getInstance();
+    var fail = false;
+    final r = DataRepository(
+      prefs,
+      buildApi: 'https://api.example',
+      client: MockClient(
+        (_) async => fail ? http.Response('{}', 200) : response(levelsData()),
+      ),
+    );
+    await r.refresh('04');
+    expect(r.cached('04')!.data['securityLevels'], hasLength(3));
+    fail = true;
+    await expectLater(r.refresh('04'), throwsA(anything));
+    expect(r.cached('04')!.data['securityLevels'], hasLength(3));
+    expect(r.cached('14'), isNull);
+    await r.setDeveloperApi('https://other.example');
+    expect(r.cached('04'), isNull);
+    await r.clearData();
+    expect(prefs.getKeys().where((k) => k.startsWith('snapshot:')), isEmpty);
+  });
   testWidgets(
     'offline section labels saved copy, source links, infrastructure and 200 percent text',
     (tester) async {

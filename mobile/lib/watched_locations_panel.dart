@@ -52,8 +52,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
   Future<Position?> _position() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       setState(
-        () => message =
-            'Lokalizacja w telefonie jest wyłączona. Możesz wyszukać miasto lub wieś.',
+        () => message = 'Lokalizacja w telefonie jest wyłączona. Możesz wyszukać miasto lub wieś.',
       );
       return null;
     }
@@ -63,15 +62,13 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
     }
     if (permission == LocationPermission.denied) {
       setState(
-        () => message =
-            'Bez zgody na lokalizację nie można użyć „Wokół mnie”. Możesz wyszukać miasto lub wieś.',
+        () => message = 'Bez zgody na lokalizację nie można użyć „Wokół mnie”. Możesz wyszukać miasto lub wieś.',
       );
       return null;
     }
     if (permission == LocationPermission.deniedForever) {
       setState(
-        () => message =
-            'Dostęp do lokalizacji jest zablokowany w ustawieniach systemu. Możesz dodać miejsce ręcznie.',
+        () => message = 'Dostęp do lokalizacji jest zablokowany w ustawieniach systemu. Możesz dodać miejsce ręcznie.',
       );
       return null;
     }
@@ -84,8 +81,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
       );
     } on TimeoutException {
       setState(
-        () => message =
-            'Nie udało się ustalić pozycji w wymaganym czasie. Spróbuj ponownie lub dodaj miejsce ręcznie.',
+        () => message = 'Nie udało się ustalić pozycji w wymaganym czasie. Spróbuj ponownie lub dodaj miejsce ręcznie.',
       );
       return null;
     }
@@ -285,8 +281,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                       } catch (_) {
                         setDialogState(() {
                           searching = false;
-                          validation =
-                              'Nie znaleziono tej miejscowości. Dopisz powiat lub województwo i spróbuj ponownie.';
+                          validation = 'Nie znaleziono tej miejscowości. Dopisz powiat lub województwo i spróbuj ponownie.';
                         });
                       }
                     },
@@ -343,8 +338,7 @@ class _WatchedLocationsPanelState extends State<WatchedLocationsPanel> {
                             } catch (_) {
                               setDialogState(() {
                                 searching = false;
-                                validation =
-                                    'Nie znaleziono tej miejscowości. Dopisz powiat lub województwo i spróbuj ponownie.';
+                                validation = 'Nie znaleziono tej miejscowości. Dopisz powiat lub województwo i spróbuj ponownie.';
                               });
                             }
                           },

@@ -44,36 +44,33 @@ void main() {
     },
   );
 
-  test(
-    'build URL, region and query isolation; bounded cache and clear invalidation',
-    () async {
-      final prefs = await SharedPreferences.getInstance();
-      final pending = Completer<http.Response>();
-      var delay = false;
-      final r = DataRepository(
-        prefs,
-        buildApi: 'https://build.example',
-        client: MockClient((request) async {
-          expect(request.url.path, '/v1/shelters');
-          expect(request.url.queryParameters['regionId'], '04');
-          expect(request.url.queryParameters['q'], 'Bydgoszcz');
-          return delay ? pending.future : response(fixture());
-        }),
-      );
-      await r.refreshShelters('04', query: ' Bydgoszcz ');
-      expect(r.cachedShelters('04')?.items.length, 3);
-      expect(r.cachedShelters('02'), isNull);
-      final other = DataRepository(prefs, buildApi: 'https://other.example');
-      expect(other.cachedShelters('04'), isNull);
-      delay = true;
-      final late = r.refreshShelters('04', query: 'Bydgoszcz');
-      final assertion = expectLater(late, throwsStateError);
-      await r.clearData();
-      pending.complete(response(fixture()));
-      await assertion;
-      expect(r.cachedShelters('04'), isNull);
-    },
-  );
+  test('build URL, region and query isolation; bounded cache and clear invalidation', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final pending = Completer<http.Response>();
+    var delay = false;
+    final r = DataRepository(
+      prefs,
+      buildApi: 'https://build.example',
+      client: MockClient((request) async {
+        expect(request.url.path, '/v1/shelters');
+        expect(request.url.queryParameters['regionId'], '04');
+        expect(request.url.queryParameters['q'], 'Bydgoszcz');
+        return delay ? pending.future : response(fixture());
+      }),
+    );
+    await r.refreshShelters('04', query: ' Bydgoszcz ');
+    expect(r.cachedShelters('04')?.items.length, 3);
+    expect(r.cachedShelters('02'), isNull);
+    final other = DataRepository(prefs, buildApi: 'https://other.example');
+    expect(other.cachedShelters('04'), isNull);
+    delay = true;
+    final late = r.refreshShelters('04', query: 'Bydgoszcz');
+    final assertion = expectLater(late, throwsStateError);
+    await r.clearData();
+    pending.complete(response(fixture()));
+    await assertion;
+    expect(r.cachedShelters('04'), isNull);
+  });
 
   test(
     'failed response keeps the last good page; version conflict is explicit',

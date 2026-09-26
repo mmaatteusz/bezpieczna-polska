@@ -515,17 +515,13 @@ class PushManager extends ChangeNotifier {
     try {
       final result = Map<String, dynamic>.from(
         await _jsonRequest(
-              update ? 'PUT' : 'POST',
-              _uri(
-                update ? '/v1/push/devices/${identity.id}' : '/v1/push/devices',
-              ),
-              identity.secret,
-              body: update
-                  ? (Map<String, dynamic>.from(payload)
-                      ..remove('installationId'))
-                  : payload,
-            )
-            as Map,
+          update ? 'PUT' : 'POST',
+          _uri(update ? '/v1/push/devices/${identity.id}' : '/v1/push/devices'),
+          identity.secret,
+          body: update
+              ? (Map<String, dynamic>.from(payload)..remove('installationId'))
+              : payload,
+        ) as Map,
       );
       await repository.prefs.setBool(_registeredKey, true);
       _setState(
@@ -558,11 +554,10 @@ class PushManager extends ChangeNotifier {
     try {
       final result = Map<String, dynamic>.from(
         await _jsonRequest(
-              'GET',
-              _uri('/v1/push/devices/${identity.id}'),
-              identity.secret,
-            )
-            as Map,
+          'GET',
+          _uri('/v1/push/devices/${identity.id}'),
+          identity.secret,
+        ) as Map,
       );
       final registered = result['registered'] == true;
       await repository.prefs.setBool(_registeredKey, registered);

@@ -161,17 +161,14 @@ http.Response jsonResponse(Object value, int status) => http.Response.bytes(
 );
 
 void main() {
-  test(
-    'status entry point wording advertises live data without precise-motion claims',
-    () {
-      final source = File('lib/screens/more_screen.dart').readAsStringSync();
-      expect(source, contains("title: 'NEPTUN'"));
-      expect(source, contains('Bieżące zgrubne zagrożenia i historia'));
-      expect(source, isNot(contains('kursu')));
-      expect(source, isNot(contains('prędkości')));
-      expect(source, isNot(contains('predykcji ruchu')));
-    },
-  );
+  test('status entry point wording advertises live data without precise-motion claims', () {
+    final source = File('lib/screens/more_screen.dart').readAsStringSync();
+    expect(source, contains("title: 'NEPTUN'"));
+    expect(source, contains('Bieżące zgrubne zagrożenia i historia'));
+    expect(source, isNot(contains('kursu')));
+    expect(source, isNot(contains('prędkości')));
+    expect(source, isNot(contains('predykcji ruchu')));
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   final now = DateTime.utc(2026, 9, 22, 12);
 
@@ -230,28 +227,25 @@ void main() {
     expect(neptunThreatForFeature(data, const <String, dynamic>{}), isNull);
   });
 
-  test(
-    'NEPTUN persistence is throttled independently from five-second live refresh',
-    () {
-      final first = NeptunData.parse(fixture(now));
-      final fiveSecondsLater = NeptunData.parse(
-        fixture(now.add(const Duration(seconds: 5))),
-      );
-      final thirtySecondsLater = NeptunData.parse(
-        fixture(now.add(const Duration(seconds: 30))),
-      );
-      expect(shouldPersistNeptunCache(null, first), isTrue);
-      expect(shouldPersistNeptunCache(first, fiveSecondsLater), isFalse);
-      expect(shouldPersistNeptunCache(first, thirtySecondsLater), isTrue);
+  test('NEPTUN persistence is throttled independently from five-second live refresh', () {
+    final first = NeptunData.parse(fixture(now));
+    final fiveSecondsLater = NeptunData.parse(
+      fixture(now.add(const Duration(seconds: 5))),
+    );
+    final thirtySecondsLater = NeptunData.parse(
+      fixture(now.add(const Duration(seconds: 30))),
+    );
+    expect(shouldPersistNeptunCache(null, first), isTrue);
+    expect(shouldPersistNeptunCache(first, fiveSecondsLater), isFalse);
+    expect(shouldPersistNeptunCache(first, thirtySecondsLater), isTrue);
 
-      final changedState = fixture(now.add(const Duration(seconds: 5)));
-      changedState['live']['state'] = 'STALE';
-      expect(
-        shouldPersistNeptunCache(first, NeptunData.parse(changedState)),
-        isTrue,
-      );
-    },
-  );
+    final changedState = fixture(now.add(const Duration(seconds: 5)));
+    changedState['live']['state'] = 'STALE';
+    expect(
+      shouldPersistNeptunCache(first, NeptunData.parse(changedState)),
+      isTrue,
+    );
+  });
 
   test(
     'NEPTUN last-known-good survives failure and clear removes it',

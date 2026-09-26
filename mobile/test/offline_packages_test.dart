@@ -263,9 +263,9 @@ void main() {
     await store.commit(first);
     await store.commit(second);
 
-    final decoded =
-        jsonDecode((await store.debugReadActiveRaw('04'))!)
-            as Map<String, dynamic>;
+    final decoded = jsonDecode(
+      (await store.debugReadActiveRaw('04'))!,
+    ) as Map<String, dynamic>;
     final manifest = Map<String, dynamic>.from(decoded['manifest'] as Map);
     manifest['checksum'] = {'algorithm': 'SHA-256', 'value': '00'};
     decoded['manifest'] = manifest;
@@ -281,9 +281,9 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     final store = OfflinePackageStore(prefs);
     await store.commit(package());
-    final envelope =
-        jsonDecode((await store.debugReadActiveRaw('04'))!)
-            as Map<String, dynamic>;
+    final envelope = jsonDecode(
+      (await store.debugReadActiveRaw('04'))!,
+    ) as Map<String, dynamic>;
     (envelope['payload'] as Map)['watchedLocations'] = [
       {'id': 'tampered'},
     ];
@@ -319,10 +319,9 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       final store = OfflinePackageStore(prefs);
       await store.commit(package());
-      final decoded =
-          jsonDecode((await store.debugReadActiveRaw('04'))!)
-                as Map<String, dynamic>
-            ..['schemaVersion'] = 99;
+      final decoded = jsonDecode(
+        (await store.debugReadActiveRaw('04'))!,
+      ) as Map<String, dynamic>..['schemaVersion'] = 99;
       await store.debugOverwriteActiveRaw('04', jsonEncode(decoded));
       final listed = await store.list();
       expect(listed.single.state, OfflinePackageState.refreshRequired);

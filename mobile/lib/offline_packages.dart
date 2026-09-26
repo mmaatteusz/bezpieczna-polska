@@ -177,9 +177,8 @@ class OfflineRegionPackage {
     }
     final region = manifest['regionId'] as String;
     if (region != 'PL' &&
-        !RegExp(
-          r'^(02|04|06|08|10|12|14|16|18|20|22|24|26|28|30|32)$',
-        ).hasMatch(region)) {
+        !RegExp(r'^(02|04|06|08|10|12|14|16|18|20|22|24|26|28|30|32)$')
+            .hasMatch(region)) {
       throw const OfflinePackageException('INVALID_REGION');
     }
     try {

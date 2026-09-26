@@ -156,9 +156,8 @@ extension OfflineRepository on DataRepository {
     final package = OfflineRegionPackage.create(
       regionId: regionId,
       createdAt: DateTime.now().toUtc(),
-      snapshotTimestamp: DateTime.parse(
-        snapshot.data['serverTime'] as String,
-      ).toUtc(),
+      snapshotTimestamp: DateTime.parse(snapshot.data['serverTime'] as String)
+          .toUtc(),
       snapshot: snapshot.data,
       shelters: shelters,
       watchedLocations: watchedLocations.map((item) => item.toJson()).toList(),
