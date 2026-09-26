@@ -104,8 +104,9 @@ class _ShelterMapState extends State<ShelterMap> {
   ShelterMapProvider get provider => ShelterMapProvider(widget.repository);
   Map<String, dynamic>? get currentRadiation =>
       radiationOverride ?? widget.radiation;
-  bool get currentRadiationOnline =>
-      radiationOverride != null ? radiationOverrideOnline : widget.radiationOnline;
+  bool get currentRadiationOnline => radiationOverride != null
+      ? radiationOverrideOnline
+      : widget.radiationOnline;
 
   bool get currentRadiationHasPoints {
     final raw = currentRadiation;
