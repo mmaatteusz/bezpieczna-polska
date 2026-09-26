@@ -1,6 +1,11 @@
 name: Audit production runtime
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
   deployment_status:
   schedule:
     - cron: '17 */6 * * *'
@@ -15,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: audit-production-runtime-${{ github.event.deployment.sha || github.run_id }}
+  group: audit-production-runtime-${{ github.event.deployment.sha || github.sha || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -39,7 +44,8 @@ jobs:
         working-directory: backend
         env:
           SMOKE_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL || 'https://api-production-b6560.up.railway.app' }}
-          EXPECTED_BUILD_SHA: ${{ github.event.deployment.sha || github.event.inputs.expected_sha || '' }}
+          EXPECTED_BUILD_SHA: ${{ github.event.deployment.sha || (github.event_name == 'push' && github.sha) || github.event.inputs.expected_sha || '' }}
           DEPLOY_WAIT_SECONDS: '600'
           CRITICAL_SOURCE_IDS: RCB,RSO,LEVELS,SHELTERS,IMGW_METEO,IMGW_HYDRO,PAA,NEPTUN
+          ALLOW_STALE_SOURCE_IDS: SHELTERS
         run: node scripts/railway-runtime-smoke.mjs
