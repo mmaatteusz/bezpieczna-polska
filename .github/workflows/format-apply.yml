@@ -1,0 +1,33 @@
+name: Temporary Dart format apply
+
+on:
+  push:
+    branches:
+      - stage/paa-measurements
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: stage/paa-measurements
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.4'
+          cache: true
+      - name: Format and commit
+        run: |
+          dart format mobile/lib/shelter_map.dart
+          if ! git diff --quiet -- mobile/lib/shelter_map.dart; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add mobile/lib/shelter_map.dart
+            git commit -m "style(map): apply Dart formatter"
+            git push origin HEAD:stage/paa-measurements
+          fi
