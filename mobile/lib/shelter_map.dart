@@ -32,6 +32,7 @@ class _MapLegend extends StatelessWidget {
           _MapLegendItem(color: Color(0xffb3261e), label: 'Alerty'),
           _MapLegendItem(color: Color(0xff1565c0), label: 'IMGW'),
           _MapLegendItem(color: Color(0xff2e7d32), label: 'Schrony'),
+          _MapLegendItem(color: Color(0xff7563b8), label: 'PAA'),
         ],
       ),
     ),
@@ -367,13 +368,12 @@ class _ShelterMapState extends State<ShelterMap> {
 
   void scheduleOnlineRetry() {
     onlineRetry?.cancel();
-    if (!mounted || widget.ukraine || showRadiation || !ready) return;
+    if (!mounted || widget.ukraine || !ready) return;
     onlineRetry = Timer(const Duration(seconds: 15), () {
       if (!mounted ||
           !ready ||
           loading ||
           online ||
-          showRadiation ||
           widget.ukraine) {
         return;
       }
@@ -408,10 +408,10 @@ class _ShelterMapState extends State<ShelterMap> {
     if (!ready || c == null || widget.ukraine) return;
 
     final now = DateTime.now();
-    final eventFeatures = showEvents && !showRadiation
+    final eventFeatures = showEvents
         ? contextEvents.expand((event) => mapEventFeatures(event, now)).toList()
         : <Map<String, dynamic>>[];
-    final watchedFeatures = showWatched && !showRadiation
+    final watchedFeatures = showWatched
         ? widget.watchedLocations
               .map(
                 (location) => {
@@ -456,7 +456,6 @@ class _ShelterMapState extends State<ShelterMap> {
         throw const FormatException('Obszar poza zakresem');
       }
       if (showRadiation) {
-        await syncContextLayers();
         final data = widget.radiation == null
             ? null
             : RadiationData.parse(widget.radiation);
@@ -472,7 +471,6 @@ class _ShelterMapState extends State<ShelterMap> {
                   p['latitude'] <= north,
             )
             .toList();
-        await c.setGeoJsonSource('shelters', empty);
         await c.setGeoJsonSource('radiation', {
           'type': 'FeatureCollection',
           'features': visible
@@ -488,16 +486,9 @@ class _ShelterMapState extends State<ShelterMap> {
               )
               .toList(),
         });
-        if (!mounted || current != ticket) return;
-        setState(() {
-          viewport = null;
-          message =
-              data?.measurementText(DateTime.now(), widget.radiationOnline) ??
-              'PAA: brak danych pomiarowych';
-        });
-        return;
+      } else {
+        await c.setGeoJsonSource('radiation', empty);
       }
-      await c.setGeoJsonSource('radiation', empty);
       final zoom = (c.cameraPosition?.zoom ?? 5).clamp(0, 22).toDouble();
       if (!mapShowsShelters(zoom)) {
         if (!overviewMode) {
@@ -596,23 +587,24 @@ class _ShelterMapState extends State<ShelterMap> {
         final points = await c.queryRenderedFeatures(point, [
           'radiation-points',
         ], null);
-        if (points.isEmpty || !mounted) return;
-        final p = (points.first as Map)['properties'] as Map;
-        final data = widget.radiation == null
-            ? null
-            : RadiationData.parse(widget.radiation);
-        await showModalBottomSheet<void>(
-          context: context,
-          builder: (_) => SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                '${p['name']}\n${p['value']} ${p['unit']}\nPomiar: ${stamp(p['measuredAt'])}\n${data?.measurementText(DateTime.now(), widget.radiationOnline) ?? 'STALE'}\nPomiar nie jest alarmem.',
+        if (points.isNotEmpty && mounted) {
+          final p = (points.first as Map)['properties'] as Map;
+          final data = widget.radiation == null
+              ? null
+              : RadiationData.parse(widget.radiation);
+          await showModalBottomSheet<void>(
+            context: context,
+            builder: (_) => SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  '${p['name']}\n${p['value']} ${p['unit']}\nPomiar: ${stamp(p['measuredAt'])}\n${data?.measurementText(DateTime.now(), widget.radiationOnline) ?? 'STALE'}\nPomiar nie jest alarmem.',
+                ),
               ),
             ),
-          ),
-        );
-        return;
+          );
+          return;
+        }
       }
       final contextHits = await c.queryRenderedFeatures(point, [
         'event-alert-points',
@@ -877,26 +869,22 @@ class _ShelterMapState extends State<ShelterMap> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Zdarzenia'),
-                  value: showEvents && !showRadiation,
-                  onChanged: showRadiation
-                      ? null
-                      : (value) {
-                          setState(() => showEvents = value);
-                          update(() {});
-                          unawaited(syncContextLayers());
-                        },
+                  value: showEvents,
+                  onChanged: (value) {
+                    setState(() => showEvents = value);
+                    update(() {});
+                    unawaited(syncContextLayers());
+                  },
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Obserwowane miejsca'),
-                  value: showWatched && !showRadiation,
-                  onChanged: showRadiation
-                      ? null
-                      : (value) {
-                          setState(() => showWatched = value);
-                          update(() {});
-                          unawaited(syncContextLayers());
-                        },
+                  value: showWatched,
+                  onChanged: (value) {
+                    setState(() => showWatched = value);
+                    update(() {});
+                    unawaited(syncContextLayers());
+                  },
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -909,8 +897,7 @@ class _ShelterMapState extends State<ShelterMap> {
                     unawaited(refresh());
                   },
                 ),
-                if (!showRadiation)
-                  DropdownButtonFormField<String>(
+                DropdownButtonFormField<String>(
                     key: ValueKey(availability),
                     initialValue: availability,
                     decoration: const InputDecoration(
@@ -1061,9 +1048,7 @@ class _ShelterMapState extends State<ShelterMap> {
                               vertical: 6,
                             ),
                             child: Text(
-                              showRadiation
-                                  ? 'PAA'
-                                  : overviewMode
+                              overviewMode
                                   ? 'ZDARZENIA • POLSKA'
                                   : online && viewport != null
                                   ? fresh
@@ -1076,10 +1061,8 @@ class _ShelterMapState extends State<ShelterMap> {
                             ),
                           ),
                         ),
-                        if (!showRadiation) ...[
-                          const SizedBox(height: 6),
-                          const _MapLegend(),
-                        ],
+                        const SizedBox(height: 6),
+                        const _MapLegend(),
                       ],
                     ),
                   ),
@@ -1109,7 +1092,7 @@ class _ShelterMapState extends State<ShelterMap> {
             child: const Text('Oficjalna mapa PAA'),
           ),
         ],
-        if (!widget.ukraine && !showRadiation) ...[
+        if (!widget.ukraine) ...[
           if (fallbackStyle)
             FilledButton.tonalIcon(
               onPressed: retryOnlineStyle,
