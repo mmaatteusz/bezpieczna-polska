@@ -306,10 +306,10 @@ class _ShelterMapState extends State<ShelterMap> {
     nationalEventsLoading = true;
     try {
       nationalSnapshot = await widget.repository.refresh('PL');
-      nationalEventsUpdatedAt = DateTime.now();
     } catch (_) {
       nationalSnapshot ??= widget.repository.cached('PL');
     } finally {
+      nationalEventsUpdatedAt = DateTime.now();
       nationalEventsLoading = false;
     }
   }
@@ -429,6 +429,7 @@ class _ShelterMapState extends State<ShelterMap> {
         if (!overviewMode) {
           setState(() => overviewMode = true);
         }
+        onlineRetry?.cancel();
         await c.setGeoJsonSource('shelters', empty);
         viewport = null;
         renderedRequest = null;
