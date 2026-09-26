@@ -320,10 +320,13 @@ class _AlertsScreenState extends State<AlertsScreen> {
   Widget build(BuildContext context) {
     final items = _displayItems();
     final sections = _regionSections(items);
-    final affectedProvinceCount = {
-      for (final item in items)
-        ...item.areas.where((code) => code != 'PL' && regions.containsKey(code)),
-    }.length;
+    final affectedProvinces = <String>{};
+    for (final item in items) {
+      affectedProvinces.addAll(
+        item.areas.where((code) => code != 'PL' && regions.containsKey(code)),
+      );
+    }
+    final affectedProvinceCount = affectedProvinces.length;
 
     final entries = <WidgetBuilder>[
       (context) => Row(
