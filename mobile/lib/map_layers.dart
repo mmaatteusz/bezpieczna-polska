@@ -32,6 +32,17 @@ bool mapDatasetChanged(MapRequest? rendered, MapRequest next) =>
     (rendered.region != next.region ||
         rendered.availability != next.availability);
 
+bool mapEventIsLive(SafetyEvent event, DateTime now) {
+  if (!event.hasPoint ||
+      event.data['lifecycle'] != 'ACTIVE' ||
+      event.data['messageContext'] != 'ACTUAL' ||
+      event.data['verification'] == 'REFUTED') {
+    return false;
+  }
+  final validTo = DateTime.tryParse(event.data['validTo']?.toString() ?? '');
+  return validTo == null || validTo.isAfter(now);
+}
+
 class MapViewport {
   final Map<String, dynamic> data;
   MapViewport._(this.data);
