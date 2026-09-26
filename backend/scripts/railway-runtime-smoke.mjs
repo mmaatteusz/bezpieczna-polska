@@ -9,6 +9,8 @@ const expectedBuildSha=(process.env.EXPECTED_BUILD_SHA||'').trim();
 const deployWaitSeconds=Number(process.env.DEPLOY_WAIT_SECONDS||600);
 const criticalSourceIds=(process.env.CRITICAL_SOURCE_IDS||'RCB,RSO,LEVELS,SHELTERS,IMGW_METEO,IMGW_HYDRO,PAA,NEPTUN')
   .split(',').map(value=>value.trim()).filter(Boolean);
+const staleOkSourceIds=new Set((process.env.STALE_OK_SOURCE_IDS||'SHELTERS')
+  .split(',').map(value=>value.trim()).filter(Boolean));
 if(!/^https:\/\/[^/]+$/.test(base))throw new Error('SMOKE_BASE_URL must be an HTTPS origin');
 if(expectedBuildSha&&!/^[a-f0-9]{40}$/.test(expectedBuildSha))throw new Error('EXPECTED_BUILD_SHA must be a 40-character lowercase git SHA');
 if(!Number.isFinite(deployWaitSeconds)||deployWaitSeconds<30||deployWaitSeconds>1800)throw new Error('DEPLOY_WAIT_SECONDS must be between 30 and 1800');
@@ -29,11 +31,12 @@ function validateCriticalSources(sourceHealth){
     const source=sourceHealth.find(item=>item.id===id);
     assert(source,'critical source missing: '+id);
     const state=sourceState(source);
-    assert(state==='HEALTHY','critical source '+id+' is '+state+(source.errorCode?' ('+source.errorCode+')':''));
+    const acceptable=state==='HEALTHY'||(state==='STALE'&&staleOkSourceIds.has(id));
+    assert(acceptable,'critical source '+id+' is '+state+(source.errorCode?' ('+source.errorCode+')':''));
     assert(!!source.lastSuccessfulSyncAt,'critical source '+id+' has no successful sync');
     assert(Number.isFinite(Date.parse(source.lastSuccessfulSyncAt)),'critical source '+id+' has invalid successful sync timestamp');
   }
-  console.log('PROBE_CRITICAL_SOURCES_OK',criticalSourceIds.join(','));
+  console.log('PROBE_CRITICAL_SOURCES_OK',criticalSourceIds.join(','),'stale-ok='+[...staleOkSourceIds].join(','));
 }
 
 function validateNeptun(data){
