@@ -279,7 +279,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   }
 
   Future<void> chooseLocality() async {
-    final queryController = TextEditingController();
+    var queryText = '';
     String? foundLabel;
     double? foundLatitude, foundLongitude;
     String? selectedRegion = localityRegionSeed(region);
@@ -301,8 +301,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: queryController,
                   autofocus: true,
+                  onChanged: (value) => queryText = value,
                   textInputAction: TextInputAction.search,
                   decoration: const InputDecoration(
                     labelText: 'Miasto lub wieś',
@@ -317,7 +317,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   onPressed: searching
                       ? null
                       : () async {
-                          final query = queryController.text.trim();
+                          final query = queryText.trim();
                           if (query.length < 2) {
                             update(
                               () => validation = 'Wpisz nazwę miejscowości.',
@@ -483,8 +483,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       }
       if (widget.repository.api.isNotEmpty) unawaited(startupSync());
     }
-
-    queryController.dispose();
   }
 
   List<SafetyEvent> get events => snapshot?.alertEvents ?? [];
@@ -784,9 +782,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
 
   Future<void> developerSettings() async {
     if (!widget.repository.developerSettingsEnabled) return;
-    final controller = TextEditingController(
-      text: widget.repository.developerApi,
-    );
+    var apiValue = widget.repository.developerApi;
     String? validation;
     await showDialog<void>(
       context: context,
@@ -802,8 +798,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   'Adres z buildu: ${widget.repository.buildApi.isEmpty ? "brak" : widget.repository.buildApi}',
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: controller,
+                TextFormField(
+                  initialValue: apiValue,
+                  onChanged: (value) => apiValue = value,
                   keyboardType: TextInputType.url,
                   autocorrect: false,
                   decoration: InputDecoration(
@@ -825,7 +822,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               onPressed: () async {
                 try {
                   ++generation;
-                  await widget.repository.setDeveloperApi(controller.text);
+                  await widget.repository.setDeveloperApi(apiValue);
                   if (dialog.mounted) Navigator.pop(dialog);
                   if (mounted) {
                     setState(() {
@@ -846,7 +843,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ),
       ),
     );
-    controller.dispose();
   }
 }
 
