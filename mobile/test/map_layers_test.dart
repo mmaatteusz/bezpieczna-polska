@@ -128,7 +128,11 @@ void main() {
     );
     expect(
       mapEventIsLive(
-        event(validTo: now.subtract(const Duration(seconds: 1)).toIso8601String()),
+        event(
+          validTo: now
+              .subtract(const Duration(seconds: 1))
+              .toIso8601String(),
+        ),
         now,
       ),
       isFalse,
