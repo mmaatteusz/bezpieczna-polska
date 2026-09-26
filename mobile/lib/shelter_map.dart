@@ -894,6 +894,10 @@ class _ShelterMapState extends State<ShelterMap> {
         return;
       }
       final shelter = ShelterPoint.parse(p);
+      final navigationUrl = shelterNavigationUrl(
+        latitude: (shelter.data['latitude'] as num).toDouble(),
+        longitude: (shelter.data['longitude'] as num).toDouble(),
+      );
       if (!mounted) return;
       await showModalBottomSheet<void>(
         context: context,
@@ -919,6 +923,18 @@ class _ShelterMapState extends State<ShelterMap> {
                   const Text(
                     'Ostatnie zapisane dane — aktualność niepotwierdzona',
                   ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      unawaited(widget.openLink(navigationUrl));
+                    },
+                    icon: const Icon(Icons.navigation_outlined),
+                    label: const Text('Nawiguj do schronu'),
+                  ),
+                ),
                 TextButton(
                   onPressed: () => widget.openLink(
                     'https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce',
