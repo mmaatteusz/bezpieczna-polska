@@ -8,7 +8,6 @@ Set<Factory<OneSequenceGestureRecognizer>> mapGestureRecognizers() =>
       Factory<EagerGestureRecognizer>(EagerGestureRecognizer.new),
     };
 
-
 String shelterNavigationUrl({
   required double latitude,
   required double longitude,
