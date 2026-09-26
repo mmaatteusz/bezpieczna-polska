@@ -187,8 +187,8 @@ class _ShelterMapState extends State<ShelterMap> {
           'voivodeship-borders',
           const LineLayerProperties(
             lineColor: '#5f6b73',
-            lineWidth: 1.1,
-            lineOpacity: 0.42,
+            lineWidth: 1.0,
+            lineOpacity: 0.30,
           ),
         );
       }
