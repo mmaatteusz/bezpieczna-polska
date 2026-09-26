@@ -106,6 +106,14 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.tap(find.byTooltip('Warstwy mapy'));
+    await tester.pumpAndSettle();
+    expect(find.text('Zakłócenia GNSS / GPS'), findsOneWidget);
+    expect(find.textContaining('oficjalny RTGMS'), findsOneWidget);
+    expect(find.textContaining('status stacji co 1 min'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Więcej').last);
     await tester.pumpAndSettle();
     expect(find.text('Stopnie alarmowe'), findsOneWidget);
