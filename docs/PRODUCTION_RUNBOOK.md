@@ -204,6 +204,8 @@ Dla release tagów workflow dodatkowo wymaga, aby build number z `mobile/pubspec
 
 Produkcyjny AAB i bezpośredni arm64 APK używają **tego samego `versionCode`**. Produkcyjnego APK nie budujemy z `--split-per-abi`, ponieważ Flutter dodaje wtedy offset ABI (np. +2000 dla arm64), co rozdzieliłoby numerację bezpośredniego APK i Google Play dla tego samego pakietu.
 
+Jeżeli `pl.bezpiecznapolska` zostanie później włączona do Google Play App Signing, certyfikat używany przez Play do podpisywania instalowanych APK musi odpowiadać ustalonej produkcyjnej tożsamości podpisującej, jeśli istnieją już użytkownicy bezpośrednich APK. Nie należy pozwolić Play wygenerować niezależnej tożsamości app-signing dla istniejącego łańcucha bez świadomego planu migracji; klucz upload może być osobny.
+
 Po buildzie sprawdź:
 
 - package id,
