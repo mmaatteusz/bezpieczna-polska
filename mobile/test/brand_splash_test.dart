@@ -8,9 +8,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: BrandSplashGate(
-          child: Scaffold(body: Text('Aplikacja gotowa')),
-        ),
+        home: BrandSplashGate(child: Scaffold(body: Text('Aplikacja gotowa'))),
       ),
     );
 
