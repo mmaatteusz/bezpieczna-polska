@@ -199,8 +199,11 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          flutter build appbundle --release --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
-          flutter build apk --release --target-platform android-arm64 --dart-define=APP_ENV=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
+          VERSION="$(node -p "require('../backend/package.json').version")"
+          BUILD="$(sed -nE 's/^version: [^+]+\+([0-9]+)$/\1/p' pubspec.yaml)"
+          test -n "$VERSION" && test -n "$BUILD"
+          flutter build appbundle --release --dart-define=APP_ENV=production --dart-define="APP_VERSION=$VERSION" --dart-define="APP_BUILD_NUMBER=$BUILD" --dart-define=APP_CHANNEL=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
+          flutter build apk --release --target-platform android-arm64 --dart-define=APP_ENV=production --dart-define="APP_VERSION=$VERSION" --dart-define="APP_BUILD_NUMBER=$BUILD" --dart-define=APP_CHANNEL=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
       - name: Verify signatures, identifiers and SHA-256
         if: steps.signing.outputs.ready == 'true'
         shell: bash
