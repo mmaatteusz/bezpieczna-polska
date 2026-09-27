@@ -128,44 +128,45 @@ void main() {
     },
   );
 
-  testWidgets('shelter source shows declared catalog separately from stale loaded copy',
-      (tester) async {
-    final shelter = source(
-      'SHELTERS',
-      state: 'STALE',
-      enabled: true,
-      complete: true,
-      coverage: 'FACILITY_CATALOG',
-      sourceClass: 'REFERENCE',
-    )
-      ..addAll({
-        'catalogItemCount': 85877,
-        'catalogDataDate': '2026-09-21',
-        'itemCount': 81967,
-        'dataDate': '2026-03-10',
-        'catalogMismatch': true,
-        'fallback': {
-          'selected': 'TERTIARY_OFFICIAL_ARCHIVE',
-          'reason':
-              'Katalog deklaruje nowsze dane; załadowano oficjalne archiwum.',
-        },
-      });
+  testWidgets(
+    'shelter source shows declared catalog separately from stale loaded copy',
+    (tester) async {
+      final shelter =
+          source(
+            'SHELTERS',
+            state: 'STALE',
+            enabled: true,
+            complete: true,
+            coverage: 'FACILITY_CATALOG',
+            sourceClass: 'REFERENCE',
+          )..addAll({
+            'catalogItemCount': 85877,
+            'catalogDataDate': '2026-09-21',
+            'itemCount': 81967,
+            'dataDate': '2026-03-10',
+            'catalogMismatch': true,
+            'fallback': {
+              'selected': 'TERTIARY_OFFICIAL_ARCHIVE',
+              'reason': 'Katalog deklaruje nowsze dane; załadowano oficjalne archiwum.',
+            },
+          });
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SourceStatusPage(sources: [shelter], openLink: (_) async {}),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('SHELTERS'));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SourceStatusPage(sources: [shelter], openLink: (_) async {}),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('SHELTERS'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('85877 • 2026-09-21'), findsOneWidget);
-    expect(find.text('81967 • 2026-03-10'), findsOneWidget);
-    expect(find.text('Archiwum dane.gov.pl'), findsOneWidget);
-    expect(
-      find.textContaining('Katalog PSP deklaruje nowszą lub inną wersję'),
-      findsOneWidget,
-    );
-  });
+      expect(find.text('85877 • 2026-09-21'), findsOneWidget);
+      expect(find.text('81967 • 2026-03-10'), findsOneWidget);
+      expect(find.text('Archiwum dane.gov.pl'), findsOneWidget);
+      expect(
+        find.textContaining('Katalog PSP deklaruje nowszą lub inną wersję'),
+        findsOneWidget,
+      );
+    },
+  );
 }

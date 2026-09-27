@@ -30,12 +30,9 @@ class SourceStatusPage extends StatelessWidget {
 
   String technicalExplanation(String state) => switch (state) {
     'HEALTHY' => 'Połączenie ze źródłem działa i dane są świeże.',
-    'STALE' =>
-      'Istnieje ostatnia poprawna kopia, ale jej aktualność nie jest już potwierdzona.',
-    'DEGRADED' =>
-      'Źródło odpowiada, ale integracja zgłasza ograniczoną jakość lub niepełną synchronizację.',
-    'BROKEN' =>
-      'Nie udało się pobrać bieżących danych. Ostatnia poprawna kopia może nadal być dostępna.',
+    'STALE' => 'Istnieje ostatnia poprawna kopia, ale jej aktualność nie jest już potwierdzona.',
+    'DEGRADED' => 'Źródło odpowiada, ale integracja zgłasza ograniczoną jakość lub niepełną synchronizację.',
+    'BROKEN' => 'Nie udało się pobrać bieżących danych. Ostatnia poprawna kopia może nadal być dostępna.',
     'NOT_CONFIGURED' =>
       'Ta integracja nie dostarcza obecnie danych w tej wersji aplikacji.',
     _ => 'Brak wystarczających informacji o stanie technicznym źródła.',
@@ -50,14 +47,10 @@ class SourceStatusPage extends StatelessWidget {
   };
 
   String sourceClassExplanation(dynamic value) => switch (value?.toString()) {
-    'STATUS' =>
-      'Oficjalne ostrzeżenia z tego źródła mogą wpływać na główny status bezpieczeństwa.',
-    'CONTEXT' =>
-      'Źródło dostarcza ważny kontekst, ale jego brak nie jest podstawą do zmiany głównego statusu.',
-    'REFERENCE' =>
-      'To dane pomocnicze, np. katalog obiektów lub pomiary. Nie są samodzielnym alarmem.',
-    'SITUATIONAL' =>
-      'Źródło służy do dodatkowej świadomości sytuacyjnej i nie zastępuje oficjalnych alarmów.',
+    'STATUS' => 'Oficjalne ostrzeżenia z tego źródła mogą wpływać na główny status bezpieczeństwa.',
+    'CONTEXT' => 'Źródło dostarcza ważny kontekst, ale jego brak nie jest podstawą do zmiany głównego statusu.',
+    'REFERENCE' => 'To dane pomocnicze, np. katalog obiektów lub pomiary. Nie są samodzielnym alarmem.',
+    'SITUATIONAL' => 'Źródło służy do dodatkowej świadomości sytuacyjnej i nie zastępuje oficjalnych alarmów.',
     _ => 'Brak jawnie określonej roli źródła.',
   };
 
@@ -252,21 +245,13 @@ class SourceStatusPage extends StatelessWidget {
                         ),
                       ),
                     ),
-                  _row(
-                    'Rola źródła',
-                    sourceClassLabel(source['sourceClass']),
-                  ),
-                  _row(
-                    'Pusty wynik',
-                    absenceLabel(source['absenceSemantics']),
-                  ),
+                  _row('Rola źródła', sourceClassLabel(source['sourceClass'])),
+                  _row('Pusty wynik', absenceLabel(source['absenceSemantics'])),
                   _row('Zakres danych', coverageLabel(source)),
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(
-                      sourceClassExplanation(source['sourceClass']),
-                    ),
+                    child: Text(sourceClassExplanation(source['sourceClass'])),
                   ),
                   if (source['itemCount'] != null)
                     _row('Liczba elementów', source['itemCount'].toString()),
