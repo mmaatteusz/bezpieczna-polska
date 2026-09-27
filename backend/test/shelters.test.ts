@@ -128,7 +128,7 @@ test('older official archive never replaces a newer last-known-good shelter cata
   await ingest(store,[{...shelterAdapter,minSyncIntervalSeconds:0,sync:async()=>stale}]);
   const after=(await store.health()).find(h=>h.id==='SHELTERS')!;
   assert.equal(after.state,'DEGRADED');assert.equal(after.errorCode,'SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD');assert.equal(after.sourceUpdatedAt,before.sourceUpdatedAt);assert.equal(after.complete,true);
-  assert.equal(sourceHealth([after],new Date('2026-09-27T18:00:00Z'))[0].state,'DEGRADED');
+  assert.equal(sourceHealth([after],new Date('2026-09-27T19:00:00Z'))[0].state,'DEGRADED');
   assert.equal(sourceHealth([after],new Date('2026-10-05T12:00:01Z'))[0].state,'STALE');
   assert.equal((await store.shelterPage({regionId:'PL',q:'',limit:50,offset:0})).total,count);
  }finally{await db.close();}
