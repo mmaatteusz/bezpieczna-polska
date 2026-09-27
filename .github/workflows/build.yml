@@ -68,10 +68,15 @@ jobs:
       - name: Build with backend from repository build configuration
         env:
           API_BASE_URL: ${{ vars.API_BASE_URL }}
-        run: flutter build apk --no-pub --debug --split-per-abi --target-platform android-arm64 --dart-define=APP_ENV=preview
+        run: >-
+          flutter build apk --no-pub --debug --split-per-abi --target-platform android-arm64
+          --build-number="$PREVIEW_BUILD_NUMBER"
+          --dart-define=APP_ENV=preview
           --dart-define="APP_VERSION=$APP_RELEASE_VERSION"
           --dart-define="APP_BUILD_NUMBER=$PREVIEW_DISPLAY_BUILD"
-          --dart-define=APP_CHANNEL=preview --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --build-number="$PREVIEW_BUILD_NUMBER"
+          --dart-define=APP_CHANNEL=preview
+          --dart-define="API_BASE_URL=$API_BASE_URL"
+          --dart-define=ENABLE_DEVELOPER_SETTINGS=false
         working-directory: mobile
       - name: Verify APK and prepare download
         shell: bash
