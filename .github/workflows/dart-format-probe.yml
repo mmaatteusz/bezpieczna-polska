@@ -1,0 +1,40 @@
+name: Temporary package-aware Dart formatter probe
+on:
+  push:
+    branches: [stage/source-contracts-imgw-pattern]
+    paths:
+      - 'mobile/lib/source_status.dart'
+      - 'mobile/test/source_status_test.dart'
+      - '.github/workflows/dart-format-probe.yml'
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: stage/source-contracts-imgw-pattern
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Resolve package language version
+        working-directory: mobile
+        run: flutter pub get
+      - name: Format target files
+        working-directory: mobile
+        run: dart format lib/source_status.dart test/source_status_test.dart
+      - name: Commit formatter output
+        shell: bash
+        run: |
+          if git diff --quiet -- mobile/lib/source_status.dart mobile/test/source_status_test.dart; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile/lib/source_status.dart mobile/test/source_status_test.dart
+          git commit -m "style(mobile): apply package-aware dart formatter"
+          git push origin HEAD:stage/source-contracts-imgw-pattern
