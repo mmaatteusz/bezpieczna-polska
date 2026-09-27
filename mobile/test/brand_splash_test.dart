@@ -3,12 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('brand splash shows one loading screen before the app', (
+  testWidgets('brand splash covers startup until initial data is ready', (
     tester,
   ) async {
+    final ready = ValueNotifier<bool>(false);
+    addTearDown(ready.dispose);
+
     await tester.pumpWidget(
-      const MaterialApp(
-        home: BrandSplashGate(child: Scaffold(body: Text('Aplikacja gotowa'))),
+      MaterialApp(
+        home: BrandSplashGate(
+          ready: ready,
+          child: const Scaffold(body: Text('Aplikacja gotowa')),
+        ),
       ),
     );
 
@@ -19,9 +25,14 @@ void main() {
     );
     expect(find.text('Ładowanie aplikacji…'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
-    expect(find.text('Aplikacja gotowa'), findsNothing);
+    expect(find.text('Aplikacja gotowa'), findsOneWidget);
 
-    await tester.pump(const Duration(milliseconds: 1700));
+    await tester.pump(const Duration(milliseconds: 1400));
+    expect(find.text('BEZPIECZNA POLSKA'), findsOneWidget);
+
+    ready.value = true;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
     await tester.pumpAndSettle();
 
     expect(find.text('BEZPIECZNA POLSKA'), findsNothing);
