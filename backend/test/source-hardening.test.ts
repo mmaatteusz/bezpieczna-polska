@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildApp} from '../src/app.js';
-import {ingest,initializeSources,parseRso} from '../src/adapters.js';
+import {ingest,initializeSources,parseRso,SOURCES} from '../src/adapters.js';
 import {Store,openDb} from '../src/store.js';
 
 const now=new Date('2026-09-24T12:00:00Z');
@@ -14,6 +14,21 @@ test('RSO keeps feed available when alarm marker changes',()=>{
  assert.equal(parseRso(rso('false'),now)[0].severity,'NORMAL');
  assert.equal(parseRso(rso(''),now)[0].severity,'NORMAL');
  assert.equal(parseRso(rso('ALARM'),now)[0].severity,'HIGH');
+});
+
+test('source quality contracts distinguish authoritative state from publication feeds',()=>{
+ const byId=new Map(SOURCES.map(s=>[s.id,s]));
+ assert.equal(byId.get('IMGW_METEO')?.sourceClass,'STATUS');
+ assert.equal(byId.get('IMGW_METEO')?.absenceSemantics,'AUTHORITATIVE_EMPTY_SET');
+ assert.equal(byId.get('IMGW_HYDRO')?.absenceSemantics,'AUTHORITATIVE_EMPTY_SET');
+ assert.equal(byId.get('RCB')?.sourceClass,'STATUS');
+ assert.equal(byId.get('RCB')?.absenceSemantics,'NOT_PROVABLE');
+ assert.equal(byId.get('RSO')?.absenceSemantics,'NOT_PROVABLE');
+ assert.equal(byId.get('PAA')?.absenceSemantics,'NOT_PROVABLE');
+ assert.equal(byId.get('CERT')?.sourceClass,'CONTEXT');
+ assert.equal(byId.get('PAA_MEASUREMENTS')?.sourceClass,'REFERENCE');
+ assert.equal(byId.get('NEPTUN')?.sourceClass,'SITUATIONAL');
+ assert.equal(byId.get('UA')?.enabled,false);
 });
 
 test('disabled sources are not synchronized and stay out of public source list',async()=>{
@@ -31,7 +46,14 @@ test('disabled sources are not synchronized and stay out of public source list',
   try{
    const response=await app.inject({method:'GET',url:'/v1/sources'});
    assert.equal(response.statusCode,200);
-   const ids=response.json().sourceHealth.map((s:any)=>s.id);
+   const publicSources=response.json().sourceHealth;
+   const ids=publicSources.map((s:any)=>s.id);
+   const imgw=publicSources.find((s:any)=>s.id==='IMGW_METEO');
+   const rcb=publicSources.find((s:any)=>s.id==='RCB');
+   assert.equal(imgw.sourceClass,'STATUS');
+   assert.equal(imgw.absenceSemantics,'AUTHORITATIVE_EMPTY_SET');
+   assert.equal(rcb.sourceClass,'STATUS');
+   assert.equal(rcb.absenceSemantics,'NOT_PROVABLE');
    assert.ok(ids.includes('RCB'));
    assert.ok(!ids.includes('UA'));
    assert.ok(!ids.includes('CSIRT_GOV'));
