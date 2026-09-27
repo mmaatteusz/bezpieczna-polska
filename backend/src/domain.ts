@@ -39,12 +39,25 @@ export const eventSchema=z.object({
  if(e.geometry&&e.latitude!==null&&(e.geometry.type!=='Point'||e.geometry.coordinates[0]!==e.longitude||e.geometry.coordinates[1]!==e.latitude))ctx.addIssue({code:'custom',message:'Conflicting event geometry'});
 }).transform(e=>({...e,geometry:e.geometry??(e.latitude!==null&&e.longitude!==null?{type:'Point' as const,coordinates:[e.longitude,e.latitude] as [number,number]}:null)}));
 export type Event=z.infer<typeof eventSchema>;
-export type Health={uaMetadata?:{regions:import('./ukraine-adapter.js').UaRegion[];activeEventIds:string[];lastActionIndex:number};neptunMetadata?:{serverTime:string;threats:import('./neptun-live-adapter.js').PublicNeptunThreat[]};checkedEventIds?:string[];regionId?:string;implementation?:string;integrationNote?:string;id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS'|'FACILITY_CATALOG'|'MEASUREMENT_NETWORK';pagesFetched?:number;dataDate?:string;sourceUpdatedAt?:string;sourceContentHash?:string;sourceUrl?:string;datasetUrl?:string;license?:string;fallbackSelected?:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE';fallback?:{selected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'|'LAST_KNOWN_GOOD_COPY'|'NONE';secondaryStatus:'NOT_NEEDED'|'AVAILABLE_STALE'|'NOT_VERIFIED';reason:string|null}};
+export type Health={uaMetadata?:{regions:import('./ukraine-adapter.js').UaRegion[];activeEventIds:string[];lastActionIndex:number};neptunMetadata?:{serverTime:string;threats:import('./neptun-live-adapter.js').PublicNeptunThreat[]};checkedEventIds?:string[];regionId?:string;implementation?:string;integrationNote?:string;sourceClass?:import('./source-adapter.js').SourceClass;absenceSemantics?:import('./source-adapter.js').AbsenceSemantics;id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS'|'FACILITY_CATALOG'|'MEASUREMENT_NETWORK';pagesFetched?:number;dataDate?:string;sourceUpdatedAt?:string;sourceContentHash?:string;sourceUrl?:string;datasetUrl?:string;license?:string;fallbackSelected?:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE';fallback?:{selected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'|'LAST_KNOWN_GOOD_COPY'|'NONE';secondaryStatus:'NOT_NEEDED'|'AVAILABLE_STALE'|'NOT_VERIFIED';reason:string|null}};
+export function healthSourceClass(h:Health):import('./source-adapter.js').SourceClass{
+ if(h.sourceClass)return h.sourceClass;
+ if(['SHELTERS','PAA_MEASUREMENTS'].includes(h.id)||['FACILITY_CATALOG','MEASUREMENT_NETWORK'].includes(h.coverage??''))return 'REFERENCE';
+ if(['CERT','CSIRT_GOV','SG','POLICE','PSP_INCIDENTS','LEVELS'].includes(h.id))return 'CONTEXT';
+ if(['UA','NEPTUN'].includes(h.id))return 'SITUATIONAL';
+ return 'STATUS';
+}
+export function healthAbsenceSemantics(h:Health):import('./source-adapter.js').AbsenceSemantics{
+ if(h.absenceSemantics)return h.absenceSemantics;
+ return h.complete&&h.coverage==='ACTIVE_WARNINGS'?'AUTHORITATIVE_EMPTY_SET':'NOT_PROVABLE';
+}
 export function computeStatus(events:Event[],health:Health[],region:string,now=new Date(),incidents?:Incident[]){
  const ms=now.getTime();
  events=events.filter(e=>e.countryCode!=='UA'&&!e.ukraine&&!e.sources.some(s=>s.id==='UA'));
- // Facilities are reference data, never evidence of the absence of hazards.
- health=health.filter(h=>h.enabled!==false&&!['UA','NEPTUN','SHELTERS','CERT','CSIRT_GOV','SG','POLICE','PSP_INCIDENTS','PAA_MEASUREMENTS'].includes(h.id)&&!['FACILITY_CATALOG','MEASUREMENT_NETWORK'].includes(h.coverage??'')&&(!h.regionId||region==='PL'||h.regionId===region));
+ // Only STATUS-class sources participate in the global coverage calculation.
+ // Context, reference and situational feeds may add information, but their
+ // absence must never make the national hazard status look less reliable.
+ health=health.filter(h=>h.enabled!==false&&healthSourceClass(h)==='STATUS'&&(!h.regionId||region==='PL'||h.regionId===region));
  const relevant=events.filter(e=>!e.isDemo&&e.officialWarning&&e.messageContext==='ACTUAL'&&e.verification==='CONFIRMED'&&e.sources.some(s=>s.tier===1)&&(region==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(region)));
  const fresh=health.filter(h=>h.state==='HEALTHY'&&h.lastSuccess&&Date.parse(h.lastSuccess)<=ms+30000&&ms-Date.parse(h.lastSuccess)<h.maxAgeSeconds*1000);
  const coverage=health.length>0&&fresh.length===health.length&&fresh.every(h=>h.complete)?'COMPLETE_FOR_CONFIGURED_SCOPE':fresh.length?'PARTIAL':'UNAVAILABLE';
@@ -67,6 +80,7 @@ export function computeStatus(events:Event[],health:Health[],region:string,now=n
 
 export function sourceHealth(health:Health[],now=new Date()){
  return health.map(h=>{
+  const sourceClass=healthSourceClass(h),absenceSemantics=healthAbsenceSemantics(h);
   const stale=h.state==='HEALTHY'&&(!h.lastSuccess||Date.parse(h.lastSuccess)>now.getTime()+30000||now.getTime()-Date.parse(h.lastSuccess)>=h.maxAgeSeconds*1000||(h.sourceUpdatedAt!==undefined&&now.getTime()-Date.parse(h.sourceUpdatedAt)>14*86400000));
   const fallback=h.id==='SHELTERS'?(()=>{
    const selected:NonNullable<Health['fallback']>['selected']=!h.lastSuccess?'NONE':h.state!=='HEALTHY'?'LAST_KNOWN_GOOD_COPY':h.fallbackSelected??'PRIMARY_OFFICIAL_SOURCE';
@@ -78,7 +92,7 @@ export function sourceHealth(health:Health[],now=new Date()){
      :null;
    return {selected,secondaryStatus:archive?'AVAILABLE_STALE' as const:'NOT_NEEDED' as const,reason};
   })():undefined;
-  return {...h,...(fallback?{fallback}:{}),healthStatus:stale?'STALE':h.state,state:stale?'STALE':h.state,lastSuccessfulSyncAt:h.lastSuccess,lastAttemptAt:h.lastAttempt??null,errorCode:h.errorCode??null};
+  return {...h,sourceClass,absenceSemantics,...(fallback?{fallback}:{}),healthStatus:stale?'STALE':h.state,state:stale?'STALE':h.state,lastSuccessfulSyncAt:h.lastSuccess,lastAttemptAt:h.lastAttempt??null,errorCode:h.errorCode??null};
  });
 }
 
