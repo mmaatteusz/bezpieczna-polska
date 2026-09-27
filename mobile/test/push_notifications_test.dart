@@ -328,6 +328,14 @@ void main() {
       find.textContaining('nie ma kompletnej konfiguracji usługi powiadomień'),
       findsOneWidget,
     );
+    expect(
+      find.text('Brak zapisanych miejsc • stuknij, aby dodać'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Obserwowane lokalizacje'));
+    await tester.pumpAndSettle();
+    expect(find.text('Wokół mnie'), findsWidgets);
+    expect(find.text('Dodaj miasto lub wieś'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     manager.dispose();
   });

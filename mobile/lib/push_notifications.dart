@@ -11,6 +11,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'model.dart';
 import 'app_version.dart';
+import 'watched_locations_panel.dart';
 
 enum PushPermissionState { notDetermined, denied, authorized, provisional }
 
@@ -729,6 +730,18 @@ class _NotificationSettingsScreenState
     }
   }
 
+  Future<void> _manageWatchedLocations() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => WatchedLocationsScreen(
+          repository: widget.manager.repository,
+          onPreferencesChanged: widget.manager.syncCurrentPreferences,
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
   Future<void> _update(PushPreferences value) async {
     setState(() => busy = true);
     try {
@@ -872,15 +885,22 @@ class _NotificationSettingsScreenState
                 ? null
                 : (value) => _update(prefs.copyWith(regionAlerts: value)),
           ),
-          SwitchListTile(
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            leading: const Icon(Icons.location_on_outlined),
             title: const Text('Obserwowane lokalizacje'),
             subtitle: Text(
-              '${widget.manager.repository.watchedLocations.length} zapisanych punktów • bez historii przemieszczania',
+              widget.manager.repository.watchedLocations.isEmpty
+                  ? 'Brak zapisanych miejsc • stuknij, aby dodać'
+                  : '${widget.manager.repository.watchedLocations.length} zapisanych punktów • stuknij, aby zarządzać',
             ),
-            value: prefs.watchedLocations,
-            onChanged: busy
-                ? null
-                : (value) => _update(prefs.copyWith(watchedLocations: value)),
+            onTap: busy ? null : _manageWatchedLocations,
+            trailing: Switch(
+              value: prefs.watchedLocations,
+              onChanged: busy
+                  ? null
+                  : (value) => _update(prefs.copyWith(watchedLocations: value)),
+            ),
           ),
           SwitchListTile(
             title: const Text('Cyberbezpieczeństwo'),
