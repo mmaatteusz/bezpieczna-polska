@@ -84,7 +84,7 @@ export function sourceHealth(health:Health[],now=new Date()){
   const stale=h.state==='HEALTHY'&&(!h.lastSuccess||Date.parse(h.lastSuccess)>now.getTime()+30000||now.getTime()-Date.parse(h.lastSuccess)>=h.maxAgeSeconds*1000||(h.sourceUpdatedAt!==undefined&&now.getTime()-Date.parse(h.sourceUpdatedAt)>14*86400000));
   const catalogMismatch=h.id==='SHELTERS'&&(
    (!!h.catalogDataDate&&!!h.dataDate&&h.catalogDataDate>h.dataDate)||
-   (typeof h.catalogItemCount==='number'&&typeof h.itemCount==='number'&&h.catalogItemCount!==h.itemCount)
+   (typeof h.catalogItemCount==='number'&&typeof h.itemCount==='number'&&h.catalogItemCount>h.itemCount)
   );
   const fallback=h.id==='SHELTERS'?(()=>{
    const selected:NonNullable<Health['fallback']>['selected']=!h.lastSuccess?'NONE':h.state!=='HEALTHY'?'LAST_KNOWN_GOOD_COPY':h.fallbackSelected??'PRIMARY_OFFICIAL_SOURCE';
