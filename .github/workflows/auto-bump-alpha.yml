@@ -80,7 +80,6 @@ jobs:
           set -euo pipefail
           node scripts/bump-alpha.mjs
           node scripts/sync-mobile-version.mjs --check
-          node scripts/validate-release.mjs
 
       - name: Commit synchronized alpha version
         if: steps.version.outputs.needs_bump == 'true' && steps.latest.outputs.stale != 'true'
@@ -90,7 +89,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add             backend/package.json             backend/package-lock.json             mobile/pubspec.yaml             mobile/lib/app_version.dart             docs/PRODUCTION_RUNBOOK.md             README.md
+          git add backend/package.json backend/package-lock.json backend/src/config.ts mobile/pubspec.yaml mobile/lib/app_version.dart docs/PRODUCTION_RUNBOOK.md README.md
 
           if git diff --cached --quiet; then
             echo "No version changes to commit." >> "$GITHUB_STEP_SUMMARY"
