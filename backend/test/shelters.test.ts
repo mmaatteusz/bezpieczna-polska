@@ -29,7 +29,7 @@ test('real PSP CSV subset preserves official IDs, addresses, coordinates and unk
  assert.equal(b.metadata!.catalogDataDate,'2026-09-19');assert.equal(b.metadata!.catalogItemCount,3);assert.equal(b.complete,true);
 });
 test('rolling current export may contain more rows than lagging catalog metadata',async()=>{
- const lines=csv.trimEnd().split(/\r?\n/),extra=lines[1].replace('OZO-6D94271C9708','OZO-ROLLING-EXTRA');
+ const lines=csv.trimEnd().split(/\r?\n/),extra=lines[1].replace('OZO-D5F2DD0D35F3','OZO-ROLLING-EXTRA');
  const rolling=[...lines,extra].join('\n')+'\n';
  const b=await shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_ORIGIN_CSV?rolling:fetchText(u),fetchBytes});
  assert.equal(b.shelters!.length,4);
