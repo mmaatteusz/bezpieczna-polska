@@ -1,6 +1,19 @@
 # Rejestr źródeł
 
-Weryfikacja publicznych stron: 21–23.09.2026; stan integracji na branchu PR #22: alpha.18. `main` pozostaje na alpha.17.1 do merge. Brak API oznacza brak potwierdzonej dokumentacji; nie dowodzi, że nie istnieje interfejs wewnętrzny.
+Stan kontraktów źródeł: 27.09.2026. Brak publicznego API oznacza brak potwierdzonego kontraktu do użycia przez aplikację; nie dowodzi, że nie istnieje interfejs wewnętrzny.
+
+## Kontrakt jakości
+
+Każde źródło ma jawny `sourceClass` oraz `absenceSemantics`.
+
+- `STATUS` — źródło może wnosić oficjalne ostrzeżenia do głównego statusu.
+- `CONTEXT` — oficjalne informacje pomocnicze; awaria nie blokuje głównego statusu.
+- `REFERENCE` — dane referencyjne lub pomiarowe, np. schronienia i stacje PAA.
+- `SITUATIONAL` — oddzielna świadomość sytuacyjna, np. NEPTUN/UA.
+- `AUTHORITATIVE_EMPTY_SET` — poprawny pusty wynik jest częścią zweryfikowanego kontraktu bieżącego stanu.
+- `NOT_PROVABLE` — brak wpisu nie jest dowodem braku zagrożenia.
+
+Wzorzec jakości stanowią `IMGW_METEO` i `IMGW_HYDRO`: bieżący oficjalny feed, jawna semantyka pustego wyniku, `complete=true`, `coverage=ACTIVE_WARNINGS` oraz fail-closed przy zmianie kontraktu.
 
 | Źródło | Właściciel i URL | Interfejs / stan | Autoryzacja, częstotliwość i ryzyko |
 |---|---|---|---|
@@ -10,13 +23,13 @@ Weryfikacja publicznych stron: 21–23.09.2026; stan integracji na branchu PR #2
 | CERT Polska | NASK / CERT Polska, https://moje.cert.pl/komunikaty/ | Oficjalny RSS komunikatów bezpieczeństwa; adapter działa | Publiczne; recent publications, complete=false; komunikaty CYBER nie zmieniają automatycznie głównego statusu fizycznego |
 | CSIRT GOV | CSIRT GOV, https://www.csirt.gov.pl/cer/rss | Oficjalna strona RSS działa, ale lista publicznych kanałów jest obecnie pusta; NOT_CONFIGURED | Nie importujemy raportów historycznych ani nie zgadujemy prywatnego feedu |
 | IMGW_METEO / IMGW_HYDRO | IMGW-PIB, https://danepubliczne.imgw.pl/apiinfo | Oficjalne publiczne JSON API ostrzeżeń meteorologicznych i hydrologicznych; dwa niezależne adaptery ACTIVE_WARNINGS | Interwał min. 5 min. TERYT/obszary mapowane do województw, bez zgadywania geometrii. Dokładna odpowiedź 404 z komunikatem No products were found jest pustym zbiorem; każdy inny błąd fail-closed. Warunki IMGW wymagają wskazania źródła i informacji o przetworzeniu danych |
-| PAA | PAA, https://www.gov.pl/web/paa/aktualnosci2 | Oficjalne komunikaty HTML; adapter działa. Pomiary stacji pozostają niepodłączone | Komunikat i pomiar są rozdzielone. Same wartości pomiarowe nigdy nie podnoszą automatycznie statusu; portal pomiarowy wymaga ponownej weryfikacji kontraktu |
+| PAA | PAA, https://www.gov.pl/web/paa/aktualnosci2 + https://monitoring.paa.gov.pl/maps-portal/ | Oficjalne komunikaty HTML oraz osobny live adapter WFS/GeoJSON dla sieci PMS | Komunikat i pomiar są rozdzielone. Pomiary mają `MEASUREMENT_NETWORK` i nie tworzą ani nie odwołują alarmu; komunikaty PAA pozostają `NOT_PROVABLE` jako lista publikacji |
 | SG | Straż Graniczna, https://www.strazgraniczna.pl/pl/aktualnosci | Oficjalne Aktualności; adapter działa z filtrem operacyjnym | Publiczna lista RSS KGSG jest pusta. Importowane są wyłącznie zamknięcia, ograniczenia, kontrole i utrudnienia dotyczące przekraczania granicy; zwykłe newsy służbowe są odrzucane |
 | POLICE | Policja, https://policja.pl/pol/rss | Oficjalny RSS „Aktualności”; adapter działa z konserwatywnym filtrem zdarzeń | Publiczne; recent publications, complete=false. Zatrzymania, kradzieże, odzyskane auta, rutynowy przemyt, statystyki i PR są odrzucane. Brak geokodowania tekstu |
 | PSP_INCIDENTS | KG PSP, https://www.gov.pl/web/kgpsp/aktualnosci | Stabilny oficjalny HTML centralnych Aktualności; adapter działa z konserwatywnym filtrem zdarzeń | Nie znaleziono zweryfikowanego krajowego live API/RSS incydentów. Recent publications, complete=false; agregaty statystyczne „Interwencje PSP” nie są traktowane jako bieżące Eventy |
 | Stopnie alarmowe | RCB, https://www.gov.pl/web/rcb/stopnie-alarmowe2 | Adapter HTML działa; obsługuje PHYSICAL/CRP i wiele równoległych zakresów | Brak publicznego kontraktu API; parser waliduje daty i zakresy, a awaria zachowuje ostatnią poprawną kopię |
 | Schronienie | PSP / dane.gov.pl, https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce | Import, PostGIS/bbox/clustering i pakiety offline regionu w kodzie | Przy 403 na bieżącym eksporcie istnieje fallback do starszego oficjalnego zasobu dane.gov.pl, ale nie jest to niezależny drugi wydawca. Last-known-good jest widoczne jako stare dane, nie jako live |
-| Ukraina | UkraineAlarm, https://api.ukrainealarm.com/ | Oficjalny adapter API v3 z alpha.12, osobny moduł, historia cykli i administracyjna mapa | Wymaga autoryzowanego `UKRAINE_ALARM_API_KEY`; bez klucza `NOT_CONFIGURED`. Pobranie live, warunki użycia i pokrycie geometrii wymagają osobnej weryfikacji. Nie wpływa na Status Polski |
+| Ukraina | UkraineAlarm, https://api.ukrainealarm.com/ | Adapter API v3 zachowany, ale źródło jest jawnie wyłączone w domyślnym runtime | Wymaga autoryzowanego `UKRAINE_ALARM_API_KEY` oraz osobnego, kontrolowanego workera przed ponownym włączeniem. Nie wpływa na Status Polski |
 
 RSO: https://komunikaty.tvp.pl/komunikatyxml/wszystkie/wszystkie/0?_format=xml — adres udokumentowany przez operatora; 0 oznacza pełny eksport. Nie jest to nieudokumentowany endpoint wymyślony przez aplikację.
 
