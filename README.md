@@ -15,7 +15,7 @@ Aktualny kod rozwojowy: **0.1.0-alpha.25** (`build 26`).
 
 Najnowsze publiczne APK Android: [v0.1.0-alpha.23](https://github.com/mmaatteusz/bezpieczna-polska/releases/latest).
 
-Wersjonowanie alpha jest zsynchronizowane pomiędzy backendem i aplikacją mobilną. Po zmianie kodu trafiającej na `main` automatyzacja podbija numer `alpha.N` oraz numer buildu, o ile dany push nie zawiera już jawnej zmiany wersji. Dzięki temu ręczny bump nie jest podbijany drugi raz.
+Wersjonowanie alpha jest zsynchronizowane pomiędzy backendem i aplikacją mobilną. Każdy nowy push do `main` podbija numer `alpha.N` oraz numer buildu, o ile sam push nie zawiera już jawnej zmiany wersji. Po automatycznym bumpie CI jawnie uruchamia build instalowalnego APK i pełny preview gate z nowego `main`, więc artefakt nie może zostać na poprzedniej alphie.
 
 Automatyczny bump wersji **nie publikuje Release**. GitHub Release powstaje dopiero z przetestowanego, podpisanego APK po przejściu wymaganych kontroli CI. Ostatni opublikowany Release może więc celowo mieć niższy numer niż bieżący kod na `main`.
 
