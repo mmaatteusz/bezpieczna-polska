@@ -86,20 +86,31 @@ export function parseShelterCsv(csv:string,meta:ShelterMeta,sourceUrl=SHELTER_OR
  });
 }
 
-export const shelterAdapter:SourceAdapter={id:'SHELTERS',version:'psp-current+dane-gov-pl-archive/3.1.0',minSyncIntervalSeconds:21600,
+const fallbackFailureCode=(error:unknown)=>{
+ const message=error instanceof Error?error.message:'';
+ return /^[A-Z][A-Z0-9_]{2,100}$/.test(message)?message:'SOURCE_FETCH_FAILED';
+};
+
+export const shelterAdapter:SourceAdapter={id:'SHELTERS',version:'psp-current+dane-gov-pl-current+archive/3.2.0',minSyncIntervalSeconds:21600,
  async sync({now,fetchText,fetchBytes}){
   const catalog=JSON.parse(await fetchText(SHELTER_DATASET));
   if(catalog.data?.id!=='28058'||catalog.data?.relationships?.institution?.data?.id!=='22'||catalog.data?.attributes?.license_name!=='CC BY 4.0'||catalog.data?.relationships?.resources?.meta?.count!==1||catalog.data?.attributes?.archived_resources_files_url!==SHELTER_ARCHIVE)throw new Error('SHELTER_PUBLISHER_CONTRACT_CHANGED');
   const before=parseShelterResource(await fetchText(SHELTER_RESOURCE),now);
-  let csv:string,shelters:Shelter[],metadata:{dataDate:string;sourceUpdatedAt:string;sourceContentHash:string;sourceUrl:string;datasetUrl:string;license:string;fallbackSelected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'};
+  let csv:string,shelters:Shelter[],metadata:{dataDate:string;sourceUpdatedAt:string;sourceContentHash:string;sourceUrl:string;datasetUrl:string;license:string;fallbackSelected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_CURRENT_RESOURCE'|'TERTIARY_OFFICIAL_ARCHIVE';fallbackReason:string|null};
   try{
    csv=await fetchText(SHELTER_ORIGIN_CSV);shelters=parseShelterCsv(csv,before,SHELTER_ORIGIN_CSV);
-   metadata={dataDate:before.dataDate,sourceUpdatedAt:before.sourceUpdatedAt,sourceContentHash:createHash('sha256').update(csv).digest('hex'),sourceUrl:SHELTER_ORIGIN_CSV,datasetUrl:SHELTER_DATASET_PAGE,license:'CC BY 4.0',fallbackSelected:'PRIMARY_OFFICIAL_SOURCE'};
+   metadata={dataDate:before.dataDate,sourceUpdatedAt:before.sourceUpdatedAt,sourceContentHash:createHash('sha256').update(csv).digest('hex'),sourceUrl:SHELTER_ORIGIN_CSV,datasetUrl:SHELTER_DATASET_PAGE,license:'CC BY 4.0',fallbackSelected:'PRIMARY_OFFICIAL_SOURCE',fallbackReason:null};
   }catch(primaryError){
-   if(!fetchBytes)throw primaryError;
-   const archived=extractShelterCsv(await fetchBytes(SHELTER_ARCHIVE));
-   csv=archived.csv;shelters=parseShelterCsv(csv,{dataDate:archived.dataDate,sourceUpdatedAt:archived.sourceUpdatedAt,count:null},SHELTER_ARCHIVE);
-   metadata={dataDate:archived.dataDate,sourceUpdatedAt:archived.sourceUpdatedAt,sourceContentHash:createHash('sha256').update(csv).digest('hex'),sourceUrl:SHELTER_ARCHIVE,datasetUrl:SHELTER_DATASET_PAGE,license:'CC BY 4.0',fallbackSelected:'SECONDARY_OFFICIAL_SOURCE'};
+   const primaryReason=fallbackFailureCode(primaryError);
+   try{
+    csv=await fetchText(SHELTER_DOWNLOAD);shelters=parseShelterCsv(csv,before,SHELTER_DOWNLOAD);
+    metadata={dataDate:before.dataDate,sourceUpdatedAt:before.sourceUpdatedAt,sourceContentHash:createHash('sha256').update(csv).digest('hex'),sourceUrl:SHELTER_DOWNLOAD,datasetUrl:SHELTER_DATASET_PAGE,license:'CC BY 4.0',fallbackSelected:'SECONDARY_OFFICIAL_CURRENT_RESOURCE',fallbackReason:primaryReason};
+   }catch(currentResourceError){
+    if(!fetchBytes)throw currentResourceError;
+    const currentReason=fallbackFailureCode(currentResourceError),archived=extractShelterCsv(await fetchBytes(SHELTER_ARCHIVE));
+    csv=archived.csv;shelters=parseShelterCsv(csv,{dataDate:archived.dataDate,sourceUpdatedAt:archived.sourceUpdatedAt,count:null},SHELTER_ARCHIVE);
+    metadata={dataDate:archived.dataDate,sourceUpdatedAt:archived.sourceUpdatedAt,sourceContentHash:createHash('sha256').update(csv).digest('hex'),sourceUrl:SHELTER_ARCHIVE,datasetUrl:SHELTER_DATASET_PAGE,license:'CC BY 4.0',fallbackSelected:'TERTIARY_OFFICIAL_ARCHIVE',fallbackReason:`primary=${primaryReason}; currentResource=${currentReason}`};
+   }
   }
   const after=parseShelterResource(await fetchText(SHELTER_RESOURCE),now);
   if(JSON.stringify(before)!==JSON.stringify(after))throw new Error('SHELTER_EXPORT_CHANGED_DURING_SYNC');
