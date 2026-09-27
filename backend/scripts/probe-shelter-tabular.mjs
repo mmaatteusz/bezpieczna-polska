@@ -3,6 +3,10 @@ const urls=[
  'https://api.dane.gov.pl/1.4/resources/1393918/data?page=1&per_page=1',
  'https://api.dane.gov.pl/1.4/resources/1393918/data?page[number]=1&page[size]=1',
  'https://api.dane.gov.pl/1.4/resources/1393918/data?limit=1&offset=0',
+ 'https://api.dane.gov.pl/1.4/resources/1393918/data?page=1&per_page=100',
+ 'https://api.dane.gov.pl/1.4/resources/1393918/data?page=1&per_page=500',
+ 'https://api.dane.gov.pl/1.4/resources/1393918/data?page=1&per_page=1000',
+ 'https://api.dane.gov.pl/1.4/resources/1393918/data?page=1&per_page=5000',
 ];
 for(const url of urls){
  try{
