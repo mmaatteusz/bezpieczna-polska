@@ -20,3 +20,14 @@ for(const url of urls){
   console.log('PROBE',JSON.stringify({url,status:response.status,contentType:response.headers.get('content-type'),location:response.headers.get('location'),summary}));
  }catch(error){console.log('PROBE',JSON.stringify({url,error:error instanceof Error?error.message:String(error)}));}
 }
+
+for(const url of [
+ 'https://api.dane.gov.pl/resources/1393918,punkty-schronienia-dane-csv/jsonld',
+ 'https://api.dane.gov.pl/media/resources/20260310/punkty_schronienia_875cc428.jsonld'
+]){
+ try{
+  const response=await fetch(url,{method:'GET',redirect:'manual',signal:AbortSignal.timeout(15000),headers:{'User-Agent':'BezpiecznaPolska-contract-probe/1.0','Accept':'application/ld+json,application/json,*/*','Range':'bytes=0-2047'}});
+  const body=await response.text();
+  console.log('JSONLD_PROBE',JSON.stringify({url,status:response.status,location:response.headers.get('location'),contentType:response.headers.get('content-type'),contentLength:response.headers.get('content-length'),contentRange:response.headers.get('content-range'),lastModified:response.headers.get('last-modified'),bodyPrefix:body.slice(0,1000).replace(/\s+/g,' ')}));
+ }catch(error){console.log('JSONLD_PROBE',JSON.stringify({url,error:error instanceof Error?error.message:String(error)}));}
+}
