@@ -29,7 +29,7 @@ test('real PSP CSV subset preserves official IDs, addresses, coordinates and unk
  assert.equal(b.metadata!.catalogDataDate,'2026-09-19');assert.equal(b.metadata!.catalogItemCount,3);assert.equal(b.complete,true);
 });
 test('rolling current export may contain more rows than lagging catalog metadata',async()=>{
- const lines=csv.trimEnd().split(/\r?\n/),extra=lines[1].replace('OZO-D5F2DD0D35F3','OZO-ROLLING-EXTRA');
+ const lines=csv.trimEnd().split(/\r?\n/),extra=lines[1].replace('OZO-D5F2DD0D35F3','OZO-AAAAAAAAAAAA');
  const rolling=[...lines,extra].join('\n')+'\n';
  const b=await shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_ORIGIN_CSV?rolling:fetchText(u),fetchBytes});
  assert.equal(b.shelters!.length,4);
@@ -44,7 +44,7 @@ test('operator snapshot requires at least the live catalog count',()=>{
  assert.equal(prepared.metadata.catalogItemCount,3);assert.equal(prepared.metadata.dataDate,'2026-09-19');
 });
 test('authenticated admin can atomically import a validated official shelter CSV',async()=>{
- const db=openDb(undefined,':memory:'),store=new Store(db),token='t'.repeat(32),original=globalThis.fetch;
+ const db=openDb(undefined,':memory:'),store=new Store(db),token='t'.repeat(32),original=globalThis.fetch;await store.init();
  globalThis.fetch=async input=>{
   const url=typeof input==='string'?input:input instanceof URL?input.href:input.url;
   if(url===SHELTER_RESOURCE)return new Response(resource,{status:200,headers:{'content-type':'application/json'}});
