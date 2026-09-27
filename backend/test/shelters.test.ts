@@ -27,6 +27,14 @@ test('real PSP CSV subset preserves official IDs, addresses, coordinates and unk
  assert.deepEqual(b.shelters!.map(s=>s.availability),['ON_REQUEST','24H','LIMITED_HOURS']);assert.ok(b.shelters!.every(s=>s.openingHours===null));
  assert.equal(b.metadata!.license,'CC BY 4.0');assert.equal(b.metadata!.fallbackSelected,'PRIMARY_OFFICIAL_SOURCE');assert.equal(b.metadata!.sourceUrl,SHELTER_ORIGIN_CSV);assert.equal(b.complete,true);
 });
+test('rolling current export may contain more rows than lagging catalog metadata',async()=>{
+ const lines=csv.trimEnd().split(/\r?\n/),extra=lines[1].replace('OZO-6D94271C9708','OZO-ROLLING-EXTRA');
+ const rolling=[...lines,extra].join('\n')+'\n';
+ const b=await shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_ORIGIN_CSV?rolling:fetchText(u),fetchBytes});
+ assert.equal(b.shelters!.length,4);
+ assert.equal(b.metadata!.fallbackSelected,'PRIMARY_OFFICIAL_SOURCE');
+ assert.equal(b.metadata!.dataDate,'2026-09-19');
+});
 test('CSV rejects truncation, duplicate IDs, bad columns, unknown region and swapped coordinates',()=>{
  const meta=parseShelterResource(resource,now);
  assert.throws(()=>parseShelterCsv(csv,{...meta,count:4}),/COUNT_MISMATCH/);
