@@ -97,7 +97,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          echo "Live shelter check outcome: \${{ steps.live.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Live shelter check outcome: ${{ steps.live.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           if [[ -f "$RUNNER_TEMP/psp-validation/shelters-live.json" ]]; then
             node -e "const r=require(process.env.RUNNER_TEMP+'/psp-validation/shelters-live.json'); console.log(JSON.stringify({source:r.source,total:r.total},null,2))" | tee -a "$GITHUB_STEP_SUMMARY"
           elif [[ -f "$RUNNER_TEMP/psp-validation/shelters-live-failure.json" ]]; then
