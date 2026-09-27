@@ -67,10 +67,7 @@ class _BootstrapAppState extends State<BootstrapApp> {
       FirebasePushPlatformAdapter.fromBuildConfiguration,
     );
     await minimumSplash;
-    return _BootstrapResult(
-      repository,
-      PushManager(repository, pushAdapter),
-    );
+    return _BootstrapResult(repository, PushManager(repository, pushAdapter));
   }
 
   @override
