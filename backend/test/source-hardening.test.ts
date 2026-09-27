@@ -31,6 +31,16 @@ test('source quality contracts distinguish authoritative state from publication 
  assert.equal(byId.get('UA')?.enabled,false);
 });
 
+test('authoritative empty-set contract fails closed when adapter becomes incomplete',async()=>{
+ const store=new Store(openDb(undefined,':memory:'));await store.init();
+ try{
+  await ingest(store,[{id:'IMGW_METEO',version:'fixture',minSyncIntervalSeconds:0,async sync(){return {events:[],complete:false,coverage:'ACTIVE_WARNINGS',pagesFetched:1};}}],async()=>{throw new Error('UNUSED');});
+  const imgw=(await store.health()).find(s=>s.id==='IMGW_METEO')!;
+  assert.equal(imgw.state,'BROKEN');
+  assert.equal(imgw.errorCode,'SOURCE_EMPTY_SET_CONTRACT_VIOLATION');
+ }finally{await store.db.close();}
+});
+
 test('disabled sources are not synchronized and stay out of public source list',async()=>{
  const store=new Store(openDb(undefined,':memory:'));await store.init();
  try{
