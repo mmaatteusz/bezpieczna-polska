@@ -10,7 +10,7 @@ export type SourceBatch = {
   neptunMetadata?: NonNullable<import('./domain.js').Health['neptunMetadata']>;
   shelters?: Shelter[];
   radiationMeasurements?: RadiationMeasurement[];
-  metadata?: {dataDate:string;sourceUpdatedAt:string;sourceContentHash:string;sourceUrl:string;datasetUrl:string;license:string;fallbackSelected?:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_SOURCE'};
+  metadata?: {dataDate:string;sourceUpdatedAt:string;sourceContentHash:string;sourceUrl:string;datasetUrl:string;license:string;fallbackSelected?:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_CURRENT_RESOURCE'|'TERTIARY_OFFICIAL_ARCHIVE';fallbackReason?:string|null};
   // A publication archive is never proof that there are no active warnings.
   complete: boolean;
   coverage: 'RECENT_PUBLICATIONS' | 'ACTIVE_WARNINGS' | 'FACILITY_CATALOG' | 'MEASUREMENT_NETWORK';
