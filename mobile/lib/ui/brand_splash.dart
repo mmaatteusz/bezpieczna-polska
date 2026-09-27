@@ -37,7 +37,9 @@ class _BrandSplashGateState extends State<BrandSplashGate>
   }
 
   double _segment(double value, double start, double end) {
-    final normalized = ((value - start) / (end - start)).clamp(0.0, 1.0);
+    final normalized = ((value - start) / (end - start))
+        .clamp(0.0, 1.0)
+        .toDouble();
     return Curves.easeOutCubic.transform(normalized);
   }
 
@@ -48,8 +50,8 @@ class _BrandSplashGateState extends State<BrandSplashGate>
     return Stack(
       fit: StackFit.expand,
       children: [
-        widget.child,
-        IgnorePointer(
+        ExcludeSemantics(child: widget.child),
+        AbsorbPointer(
           child: AnimatedBuilder(
             animation: _controller,
             builder: (context, _) {
