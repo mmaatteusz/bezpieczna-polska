@@ -51,12 +51,7 @@ class _BrandMarkPainter extends CustomPainter {
       Paint()..color = BrandColors.offWhite,
     );
     canvas.drawRect(
-      Rect.fromLTWH(
-        0,
-        size.height * 0.50,
-        size.width,
-        size.height * 0.50,
-      ),
+      Rect.fromLTWH(0, size.height * 0.50, size.width, size.height * 0.50),
       Paint()..color = BrandColors.polishRed,
     );
     canvas.restore();
