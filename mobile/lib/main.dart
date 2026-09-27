@@ -22,6 +22,8 @@ import 'screens/alerts_screen.dart';
 import 'screens/map_screen.dart';
 import 'screens/more_screen.dart';
 import 'ui/app_theme.dart';
+import 'ui/brand.dart';
+import 'ui/brand_splash.dart';
 
 String? localityRegionSeed(String currentRegion) =>
     currentRegion == 'PL' ? null : currentRegion;
@@ -64,10 +66,12 @@ class _SafetyAppState extends State<SafetyApp> {
     theme: buildSafetyTheme(Brightness.light),
     darkTheme: buildSafetyTheme(Brightness.dark),
     themeMode: widget.repository.dark ? ThemeMode.dark : ThemeMode.light,
-    home: Home(
-      repository: widget.repository,
-      pushManager: widget.pushManager,
-      onTheme: () => setState(() {}),
+    home: BrandSplashGate(
+      child: Home(
+        repository: widget.repository,
+        pushManager: widget.pushManager,
+        onTheme: () => setState(() {}),
+      ),
     ),
   );
 }
@@ -587,7 +591,16 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: Text(['Bezpieczna Polska', 'Mapa', 'Alerty', 'Więcej'][page]),
+      title: page == 0
+          ? const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                BrandMark(size: 30),
+                SizedBox(width: 10),
+                Text('Bezpieczna Polska'),
+              ],
+            )
+          : Text(['Bezpieczna Polska', 'Mapa', 'Alerty', 'Więcej'][page]),
       actions: [
         Padding(
           padding: const EdgeInsets.only(right: 8),
