@@ -98,12 +98,12 @@ export const shelterAdapter:SourceAdapter={id:'SHELTERS',version:'psp-current+da
   const before=parseShelterResource(await fetchText(SHELTER_RESOURCE),now);
   let csv:string,shelters:Shelter[],metadata:{dataDate:string;sourceUpdatedAt:string;sourceContentHash:string;sourceUrl:string;datasetUrl:string;license:string;fallbackSelected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_CURRENT_RESOURCE'|'TERTIARY_OFFICIAL_ARCHIVE';fallbackReason:string|null};
   try{
-   csv=await fetchText(SHELTER_ORIGIN_CSV);shelters=parseShelterCsv(csv,before,SHELTER_ORIGIN_CSV);
+   csv=await fetchText(SHELTER_ORIGIN_CSV);shelters=parseShelterCsv(csv,{...before,count:null},SHELTER_ORIGIN_CSV);
    metadata={dataDate:before.dataDate,sourceUpdatedAt:before.sourceUpdatedAt,sourceContentHash:createHash('sha256').update(csv).digest('hex'),sourceUrl:SHELTER_ORIGIN_CSV,datasetUrl:SHELTER_DATASET_PAGE,license:'CC BY 4.0',fallbackSelected:'PRIMARY_OFFICIAL_SOURCE',fallbackReason:null};
   }catch(primaryError){
    const primaryReason=fallbackFailureCode(primaryError);
    try{
-    csv=await fetchText(SHELTER_DOWNLOAD);shelters=parseShelterCsv(csv,before,SHELTER_DOWNLOAD);
+    csv=await fetchText(SHELTER_DOWNLOAD);shelters=parseShelterCsv(csv,{...before,count:null},SHELTER_DOWNLOAD);
     metadata={dataDate:before.dataDate,sourceUpdatedAt:before.sourceUpdatedAt,sourceContentHash:createHash('sha256').update(csv).digest('hex'),sourceUrl:SHELTER_DOWNLOAD,datasetUrl:SHELTER_DATASET_PAGE,license:'CC BY 4.0',fallbackSelected:'SECONDARY_OFFICIAL_CURRENT_RESOURCE',fallbackReason:primaryReason};
    }catch(currentResourceError){
     if(!fetchBytes)throw currentResourceError;
