@@ -30,9 +30,12 @@ class SourceStatusPage extends StatelessWidget {
 
   String technicalExplanation(String state) => switch (state) {
     'HEALTHY' => 'Połączenie ze źródłem działa i dane są świeże.',
-    'STALE' => 'Istnieje ostatnia poprawna kopia, ale jej aktualność nie jest już potwierdzona.',
-    'DEGRADED' => 'Źródło odpowiada, ale integracja zgłasza ograniczoną jakość lub niepełną synchronizację.',
-    'BROKEN' => 'Nie udało się pobrać bieżących danych. Ostatnia poprawna kopia może nadal być dostępna.',
+    'STALE' =>
+      'Istnieje ostatnia poprawna kopia, ale jej aktualność nie jest już potwierdzona.',
+    'DEGRADED' =>
+      'Źródło odpowiada, ale integracja zgłasza ograniczoną jakość lub niepełną synchronizację.',
+    'BROKEN' =>
+      'Nie udało się pobrać bieżących danych. Ostatnia poprawna kopia może nadal być dostępna.',
     'NOT_CONFIGURED' =>
       'Ta integracja nie dostarcza obecnie danych w tej wersji aplikacji.',
     _ => 'Brak wystarczających informacji o stanie technicznym źródła.',
