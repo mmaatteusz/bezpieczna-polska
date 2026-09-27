@@ -22,9 +22,9 @@ export async function initializeSources(store:Store){
  const existing=await store.health();
  for(const s of SOURCES){
   const previous=existing.find(h=>h.id===s.id);
-  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?10800:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
+  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?7200:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
   else if(!s.enabled)await store.setHealth({...previous,...s,state:'NOT_CONFIGURED',complete:false});
-  else await store.setHealth({...previous,...s,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?10800:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900});
+  else await store.setHealth({...previous,...s,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?7200:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900});
  }
 }
 export function messageContext(text:string):Event['messageContext']{return /ćwicz|cwicz|exercise/i.test(text)?'EXERCISE':/test syren|test systemu/i.test(text)?'TEST':'UNKNOWN';}
