@@ -49,10 +49,10 @@ jobs:
         run: |
           flutter pub get
           flutter build apk --debug --split-per-abi --target-platform android-arm64 --build-number="$PREVIEW_BUILD_NUMBER" \
-            --dart-define=APP_ENV=preview
-          --dart-define="APP_VERSION=$APP_RELEASE_VERSION"
-          --dart-define="APP_BUILD_NUMBER=$PREVIEW_DISPLAY_BUILD"
-          --dart-define=APP_CHANNEL=preview \
+            --dart-define=APP_ENV=preview \
+            --dart-define="APP_VERSION=$APP_RELEASE_VERSION" \
+            --dart-define="APP_BUILD_NUMBER=$PREVIEW_DISPLAY_BUILD" \
+            --dart-define=APP_CHANNEL=preview \
             --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL" \
             --dart-define=ENABLE_DEVELOPER_SETTINGS=true
       - name: Prepare artifact
