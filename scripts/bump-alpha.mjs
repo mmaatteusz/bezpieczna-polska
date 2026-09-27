@@ -4,6 +4,7 @@ const backendPackageUrl = new URL('../backend/package.json', import.meta.url);
 const backendLockUrl = new URL('../backend/package-lock.json', import.meta.url);
 const pubspecUrl = new URL('../mobile/pubspec.yaml', import.meta.url);
 const runbookUrl = new URL('../docs/PRODUCTION_RUNBOOK.md', import.meta.url);
+const readmeUrl = new URL('../README.md', import.meta.url);
 
 const backendPackageRaw = readFileSync(backendPackageUrl, 'utf8');
 const backendPackage = JSON.parse(backendPackageRaw);
@@ -61,6 +62,16 @@ writeFileSync(
     `Aktualny kod: **${nextVersion}**.`,
   ),
 );
+
+const readme = readFileSync(readmeUrl, 'utf8');
+const updatedReadme = readme.replace(
+  /^Aktualny kod rozwojowy: \*\*[^*]+\*\* \(`build \d+`\)\.$/m,
+  `Aktualny kod rozwojowy: **${nextVersion}** (\`build ${nextBuild}\`).`,
+);
+if (updatedReadme === readme) {
+  throw new Error('README version marker not found');
+}
+writeFileSync(readmeUrl, updatedReadme);
 
 await import('./sync-mobile-version.mjs');
 console.log(`Bumped ${currentVersion} -> ${nextVersion}, production build ${nextBuild}`);
