@@ -41,6 +41,34 @@ class SourceStatusPage extends StatelessWidget {
     _ => 'Brak wystarczających informacji o stanie technicznym źródła.',
   };
 
+  String sourceClassLabel(dynamic value) => switch (value?.toString()) {
+    'STATUS' => 'Źródło statusu',
+    'CONTEXT' => 'Źródło kontekstowe',
+    'REFERENCE' => 'Dane referencyjne / pomiarowe',
+    'SITUATIONAL' => 'Świadomość sytuacyjna',
+    _ => 'Rola nieokreślona',
+  };
+
+  String sourceClassExplanation(dynamic value) => switch (value?.toString()) {
+    'STATUS' =>
+      'Oficjalne ostrzeżenia z tego źródła mogą wpływać na główny status bezpieczeństwa.',
+    'CONTEXT' =>
+      'Źródło dostarcza ważny kontekst, ale jego brak nie jest podstawą do zmiany głównego statusu.',
+    'REFERENCE' =>
+      'To dane pomocnicze, np. katalog obiektów lub pomiary. Nie są samodzielnym alarmem.',
+    'SITUATIONAL' =>
+      'Źródło służy do dodatkowej świadomości sytuacyjnej i nie zastępuje oficjalnych alarmów.',
+    _ => 'Brak jawnie określonej roli źródła.',
+  };
+
+  String absenceLabel(dynamic value) => switch (value?.toString()) {
+    'AUTHORITATIVE_EMPTY_SET' =>
+      'Pusty wynik może potwierdzić brak aktywnych ostrzeżeń w tym zakresie',
+    'NOT_PROVABLE' =>
+      'Brak wpisu nie potwierdza braku zagrożenia',
+    _ => 'Semantyka pustego wyniku nieokreślona',
+  };
+
   String coverageType(dynamic value) => switch (value?.toString()) {
     'ACTIVE_WARNINGS' => 'aktywne ostrzeżenia',
     'RECENT_PUBLICATIONS' => 'ostatnie publikacje',
@@ -110,9 +138,9 @@ class SourceStatusPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Stan techniczny i kompletność danych są pokazywane osobno. '
-                    'Źródło może działać poprawnie, ale obejmować tylko część '
-                    'publikowanych informacji.',
+                    'Stan techniczny, rola źródła i kompletność danych są '
+                    'pokazywane osobno. Pusty wynik ma znaczenie tylko wtedy, '
+                    'gdy kontrakt źródła rzeczywiście potwierdza bieżący stan.',
                   ),
                   const SizedBox(height: 14),
                   Wrap(
@@ -195,7 +223,17 @@ class SourceStatusPage extends StatelessWidget {
                   _row('Ostatni element', stamp(source['lastItemTime'])),
                   if (source['dataDate'] != null)
                     _row('Data danych', source['dataDate'].toString()),
+                  _row('Rola źródła', sourceClassLabel(source['sourceClass'])),
+                  _row(
+                    'Pusty wynik',
+                    absenceLabel(source['absenceSemantics']),
+                  ),
                   _row('Zakres danych', coverageLabel(source)),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(sourceClassExplanation(source['sourceClass'])),
+                  ),
                   if (source['itemCount'] != null)
                     _row('Liczba elementów', source['itemCount'].toString()),
                   if (fallback is Map)
