@@ -16,10 +16,30 @@ if (match[1] !== version) {
 }
 
 const mobileTarget = new URL('../mobile/lib/app_version.dart', import.meta.url);
+const buildNumber = match[2];
 const generatedMobile =
   `// Generated from backend/package.json + mobile/pubspec.yaml by scripts/sync-mobile-version.mjs.\n` +
   `// Run node scripts/sync-mobile-version.mjs after changing both release versions.\n` +
-  `const appVersion = '${version}';\n`;
+  `const appVersion = String.fromEnvironment(\n` +
+  `  'APP_VERSION',\n` +
+  `  defaultValue: '${version}',\n` +
+  `);\n` +
+  `const appBuildNumber = String.fromEnvironment(\n` +
+  `  'APP_BUILD_NUMBER',\n` +
+  `  defaultValue: '${buildNumber}',\n` +
+  `);\n` +
+  `const appChannel = String.fromEnvironment(\n` +
+  `  'APP_CHANNEL',\n` +
+  `  defaultValue: 'development',\n` +
+  `);\n\n` +
+  `String get appVersionLabel {\n` +
+  `  final prefix = appChannel == 'preview'\n` +
+  `      ? 'preview build'\n` +
+  `      : appChannel == 'production'\n` +
+  `      ? 'build'\n` +
+  `      : 'dev build';\n` +
+  `  return '\$appVersion • \$prefix \$appBuildNumber';\n` +
+  `}\n`;
 
 const backendTarget = new URL('../backend/src/config.ts', import.meta.url);
 const backendConfig = readFileSync(backendTarget, 'utf8');
@@ -45,5 +65,5 @@ if (check) {
   writeFileSync(backendTarget, generatedBackend);
 }
 console.log(
-  `Release version ${version} (build ${match[2]}): ${check ? 'verified' : 'synced'}`,
+  `Release version ${version} (build ${buildNumber}): ${check ? 'verified' : 'synced'}`,
 );
