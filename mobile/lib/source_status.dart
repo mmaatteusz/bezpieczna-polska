@@ -14,34 +14,57 @@ class SourceStatusPage extends StatelessWidget {
   String stateOf(Map<String, dynamic> source) =>
       (source['healthStatus'] ?? source['state'] ?? 'UNKNOWN').toString();
 
-  String effectiveStateOf(Map<String, dynamic> source) {
-    final state = stateOf(source);
+  String technicalStateOf(Map<String, dynamic> source) {
     if (source['enabled'] == false) return 'NOT_CONFIGURED';
-    if (state == 'HEALTHY' && source['complete'] != true) return 'DEGRADED';
-    return state;
+    return stateOf(source);
   }
 
-  String label(String state) => switch (state) {
-    'HEALTHY' => 'HEALTHY • aktualne',
-    'STALE' => 'STALE • nieaktualne',
-    'DEGRADED' => 'PARTIAL • niepełne',
-    'BROKEN' => 'DOWN • niedostępne',
-    'NOT_CONFIGURED' => 'NOT_CONFIGURED • niepodłączone',
+  String technicalLabel(String state) => switch (state) {
+    'HEALTHY' => 'AKTUALNE • działa',
+    'STALE' => 'NIEAKTUALNE • ostatnia kopia',
+    'DEGRADED' => 'OGRANICZONE • działa częściowo',
+    'BROKEN' => 'NIEDOSTĘPNE • błąd',
+    'NOT_CONFIGURED' => 'NIEPODŁĄCZONE',
     _ => 'Stan nieustalony',
   };
 
-  String explanation(String state) => switch (state) {
-    'HEALTHY' => 'Źródło dostarcza świeże dane.',
+  String technicalExplanation(String state) => switch (state) {
+    'HEALTHY' => 'Połączenie ze źródłem działa i dane są świeże.',
     'STALE' =>
       'Istnieje ostatnia poprawna kopia, ale jej aktualność nie jest już potwierdzona.',
     'DEGRADED' =>
-      'Źródło działa częściowo. Aplikacja nie zakłada, że brakujące dane oznaczają brak zagrożenia.',
+      'Źródło odpowiada, ale integracja zgłasza ograniczoną jakość lub niepełną synchronizację.',
     'BROKEN' =>
-      'Nie udało się pobrać bieżących danych. Ostatnia poprawna kopia może nadal być widoczna jako STALE.',
+      'Nie udało się pobrać bieżących danych. Ostatnia poprawna kopia może nadal być dostępna.',
     'NOT_CONFIGURED' =>
       'Ta integracja nie dostarcza obecnie danych w tej wersji aplikacji.',
-    _ => 'Brak wystarczających informacji o aktualności tego źródła.',
+    _ => 'Brak wystarczających informacji o stanie technicznym źródła.',
   };
+
+  String coverageType(dynamic value) => switch (value?.toString()) {
+    'ACTIVE_WARNINGS' => 'aktywne ostrzeżenia',
+    'RECENT_PUBLICATIONS' => 'ostatnie publikacje',
+    'FACILITY_CATALOG' => 'katalog obiektów',
+    'MEASUREMENT_NETWORK' => 'sieć pomiarowa',
+    null => 'nieokreślony typ danych',
+    final value => value,
+  };
+
+  String coverageLabel(Map<String, dynamic> source) {
+    final type = coverageType(source['coverage']);
+    if (source['complete'] == true) {
+      return 'pełny dla obsługiwanego zakresu • $type';
+    }
+    return 'ograniczony • $type';
+  }
+
+  String coverageExplanation(Map<String, dynamic> source) {
+    if (source['complete'] == true) {
+      return 'Źródło deklaruje pełny zakres dla obsługiwanego typu danych.';
+    }
+    return 'Źródło nie jest kompletnym rejestrem wszystkich możliwych zdarzeń. '
+        'To ograniczenie zakresu, a nie awaria połączenia.';
+  }
 
   String fallbackLabel(dynamic value) => switch (value) {
     'PRIMARY_OFFICIAL_SOURCE' => 'Bieżące oficjalne źródło',
@@ -61,16 +84,15 @@ class SourceStatusPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final healthy = sources
-        .where((s) => effectiveStateOf(s) == 'HEALTHY')
+    final working = sources
+        .where(
+          (s) => ['HEALTHY', 'DEGRADED'].contains(technicalStateOf(s)),
+        )
         .length;
-    final stale = sources.where((s) => effectiveStateOf(s) == 'STALE').length;
-    final partial = sources
-        .where((s) => effectiveStateOf(s) == 'DEGRADED')
-        .length;
-    final down = sources.where((s) => effectiveStateOf(s) == 'BROKEN').length;
+    final stale = sources.where((s) => technicalStateOf(s) == 'STALE').length;
+    final down = sources.where((s) => technicalStateOf(s) == 'BROKEN').length;
     final notConfigured = sources
-        .where((s) => effectiveStateOf(s) == 'NOT_CONFIGURED')
+        .where((s) => technicalStateOf(s) == 'NOT_CONFIGURED')
         .length;
 
     return Scaffold(
@@ -85,12 +107,14 @@ class SourceStatusPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Aktualność danych',
+                    'Połączenie ze źródłami',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Aplikacja rozróżnia świeże dane, ostatnią poprawną kopię i brak połączenia. Brak danych nigdy nie jest prezentowany jako potwierdzenie bezpieczeństwa.',
+                    'Stan techniczny i kompletność danych są pokazywane osobno. '
+                    'Źródło może działać poprawnie, ale obejmować tylko część '
+                    'publikowanych informacji.',
                   ),
                   const SizedBox(height: 14),
                   Wrap(
@@ -100,33 +124,28 @@ class SourceStatusPage extends StatelessWidget {
                       _metric(
                         context,
                         Icons.check_circle_outline,
-                        'HEALTHY • aktualne',
-                        healthy,
+                        'Działa',
+                        working,
                       ),
                       _metric(
                         context,
                         Icons.schedule_outlined,
-                        'STALE • nieaktualne',
+                        'Nieaktualne',
                         stale,
                       ),
                       _metric(
                         context,
-                        Icons.warning_amber_outlined,
-                        'PARTIAL • niepełne',
-                        partial,
-                      ),
-                      _metric(
-                        context,
                         Icons.error_outline,
-                        'DOWN • niedostępne',
+                        'Niedostępne',
                         down,
                       ),
-                      _metric(
-                        context,
-                        Icons.link_off_outlined,
-                        'NOT_CONFIGURED • niepodłączone',
-                        notConfigured,
-                      ),
+                      if (notConfigured > 0)
+                        _metric(
+                          context,
+                          Icons.link_off_outlined,
+                          'Niepodłączone',
+                          notConfigured,
+                        ),
                     ],
                   ),
                 ],
@@ -145,22 +164,30 @@ class SourceStatusPage extends StatelessWidget {
               ),
             ),
           ...sources.map((source) {
-            final effectiveState = effectiveStateOf(source);
+            final technicalState = technicalStateOf(source);
             final fallback = source['fallback'];
             return Card(
               child: ExpansionTile(
-                leading: Icon(icon(effectiveState)),
+                leading: Icon(icon(technicalState)),
                 title: Text(
                   source['name']?.toString() ?? source['id'].toString(),
                 ),
                 subtitle: Text(
-                  '${label(effectiveState)}\nOstatnia poprawna synchronizacja: ${stamp(source['lastSuccessfulSyncAt'] ?? source['lastSuccess'])}',
+                  '${technicalLabel(technicalState)}\n'
+                  'Zakres danych: ${coverageLabel(source)}\n'
+                  'Ostatnia poprawna synchronizacja: '
+                  '${stamp(source['lastSuccessfulSyncAt'] ?? source['lastSuccess'])}',
                 ),
                 childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 children: [
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(explanation(effectiveState)),
+                    child: Text(technicalExplanation(technicalState)),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(coverageExplanation(source)),
                   ),
                   const SizedBox(height: 10),
                   _row(
@@ -170,8 +197,7 @@ class SourceStatusPage extends StatelessWidget {
                   _row('Ostatni element', stamp(source['lastItemTime'])),
                   if (source['dataDate'] != null)
                     _row('Data danych', source['dataDate'].toString()),
-                  if (source['coverage'] != null)
-                    _row('Zakres', source['coverage'].toString()),
+                  _row('Zakres danych', coverageLabel(source)),
                   if (source['itemCount'] != null)
                     _row('Liczba elementów', source['itemCount'].toString()),
                   if (fallback is Map)
