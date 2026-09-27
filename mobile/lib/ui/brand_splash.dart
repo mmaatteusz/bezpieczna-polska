@@ -19,14 +19,15 @@ class _BrandSplashGateState extends State<BrandSplashGate>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1150),
-    )..addStatusListener((status) {
-      if (status == AnimationStatus.completed && mounted) {
-        setState(() => _showOverlay = false);
-      }
-    });
+    _controller =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 1150),
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed && mounted) {
+            setState(() => _showOverlay = false);
+          }
+        });
     _controller.forward();
   }
 
@@ -70,8 +71,7 @@ class _BrandSplashGateState extends State<BrandSplashGate>
                   child: SafeArea(
                     child: Center(
                       child: Semantics(
-                        label:
-                            'Bezpieczna Polska. Cywilne informacje o bezpieczeństwie.',
+                        label: 'Bezpieczna Polska. Cywilne informacje o bezpieczeństwie.',
                         container: true,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 28),
