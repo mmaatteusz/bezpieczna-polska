@@ -19,5 +19,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          flutter pub get
           dart format lib/source_status.dart test/source_status_test.dart
           git diff -- lib/source_status.dart test/source_status_test.dart
