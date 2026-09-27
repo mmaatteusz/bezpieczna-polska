@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {deflateRawSync} from 'node:zlib';
-import {shelterAdapter,parseShelterResource,parseShelterCsv,extractShelterCsv,SHELTER_DOWNLOAD,SHELTER_RESOURCE,SHELTER_DATASET,SHELTER_ORIGIN_CSV,SHELTER_ARCHIVE} from '../src/shelter-adapter.js';
+import {shelterAdapter,parseShelterResource,parseShelterCsv,extractShelterCsv,prepareOperatorShelterSnapshot,SHELTER_DOWNLOAD,SHELTER_RESOURCE,SHELTER_DATASET,SHELTER_ORIGIN_CSV,SHELTER_ARCHIVE} from '../src/shelter-adapter.js';
 import {Store,openDb} from '../src/store.js';
 import {ingest,initializeSources,fetchPublicBytes} from '../src/adapters.js';
 import {computeStatus,sourceHealth} from '../src/domain.js';
@@ -35,6 +35,30 @@ test('rolling current export may contain more rows than lagging catalog metadata
  assert.equal(b.shelters!.length,4);
  assert.equal(b.metadata!.fallbackSelected,'PRIMARY_OFFICIAL_SOURCE');
  assert.equal(b.metadata!.dataDate,'2026-09-19');
+});
+test('operator snapshot requires at least the live catalog count',()=>{
+ const behind=resource.replace('3 rekordów','4 rekordów');
+ assert.throws(()=>prepareOperatorShelterSnapshot(csv,behind,now),/SHELTER_SNAPSHOT_BEHIND_CATALOG/);
+ const prepared=prepareOperatorShelterSnapshot(csv,resource,now);
+ assert.equal(prepared.shelters.length,3);assert.equal(prepared.metadata.fallbackSelected,'OPERATOR_OFFICIAL_SNAPSHOT');
+ assert.equal(prepared.metadata.catalogItemCount,3);assert.equal(prepared.metadata.dataDate,'2026-09-19');
+});
+test('authenticated admin can atomically import a validated official shelter CSV',async()=>{
+ const db=openDb(undefined,':memory:'),store=new Store(db),token='t'.repeat(32),original=globalThis.fetch;
+ globalThis.fetch=async input=>{
+  const url=typeof input==='string'?input:input instanceof URL?input.href:input.url;
+  if(url===SHELTER_RESOURCE)return new Response(resource,{status:200,headers:{'content-type':'application/json'}});
+  throw new Error('UNEXPECTED_FETCH_'+url);
+ };
+ const app=await buildApp(store,token);
+ try{
+  const unauthorized=await app.inject({method:'POST',url:'/admin/shelters/import',headers:{'content-type':'text/csv'},payload:csv});
+  assert.equal(unauthorized.statusCode,401);
+  const response=await app.inject({method:'POST',url:'/admin/shelters/import',headers:{authorization:`Bearer ${token}`,'content-type':'text/csv'},payload:csv});
+  assert.equal(response.statusCode,200);const body=response.json();assert.equal(body.itemCount,3);assert.equal(body.dataDate,'2026-09-19');assert.equal(body.provenance,'OPERATOR_OFFICIAL_SNAPSHOT');
+  const page=await store.shelterPage({regionId:'PL',q:'',limit:50,offset:0});assert.equal(page.total,3);
+  const health=(await store.health()).find(h=>h.id==='SHELTERS')!;assert.equal(health.state,'HEALTHY');assert.equal(health.fallbackSelected,'OPERATOR_OFFICIAL_SNAPSHOT');assert.equal(health.itemCount,3);
+ }finally{await app.close();await db.close();globalThis.fetch=original;}
 });
 test('CSV rejects truncation, duplicate IDs, bad columns, unknown region and swapped coordinates',()=>{
  const meta=parseShelterResource(resource,now);
