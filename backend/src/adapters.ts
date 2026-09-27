@@ -15,16 +15,16 @@ import {eventSchema,REGIONS,type Event,type Health} from './domain.js';
 import {Store} from './store.js';
 import {SOURCES, type SourceAdapter} from './source-adapter.js';
 import {rcbAdapter} from './rcb-adapter.js';
-import {shelterAdapter,SHELTER_DATASET,SHELTER_RESOURCE,SHELTER_ORIGIN_CSV,SHELTER_ARCHIVE} from './shelter-adapter.js';
+import {shelterAdapter,SHELTER_DATASET,SHELTER_RESOURCE,SHELTER_DOWNLOAD,SHELTER_ORIGIN_CSV,SHELTER_ARCHIVE} from './shelter-adapter.js';
 export {SOURCES} from './source-adapter.js';
 export {parseRcbIndex,parseRcbArticle} from './rcb-adapter.js';
 export async function initializeSources(store:Store){
  const existing=await store.health();
  for(const s of SOURCES){
   const previous=existing.find(h=>h.id===s.id);
-  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?10800:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
+  if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?7200:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
   else if(!s.enabled)await store.setHealth({...previous,...s,state:'NOT_CONFIGURED',complete:false});
-  else await store.setHealth({...previous,...s,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?10800:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900});
+  else await store.setHealth({...previous,...s,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?7200:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900});
  }
 }
 export function messageContext(text:string):Event['messageContext']{return /ćwicz|cwicz|exercise/i.test(text)?'EXERCISE':/test syren|test systemu/i.test(text)?'TEST':'UNKNOWN';}
@@ -66,15 +66,20 @@ export const rsoAdapter:SourceAdapter={
 };
 export async function fetchPublic(url:string):Promise<string>{
  if(isAllowedUaUrl(url))return fetchUa(url);
- const shelterMeta=[SHELTER_DATASET,SHELTER_RESOURCE].includes(url),shelterCurrent=url===SHELTER_ORIGIN_CSV,certFeed=url===CERT_FEED,csirtRssPage=url===CSIRT_GOV_RSS_PAGE,sgSource=isAllowedSgUrl(url),policeSource=isAllowedPoliceUrl(url);
+ const shelterMeta=[SHELTER_DATASET,SHELTER_RESOURCE].includes(url),shelterOrigin=url===SHELTER_ORIGIN_CSV,shelterCurrentResource=url===SHELTER_DOWNLOAD,shelterCurrent=shelterOrigin||shelterCurrentResource,certFeed=url===CERT_FEED,csirtRssPage=url===CSIRT_GOV_RSS_PAGE,sgSource=isAllowedSgUrl(url),policeSource=isAllowedPoliceUrl(url);
  const imgwSource=isAllowedImgwUrl(url),neptunSource=url===NEPTUN_API,paaMeasurementsSource=isAllowedPaaMeasurementsUrl(url);
  const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterMeta&&!shelterCurrent&&!certFeed&&!csirtRssPage&&!sgSource&&!policeSource&&!imgwSource&&!neptunSource&&!paaMeasurementsSource&&url!==UA_BOUNDARY_QUERY&&url!==WCZK_PODKARPACKIE&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
- if(shelterCurrent&&(u.hostname!=='gdziesieukryc.pl'||u.pathname!=='/PS_XML/punkty_schronienia.csv'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
+ if(shelterOrigin&&(u.hostname!=='gdziesieukryc.pl'||u.pathname!=='/PS_XML/punkty_schronienia.csv'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
+ if(shelterCurrentResource&&(u.hostname!=='api.dane.gov.pl'||u.pathname!=='/resources/1393918,punkty-schronienia-dane-csv/file'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(certFeed&&(u.hostname!=='moje.cert.pl'||u.pathname!=='/advisory_feed/advisory/feed/'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(csirtRssPage&&(u.hostname!=='www.csirt.gov.pl'||u.pathname!=='/cer/rss'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(sgSource&&!isAllowedSgUrl(u.href))throw new Error('SOURCE_URL_DENIED');
  if(policeSource&&!isAllowedPoliceUrl(u.href))throw new Error('SOURCE_URL_DENIED');
- const response=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(shelterCurrent?90000:paaMeasurementsSource?30000:20000),headers:paaMeasurementsSource?{'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36','Accept':'application/json,text/plain,*/*','Accept-Language':'pl-PL,pl;q=0.9,en;q=0.8','Referer':'https://monitoring.paa.gov.pl/maps-portal/'}:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/rss+xml,application/xml,application/json,text/csv'}});
+ const response=await fetch(u,{redirect:shelterCurrentResource?'follow':'error',signal:AbortSignal.timeout(shelterCurrent?90000:paaMeasurementsSource?30000:20000),headers:paaMeasurementsSource?{'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36','Accept':'application/json,text/plain,*/*','Accept-Language':'pl-PL,pl;q=0.9,en;q=0.8','Referer':'https://monitoring.paa.gov.pl/maps-portal/'}:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/rss+xml,application/xml,application/json,text/csv'}});
+ if(shelterCurrentResource){
+  const finalUrl=new URL(response.url||u.href);
+  if(finalUrl.protocol!=='https:'||(!finalUrl.hostname.endsWith('.dane.gov.pl')&&finalUrl.hostname!=='dane.gov.pl'&&finalUrl.hostname!=='api.dane.gov.pl'))throw new Error('SHELTER_DOWNLOAD_REDIRECT_DENIED');
+ }
  if(!response.ok){
   if(imgwSource&&response.status===404){
    const errorBody=await response.text();
@@ -113,9 +118,15 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
   if(!previous)throw new Error('UNKNOWN_ADAPTER');
   if(!previous.enabled)continue;
   const begin=Date.now(),lastAttempt=new Date(begin).toISOString();
-  if(adapter.minSyncIntervalSeconds&&previous.lastSuccess&&previous.state==='HEALTHY'&&begin-Date.parse(previous.lastSuccess)>=0&&begin-Date.parse(previous.lastSuccess)<adapter.minSyncIntervalSeconds*1000)continue;
+  const intervalReference=adapter.id==='SHELTERS'&&previous.state==='DEGRADED'?previous.lastAttempt:previous.lastSuccess;
+  if(adapter.minSyncIntervalSeconds&&intervalReference&&['HEALTHY','DEGRADED'].includes(previous.state)&&begin-Date.parse(intervalReference)>=0&&begin-Date.parse(intervalReference)<adapter.minSyncIntervalSeconds*1000)continue;
   try{
    const batch=await adapter.sync({now:new Date(begin),fetchText,fetchBytes,previousEvents:['UA','PAA','SG','POLICE','PSP_INCIDENTS'].includes(adapter.id)?previousEvents:undefined});
+   // Keep the IMGW-style promise enforceable: a source advertised as capable
+   // of proving an empty current-state set must actually return a complete
+   // batch. STATUS sources with that promise must expose ACTIVE_WARNINGS.
+   if(previous.absenceSemantics==='AUTHORITATIVE_EMPTY_SET'&&!batch.complete)throw new Error('SOURCE_EMPTY_SET_CONTRACT_VIOLATION');
+   if(previous.sourceClass==='STATUS'&&previous.absenceSemantics==='AUTHORITATIVE_EMPTY_SET'&&batch.coverage!=='ACTIVE_WARNINGS')throw new Error('SOURCE_STATUS_COVERAGE_CONTRACT_VIOLATION');
    const items=batch.events.map(e=>eventSchema.parse(e));
    if(items.some(e=>e.isDemo||!e.sources.some(s=>s.id===adapter.id)))throw new Error('SOURCE_INVALID_EVENT');
    const published=items.map(e=>e.publishedAt??(e.securityLevel?.publishedAt?e.securityLevel.publishedAt:null)).filter((v):v is string=>v!==null).sort();
@@ -132,7 +143,8 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
   }catch(error){
    const message=error instanceof Error?error.message:'';
    const errorCode=/^[A-Z][A-Z0-9_]{2,100}$/.test(message)?message:'SOURCE_SYNC_FAILED';
-   await store.setHealth({...previous,enabled:true,state:errorCode==='NOT_CONFIGURED_UA_API_KEY_MISSING'?'NOT_CONFIGURED':'BROKEN',lastAttempt,lastFailure:new Date().toISOString(),failureCount:previous.failureCount+1,responseTime:Date.now()-begin,complete:false,errorCode,adapterVersion:adapter.version});
+   const keepShelterLkg=adapter.id==='SHELTERS'&&errorCode==='SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD'&&!!previous.lastSuccess&&!!previous.sourceContentHash;
+   await store.setHealth({...previous,enabled:true,state:errorCode==='NOT_CONFIGURED_UA_API_KEY_MISSING'?'NOT_CONFIGURED':keepShelterLkg?'DEGRADED':'BROKEN',lastAttempt,lastFailure:new Date().toISOString(),failureCount:previous.failureCount+1,responseTime:Date.now()-begin,complete:keepShelterLkg?previous.complete:false,errorCode,adapterVersion:adapter.version});
   }
  }
 }

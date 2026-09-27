@@ -65,15 +65,26 @@ class RadiationData {
     }
     return RadiationData._(m);
   }
+  int? channelMaxAgeSeconds(String id) {
+    for (final h in data['sourceHealth'] as List) {
+      if (h is Map && h['id'] == id && h['maxAgeSeconds'] is num) {
+        final value = (h['maxAgeSeconds'] as num).toInt();
+        return value > 0 ? value : null;
+      }
+    }
+    return null;
+  }
+
   bool channelFresh(String id, DateTime now, bool online) {
     if (!online) return false;
     for (final h in data['sourceHealth'] as List) {
       if (h is! Map || h['id'] != id || h['state'] != 'HEALTHY') continue;
       final date = DateTime.tryParse(h['lastSuccess'] as String? ?? '');
+      final maxAgeSeconds = channelMaxAgeSeconds(id);
       return date != null &&
-          h['maxAgeSeconds'] is num &&
+          maxAgeSeconds != null &&
           !date.isAfter(now.add(const Duration(seconds: 30))) &&
-          now.difference(date).inSeconds < h['maxAgeSeconds'];
+          now.difference(date).inSeconds < maxAgeSeconds;
     }
     return false;
   }
@@ -98,19 +109,16 @@ class RadiationData {
     }
     final items = data['measurements'] as List;
     if (items.isEmpty) return 'Pomiary PAA: brak danych';
+    final maxAgeSeconds = channelMaxAgeSeconds('PAA_MEASUREMENTS');
     final fresh =
+        maxAgeSeconds != null &&
         channelFresh('PAA_MEASUREMENTS', now, online) &&
-        items.every(
-          (p) =>
-              p['freshness'] == 'FRESH' &&
-              now
-                      .difference(DateTime.parse(p['measuredAt'] as String))
-                      .inSeconds <
-                  10800 &&
-              !DateTime.parse(
-                p['measuredAt'] as String,
-              ).isAfter(now.add(const Duration(seconds: 30))),
-        );
+        items.every((p) {
+          final measuredAt = DateTime.parse(p['measuredAt'] as String);
+          return p['freshness'] == 'FRESH' &&
+              !measuredAt.isAfter(now.add(const Duration(seconds: 30))) &&
+              now.difference(measuredAt).inSeconds < maxAgeSeconds;
+        });
     return fresh
         ? 'Dane pomiarowe aktualne'
         : 'Dane pomiarowe STALE — ostatnia zapisana kopia';

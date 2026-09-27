@@ -1,7 +1,8 @@
 import {z} from 'zod';
 import {publicSourceHealth,sourceHealth,type Event,type Health} from './domain.js';
-// Internal storage contract, NOT a claimed PAA API. No production measurement
-// adapter is enabled until the official source format and geometry are verified.
+// Internal storage contract for measurements imported from the verified PAA
+// WFS/GeoJSON adapter. Measurements are informational evidence and never
+// independently create or clear a radiological warning.
 export const radiationMeasurementSchema=z.object({
  stationId:z.string().min(1).max(100),name:z.string().min(1).max(200),
  latitude:z.number().min(49).max(55).nullable(),longitude:z.number().min(14).max(24.2).nullable(),

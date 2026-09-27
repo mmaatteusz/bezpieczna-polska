@@ -11,11 +11,11 @@
 
 ## Wersja i wydania
 
-Aktualny kod rozwojowy: **0.1.0-alpha.24** (`build 25`).
+Aktualny kod rozwojowy: **0.1.0-alpha.25** (`build 26`).
 
 Najnowsze publiczne APK Android: [v0.1.0-alpha.23](https://github.com/mmaatteusz/bezpieczna-polska/releases/latest).
 
-Wersjonowanie alpha jest zsynchronizowane pomiędzy backendem i aplikacją mobilną. Po zmianie kodu trafiającej na `main` automatyzacja podbija numer `alpha.N` oraz numer buildu, o ile dany push nie zawiera już jawnej zmiany wersji. Dzięki temu ręczny bump nie jest podbijany drugi raz.
+Wersjonowanie alpha jest zsynchronizowane pomiędzy backendem i aplikacją mobilną. Każdy nowy push do `main` podbija numer `alpha.N` oraz numer buildu, o ile sam push nie zawiera już jawnej zmiany wersji. Po automatycznym bumpie CI jawnie uruchamia build instalowalnego APK i pełny preview gate z nowego `main`, więc artefakt nie może zostać na poprzedniej alphie.
 
 Automatyczny bump wersji **nie publikuje Release**. GitHub Release powstaje dopiero z przetestowanego, podpisanego APK po przejściu wymaganych kontroli CI. Ostatni opublikowany Release może więc celowo mieć niższy numer niż bieżący kod na `main`.
 
@@ -59,7 +59,7 @@ Automatyczny bump wersji **nie publikuje Release**. GitHub Release powstaje dopi
 | IMGW meteo | ✅ live |
 | IMGW hydro | ✅ live |
 | PAA — komunikaty | ✅ live |
-| PAA — pomiary stacji | ⛔ wyłączone; brak zweryfikowanego stabilnego kontraktu |
+| PAA — pomiary stacji | ✅ live; oficjalny WFS/GeoJSON, osobna warstwa informacyjna; pomiary nie tworzą alarmu |
 | CERT Polska | ✅ live |
 | CSIRT GOV | ⛔ brak użytecznego bieżącego publicznego feedu |
 | Straż Graniczna | ✅ oficjalne publikacje z konserwatywnym filtrem operacyjnym |
@@ -67,10 +67,19 @@ Automatyczny bump wersji **nie publikuje Release**. GitHub Release powstaje dopi
 | PSP incidents | ✅ oficjalne publikacje z filtrem istotnych zdarzeń |
 | Schronienia | ✅ PostGIS + mapa + offline |
 | NEPTUN | ✅ live, z publikacją zgrubnej pozycji |
-| UkraineAlarm | 🟡 kod i UI istnieją, ale produkcja nie ma klucza API i funkcja pozostaje wyłączona |
+| UkraineAlarm | ⛔ adapter zachowany, ale źródło jest jawnie wyłączone do czasu klucza API i uruchomienia kontrolowanego workera |
 | Push | 🟡 backend + UI + outbox istnieją; realne wysyłki wymagają konfiguracji FCM/APNs |
 
 Stan `HEALTHY` potwierdza poprawny ostatni cykl synchronizacji adaptera. Nie oznacza kompletności wszystkich zdarzeń w kraju.
+
+### Kontrakt jakości źródeł
+
+Każde źródło deklaruje dwie niezależne cechy:
+
+- `sourceClass`: `STATUS`, `CONTEXT`, `REFERENCE` albo `SITUATIONAL`,
+- `absenceSemantics`: `AUTHORITATIVE_EMPTY_SET` albo `NOT_PROVABLE`.
+
+Wzorzec stanowią bieżące API IMGW: poprawnie pobrany pusty zestaw jest tam wiarygodną informacją o braku aktywnych ostrzeżeń danego typu. RCB, RSO, WCZK, PAA-komunikaty i inne listy publikacji nie dostają takiego statusu tylko dlatego, że synchronizacja się udała. Źródła kontekstowe i referencyjne nie blokują głównego statusu kraju, ale nadal są widoczne w diagnostyce i mogą dostarczać zdarzenia lub dane pomocnicze.
 
 ## Railway
 
@@ -173,7 +182,7 @@ Najważniejsze otwarte elementy:
 2. wykonać pierwszy podpisany production AAB/APK,
 3. skonfigurować FCM przed reklamowaniem push jako działającego,
 4. podpiąć gotowy panel stopni alarmowych do UI,
-5. zdecydować sposób prezentacji PAA bez udawania niedostępnych pomiarów,
+5. dopracować prezentację świeżości pomiarów PAA per stacja i komunikaty o danych nieaktualnych,
 6. UkraineAlarm uruchomić dopiero po uzyskaniu i zweryfikowaniu klucza API,
 7. przygotować politykę prywatności i Google Play Data Safety,
 8. wykonać pierwszy Google Play Internal Test,

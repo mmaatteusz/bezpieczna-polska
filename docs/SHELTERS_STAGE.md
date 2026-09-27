@@ -3,8 +3,9 @@
 ## Źródło i znaczenie danych
 
 Zbiór [Punkty schronienia w Polsce](https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce), ID 28058, wydawca Komenda Główna PSP (instytucja 22), CC BY 4.0.
-Adapter weryfikuje metadane dane.gov.pl, następnie pobiera [katalog XML PSP](https://gdziesieukryc.pl/PS_XML/punkty_schronienia.xml) oraz wskazany tam [CSV](https://gdziesieukryc.pl/PS_XML/punkty_schronienia.csv). Pobiera katalog ponownie, aby wykryć zmianę wersji podczas transferu.
-Bezpośredni eksport PSP jest nowszy niż buforowany zasób dane.gov.pl; to ten sam zadeklarowany przez wydawcę kanał publikacji.
+Adapter weryfikuje metadane zasobu 1393918 w API dane.gov.pl i wskazany przez wydawcę bieżący CSV PSP. Dostęp serwer-serwer do `gdziesieukryc.pl/PS_XML/punkty_schronienia.csv` oraz do `download_url` dane.gov.pl jest obecnie blokowany HTTP 403; `download_url` przekierowuje na ten sam host PSP. Nie obchodzimy tej blokady.
+
+Metadane dane.gov.pl są źródłem prawdy o deklarowanej dacie i wersji katalogu, ale API tabelaryczne zasobu jest opóźnione i nie może być traktowane jako bieżąca kopia. Gdy automatyczne pobranie bieżącej treści jest niemożliwe, dopuszczony jest uwierzytelniony import oficjalnego CSV przez operatora. Import przechodzi ten sam parser i walidację co automatyczna synchronizacja.
 
 Punkt w wykazie nie jest automatycznie certyfikowanym schronem. Typ źródłowy to „Obiekt ochrony ludności”; brak klasy ochrony, pojemności, dokładnych godzin i informacji o dostępności dla osób z niepełnosprawnościami. Pola pozostają UNKNOWN/null. „Całodobowa”, „Na żądanie” i „Określone godziny” to oznaczenia wydawcy, nie potwierdzenie wejścia teraz.
 Oficjalne wyjaśnienie: https://www.gov.pl/web/kmpsp-warszawa/gdzie-sie-ukryc---sprawdz-najblizsze-punkty-schronienia-ps
@@ -12,11 +13,23 @@ Oficjalne wyjaśnienie: https://www.gov.pl/web/kmpsp-warszawa/gdzie-sie-ukryc---
 ## Synchronizacja i przechowywanie
 
 - Jeden SourceAdapter SHELTERS, uruchamiany automatycznie wraz z RCB. Poprawny import nie częściej niż co 6 h; po awarii ponowna próba w następnym cyklu backendu.
-- Kontrakt sprawdza wydawcę, licencję, dokładne adresy zasobów, nagłówki CSV, liczbę wierszy, identyfikatory, regiony, współrzędne i daty. Niekompletny zbiór jest odrzucany w całości.
+- Kontrakt sprawdza wydawcę, licencję, adresy zasobów, nagłówki CSV, identyfikatory, regiony, współrzędne i daty. Licznik rekordów w metadanych jest kontrolą minimalnej kompletności, a nie wymogiem dokładnej równości, ponieważ bieżący CSV może wyprzedzać aktualizację opisu zasobu.
 - Atomowa zamiana krajowego wykazu i sourceHealth w jednej transakcji. Usunięte punkty znikają po poprawnym imporcie. Błąd pozostawia poprzednie punkty, skrót i czas ostatniego sukcesu; stan źródła jest BROKEN.
-- sourceHealth zawiera lastSuccessfulSyncAt, dataDate, sourceUpdatedAt, liczbę punktów, SHA-256 CSV i licencję. Po 48 h bez poprawnej synchronizacji lub wieku eksportu ponad 14 dni dane są STALE. To polityka aplikacji, nie deklarowana przez PSP gwarancja aktualizacji.
+- sourceHealth zawiera lastSuccessfulSyncAt, dataDate, sourceUpdatedAt, liczbę załadowanych punktów, deklarowaną liczbę/datę katalogu, SHA-256 CSV, pochodzenie i licencję. Załadowany katalog większy od deklarowanego licznika nie jest błędem; katalog mniejszy od aktualnych metadanych jest traktowany jako niekompletny. Po 14 dniach wieku źródła dane są STALE.
 - Osobny model Shelter dla stałych obiektów. Zunifikowany Event pozostaje modelem ostrzeżeń. Katalog obiektów nigdy nie potwierdza braku zagrożeń i nie daje GREEN.
 - PostGIS Point/SRID 4326, indeks GiST, filtrowanie bbox; SQLite wyłącznie w development/testach.
+
+## Import bieżącego oficjalnego CSV
+
+Gdy PSP blokuje pobieranie serwer-serwer, aktualny oficjalny CSV można wgrać przez chroniony endpoint `POST /admin/shelters/import` z `Content-Type: text/csv` i Bearer `ADMIN_TOKEN`. Endpoint pobiera metadane zasobu dane.gov.pl przed i po imporcie, odrzuca zmianę wersji w trakcie operacji, waliduje cały CSV i atomowo zastępuje katalog w PostGIS.
+
+Na Windows można użyć:
+
+```powershell
+.\scripts\import-shelters.ps1 -CsvPath ".\punkty_schronienia.csv"
+```
+
+Wymagane są zmienne `API_BASE_URL` i `ADMIN_TOKEN`. Token nie jest zapisywany w repozytorium. Import operatora jest jawnie oznaczony w diagnostyce jako `OPERATOR_OFFICIAL_SNAPSHOT`; nie jest przedstawiany jako automatyczne pobranie.
 
 ## API i telefon
 
@@ -37,7 +50,7 @@ Przebieg CI z 19 września: https://github.com/mmaatteusz/bezpieczna-polska/acti
 
 Pełny import z bieżącego środowiska powiódł się ponownie 20 września 2026 o 05:17 UTC. Rozdzielamy deterministyczne testy kodu od dostępności źródła z konkretnej maszyny: nie wolno przedstawiać błędu próby sieciowej jako sukcesu integracji na tej maszynie.
 
-Kopia dane.gov.pl nie jest automatycznym fallbackiem: download_url przekierowuje do PSP. Opis zasobu wskazuje 85 762 rekordy (data_date 2026-09-14), podczas gdy API tabular_data zwraca count 81 967 i widoczne rekordy z updated_at 2026-03-10. Bez uzgodnienia kompletności i dat nie publikujemy tego jako pełnej aktualnej kopii.
+Obserwacja 27.09.2026: metadane zasobu wskazują `data_date=2026-09-21`, `modified=2026-09-21T17:58:20Z` i 85 877 rekordów. Ten sam zasób przez API tabelaryczne nadal zwraca 81 967 rekordów z `updated_at=2026-03-10`. `download_url` przekierowuje do PSP i kończy HTTP 403. Przekazany bieżący oficjalny CSV zawiera 86 388 poprawnych rekordów, dlatego dokładna równość z opóźnionym licznikiem metadanych nie jest wymagana.
 
 Rzeczywista obserwacja 2026-09-19: 85 889 punktów PL, 4 064 w kujawsko-pomorskim, 449 wyników dla Bydgoszczy. Eksport PSP z 2026-09-19 08:24:06 +02:00. Pełne metadane i przykłady: [raport](validation/shelters/shelters-live.json). Skrypt ponowienia: `node backend/scripts/live-shelters.mjs docs/validation/shelters` po kompilacji backendu; TEST_DATABASE_URL wybiera bazę testową PostGIS.
 

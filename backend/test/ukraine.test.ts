@@ -72,13 +72,16 @@ test('UA revisions, official correction, resync idempotence, backend restart and
   await store.setHealth(health('BROKEN'));const down=await ukraineSnapshot(store,now);assert.equal(down.healthStatus,'DOWN');assert.equal(down.events.length,1);assert.equal(down.events[0].freshness,'STALE');
  }finally{await db.close();await rm(dir,{recursive:true,force:true});}
 });
-test('UA failed ingestion retains last-known-good and missing key is NOT_CONFIGURED',async()=>{
+test('UA stays NOT_CONFIGURED and preserves last-known-good while default runtime is disabled',async()=>{
  const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();await initializeSources(store);
  try{
   await store.applySync([parse()],{...health(),lastSuccess:'2026-01-01T00:00:00Z'});
-  const broken={...ukraineAdapter,minSyncIntervalSeconds:0,sync:async()=>{throw new Error('NOT_CONFIGURED_UA_API_KEY_MISSING');}};
-  await ingest(store,[broken]);assert.equal((await store.health()).find(h=>h.id==='UA')?.state,'NOT_CONFIGURED');assert.equal((await store.events()).length,1);assert.equal((await store.timeline(parse().id)).length,1);
-  await ingest(store,[{...broken,sync:async()=>{throw new Error('UA_CONTRACT_CHANGED');}}]);assert.equal((await store.health()).find(h=>h.id==='UA')?.state,'BROKEN');assert.equal((await store.events()).length,1);
+  let called=false;
+  const dormant={...ukraineAdapter,minSyncIntervalSeconds:0,sync:async()=>{called=true;throw new Error('UA_CONTRACT_CHANGED');}};
+  await ingest(store,[dormant]);
+  const ua=(await store.health()).find(h=>h.id==='UA')!;
+  assert.equal(called,false);assert.equal(ua.enabled,false);assert.equal(ua.state,'NOT_CONFIGURED');
+  assert.equal((await store.events()).length,1);assert.equal((await store.timeline(parse().id)).length,1);
  }finally{await db.close();}
 });
 test('UA API snapshot and map separate from Polish feed; no operational position fields',async()=>{

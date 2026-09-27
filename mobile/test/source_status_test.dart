@@ -8,6 +8,8 @@ Map<String, dynamic> source(
   required bool enabled,
   required bool complete,
   String? coverage,
+  String sourceClass = 'STATUS',
+  String absenceSemantics = 'NOT_PROVABLE',
 }) {
   return {
     'id': id,
@@ -18,6 +20,8 @@ Map<String, dynamic> source(
     'enabled': enabled,
     'complete': complete,
     'coverage': coverage,
+    'sourceClass': sourceClass,
+    'absenceSemantics': absenceSemantics,
     'maxAgeSeconds': 900,
     'lastSuccess': null,
     'lastAttempt': null,
@@ -43,6 +47,8 @@ void main() {
           enabled: true,
           complete: true,
           coverage: 'ACTIVE_WARNINGS',
+          sourceClass: 'STATUS',
+          absenceSemantics: 'AUTHORITATIVE_EMPTY_SET',
         ),
         source(
           'STALE',
@@ -68,6 +74,12 @@ void main() {
       expect(find.text('Niedostępne: 1'), findsOneWidget);
       expect(find.text('Niepodłączone: 1'), findsOneWidget);
       expect(find.textContaining('PARTIAL • niepełne'), findsNothing);
+      expect(
+        find.textContaining(
+          'Pusty wynik może potwierdzić brak aktywnych ostrzeżeń',
+        ),
+        findsNothing,
+      );
 
       expect(
         find.text(
@@ -86,6 +98,18 @@ void main() {
         findsOneWidget,
       );
 
+      await tester.tap(find.text('FULL'));
+      await tester.pumpAndSettle();
+      expect(find.text('Źródło statusu'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Pusty wynik może potwierdzić brak aktywnych ostrzeżeń',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('FULL'));
+      await tester.pumpAndSettle();
+
       for (var i = 0; i < 6 && find.text('BROKEN').evaluate().isEmpty; i++) {
         await tester.drag(find.byType(ListView), const Offset(0, -350));
         await tester.pumpAndSettle();
@@ -101,6 +125,49 @@ void main() {
       );
       expect(find.textContaining('NIEPODŁĄCZONE'), findsOneWidget);
       expect(find.textContaining('NIEDOSTĘPNE • błąd'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'shelter source shows declared catalog separately from stale loaded copy',
+    (tester) async {
+      final shelter =
+          source(
+            'SHELTERS',
+            state: 'STALE',
+            enabled: true,
+            complete: true,
+            coverage: 'FACILITY_CATALOG',
+            sourceClass: 'REFERENCE',
+          )..addAll({
+            'catalogItemCount': 85877,
+            'catalogDataDate': '2026-09-21',
+            'itemCount': 81967,
+            'dataDate': '2026-03-10',
+            'catalogMismatch': true,
+            'fallback': {
+              'selected': 'TERTIARY_OFFICIAL_ARCHIVE',
+              'reason':
+                  'Katalog deklaruje nowsze dane; załadowano oficjalne archiwum.',
+            },
+          });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SourceStatusPage(sources: [shelter], openLink: (_) async {}),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('SHELTERS'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('85877 • 2026-09-21'), findsOneWidget);
+      expect(find.text('81967 • 2026-03-10'), findsOneWidget);
+      expect(find.text('Archiwum dane.gov.pl'), findsOneWidget);
+      expect(
+        find.textContaining('Katalog PSP deklaruje nowszą lub inną wersję'),
+        findsOneWidget,
+      );
     },
   );
 }

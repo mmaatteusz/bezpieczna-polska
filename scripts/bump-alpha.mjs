@@ -55,13 +55,14 @@ writeFileSync(
 );
 
 const runbook = readFileSync(runbookUrl, 'utf8');
-writeFileSync(
-  runbookUrl,
-  runbook.replace(
-    /^Aktualny kod: \*\*[^*]+\*\*\.$/m,
-    `Aktualny kod: **${nextVersion}**.`,
-  ),
+const updatedRunbook = runbook.replace(
+  /^Aktualny kod: \*\*[^*]+\*\*\.$/m,
+  `Aktualny kod: **${nextVersion}**.`,
 );
+if (updatedRunbook === runbook) {
+  throw new Error('Runbook version marker not found');
+}
+writeFileSync(runbookUrl, updatedRunbook);
 
 const readme = readFileSync(readmeUrl, 'utf8');
 const updatedReadme = readme.replace(

@@ -42,6 +42,29 @@ function validateCriticalSources(sourceHealth){
   console.log('PROBE_CRITICAL_SOURCES_OK',criticalSourceIds.join(','));
 }
 
+function validateSourceContracts(sourceHealth){
+  const classes=new Set(['STATUS','CONTEXT','REFERENCE','SITUATIONAL']);
+  const semantics=new Set(['AUTHORITATIVE_EMPTY_SET','NOT_PROVABLE']);
+  for(const source of sourceHealth){
+    assert(classes.has(source.sourceClass),'source '+source.id+' missing/invalid sourceClass');
+    assert(semantics.has(source.absenceSemantics),'source '+source.id+' missing/invalid absenceSemantics');
+  }
+  for(const id of ['IMGW_METEO','IMGW_HYDRO']){
+    const source=sourceHealth.find(item=>item.id===id);
+    assert(source,'source contract missing: '+id);
+    assert(source.sourceClass==='STATUS',id+' must remain STATUS');
+    assert(source.absenceSemantics==='AUTHORITATIVE_EMPTY_SET',id+' lost authoritative empty-set contract');
+    assert(source.complete===true&&source.coverage==='ACTIVE_WARNINGS',id+' runtime coverage contract invalid');
+  }
+  for(const id of ['RCB','RSO','PAA','WCZK-18']){
+    const source=sourceHealth.find(item=>item.id===id);
+    if(!source)continue;
+    assert(source.sourceClass==='STATUS',id+' must remain STATUS');
+    assert(source.absenceSemantics==='NOT_PROVABLE',id+' must not claim all-clear semantics');
+  }
+  console.log('PROBE_SOURCE_CONTRACTS_OK');
+}
+
 function validateNeptun(data){
   assert(data.schemaVersion===2&&data.mode==='LIVE_AND_HISTORY','NEPTUN schema/mode invalid');
   assert(data.minimumPublishedPrecisionKm>=10,'NEPTUN minimum precision invalid');
@@ -94,6 +117,7 @@ function validateNeptun(data){
   const sources=await json('/v1/sources');
   assert(Array.isArray(sources.sourceHealth),'sources contract invalid');
   validateCriticalSources(sources.sourceHealth);
+  validateSourceContracts(sources.sourceHealth);
 
   const layers=await json('/v1/map/layers');
   const neptunLayer=layers.layers?.find(layer=>layer.id==='NEPTUN');

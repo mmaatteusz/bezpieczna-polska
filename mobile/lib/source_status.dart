@@ -41,6 +41,33 @@ class SourceStatusPage extends StatelessWidget {
     _ => 'Brak wystarczających informacji o stanie technicznym źródła.',
   };
 
+  String sourceClassLabel(dynamic value) => switch (value?.toString()) {
+    'STATUS' => 'Źródło statusu',
+    'CONTEXT' => 'Źródło kontekstowe',
+    'REFERENCE' => 'Dane referencyjne / pomiarowe',
+    'SITUATIONAL' => 'Świadomość sytuacyjna',
+    _ => 'Rola nieokreślona',
+  };
+
+  String sourceClassExplanation(dynamic value) => switch (value?.toString()) {
+    'STATUS' =>
+      'Oficjalne ostrzeżenia z tego źródła mogą wpływać na główny status bezpieczeństwa.',
+    'CONTEXT' =>
+      'Źródło dostarcza ważny kontekst, ale jego brak nie jest podstawą do zmiany głównego statusu.',
+    'REFERENCE' =>
+      'To dane pomocnicze, np. katalog obiektów lub pomiary. Nie są samodzielnym alarmem.',
+    'SITUATIONAL' =>
+      'Źródło służy do dodatkowej świadomości sytuacyjnej i nie zastępuje oficjalnych alarmów.',
+    _ => 'Brak jawnie określonej roli źródła.',
+  };
+
+  String absenceLabel(dynamic value) => switch (value?.toString()) {
+    'AUTHORITATIVE_EMPTY_SET' =>
+      'Pusty wynik może potwierdzić brak aktywnych ostrzeżeń w tym zakresie',
+    'NOT_PROVABLE' => 'Brak wpisu nie potwierdza braku zagrożenia',
+    _ => 'Semantyka pustego wyniku nieokreślona',
+  };
+
   String coverageType(dynamic value) => switch (value?.toString()) {
     'ACTIVE_WARNINGS' => 'aktywne ostrzeżenia',
     'RECENT_PUBLICATIONS' => 'ostatnie publikacje',
@@ -67,8 +94,12 @@ class SourceStatusPage extends StatelessWidget {
   }
 
   String fallbackLabel(dynamic value) => switch (value) {
-    'PRIMARY_OFFICIAL_SOURCE' => 'Bieżące oficjalne źródło',
-    'SECONDARY_OFFICIAL_SOURCE' => 'Oficjalne źródło zapasowe',
+    'PRIMARY_OFFICIAL_SOURCE' => 'Bieżące źródło PSP',
+    'SECONDARY_OFFICIAL_CURRENT_RESOURCE' =>
+      'Aktualna kopia zasobu dane.gov.pl',
+    'TERTIARY_OFFICIAL_ARCHIVE' => 'Archiwum dane.gov.pl',
+    'OPERATOR_OFFICIAL_SNAPSHOT' =>
+      'Zweryfikowany oficjalny CSV (import operatora)',
     'LAST_KNOWN_GOOD_COPY' => 'LAST KNOWN GOOD',
     'NONE' => 'Brak danych zapasowych',
     _ => value?.toString() ?? 'Nie podano',
@@ -110,9 +141,9 @@ class SourceStatusPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Stan techniczny i kompletność danych są pokazywane osobno. '
-                    'Źródło może działać poprawnie, ale obejmować tylko część '
-                    'publikowanych informacji.',
+                    'Stan techniczny, rola źródła i kompletność danych są '
+                    'pokazywane osobno. Pusty wynik ma znaczenie tylko wtedy, '
+                    'gdy kontrakt źródła rzeczywiście potwierdza bieżący stan.',
                   ),
                   const SizedBox(height: 14),
                   Wrap(
@@ -193,13 +224,48 @@ class SourceStatusPage extends StatelessWidget {
                     stamp(source['lastAttemptAt'] ?? source['lastAttempt']),
                   ),
                   _row('Ostatni element', stamp(source['lastItemTime'])),
-                  if (source['dataDate'] != null)
+                  if (source['id'] == 'SHELTERS' &&
+                      source['catalogItemCount'] != null &&
+                      source['catalogDataDate'] != null)
+                    _row(
+                      'Katalog PSP/dane.gov.pl',
+                      '${source['catalogItemCount']} • ${source['catalogDataDate']}',
+                    ),
+                  if (source['id'] == 'SHELTERS' &&
+                      source['itemCount'] != null &&
+                      source['dataDate'] != null)
+                    _row(
+                      'Załadowana kopia',
+                      '${source['itemCount']} • ${source['dataDate']}',
+                    )
+                  else if (source['dataDate'] != null)
                     _row('Data danych', source['dataDate'].toString()),
+                  if (source['id'] == 'SHELTERS' &&
+                      source['catalogMismatch'] == true)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '⚠ Katalog PSP deklaruje nowszą lub inną wersję niż '
+                          'punkty obecnie załadowane w aplikacji.',
+                        ),
+                      ),
+                    ),
+                  _row('Rola źródła', sourceClassLabel(source['sourceClass'])),
+                  _row('Pusty wynik', absenceLabel(source['absenceSemantics'])),
                   _row('Zakres danych', coverageLabel(source)),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(sourceClassExplanation(source['sourceClass'])),
+                  ),
                   if (source['itemCount'] != null)
                     _row('Liczba elementów', source['itemCount'].toString()),
                   if (fallback is Map)
                     _row('Używane dane', fallbackLabel(fallback['selected'])),
+                  if (fallback is Map && fallback['reason'] is String)
+                    _row('Powód przełączenia', fallback['reason'].toString()),
                   const SizedBox(height: 8),
                   if (source['url'] is String)
                     Align(
