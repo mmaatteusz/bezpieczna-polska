@@ -1,0 +1,110 @@
+name: Auto bump alpha on main
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'mobile/**'
+      - 'sources/**'
+      - 'scripts/**'
+      - 'deploy/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-bump-alpha-main
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Detect whether this push already changed the app version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          BEFORE="${{ github.event.before }}"
+          CURRENT="$(node -p "require('./backend/package.json').version")"
+          BEFORE_VERSION=""
+
+          if [[ ! "$BEFORE" =~ ^0+$ ]]; then
+            BEFORE_VERSION="$(
+              git show "$BEFORE:backend/package.json" 2>/dev/null |
+                node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{try{process.stdout.write(String(JSON.parse(s).version??''))}catch{}})" ||
+                true
+            )"
+          fi
+
+          echo "before_version=$BEFORE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "current_version=$CURRENT" >> "$GITHUB_OUTPUT"
+
+          if [[ -n "$BEFORE_VERSION" && "$BEFORE_VERSION" != "$CURRENT" ]]; then
+            echo "needs_bump=false" >> "$GITHUB_OUTPUT"
+            echo "Version already changed in this push: $BEFORE_VERSION -> $CURRENT" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "needs_bump=true" >> "$GITHUB_OUTPUT"
+            echo "Code changed without an alpha bump; preparing the next alpha." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Ensure this run still represents the latest main
+        if: steps.version.outputs.needs_bump == 'true'
+        id: latest
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+            echo "A newer main commit exists; its workflow run will own the bump." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump alpha and validate synchronized version files
+        if: steps.version.outputs.needs_bump == 'true' && steps.latest.outputs.stale != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/bump-alpha.mjs
+          node scripts/sync-mobile-version.mjs --check
+          node scripts/validate-release.mjs
+
+      - name: Commit synchronized alpha version
+        if: steps.version.outputs.needs_bump == 'true' && steps.latest.outputs.stale != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add             backend/package.json             backend/package-lock.json             mobile/pubspec.yaml             mobile/lib/app_version.dart             docs/PRODUCTION_RUNBOOK.md             README.md
+
+          if git diff --cached --quiet; then
+            echo "No version changes to commit." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          VERSION="$(node -p "require('./backend/package.json').version")"
+          git commit -m "chore: bump to $VERSION [skip ci]"
+
+          git fetch origin main
+          if [[ "$(git rev-parse HEAD^)" != "$(git rev-parse origin/main)" ]]; then
+            echo "Main advanced before push; leaving the bump to the newer workflow run." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git push origin HEAD:main
+          echo "Alpha version bumped to $VERSION." >> "$GITHUB_STEP_SUMMARY"
