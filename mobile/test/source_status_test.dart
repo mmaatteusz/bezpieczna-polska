@@ -147,7 +147,8 @@ void main() {
             'catalogMismatch': true,
             'fallback': {
               'selected': 'TERTIARY_OFFICIAL_ARCHIVE',
-              'reason': 'Katalog deklaruje nowsze dane; załadowano oficjalne archiwum.',
+              'reason':
+                  'Katalog deklaruje nowsze dane; załadowano oficjalne archiwum.',
             },
           });
 
