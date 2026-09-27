@@ -95,7 +95,7 @@ export function sourceHealth(health:Health[],now=new Date()){
     :currentFallback
      ?`Główne źródło PSP było niedostępne (${h.fallbackReason??'powód nieustalony'}); użyto bieżącej oficjalnej kopii zasobu dane.gov.pl z datą ${h.dataDate??'nieustaloną'}.`
      :archive
-      ?`Główne źródło PSP i bieżąca kopia dane.gov.pl były niedostępne (${h.fallbackReason??'powód nieustalony'}); użyto oficjalnego archiwum z datą ${h.dataDate??'nieustaloną'}.`
+      ?`Katalog PSP/dane.gov.pl deklaruje ${h.catalogItemCount??'nieustaloną liczbę'} punktów z datą ${h.catalogDataDate??'nieustaloną'}, ale bieżąca treść jest niedostępna (${h.fallbackReason??'powód nieustalony'}). Załadowano oficjalne archiwum: ${h.itemCount??'nieustalona liczba'} punktów z datą ${h.dataDate??'nieustaloną'}.`
       :null;
    return {selected,secondaryStatus:currentFallback?'AVAILABLE_CURRENT' as const:archive?'AVAILABLE_STALE' as const:'NOT_NEEDED' as const,reason};
   })():undefined;
