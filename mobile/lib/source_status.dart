@@ -222,8 +222,34 @@ class SourceStatusPage extends StatelessWidget {
                     stamp(source['lastAttemptAt'] ?? source['lastAttempt']),
                   ),
                   _row('Ostatni element', stamp(source['lastItemTime'])),
-                  if (source['dataDate'] != null)
+                  if (source['id'] == 'SHELTERS' &&
+                      source['catalogItemCount'] != null &&
+                      source['catalogDataDate'] != null)
+                    _row(
+                      'Katalog PSP/dane.gov.pl',
+                      '${source['catalogItemCount']} • ${source['catalogDataDate']}',
+                    ),
+                  if (source['id'] == 'SHELTERS' &&
+                      source['itemCount'] != null &&
+                      source['dataDate'] != null)
+                    _row(
+                      'Załadowana kopia',
+                      '${source['itemCount']} • ${source['dataDate']}',
+                    )
+                  else if (source['dataDate'] != null)
                     _row('Data danych', source['dataDate'].toString()),
+                  if (source['id'] == 'SHELTERS' &&
+                      source['catalogMismatch'] == true)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '⚠ Katalog PSP deklaruje nowszą lub inną wersję niż '
+                          'punkty obecnie załadowane w aplikacji.',
+                        ),
+                      ),
+                    ),
                   _row(
                     'Rola źródła',
                     sourceClassLabel(source['sourceClass']),
