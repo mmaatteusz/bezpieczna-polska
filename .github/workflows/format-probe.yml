@@ -16,6 +16,7 @@ jobs:
           channel: stable
           cache: true
       - name: Show exact formatter diff
+        working-directory: mobile
         run: |
-          dart format mobile/lib mobile/test
-          git diff -- mobile/lib mobile/test
+          dart format lib test
+          git diff -- lib test
