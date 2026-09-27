@@ -27,6 +27,9 @@ jobs:
       - name: Probe dane.gov.pl tabular shelter API
         working-directory: backend
         run: node scripts/probe-shelter-tabular.mjs
+      - name: Probe current shelter origin access
+        working-directory: backend
+        run: node scripts/probe-shelter-origin.mjs
 
   verify:
     runs-on: ubuntu-latest
