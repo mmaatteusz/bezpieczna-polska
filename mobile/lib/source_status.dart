@@ -64,8 +64,7 @@ class SourceStatusPage extends StatelessWidget {
   String absenceLabel(dynamic value) => switch (value?.toString()) {
     'AUTHORITATIVE_EMPTY_SET' =>
       'Pusty wynik może potwierdzić brak aktywnych ostrzeżeń w tym zakresie',
-    'NOT_PROVABLE' =>
-      'Brak wpisu nie potwierdza braku zagrożenia',
+    'NOT_PROVABLE' => 'Brak wpisu nie potwierdza braku zagrożenia',
     _ => 'Semantyka pustego wyniku nieokreślona',
   };
 
