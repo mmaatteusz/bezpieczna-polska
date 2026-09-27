@@ -30,6 +30,9 @@ jobs:
       - name: Probe current shelter origin access
         working-directory: backend
         run: node scripts/probe-shelter-origin.mjs
+      - name: Discover official app shelter API
+        working-directory: backend
+        run: node scripts/probe-shelter-app-api.mjs
 
   verify:
     runs-on: ubuntu-latest
