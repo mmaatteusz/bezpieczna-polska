@@ -8,6 +8,17 @@
 
 > **Status: aktywna alpha / kandydat do zamkniętej bety Android.** Android jest główną platformą. Backend produkcyjny działa na Railway i śledzi `main`. Kod może działać z ostatnią poprawną kopią danych offline, ale brak danych nigdy nie jest traktowany jako potwierdzenie bezpieczeństwa.
 
+
+## Wersja i wydania
+
+Aktualny kod rozwojowy: **0.1.0-alpha.23** (`build 24`).
+
+Najnowsze publiczne APK Android: [v0.1.0-alpha.23](https://github.com/mmaatteusz/bezpieczna-polska/releases/latest).
+
+Wersjonowanie alpha jest zsynchronizowane pomiędzy backendem i aplikacją mobilną. Po zmianie kodu trafiającej na `main` automatyzacja podbija numer `alpha.N` oraz numer buildu, o ile dany push nie zawiera już jawnej zmiany wersji. Dzięki temu ręczny bump nie jest podbijany drugi raz.
+
+Automatyczny bump wersji **nie publikuje Release**. GitHub Release powstaje dopiero z przetestowanego, podpisanego APK po przejściu wymaganych kontroli CI. Ostatni opublikowany Release może więc celowo mieć niższy numer niż bieżący kod na `main`.
+
 ## Co działa
 
 ### Android
@@ -152,9 +163,9 @@ flutter analyze
 flutter test
 ```
 
-Lokalny build Androida domyślnie używa pakietu developerskiego. Dystrybuowalny preview należy budować przez GitHub Actions, żeby zachować prawidłowy signer i linię `versionCode`.
+Lokalny build Androida domyślnie używa pakietu developerskiego. Dystrybuowalny preview należy budować przez GitHub Actions, żeby zachować prawidłowy signer i linię `versionCode`. Publiczne APK alpha są publikowane w GitHub Releases dopiero po zielonym buildzie.
 
-## Co zostało do publicznego wydania
+## Co zostało do wydania produkcyjnego
 
 Najważniejsze otwarte elementy:
 
