@@ -1,11 +1,24 @@
 import {mkdir,writeFile} from 'node:fs/promises';
 import {Store,openDb} from '../dist/store.js';
 import {ingest} from '../dist/adapters.js';
-import {shelterAdapter} from '../dist/shelter-adapter.js';
+import {shelterAdapter,SHELTER_DOWNLOAD} from '../dist/shelter-adapter.js';
 import {buildApp} from '../dist/app.js';
 const directory=process.argv[2];if(!directory)throw new Error('Supply output directory');
+async function redirectObservation(url){
+ const chain=[];let current=url;
+ for(let i=0;i<5;i++){
+  const response=await fetch(current,{redirect:'manual',signal:AbortSignal.timeout(20000),headers:{'User-Agent':'BezpiecznaPolska-live-source-observer/1.0'}});
+  const location=response.headers.get('location'),next=location?new URL(location,current):null;
+  chain.push({status:response.status,url:new URL(current).origin+new URL(current).pathname,location:next?next.origin+next.pathname:null});
+  if(!next||![301,302,303,307,308].includes(response.status))break;
+  current=next.href;
+ }
+ return chain;
+}
 const db=openDb(process.env.TEST_DATABASE_URL,process.env.SQLITE_PATH??':memory:'),store=new Store(db);
 try{
+ const downloadRedirects=await redirectObservation(SHELTER_DOWNLOAD).catch(error=>[{error:error instanceof Error?error.message:'probe failed'}]);
+ console.log('SHELTER_DOWNLOAD_REDIRECT_CHAIN',JSON.stringify(downloadRedirects));
  await store.init();await ingest(store,[shelterAdapter]);
  const source=(await store.health()).find(s=>s.id==='SHELTERS');
  if(source?.state!=='HEALTHY'){
