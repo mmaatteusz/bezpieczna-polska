@@ -17,7 +17,7 @@ function zipCsv(text:string){
  const eocd=Buffer.alloc(22);eocd.writeUInt32LE(0x06054b50,0);eocd.writeUInt16LE(1,8);eocd.writeUInt16LE(1,10);eocd.writeUInt32LE(central.length+name.length,12);eocd.writeUInt32LE(local.length+name.length+compressed.length,16);
  return Buffer.concat([local,name,compressed,central,name,eocd]);
 }
-const fetchText=async(url:string)=>{if(url===SHELTER_RESOURCE)return resource;if(url===SHELTER_DATASET)return dataset;if(url===SHELTER_ORIGIN_CSV)return csv;throw new Error('UNEXPECTED_URL');};
+const fetchText=async(url:string)=>{if(url===SHELTER_RESOURCE)return resource;if(url===SHELTER_DATASET)return dataset;if(url===SHELTER_ORIGIN_CSV||url===SHELTER_DOWNLOAD)return csv;throw new Error('UNEXPECTED_URL');};
 const fetchBytes=async(url:string)=>{if(url===SHELTER_ARCHIVE)return zipCsv(csv);throw new Error('UNEXPECTED_BINARY_URL');};
 const batch=()=>shelterAdapter.sync({now,fetchText,fetchBytes});
 test('real PSP CSV subset preserves official IDs, addresses, coordinates and unknown protection',async()=>{
@@ -44,12 +44,19 @@ test('official dane.gov.pl resource and archive validate publisher, dates and st
  let calls=0;await assert.rejects(shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_RESOURCE&&++calls===2?resource.replace('08:24:06','08:25:06'):fetchText(u),fetchBytes}),/CHANGED_DURING_SYNC/);
  const extracted=extractShelterCsv(zipCsv(csv));assert.equal(extracted.csv,csv.replace(/^\uFEFF/,''));assert.equal(extracted.dataDate,'2026-03-10');
 });
-test('403 on current PSP CSV falls back to official dane.gov.pl archive and marks its older date',async()=>{
+test('403 on PSP origin falls back to current dane.gov.pl resource without losing current date',async()=>{
  const b=await shelterAdapter.sync({now,fetchText:async u=>u===SHELTER_ORIGIN_CSV?Promise.reject(new Error('SOURCE_HTTP_403')):fetchText(u),fetchBytes});
- assert.equal(b.shelters!.length,3);assert.equal(b.metadata!.fallbackSelected,'SECONDARY_OFFICIAL_SOURCE');assert.equal(b.metadata!.sourceUrl,SHELTER_ARCHIVE);
- assert.equal(b.metadata!.dataDate,'2026-03-10');assert.match(b.metadata!.sourceUpdatedAt,/^2026-03-10T09:44:/);
+ assert.equal(b.shelters!.length,3);assert.equal(b.metadata!.fallbackSelected,'SECONDARY_OFFICIAL_CURRENT_RESOURCE');assert.equal(b.metadata!.sourceUrl,SHELTER_DOWNLOAD);
+ assert.equal(b.metadata!.dataDate,'2026-09-19');assert.equal(b.metadata!.sourceUpdatedAt,'2026-09-19T08:24:06Z');assert.equal(b.metadata!.fallbackReason,'SOURCE_HTTP_403');
  const health=sourceHealth([{id:'SHELTERS',name:'S',url:'https://dane.gov.pl/',state:'HEALTHY',lastSuccess:now.toISOString(),lastFailure:null,lastItemTime:b.metadata!.sourceUpdatedAt,failureCount:0,responseTime:1,maxAgeSeconds:172800,complete:true,...b.metadata}],now)[0];
- assert.equal(health.state,'STALE');assert.equal(health.fallback.selected,'SECONDARY_OFFICIAL_SOURCE');assert.equal(health.fallback.secondaryStatus,'AVAILABLE_STALE');
+ assert.equal(health.state,'HEALTHY');assert.equal(health.fallback.selected,'SECONDARY_OFFICIAL_CURRENT_RESOURCE');assert.equal(health.fallback.secondaryStatus,'AVAILABLE_CURRENT');assert.match(health.fallback.reason!,/SOURCE_HTTP_403/);
+});
+test('when PSP origin and current dane.gov.pl resource both fail, archive is tertiary and visibly stale',async()=>{
+ const b=await shelterAdapter.sync({now,fetchText:async u=>[SHELTER_ORIGIN_CSV,SHELTER_DOWNLOAD].includes(u)?Promise.reject(new Error(u===SHELTER_ORIGIN_CSV?'SOURCE_HTTP_403':'SOURCE_HTTP_503')):fetchText(u),fetchBytes});
+ assert.equal(b.shelters!.length,3);assert.equal(b.metadata!.fallbackSelected,'TERTIARY_OFFICIAL_ARCHIVE');assert.equal(b.metadata!.sourceUrl,SHELTER_ARCHIVE);
+ assert.equal(b.metadata!.dataDate,'2026-03-10');assert.match(b.metadata!.sourceUpdatedAt,/^2026-03-10T09:44:/);assert.match(b.metadata!.fallbackReason!,/SOURCE_HTTP_403/);assert.match(b.metadata!.fallbackReason!,/SOURCE_HTTP_503/);
+ const health=sourceHealth([{id:'SHELTERS',name:'S',url:'https://dane.gov.pl/',state:'HEALTHY',lastSuccess:now.toISOString(),lastFailure:null,lastItemTime:b.metadata!.sourceUpdatedAt,failureCount:0,responseTime:1,maxAgeSeconds:172800,complete:true,...b.metadata}],now)[0];
+ assert.equal(health.state,'STALE');assert.equal(health.fallback.selected,'TERTIARY_OFFICIAL_ARCHIVE');assert.equal(health.fallback.secondaryStatus,'AVAILABLE_STALE');
 });
 test('unknown availability is preserved without claiming all-day access',()=>{
  const s=parseShelterCsv(csv.replace('Na żądanie','Nowa wartość'),parseShelterResource(resource,now))[0];assert.equal(s.availability,'UNKNOWN');assert.equal(s.sourceAvailability,'Nowa wartość');
@@ -72,7 +79,7 @@ test('older official archive never replaces a newer last-known-good shelter cata
  try{
   const current=await batch();await ingest(store,[{...shelterAdapter,minSyncIntervalSeconds:0,sync:async()=>current}]);
   const before=(await store.health()).find(h=>h.id==='SHELTERS')!,count=(await store.shelterPage({regionId:'PL',q:'',limit:50,offset:0})).total;
-  const stale={...current,metadata:{...current.metadata!,dataDate:'2026-03-10',sourceUpdatedAt:'2026-03-10T09:44:00Z',sourceUrl:SHELTER_ARCHIVE,fallbackSelected:'SECONDARY_OFFICIAL_SOURCE' as const}};
+  const stale={...current,metadata:{...current.metadata!,dataDate:'2026-03-10',sourceUpdatedAt:'2026-03-10T09:44:00Z',sourceUrl:SHELTER_ARCHIVE,fallbackSelected:'TERTIARY_OFFICIAL_ARCHIVE' as const}};
   await ingest(store,[{...shelterAdapter,minSyncIntervalSeconds:0,sync:async()=>stale}]);
   const after=(await store.health()).find(h=>h.id==='SHELTERS')!;
   assert.equal(after.state,'BROKEN');assert.equal(after.errorCode,'SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD');assert.equal(after.sourceUpdatedAt,before.sourceUpdatedAt);
