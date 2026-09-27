@@ -98,6 +98,8 @@ class SourceStatusPage extends StatelessWidget {
     'SECONDARY_OFFICIAL_CURRENT_RESOURCE' =>
       'Aktualna kopia zasobu dane.gov.pl',
     'TERTIARY_OFFICIAL_ARCHIVE' => 'Archiwum dane.gov.pl',
+    'OPERATOR_OFFICIAL_SNAPSHOT' =>
+      'Zweryfikowany oficjalny CSV (import operatora)',
     'LAST_KNOWN_GOOD_COPY' => 'LAST KNOWN GOOD',
     'NONE' => 'Brak danych zapasowych',
     _ => value?.toString() ?? 'Nie podano',
