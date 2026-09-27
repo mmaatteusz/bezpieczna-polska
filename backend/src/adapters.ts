@@ -118,7 +118,8 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
   if(!previous)throw new Error('UNKNOWN_ADAPTER');
   if(!previous.enabled)continue;
   const begin=Date.now(),lastAttempt=new Date(begin).toISOString();
-  if(adapter.minSyncIntervalSeconds&&previous.lastSuccess&&previous.state==='HEALTHY'&&begin-Date.parse(previous.lastSuccess)>=0&&begin-Date.parse(previous.lastSuccess)<adapter.minSyncIntervalSeconds*1000)continue;
+  const intervalReference=adapter.id==='SHELTERS'&&previous.state==='DEGRADED'?previous.lastAttempt:previous.lastSuccess;
+  if(adapter.minSyncIntervalSeconds&&intervalReference&&['HEALTHY','DEGRADED'].includes(previous.state)&&begin-Date.parse(intervalReference)>=0&&begin-Date.parse(intervalReference)<adapter.minSyncIntervalSeconds*1000)continue;
   try{
    const batch=await adapter.sync({now:new Date(begin),fetchText,fetchBytes,previousEvents:['UA','PAA','SG','POLICE','PSP_INCIDENTS'].includes(adapter.id)?previousEvents:undefined});
    // Keep the IMGW-style promise enforceable: a source advertised as capable
@@ -142,7 +143,8 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
   }catch(error){
    const message=error instanceof Error?error.message:'';
    const errorCode=/^[A-Z][A-Z0-9_]{2,100}$/.test(message)?message:'SOURCE_SYNC_FAILED';
-   await store.setHealth({...previous,enabled:true,state:errorCode==='NOT_CONFIGURED_UA_API_KEY_MISSING'?'NOT_CONFIGURED':'BROKEN',lastAttempt,lastFailure:new Date().toISOString(),failureCount:previous.failureCount+1,responseTime:Date.now()-begin,complete:false,errorCode,adapterVersion:adapter.version});
+   const keepShelterLkg=adapter.id==='SHELTERS'&&errorCode==='SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD'&&!!previous.lastSuccess&&!!previous.sourceContentHash;
+   await store.setHealth({...previous,enabled:true,state:errorCode==='NOT_CONFIGURED_UA_API_KEY_MISSING'?'NOT_CONFIGURED':keepShelterLkg?'DEGRADED':'BROKEN',lastAttempt,lastFailure:new Date().toISOString(),failureCount:previous.failureCount+1,responseTime:Date.now()-begin,complete:keepShelterLkg?previous.complete:false,errorCode,adapterVersion:adapter.version});
   }
  }
 }
