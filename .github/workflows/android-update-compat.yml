@@ -66,6 +66,9 @@ jobs:
           NEXT_BUILD="$((BASE_BUILD + 1))"
           echo "BASE_BUILD=$BASE_BUILD" >> "$GITHUB_ENV"
           echo "NEXT_BUILD=$NEXT_BUILD" >> "$GITHUB_ENV"
+          VERSION="$(sed -nE 's/^version: ([^+]+)\+[0-9]+$/\1/p' mobile/pubspec.yaml)"
+          test -n "$VERSION"
+          echo "APP_RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "Testing update $BASE_BUILD -> $NEXT_BUILD" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build two signed x86_64 preview APKs
@@ -77,6 +80,9 @@ jobs:
           flutter build apk --debug --target-platform android-x64 \
             --build-number="$BASE_BUILD" \
             --dart-define=APP_ENV=preview \
+            --dart-define="APP_VERSION=$APP_RELEASE_VERSION" \
+            --dart-define="APP_BUILD_NUMBER=$BASE_BUILD" \
+            --dart-define=APP_CHANNEL=preview \
             --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL" \
             --dart-define=ENABLE_DEVELOPER_SETTINGS=true
           cp build/app/outputs/flutter-apk/app-debug.apk ../base-preview.apk
@@ -84,6 +90,9 @@ jobs:
           flutter build apk --debug --target-platform android-x64 \
             --build-number="$NEXT_BUILD" \
             --dart-define=APP_ENV=preview \
+            --dart-define="APP_VERSION=$APP_RELEASE_VERSION" \
+            --dart-define="APP_BUILD_NUMBER=$NEXT_BUILD" \
+            --dart-define=APP_CHANNEL=preview \
             --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL" \
             --dart-define=ENABLE_DEVELOPER_SETTINGS=true
           cp build/app/outputs/flutter-apk/app-debug.apk ../update-preview.apk
