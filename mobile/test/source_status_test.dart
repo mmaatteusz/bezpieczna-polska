@@ -8,6 +8,8 @@ Map<String, dynamic> source(
   required bool enabled,
   required bool complete,
   String? coverage,
+  String sourceClass = 'STATUS',
+  String absenceSemantics = 'NOT_PROVABLE',
 }) {
   return {
     'id': id,
@@ -18,6 +20,8 @@ Map<String, dynamic> source(
     'enabled': enabled,
     'complete': complete,
     'coverage': coverage,
+    'sourceClass': sourceClass,
+    'absenceSemantics': absenceSemantics,
     'maxAgeSeconds': 900,
     'lastSuccess': null,
     'lastAttempt': null,
@@ -43,6 +47,8 @@ void main() {
           enabled: true,
           complete: true,
           coverage: 'ACTIVE_WARNINGS',
+          sourceClass: 'STATUS',
+          absenceSemantics: 'AUTHORITATIVE_EMPTY_SET',
         ),
         source(
           'STALE',
@@ -68,6 +74,12 @@ void main() {
       expect(find.text('Niedostępne: 1'), findsOneWidget);
       expect(find.text('Niepodłączone: 1'), findsOneWidget);
       expect(find.textContaining('PARTIAL • niepełne'), findsNothing);
+      expect(
+        find.textContaining(
+          'Pusty wynik może potwierdzić brak aktywnych ostrzeżeń',
+        ),
+        findsNothing,
+      );
 
       expect(
         find.text(
@@ -85,6 +97,18 @@ void main() {
         ),
         findsOneWidget,
       );
+
+      await tester.tap(find.text('FULL'));
+      await tester.pumpAndSettle();
+      expect(find.text('Źródło statusu'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Pusty wynik może potwierdzić brak aktywnych ostrzeżeń',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('FULL'));
+      await tester.pumpAndSettle();
 
       for (var i = 0; i < 6 && find.text('BROKEN').evaluate().isEmpty; i++) {
         await tester.drag(find.byType(ListView), const Offset(0, -350));
