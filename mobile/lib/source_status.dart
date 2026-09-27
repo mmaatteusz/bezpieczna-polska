@@ -222,7 +222,10 @@ class SourceStatusPage extends StatelessWidget {
                   _row('Ostatni element', stamp(source['lastItemTime'])),
                   if (source['dataDate'] != null)
                     _row('Data danych', source['dataDate'].toString()),
-                  _row('Rola źródła', sourceClassLabel(source['sourceClass'])),
+                  _row(
+                    'Rola źródła',
+                    sourceClassLabel(source['sourceClass']),
+                  ),
                   _row(
                     'Pusty wynik',
                     absenceLabel(source['absenceSemantics']),
@@ -231,7 +234,9 @@ class SourceStatusPage extends StatelessWidget {
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(sourceClassExplanation(source['sourceClass'])),
+                    child: Text(
+                      sourceClassExplanation(source['sourceClass']),
+                    ),
                   ),
                   if (source['itemCount'] != null)
                     _row('Liczba elementów', source['itemCount'].toString()),
