@@ -931,8 +931,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                         unawaited(developerSettings());
                       },
                     ),
-                  const Text(
-                    '$appVersion • Pakiety offline • Push opt-in • GPS tylko na żądanie',
+                  Text(
+                    '$appVersionLabel • Pakiety offline • Push opt-in • GPS tylko na żądanie',
                   ),
                 ],
               ),

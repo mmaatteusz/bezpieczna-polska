@@ -5,7 +5,7 @@ const yaml=readFileSync(new URL('../mobile/pubspec.yaml',import.meta.url),'utf8'
 const version=yaml.match(/^version:\s*([^+\s]+)\+(\d+)$/m);
 if(!version||version[1]!==backend.version||!Number.isSafeInteger(Number(version[2]))||Number(version[2])<1)throw new Error('Mobile/backend version mismatch');
 const dartVersion=readFileSync(new URL('../mobile/lib/app_version.dart',import.meta.url),'utf8');
-if(!dartVersion.includes(`const appVersion = '${version[1]}';`))throw new Error('Displayed mobile version mismatch');
+if(!dartVersion.includes(`defaultValue: '${version[1]}',`)||!dartVersion.includes(`defaultValue: '${version[2]}',`))throw new Error('Displayed mobile version/build mismatch');
 if(process.env.GITHUB_REF?.startsWith('refs/tags/')&&!new RegExp('^refs/tags/v'+version[1].replaceAll('.','\\.')+'-rc\\.[0-9]+$').test(process.env.GITHUB_REF))
  throw new Error('Release candidate tag does not match app version');
 if(process.argv.includes('--production')){
