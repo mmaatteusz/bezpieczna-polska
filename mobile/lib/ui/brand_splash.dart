@@ -7,7 +7,7 @@ class BrandLoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: BrandColors.navy,
+    backgroundColor: BrandColors.logoBackground,
     body: SafeArea(
       child: Center(
         child: Semantics(
@@ -19,8 +19,11 @@ class BrandLoadingScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const BrandMark(size: 112),
-                const SizedBox(height: 24),
+                const BrandMark(
+                  size: 230,
+                  semanticLabel: 'Logo Bezpieczna Polska',
+                ),
+                const SizedBox(height: 22),
                 const Text(
                   'Najważniejsze jest Twoje bezpieczeństwo',
                   textAlign: TextAlign.center,
@@ -31,7 +34,7 @@ class BrandLoadingScreen extends StatelessWidget {
                     height: 1.2,
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 22),
                 SizedBox(
                   width: 180,
                   child: ClipRRect(
@@ -43,15 +46,15 @@ class BrandLoadingScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 const Text(
-                  'BEZPIECZNA POLSKA',
+                  'Ładowanie aplikacji…',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: BrandColors.mist,
                     fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.4,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.3,
                   ),
                 ),
               ],

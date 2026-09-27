@@ -634,7 +634,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           ? const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                BrandMark(size: 30),
+                BrandMark(size: 36),
                 SizedBox(width: 10),
                 Text('Bezpieczna Polska'),
               ],
