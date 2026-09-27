@@ -3,15 +3,10 @@ name: Auto bump alpha on main
 on:
   push:
     branches: [main]
-    paths:
-      - 'backend/**'
-      - 'mobile/**'
-      - 'sources/**'
-      - 'scripts/**'
-      - 'deploy/**'
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: auto-bump-alpha-main
@@ -83,6 +78,7 @@ jobs:
 
       - name: Commit synchronized alpha version
         if: steps.version.outputs.needs_bump == 'true' && steps.latest.outputs.stale != 'true'
+        id: commit
         shell: bash
         run: |
           set -euo pipefail
@@ -97,7 +93,7 @@ jobs:
           fi
 
           VERSION="$(node -p "require('./backend/package.json').version")"
-          git commit -m "chore: bump to $VERSION [skip ci]"
+          git commit -m "chore: bump to $VERSION"
 
           git fetch origin main
           if [[ "$(git rev-parse HEAD^)" != "$(git rev-parse origin/main)" ]]; then
@@ -106,4 +102,27 @@ jobs:
           fi
 
           git push origin HEAD:main
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Alpha version bumped to $VERSION." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build installable APK from canonical main
+        if: steps.latest.outputs.stale != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run test-apk.yml --ref main
+          echo "Requested installable APK build from canonical main." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Re-run full preview gate after bot version bump
+        if: steps.commit.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run regression-preview.yml --ref main
+          gh workflow run android-update-compat.yml --ref main
+          echo "Requested preview regression and update-in-place checks for ${{ steps.commit.outputs.version }}." >> "$GITHUB_STEP_SUMMARY"
