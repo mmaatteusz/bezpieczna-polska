@@ -49,6 +49,14 @@ try{
   'https://gdziesieukryc.pl/api/points?limit=1'
  ];
  for(const candidate of apiCandidates)console.log('SHELTER_PUBLIC_API_CANDIDATE',candidate,JSON.stringify(await publicApiObservation(candidate)));
+ const tabularCandidates=[
+  'https://api.dane.gov.pl/1.4/resources/1393918/data',
+  'https://api.dane.gov.pl/1.4/resources/1393918/data?page=1&per_page=1',
+  'https://api.dane.gov.pl/1.4/resources/1393918/data?page[number]=1&page[size]=1',
+  'https://api.dane.gov.pl/1.4/resources/1393918/data?limit=1&offset=0',
+  'https://api.dane.gov.pl/resources/1393918,punkty-schronienia-dane-csv/jsonld'
+ ];
+ for(const candidate of tabularCandidates)console.log('SHELTER_TABULAR_API_CANDIDATE',candidate,JSON.stringify(await publicApiObservation(candidate)));
  try{
   const response=await fetch(SHELTER_RESOURCE,{signal:AbortSignal.timeout(20000),headers:{'User-Agent':'BezpiecznaPolska-live-source-observer/1.0','Accept':'application/json'}});
   const root=await response.json(),attributes=root?.data?.attributes??{};
