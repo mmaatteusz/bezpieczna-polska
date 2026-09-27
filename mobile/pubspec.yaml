@@ -27,3 +27,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/poland_voivodeships_min.geojson
+    - assets/brand/bezpieczna_polska_logo.jpg
