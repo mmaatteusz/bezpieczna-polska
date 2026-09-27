@@ -38,15 +38,56 @@ typedef _ResolvedLocality = ({
 Future<void> main() async {
   validateBuildConfiguration();
   WidgetsFlutterBinding.ensureInitialized();
-  final repository = DataRepository(await SharedPreferences.getInstance());
-  final pushAdapter = await safePushPlatformAdapter(
-    FirebasePushPlatformAdapter.fromBuildConfiguration,
-  );
-  runApp(
-    SafetyApp(
-      repository: repository,
-      pushManager: PushManager(repository, pushAdapter),
-    ),
+  runApp(const BootstrapApp());
+}
+
+class _BootstrapResult {
+  final DataRepository repository;
+  final PushManager pushManager;
+
+  const _BootstrapResult(this.repository, this.pushManager);
+}
+
+class BootstrapApp extends StatefulWidget {
+  const BootstrapApp({super.key});
+
+  @override
+  State<BootstrapApp> createState() => _BootstrapAppState();
+}
+
+class _BootstrapAppState extends State<BootstrapApp> {
+  late final Future<_BootstrapResult> _bootstrap = _initialize();
+
+  Future<_BootstrapResult> _initialize() async {
+    final minimumSplash = Future<void>.delayed(
+      const Duration(milliseconds: 850),
+    );
+    final repository = DataRepository(await SharedPreferences.getInstance());
+    final pushAdapter = await safePushPlatformAdapter(
+      FirebasePushPlatformAdapter.fromBuildConfiguration,
+    );
+    await minimumSplash;
+    return _BootstrapResult(repository, PushManager(repository, pushAdapter));
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<_BootstrapResult>(
+    future: _bootstrap,
+    builder: (context, snapshot) {
+      if (snapshot.hasData) {
+        final result = snapshot.requireData;
+        return SafetyApp(
+          repository: result.repository,
+          pushManager: result.pushManager,
+        );
+      }
+
+      return const MaterialApp(
+        title: 'Bezpieczna Polska',
+        debugShowCheckedModeBanner: false,
+        home: BrandLoadingScreen(),
+      );
+    },
   );
 }
 
@@ -66,12 +107,10 @@ class _SafetyAppState extends State<SafetyApp> {
     theme: buildSafetyTheme(Brightness.light),
     darkTheme: buildSafetyTheme(Brightness.dark),
     themeMode: widget.repository.dark ? ThemeMode.dark : ThemeMode.light,
-    home: BrandSplashGate(
-      child: Home(
-        repository: widget.repository,
-        pushManager: widget.pushManager,
-        onTheme: () => setState(() {}),
-      ),
+    home: Home(
+      repository: widget.repository,
+      pushManager: widget.pushManager,
+      onTheme: () => setState(() {}),
     ),
   );
 }
