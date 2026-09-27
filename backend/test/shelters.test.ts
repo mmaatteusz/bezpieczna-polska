@@ -43,6 +43,17 @@ test('operator snapshot requires at least the live catalog count',()=>{
  assert.equal(prepared.shelters.length,3);assert.equal(prepared.metadata.fallbackSelected,'OPERATOR_OFFICIAL_SNAPSHOT');
  assert.equal(prepared.metadata.catalogItemCount,3);assert.equal(prepared.metadata.dataDate,'2026-09-19');
 });
+test('loaded shelter snapshot ahead of catalog counter is not marked mismatched',()=>{
+ const health=sourceHealth([{
+  id:'SHELTERS',name:'S',url:'https://dane.gov.pl/',enabled:true,state:'HEALTHY',
+  lastSuccess:now.toISOString(),lastFailure:null,lastItemTime:now.toISOString(),failureCount:0,responseTime:1,maxAgeSeconds:1209600,
+  complete:true,coverage:'FACILITY_CATALOG',itemCount:4,dataDate:'2026-09-19',sourceUpdatedAt:'2026-09-19T08:24:06Z',
+  catalogItemCount:3,catalogDataDate:'2026-09-19',catalogUpdatedAt:'2026-09-19T08:24:06Z',
+  sourceContentHash:'a'.repeat(64),sourceUrl:SHELTER_ORIGIN_CSV,datasetUrl:'https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce',
+  license:'CC BY 4.0',fallbackSelected:'OPERATOR_OFFICIAL_SNAPSHOT'
+ }],now)[0];
+ assert.equal(health.catalogMismatch,false);
+});
 test('authenticated admin can atomically import a validated official shelter CSV',async()=>{
  const db=openDb(undefined,':memory:'),store=new Store(db),token='t'.repeat(32),original=globalThis.fetch;await store.init();
  globalThis.fetch=async input=>{
