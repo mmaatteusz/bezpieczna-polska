@@ -899,8 +899,7 @@ class _NotificationSettingsScreenState
               value: prefs.watchedLocations,
               onChanged: busy
                   ? null
-                  : (value) =>
-                        _update(prefs.copyWith(watchedLocations: value)),
+                  : (value) => _update(prefs.copyWith(watchedLocations: value)),
             ),
           ),
           SwitchListTile(
