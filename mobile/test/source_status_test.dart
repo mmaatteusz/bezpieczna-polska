@@ -51,24 +51,9 @@ void main() {
           complete: false,
           coverage: 'RECENT_PUBLICATIONS',
         ),
-        source(
-          'DEGRADED',
-          state: 'DEGRADED',
-          enabled: true,
-          complete: false,
-        ),
-        source(
-          'OFF',
-          state: 'NOT_CONFIGURED',
-          enabled: false,
-          complete: false,
-        ),
-        source(
-          'BROKEN',
-          state: 'BROKEN',
-          enabled: true,
-          complete: false,
-        ),
+        source('DEGRADED', state: 'DEGRADED', enabled: true, complete: false),
+        source('OFF', state: 'NOT_CONFIGURED', enabled: false, complete: false),
+        source('BROKEN', state: 'BROKEN', enabled: true, complete: false),
       ];
 
       await tester.pumpWidget(
@@ -106,7 +91,10 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      expect(find.textContaining('NIEAKTUALNE • ostatnia kopia'), findsOneWidget);
+      expect(
+        find.textContaining('NIEAKTUALNE • ostatnia kopia'),
+        findsOneWidget,
+      );
       expect(
         find.textContaining('OGRANICZONE • działa częściowo'),
         findsOneWidget,
