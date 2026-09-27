@@ -11,7 +11,8 @@ class BrandLoadingScreen extends StatelessWidget {
     body: SafeArea(
       child: Center(
         child: Semantics(
-          label: 'Bezpieczna Polska. Najważniejsze jest Twoje bezpieczeństwo. Ładowanie aplikacji.',
+          label:
+              'Bezpieczna Polska. Najważniejsze jest Twoje bezpieczeństwo. Ładowanie aplikacji.',
           container: true,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
