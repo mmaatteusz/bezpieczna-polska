@@ -85,9 +85,7 @@ class SourceStatusPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final working = sources
-        .where(
-          (s) => ['HEALTHY', 'DEGRADED'].contains(technicalStateOf(s)),
-        )
+        .where((s) => ['HEALTHY', 'DEGRADED'].contains(technicalStateOf(s)))
         .length;
     final stale = sources.where((s) => technicalStateOf(s) == 'STALE').length;
     final down = sources.where((s) => technicalStateOf(s) == 'BROKEN').length;
