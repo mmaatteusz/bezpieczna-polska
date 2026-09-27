@@ -33,12 +33,13 @@ const generatedMobile =
   `  defaultValue: 'development',\n` +
   `);\n\n` +
   `String get appVersionLabel {\n` +
-  `  final prefix = appChannel == 'preview'\n` +
-  `      ? 'preview build'\n` +
-  `      : appChannel == 'production'\n` +
-  `      ? 'build'\n` +
-  `      : 'dev build';\n` +
-  `  return '\$appVersion • \$prefix \$appBuildNumber';\n` +
+  `  if (appChannel == 'preview') {\n` +
+  `    return '\$appVersion • preview build \$appBuildNumber';\n` +
+  `  }\n` +
+  `  if (appChannel == 'production') {\n` +
+  `    return '\$appVersion • build \$appBuildNumber';\n` +
+  `  }\n` +
+  `  return '\$appVersion • dev build \$appBuildNumber';\n` +
   `}\n`;
 
 const backendTarget = new URL('../backend/src/config.ts', import.meta.url);
