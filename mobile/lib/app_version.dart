@@ -14,10 +14,11 @@ const appChannel = String.fromEnvironment(
 );
 
 String get appVersionLabel {
-  final prefix = appChannel == 'preview'
-      ? 'preview build'
-      : appChannel == 'production'
-      ? 'build'
-      : 'dev build';
-  return '$appVersion • $prefix $appBuildNumber';
+  if (appChannel == 'preview') {
+    return '$appVersion • preview build $appBuildNumber';
+  }
+  if (appChannel == 'production') {
+    return '$appVersion • build $appBuildNumber';
+  }
+  return '$appVersion • dev build $appBuildNumber';
 }
