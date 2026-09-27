@@ -35,15 +35,24 @@ jobs:
           cache: true
       - name: Configure stable preview signing
         run: bash scripts/configure-preview-signing.sh
-      - name: Allocate monotonic preview versionCode
+      - name: Allocate preview version identity
         shell: bash
-        run: echo "PREVIEW_BUILD_NUMBER=$(bash scripts/android-preview-build-number.sh)" >> "$GITHUB_ENV"
+        run: |
+          set -euo pipefail
+          echo "PREVIEW_BUILD_NUMBER=$(bash scripts/android-preview-build-number.sh)" >> "$GITHUB_ENV"
+          echo "PREVIEW_DISPLAY_BUILD=${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          VERSION="$(sed -nE 's/^version: ([^+]+)\+[0-9]+$/\1/p' mobile/pubspec.yaml)"
+          test -n "$VERSION"
+          echo "APP_RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
       - name: Build current main-compatible preview APK
         working-directory: mobile
         run: |
           flutter pub get
           flutter build apk --debug --split-per-abi --target-platform android-arm64 --build-number="$PREVIEW_BUILD_NUMBER" \
-            --dart-define=APP_ENV=preview \
+            --dart-define=APP_ENV=preview
+          --dart-define="APP_VERSION=$APP_RELEASE_VERSION"
+          --dart-define="APP_BUILD_NUMBER=$PREVIEW_DISPLAY_BUILD"
+          --dart-define=APP_CHANNEL=preview \
             --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL" \
             --dart-define=ENABLE_DEVELOPER_SETTINGS=true
       - name: Prepare artifact
