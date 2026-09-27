@@ -91,6 +91,26 @@ const fallbackFailureCode=(error:unknown)=>{
  return /^[A-Z][A-Z0-9_]{2,100}$/.test(message)?message:'SOURCE_FETCH_FAILED';
 };
 
+export function prepareOperatorShelterSnapshot(csv:string,resourceText:string,now=new Date()){
+ const meta=parseShelterResource(resourceText,now);
+ const shelters=parseShelterCsv(csv,{...meta,count:null},SHELTER_ORIGIN_CSV);
+ if(shelters.length<meta.count)throw new Error('SHELTER_SNAPSHOT_BEHIND_CATALOG');
+ const metadata={
+  dataDate:meta.dataDate,
+  sourceUpdatedAt:meta.sourceUpdatedAt,
+  sourceContentHash:createHash('sha256').update(csv).digest('hex'),
+  sourceUrl:SHELTER_ORIGIN_CSV,
+  datasetUrl:SHELTER_DATASET_PAGE,
+  license:'CC BY 4.0',
+  fallbackSelected:'OPERATOR_OFFICIAL_SNAPSHOT' as const,
+  fallbackReason:'SERVER_SIDE_SOURCE_BLOCKED_OPERATOR_IMPORT',
+  catalogDataDate:meta.dataDate,
+  catalogUpdatedAt:meta.sourceUpdatedAt,
+  catalogItemCount:meta.count
+ };
+ return {shelters,metadata};
+}
+
 export const shelterAdapter:SourceAdapter={id:'SHELTERS',version:'psp-current+dane-gov-pl-current+archive/3.3.0',minSyncIntervalSeconds:21600,
  async sync({now,fetchText,fetchBytes}){
   const catalog=JSON.parse(await fetchText(SHELTER_DATASET));
