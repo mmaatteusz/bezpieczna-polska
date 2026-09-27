@@ -19,7 +19,7 @@ void main() {
     final image = tester.widget<Image>(find.byType(Image));
     expect(
       (image.image as AssetImage).assetName,
-      'assets/brand/bezpieczna_polska_logo.jpg',
+      'assets/brand/bezpieczna_polska_logo_transparent.png',
     );
     expect(tester.takeException(), isNull);
   });
