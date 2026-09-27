@@ -932,7 +932,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       },
                     ),
                   const Text(
-                    '$appVersion • Pakiety offline • Push opt-in • GPS tylko na żądanie',
+                    '$appVersionLabel • Pakiety offline • Push opt-in • GPS tylko na żądanie',
                   ),
                 ],
               ),
