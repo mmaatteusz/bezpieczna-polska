@@ -116,6 +116,11 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
   if(adapter.minSyncIntervalSeconds&&previous.lastSuccess&&previous.state==='HEALTHY'&&begin-Date.parse(previous.lastSuccess)>=0&&begin-Date.parse(previous.lastSuccess)<adapter.minSyncIntervalSeconds*1000)continue;
   try{
    const batch=await adapter.sync({now:new Date(begin),fetchText,fetchBytes,previousEvents:['UA','PAA','SG','POLICE','PSP_INCIDENTS'].includes(adapter.id)?previousEvents:undefined});
+   // Keep the IMGW-style promise enforceable: a source advertised as capable
+   // of proving an empty current-state set must actually return a complete
+   // batch. STATUS sources with that promise must expose ACTIVE_WARNINGS.
+   if(previous.absenceSemantics==='AUTHORITATIVE_EMPTY_SET'&&!batch.complete)throw new Error('SOURCE_EMPTY_SET_CONTRACT_VIOLATION');
+   if(previous.sourceClass==='STATUS'&&previous.absenceSemantics==='AUTHORITATIVE_EMPTY_SET'&&batch.coverage!=='ACTIVE_WARNINGS')throw new Error('SOURCE_STATUS_COVERAGE_CONTRACT_VIOLATION');
    const items=batch.events.map(e=>eventSchema.parse(e));
    if(items.some(e=>e.isDemo||!e.sources.some(s=>s.id===adapter.id)))throw new Error('SOURCE_INVALID_EVENT');
    const published=items.map(e=>e.publishedAt??(e.securityLevel?.publishedAt?e.securityLevel.publishedAt:null)).filter((v):v is string=>v!==null).sort();
