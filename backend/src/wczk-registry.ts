@@ -28,6 +28,8 @@ export const WCZK_SOURCES=authorities.map(([regionId,regionName,url])=>({
  coveredBy:'RSO' as const,
  deliveryChannel:regionId==='18'?'RSO_AND_OFFICIAL_PAGE':'RSO',
  directAdapterEnabled:regionId==='18',
+ sourceClass:'STATUS' as const,
+ absenceSemantics:'NOT_PROVABLE' as const,
  // Only the separate Podkarpackie HTML mirror has its own adapter. Other
  // provinces are already covered by the nationwide RSO adapter and must not
  // create duplicate NOT_CONFIGURED sources.
