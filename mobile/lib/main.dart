@@ -59,6 +59,14 @@ class SafetyApp extends StatefulWidget {
 }
 
 class _SafetyAppState extends State<SafetyApp> {
+  final ValueNotifier<bool> _startupReady = ValueNotifier<bool>(false);
+
+  @override
+  void dispose() {
+    _startupReady.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Bezpieczna Polska',
@@ -67,9 +75,13 @@ class _SafetyAppState extends State<SafetyApp> {
     darkTheme: buildSafetyTheme(Brightness.dark),
     themeMode: widget.repository.dark ? ThemeMode.dark : ThemeMode.light,
     home: BrandSplashGate(
+      ready: _startupReady,
       child: Home(
         repository: widget.repository,
         pushManager: widget.pushManager,
+        onInitialLoadReady: () {
+          if (mounted && !_startupReady.value) _startupReady.value = true;
+        },
         onTheme: () => setState(() {}),
       ),
     ),
@@ -79,11 +91,13 @@ class _SafetyAppState extends State<SafetyApp> {
 class Home extends StatefulWidget {
   final DataRepository repository;
   final PushManager? pushManager;
+  final VoidCallback? onInitialLoadReady;
   final VoidCallback onTheme;
   const Home({
     super.key,
     required this.repository,
     this.pushManager,
+    this.onInitialLoadReady,
     required this.onTheme,
   });
   @override
@@ -112,12 +126,20 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     region = widget.repository.region;
     localityLabel = widget.repository.primaryLocationLabel;
     snapshot = widget.repository.cached(region);
-    unawaited(loadOffline());
     loadSeen();
     timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) setState(() {});
     });
-    if (widget.repository.api.isNotEmpty) unawaited(startupSync());
+    if (widget.repository.api.isNotEmpty) {
+      unawaited(loadOffline());
+      unawaited(startupSync(onPrimaryLoaded: widget.onInitialLoadReady));
+    } else {
+      unawaited(
+        loadOffline().whenComplete(() {
+          if (mounted) widget.onInitialLoadReady?.call();
+        }),
+      );
+    }
     refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted &&
           !loading &&
@@ -205,7 +227,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> startupSync() async {
+  Future<void> startupSync({VoidCallback? onPrimaryLoaded}) async {
     if (backgroundSync || widget.repository.api.isEmpty) return;
     final target = region;
     setState(() => backgroundSync = true);
@@ -221,6 +243,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
 
     try {
       await refresh();
+      if (mounted) onPrimaryLoaded?.call();
       if (!mounted || target != region || widget.repository.api.isEmpty) return;
 
       final existingPackage = await widget.repository.offlinePackage(target);
