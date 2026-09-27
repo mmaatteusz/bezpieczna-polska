@@ -6,9 +6,7 @@ void main() {
   testWidgets('loading screen keeps the safety message and progress visible', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      const MaterialApp(home: BrandLoadingScreen()),
-    );
+    await tester.pumpWidget(const MaterialApp(home: BrandLoadingScreen()));
 
     expect(
       find.text('Najważniejsze jest Twoje bezpieczeństwo'),
