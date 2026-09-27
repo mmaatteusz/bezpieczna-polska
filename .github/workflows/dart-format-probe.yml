@@ -1,0 +1,31 @@
+name: Temporary Dart formatter probe
+on:
+  push:
+    branches: [stage/source-contracts-imgw-pattern]
+    paths:
+      - 'mobile/lib/source_status.dart'
+      - 'mobile/test/source_status_test.dart'
+      - '.github/workflows/dart-format-probe.yml'
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Format target files
+        working-directory: mobile
+        run: dart format lib/source_status.dart test/source_status_test.dart
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dart-formatted-source-status
+          path: |
+            mobile/lib/source_status.dart
+            mobile/test/source_status_test.dart
+          retention-days: 1
