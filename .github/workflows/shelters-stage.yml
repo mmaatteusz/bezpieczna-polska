@@ -16,6 +16,18 @@ concurrency:
   group: shelters-stage-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  api-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Probe dane.gov.pl tabular shelter API
+        working-directory: backend
+        run: node scripts/probe-shelter-tabular.mjs
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
