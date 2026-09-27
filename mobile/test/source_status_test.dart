@@ -7,6 +7,7 @@ Map<String, dynamic> source(
   required String state,
   required bool enabled,
   required bool complete,
+  String? coverage,
 }) {
   return {
     'id': id,
@@ -16,6 +17,7 @@ Map<String, dynamic> source(
     'healthStatus': state,
     'enabled': enabled,
     'complete': complete,
+    'coverage': coverage,
     'maxAgeSeconds': 900,
     'lastSuccess': null,
     'lastAttempt': null,
@@ -25,13 +27,48 @@ Map<String, dynamic> source(
 
 void main() {
   testWidgets(
-    'source page distinguishes active partial, disconnected and broken sources',
+    'source page separates technical health from coverage completeness',
     (tester) async {
       final sources = [
-        source('PARTIAL', state: 'HEALTHY', enabled: true, complete: false),
-        source('FULL', state: 'HEALTHY', enabled: true, complete: true),
-        source('OFF', state: 'NOT_CONFIGURED', enabled: false, complete: false),
-        source('BROKEN', state: 'BROKEN', enabled: true, complete: false),
+        source(
+          'LIMITED',
+          state: 'HEALTHY',
+          enabled: true,
+          complete: false,
+          coverage: 'RECENT_PUBLICATIONS',
+        ),
+        source(
+          'FULL',
+          state: 'HEALTHY',
+          enabled: true,
+          complete: true,
+          coverage: 'ACTIVE_WARNINGS',
+        ),
+        source(
+          'STALE',
+          state: 'STALE',
+          enabled: true,
+          complete: false,
+          coverage: 'RECENT_PUBLICATIONS',
+        ),
+        source(
+          'DEGRADED',
+          state: 'DEGRADED',
+          enabled: true,
+          complete: false,
+        ),
+        source(
+          'OFF',
+          state: 'NOT_CONFIGURED',
+          enabled: false,
+          complete: false,
+        ),
+        source(
+          'BROKEN',
+          state: 'BROKEN',
+          enabled: true,
+          complete: false,
+        ),
       ];
 
       await tester.pumpWidget(
@@ -41,38 +78,45 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('HEALTHY • aktualne: 1'), findsOneWidget);
-      expect(find.text('PARTIAL • niepełne: 1'), findsOneWidget);
-      expect(find.text('DOWN • niedostępne: 1'), findsOneWidget);
-      expect(find.text('NOT_CONFIGURED • niepodłączone: 1'), findsOneWidget);
+      expect(find.text('Działa: 3'), findsOneWidget);
+      expect(find.text('Nieaktualne: 1'), findsOneWidget);
+      expect(find.text('Niedostępne: 1'), findsOneWidget);
+      expect(find.text('Niepodłączone: 1'), findsOneWidget);
+      expect(find.textContaining('PARTIAL • niepełne'), findsNothing);
+
       expect(
         find.text(
-          'PARTIAL • niepełne\nOstatnia poprawna synchronizacja: Nie podano',
+          'AKTUALNE • działa\n'
+          'Zakres danych: ograniczony • ostatnie publikacje\n'
+          'Ostatnia poprawna synchronizacja: Nie podano',
         ),
         findsOneWidget,
       );
       expect(
         find.text(
-          'HEALTHY • aktualne\nOstatnia poprawna synchronizacja: Nie podano',
+          'AKTUALNE • działa\n'
+          'Zakres danych: pełny dla obsługiwanego zakresu • aktywne ostrzeżenia\n'
+          'Ostatnia poprawna synchronizacja: Nie podano',
         ),
         findsOneWidget,
       );
-      for (var i = 0; i < 4 && find.text('BROKEN').evaluate().isEmpty; i++) {
-        await tester.drag(find.byType(ListView), const Offset(0, -300));
+
+      for (
+        var i = 0;
+        i < 6 && find.text('BROKEN').evaluate().isEmpty;
+        i++
+      ) {
+        await tester.drag(find.byType(ListView), const Offset(0, -350));
         await tester.pumpAndSettle();
       }
+
+      expect(find.textContaining('NIEAKTUALNE • ostatnia kopia'), findsOneWidget);
       expect(
-        find.text(
-          'NOT_CONFIGURED • niepodłączone\nOstatnia poprawna synchronizacja: Nie podano',
-        ),
+        find.textContaining('OGRANICZONE • działa częściowo'),
         findsOneWidget,
       );
-      expect(
-        find.text(
-          'DOWN • niedostępne\nOstatnia poprawna synchronizacja: Nie podano',
-        ),
-        findsOneWidget,
-      );
+      expect(find.textContaining('NIEPODŁĄCZONE'), findsOneWidget);
+      expect(find.textContaining('NIEDOSTĘPNE • błąd'), findsOneWidget);
     },
   );
 }
