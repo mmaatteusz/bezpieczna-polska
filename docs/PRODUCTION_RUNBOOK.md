@@ -1,6 +1,6 @@
 # Production runbook — Bezpieczna Polska
 
-Aktualny kod: **0.1.0-alpha.23**.\n\nSchemat wersji: `0.1.0-alpha.N` oznacza etap funkcjonalny, `+build` w `pubspec.yaml` jest monotonicznym numerem produkcyjnym, a preview APK używa dodatkowo własnego rosnącego `versionCode` z CI. W interfejsie aplikacja pokazuje zarówno alphę, jak i konkretny numer buildu.
+Aktualny kod: **0.1.0-alpha.25**.\n\nSchemat wersji: `0.1.0-alpha.N` oznacza etap funkcjonalny, `+build` w `pubspec.yaml` jest monotonicznym numerem produkcyjnym, a preview APK używa dodatkowo własnego rosnącego `versionCode` z CI. W interfejsie aplikacja pokazuje zarówno alphę, jak i konkretny numer buildu.
 
 Ten dokument opisuje docelowy sposób wdrożenia. Stan faktycznego Railway z 2026-09-26 jest opisany w [AUDIT_2026-09-26.md](AUDIT_2026-09-26.md).
 
