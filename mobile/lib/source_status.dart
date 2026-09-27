@@ -94,8 +94,10 @@ class SourceStatusPage extends StatelessWidget {
   }
 
   String fallbackLabel(dynamic value) => switch (value) {
-    'PRIMARY_OFFICIAL_SOURCE' => 'Bieżące oficjalne źródło',
-    'SECONDARY_OFFICIAL_SOURCE' => 'Oficjalne źródło zapasowe',
+    'PRIMARY_OFFICIAL_SOURCE' => 'Bieżące źródło PSP',
+    'SECONDARY_OFFICIAL_CURRENT_RESOURCE' =>
+      'Aktualna kopia zasobu dane.gov.pl',
+    'TERTIARY_OFFICIAL_ARCHIVE' => 'Archiwum dane.gov.pl',
     'LAST_KNOWN_GOOD_COPY' => 'LAST KNOWN GOOD',
     'NONE' => 'Brak danych zapasowych',
     _ => value?.toString() ?? 'Nie podano',
@@ -242,6 +244,8 @@ class SourceStatusPage extends StatelessWidget {
                     _row('Liczba elementów', source['itemCount'].toString()),
                   if (fallback is Map)
                     _row('Używane dane', fallbackLabel(fallback['selected'])),
+                  if (fallback is Map && fallback['reason'] is String)
+                    _row('Powód przełączenia', fallback['reason'].toString()),
                   const SizedBox(height: 8),
                   if (source['url'] is String)
                     Align(
