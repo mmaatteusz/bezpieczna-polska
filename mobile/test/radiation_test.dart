@@ -58,7 +58,10 @@ void main() {
       'unit': 'nSv/h',
       'freshness': 'FRESH',
     };
-    Map<String, dynamic> payload(Map<String, dynamic> point) => {
+    Map<String, dynamic> payload(
+      Map<String, dynamic> point, {
+      int maxAgeSeconds = 10800,
+    }) => {
       ...radiation(now),
       'measurementState': 'FRESH',
       'measurements': [point],
@@ -67,7 +70,7 @@ void main() {
           'id': 'PAA_MEASUREMENTS',
           'state': 'HEALTHY',
           'lastSuccess': now.toIso8601String(),
-          'maxAgeSeconds': 10800,
+          'maxAgeSeconds': maxAgeSeconds,
         },
       ],
     };
@@ -80,6 +83,11 @@ void main() {
     );
     expect(
       data.measurementText(now.add(const Duration(hours: 4)), true),
+      contains('STALE'),
+    );
+    final strict = RadiationData.parse(payload(p, maxAgeSeconds: 3600));
+    expect(
+      strict.measurementText(now.add(const Duration(hours: 2)), true),
       contains('STALE'),
     );
     for (final bad in [
