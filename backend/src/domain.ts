@@ -39,7 +39,7 @@ export const eventSchema=z.object({
  if(e.geometry&&e.latitude!==null&&(e.geometry.type!=='Point'||e.geometry.coordinates[0]!==e.longitude||e.geometry.coordinates[1]!==e.latitude))ctx.addIssue({code:'custom',message:'Conflicting event geometry'});
 }).transform(e=>({...e,geometry:e.geometry??(e.latitude!==null&&e.longitude!==null?{type:'Point' as const,coordinates:[e.longitude,e.latitude] as [number,number]}:null)}));
 export type Event=z.infer<typeof eventSchema>;
-export type Health={uaMetadata?:{regions:import('./ukraine-adapter.js').UaRegion[];activeEventIds:string[];lastActionIndex:number};neptunMetadata?:{serverTime:string;threats:import('./neptun-live-adapter.js').PublicNeptunThreat[]};checkedEventIds?:string[];regionId?:string;implementation?:string;integrationNote?:string;sourceClass?:import('./source-adapter.js').SourceClass;absenceSemantics?:import('./source-adapter.js').AbsenceSemantics;id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS'|'FACILITY_CATALOG'|'MEASUREMENT_NETWORK';pagesFetched?:number;dataDate?:string;sourceUpdatedAt?:string;sourceContentHash?:string;sourceUrl?:string;datasetUrl?:string;license?:string;catalogDataDate?:string;catalogUpdatedAt?:string;catalogItemCount?:number;fallbackSelected?:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_CURRENT_RESOURCE'|'TERTIARY_OFFICIAL_ARCHIVE';fallbackReason?:string|null;catalogMismatch?:boolean;fallback?:{selected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_CURRENT_RESOURCE'|'TERTIARY_OFFICIAL_ARCHIVE'|'LAST_KNOWN_GOOD_COPY'|'NONE';secondaryStatus:'NOT_NEEDED'|'AVAILABLE_CURRENT'|'AVAILABLE_STALE'|'NOT_VERIFIED';reason:string|null}};
+export type Health={uaMetadata?:{regions:import('./ukraine-adapter.js').UaRegion[];activeEventIds:string[];lastActionIndex:number};neptunMetadata?:{serverTime:string;threats:import('./neptun-live-adapter.js').PublicNeptunThreat[]};checkedEventIds?:string[];regionId?:string;implementation?:string;integrationNote?:string;sourceClass?:import('./source-adapter.js').SourceClass;absenceSemantics?:import('./source-adapter.js').AbsenceSemantics;id:string;name:string;url:string;state:'HEALTHY'|'DEGRADED'|'BROKEN'|'NOT_CONFIGURED';lastSuccess:string|null;lastFailure:string|null;lastItemTime:string|null;failureCount:number;responseTime:number|null;maxAgeSeconds:number;complete:boolean;enabled?:boolean;lastAttempt?:string|null;errorCode?:string|null;itemCount?:number;adapterVersion?:string|null;coverage?:'RECENT_PUBLICATIONS'|'ACTIVE_WARNINGS'|'FACILITY_CATALOG'|'MEASUREMENT_NETWORK';pagesFetched?:number;dataDate?:string;sourceUpdatedAt?:string;sourceContentHash?:string;sourceUrl?:string;datasetUrl?:string;license?:string;catalogDataDate?:string;catalogUpdatedAt?:string;catalogItemCount?:number;fallbackSelected?:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_CURRENT_RESOURCE'|'TERTIARY_OFFICIAL_ARCHIVE'|'OPERATOR_OFFICIAL_SNAPSHOT';fallbackReason?:string|null;catalogMismatch?:boolean;fallback?:{selected:'PRIMARY_OFFICIAL_SOURCE'|'SECONDARY_OFFICIAL_CURRENT_RESOURCE'|'TERTIARY_OFFICIAL_ARCHIVE'|'OPERATOR_OFFICIAL_SNAPSHOT'|'LAST_KNOWN_GOOD_COPY'|'NONE';secondaryStatus:'NOT_NEEDED'|'AVAILABLE_CURRENT'|'AVAILABLE_STALE'|'NOT_VERIFIED';reason:string|null}};
 export function healthSourceClass(h:Health):import('./source-adapter.js').SourceClass{
  if(h.sourceClass)return h.sourceClass;
  if(['SHELTERS','PAA_MEASUREMENTS'].includes(h.id)||['FACILITY_CATALOG','MEASUREMENT_NETWORK'].includes(h.coverage??''))return 'REFERENCE';
@@ -89,15 +89,18 @@ export function sourceHealth(health:Health[],now=new Date()){
   const fallback=h.id==='SHELTERS'?(()=>{
    const selected:NonNullable<Health['fallback']>['selected']=!h.lastSuccess?'NONE':h.state!=='HEALTHY'?'LAST_KNOWN_GOOD_COPY':h.fallbackSelected??'PRIMARY_OFFICIAL_SOURCE';
    const currentFallback=selected==='SECONDARY_OFFICIAL_CURRENT_RESOURCE';
+   const operatorSnapshot=selected==='OPERATOR_OFFICIAL_SNAPSHOT';
    const archive=selected==='TERTIARY_OFFICIAL_ARCHIVE';
    const reason=selected==='LAST_KNOWN_GOOD_COPY'
     ?'Bieżąca synchronizacja nie powiodła się; zachowano ostatnią poprawną kopię.'
-    :currentFallback
-     ?`Główne źródło PSP było niedostępne (${h.fallbackReason??'powód nieustalony'}); użyto bieżącej oficjalnej kopii zasobu dane.gov.pl z datą ${h.dataDate??'nieustaloną'}.`
-     :archive
-      ?`Katalog PSP/dane.gov.pl deklaruje ${h.catalogItemCount??'nieustaloną liczbę'} punktów z datą ${h.catalogDataDate??'nieustaloną'}, ale bieżąca treść jest niedostępna (${h.fallbackReason??'powód nieustalony'}). Załadowano oficjalne archiwum: ${h.itemCount??'nieustalona liczba'} punktów z datą ${h.dataDate??'nieustaloną'}.`
-      :null;
-   return {selected,secondaryStatus:currentFallback?'AVAILABLE_CURRENT' as const:archive?'AVAILABLE_STALE' as const:'NOT_NEEDED' as const,reason};
+    :operatorSnapshot
+     ?`Bieżący oficjalny eksport został wgrany przez uwierzytelnionego operatora po walidacji z metadanymi dane.gov.pl. Dane: ${h.itemCount??'nieustalona liczba'} punktów, data katalogu ${h.dataDate??'nieustalona'}.`
+     :currentFallback
+      ?`Główne źródło PSP było niedostępne (${h.fallbackReason??'powód nieustalony'}); użyto bieżącej oficjalnej kopii zasobu dane.gov.pl z datą ${h.dataDate??'nieustaloną'}.`
+      :archive
+       ?`Katalog PSP/dane.gov.pl deklaruje ${h.catalogItemCount??'nieustaloną liczbę'} punktów z datą ${h.catalogDataDate??'nieustaloną'}, ale bieżąca treść jest niedostępna (${h.fallbackReason??'powód nieustalony'}). Załadowano oficjalne archiwum: ${h.itemCount??'nieustalona liczba'} punktów z datą ${h.dataDate??'nieustaloną'}.`
+       :null;
+   return {selected,secondaryStatus:operatorSnapshot||currentFallback?'AVAILABLE_CURRENT' as const:archive?'AVAILABLE_STALE' as const:'NOT_NEEDED' as const,reason};
   })():undefined;
   return {...h,sourceClass,absenceSemantics,...(h.id==='SHELTERS'?{catalogMismatch}:{}),...(fallback?{fallback}:{}),healthStatus:stale?'STALE':h.state,state:stale?'STALE':h.state,lastSuccessfulSyncAt:h.lastSuccess,lastAttemptAt:h.lastAttempt??null,errorCode:h.errorCode??null};
  });
