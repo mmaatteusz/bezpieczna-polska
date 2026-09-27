@@ -25,7 +25,8 @@ test('real PSP CSV subset preserves official IDs, addresses, coordinates and unk
  const s=b.shelters![0];assert.equal(s.address,'ul. Narcyza Gieryna 4, Bydgoszcz');assert.equal(s.regionId,'04');
  assert.equal(s.latitude,53.1661471448123);assert.equal(s.longitude,18.1731816478461);assert.equal(s.protectionClass,'UNKNOWN');assert.equal(s.capacity,null);
  assert.deepEqual(b.shelters!.map(s=>s.availability),['ON_REQUEST','24H','LIMITED_HOURS']);assert.ok(b.shelters!.every(s=>s.openingHours===null));
- assert.equal(b.metadata!.license,'CC BY 4.0');assert.equal(b.metadata!.fallbackSelected,'PRIMARY_OFFICIAL_SOURCE');assert.equal(b.metadata!.sourceUrl,SHELTER_ORIGIN_CSV);assert.equal(b.complete,true);
+ assert.equal(b.metadata!.license,'CC BY 4.0');assert.equal(b.metadata!.fallbackSelected,'PRIMARY_OFFICIAL_SOURCE');assert.equal(b.metadata!.sourceUrl,SHELTER_ORIGIN_CSV);
+ assert.equal(b.metadata!.catalogDataDate,'2026-09-19');assert.equal(b.metadata!.catalogItemCount,3);assert.equal(b.complete,true);
 });
 test('rolling current export may contain more rows than lagging catalog metadata',async()=>{
  const lines=csv.trimEnd().split(/\r?\n/),extra=lines[1].replace('OZO-6D94271C9708','OZO-ROLLING-EXTRA');
@@ -57,14 +58,15 @@ test('403 on PSP origin falls back to current dane.gov.pl resource without losin
  assert.equal(b.shelters!.length,3);assert.equal(b.metadata!.fallbackSelected,'SECONDARY_OFFICIAL_CURRENT_RESOURCE');assert.equal(b.metadata!.sourceUrl,SHELTER_DOWNLOAD);
  assert.equal(b.metadata!.dataDate,'2026-09-19');assert.equal(b.metadata!.sourceUpdatedAt,'2026-09-19T08:24:06Z');assert.equal(b.metadata!.fallbackReason,'SOURCE_HTTP_403');
  const health=sourceHealth([{id:'SHELTERS',name:'S',url:'https://dane.gov.pl/',state:'HEALTHY',lastSuccess:now.toISOString(),lastFailure:null,lastItemTime:b.metadata!.sourceUpdatedAt,failureCount:0,responseTime:1,maxAgeSeconds:172800,complete:true,...b.metadata}],now)[0];
- assert.equal(health.state,'HEALTHY');assert.equal(health.fallback.selected,'SECONDARY_OFFICIAL_CURRENT_RESOURCE');assert.equal(health.fallback.secondaryStatus,'AVAILABLE_CURRENT');assert.match(health.fallback.reason!,/SOURCE_HTTP_403/);
+ assert.equal(health.state,'HEALTHY');assert.equal(health.catalogMismatch,false);assert.equal(health.fallback.selected,'SECONDARY_OFFICIAL_CURRENT_RESOURCE');assert.equal(health.fallback.secondaryStatus,'AVAILABLE_CURRENT');assert.match(health.fallback.reason!,/SOURCE_HTTP_403/);
 });
 test('when PSP origin and current dane.gov.pl resource both fail, archive is tertiary and visibly stale',async()=>{
  const b=await shelterAdapter.sync({now,fetchText:async u=>[SHELTER_ORIGIN_CSV,SHELTER_DOWNLOAD].includes(u)?Promise.reject(new Error(u===SHELTER_ORIGIN_CSV?'SOURCE_HTTP_403':'SOURCE_HTTP_503')):fetchText(u),fetchBytes});
  assert.equal(b.shelters!.length,3);assert.equal(b.metadata!.fallbackSelected,'TERTIARY_OFFICIAL_ARCHIVE');assert.equal(b.metadata!.sourceUrl,SHELTER_ARCHIVE);
  assert.equal(b.metadata!.dataDate,'2026-03-10');assert.match(b.metadata!.sourceUpdatedAt,/^2026-03-10T09:44:/);assert.match(b.metadata!.fallbackReason!,/SOURCE_HTTP_403/);assert.match(b.metadata!.fallbackReason!,/SOURCE_HTTP_503/);
  const health=sourceHealth([{id:'SHELTERS',name:'S',url:'https://dane.gov.pl/',state:'HEALTHY',lastSuccess:now.toISOString(),lastFailure:null,lastItemTime:b.metadata!.sourceUpdatedAt,failureCount:0,responseTime:1,maxAgeSeconds:172800,complete:true,...b.metadata}],now)[0];
- assert.equal(health.state,'STALE');assert.equal(health.fallback.selected,'TERTIARY_OFFICIAL_ARCHIVE');assert.equal(health.fallback.secondaryStatus,'AVAILABLE_STALE');
+ assert.equal(health.state,'STALE');assert.equal(health.catalogMismatch,true);assert.equal(health.fallback.selected,'TERTIARY_OFFICIAL_ARCHIVE');assert.equal(health.fallback.secondaryStatus,'AVAILABLE_STALE');
+ assert.match(health.fallback.reason!,/2026-09-19/);assert.match(health.fallback.reason!,/2026-03-10/);
 });
 test('unknown availability is preserved without claiming all-day access',()=>{
  const s=parseShelterCsv(csv.replace('Na żądanie','Nowa wartość'),parseShelterResource(resource,now))[0];assert.equal(s.availability,'UNKNOWN');assert.equal(s.sourceAvailability,'Nowa wartość');
