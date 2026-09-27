@@ -12,7 +12,8 @@ test('shelter bootstrap reconstructs exact CSV and rejects tampering',()=>{
  const encoded=gzip.toString('base64');
  const parts=[encoded.slice(0,5),encoded.slice(5,13),encoded.slice(13)];
  assert.equal(decodeShelterSnapshot(parts,sha(gzip),sha(csv)),csv);
- assert.throws(()=>decodeShelterSnapshot([encoded+'A'],sha(gzip),sha(csv)),/GZIP_HASH_MISMATCH|INVALID_BASE64/);
+ const tampered=encoded.slice(0,8)+(encoded[8]==='A'?'B':'A')+encoded.slice(9);
+ assert.throws(()=>decodeShelterSnapshot([tampered],sha(gzip),sha(csv)),/GZIP_HASH_MISMATCH/);
  assert.throws(()=>decodeShelterSnapshot(parts,'0'.repeat(64),sha(csv)),/GZIP_HASH_MISMATCH/);
  assert.throws(()=>decodeShelterSnapshot(parts,sha(gzip),'0'.repeat(64)),/CSV_HASH_MISMATCH/);
 });
