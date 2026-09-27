@@ -48,9 +48,11 @@ test('disabled sources are not synchronized and stay out of public source list',
   let called=false;
   await ingest(store,[{id:'CSIRT_GOV',version:'fixture',minSyncIntervalSeconds:0,async sync(){called=true;throw new Error('SHOULD_NOT_RUN');}}],async()=>{throw new Error('UNUSED');});
   assert.equal(called,false);
-  const disabled=(await store.health()).find(s=>s.id==='CSIRT_GOV')!;
+  const initialized=await store.health();
+  const disabled=initialized.find(s=>s.id==='CSIRT_GOV')!;
   assert.equal(disabled.enabled,false);
   assert.equal(disabled.state,'NOT_CONFIGURED');
+  assert.equal(initialized.find(s=>s.id==='PAA_MEASUREMENTS')?.maxAgeSeconds,7200);
 
   const app=await buildApp(store);
   try{
