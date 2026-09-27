@@ -59,7 +59,7 @@ Automatyczny bump wersji **nie publikuje Release**. GitHub Release powstaje dopi
 | IMGW meteo | ✅ live |
 | IMGW hydro | ✅ live |
 | PAA — komunikaty | ✅ live |
-| PAA — pomiary stacji | ⛔ wyłączone; brak zweryfikowanego stabilnego kontraktu |
+| PAA — pomiary stacji | ✅ live; oficjalny WFS/GeoJSON, osobna warstwa informacyjna; pomiary nie tworzą alarmu |
 | CERT Polska | ✅ live |
 | CSIRT GOV | ⛔ brak użytecznego bieżącego publicznego feedu |
 | Straż Graniczna | ✅ oficjalne publikacje z konserwatywnym filtrem operacyjnym |
@@ -67,10 +67,19 @@ Automatyczny bump wersji **nie publikuje Release**. GitHub Release powstaje dopi
 | PSP incidents | ✅ oficjalne publikacje z filtrem istotnych zdarzeń |
 | Schronienia | ✅ PostGIS + mapa + offline |
 | NEPTUN | ✅ live, z publikacją zgrubnej pozycji |
-| UkraineAlarm | 🟡 kod i UI istnieją, ale produkcja nie ma klucza API i funkcja pozostaje wyłączona |
+| UkraineAlarm | ⛔ adapter zachowany, ale źródło jest jawnie wyłączone do czasu klucza API i uruchomienia kontrolowanego workera |
 | Push | 🟡 backend + UI + outbox istnieją; realne wysyłki wymagają konfiguracji FCM/APNs |
 
 Stan `HEALTHY` potwierdza poprawny ostatni cykl synchronizacji adaptera. Nie oznacza kompletności wszystkich zdarzeń w kraju.
+
+### Kontrakt jakości źródeł
+
+Każde źródło deklaruje dwie niezależne cechy:
+
+- `sourceClass`: `STATUS`, `CONTEXT`, `REFERENCE` albo `SITUATIONAL`,
+- `absenceSemantics`: `AUTHORITATIVE_EMPTY_SET` albo `NOT_PROVABLE`.
+
+Wzorzec stanowią bieżące API IMGW: poprawnie pobrany pusty zestaw jest tam wiarygodną informacją o braku aktywnych ostrzeżeń danego typu. RCB, RSO, WCZK, PAA-komunikaty i inne listy publikacji nie dostają takiego statusu tylko dlatego, że synchronizacja się udała. Źródła kontekstowe i referencyjne nie blokują głównego statusu kraju, ale nadal są widoczne w diagnostyce i mogą dostarczać zdarzenia lub dane pomocnicze.
 
 ## Railway
 
@@ -173,7 +182,7 @@ Najważniejsze otwarte elementy:
 2. wykonać pierwszy podpisany production AAB/APK,
 3. skonfigurować FCM przed reklamowaniem push jako działającego,
 4. podpiąć gotowy panel stopni alarmowych do UI,
-5. zdecydować sposób prezentacji PAA bez udawania niedostępnych pomiarów,
+5. dopracować prezentację świeżości pomiarów PAA per stacja i komunikaty o danych nieaktualnych,
 6. UkraineAlarm uruchomić dopiero po uzyskaniu i zweryfikowaniu klucza API,
 7. przygotować politykę prywatności i Google Play Data Safety,
 8. wykonać pierwszy Google Play Internal Test,
