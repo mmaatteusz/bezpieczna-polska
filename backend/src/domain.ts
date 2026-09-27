@@ -81,7 +81,7 @@ export function computeStatus(events:Event[],health:Health[],region:string,now=n
 export function sourceHealth(health:Health[],now=new Date()){
  return health.map(h=>{
   const sourceClass=healthSourceClass(h),absenceSemantics=healthAbsenceSemantics(h);
-  const stale=h.state==='HEALTHY'&&(!h.lastSuccess||Date.parse(h.lastSuccess)>now.getTime()+30000||now.getTime()-Date.parse(h.lastSuccess)>=h.maxAgeSeconds*1000||(h.sourceUpdatedAt!==undefined&&now.getTime()-Date.parse(h.sourceUpdatedAt)>14*86400000));
+  const stale=['HEALTHY','DEGRADED'].includes(h.state)&&(!h.lastSuccess||Date.parse(h.lastSuccess)>now.getTime()+30000||now.getTime()-Date.parse(h.lastSuccess)>=h.maxAgeSeconds*1000||(h.sourceUpdatedAt!==undefined&&now.getTime()-Date.parse(h.sourceUpdatedAt)>14*86400000));
   const catalogMismatch=h.id==='SHELTERS'&&(
    (!!h.catalogDataDate&&!!h.dataDate&&h.catalogDataDate>h.dataDate)||
    (typeof h.catalogItemCount==='number'&&typeof h.itemCount==='number'&&h.catalogItemCount>h.itemCount)
