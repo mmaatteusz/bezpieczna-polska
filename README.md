@@ -1,7 +1,7 @@
 # Bezpieczna Polska
 
 <p align="center">
-  <img src="mobile/assets/brand/bezpieczna_polska_logo.jpg" width="360" alt="Logo Bezpieczna Polska">
+  <img src="mobile/assets/brand/bezpieczna_polska_logo_transparent.png" width="360" alt="Logo Bezpieczna Polska">
 </p>
 
 **Bezpieczna Polska** to aplikacja Flutter + backend do cywilnej świadomości sytuacyjnej w Polsce. Łączy oficjalne komunikaty, dane przestrzenne i wybrane źródła informacyjne, zachowując źródło, świeżość, historię zmian i jawne ograniczenia pokrycia.

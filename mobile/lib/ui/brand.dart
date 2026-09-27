@@ -25,7 +25,7 @@ class BrandMark extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox.square(
     dimension: size,
     child: Image.asset(
-      'assets/brand/bezpieczna_polska_logo.jpg',
+      'assets/brand/bezpieczna_polska_logo_transparent.png',
       width: size,
       height: size,
       fit: fit,
