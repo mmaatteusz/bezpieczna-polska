@@ -23,10 +23,10 @@ class _BrandSplashGateState extends State<BrandSplashGate>
       vsync: this,
       duration: const Duration(milliseconds: 1150),
     )..addStatusListener((status) {
-        if (status == AnimationStatus.completed && mounted) {
-          setState(() => _showOverlay = false);
-        }
-      });
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() => _showOverlay = false);
+      }
+    });
     _controller.forward();
   }
 
