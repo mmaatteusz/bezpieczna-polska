@@ -9,11 +9,12 @@ import {securityLevelStatus} from './security-level.js';
 import Fastify from 'fastify';import rateLimit from '@fastify/rate-limit';import {timingSafeEqual} from 'node:crypto';import {z} from 'zod';
 import {APP_VERSION,type AppEnv} from './config.js';
 import {assertSchema} from './migrate.js';
-import {computeStatus,eventSchema,REGIONS,sourceHealth,publicSourceHealth} from './domain.js';import {Store} from './store.js';import {initializeSources,ingest} from './adapters.js';
+import {computeStatus,eventSchema,REGIONS,sourceHealth,publicSourceHealth} from './domain.js';import {Store} from './store.js';import {initializeSources,ingest,fetchPublic} from './adapters.js';import {prepareOperatorShelterSnapshot,parseShelterResource,SHELTER_RESOURCE} from './shelter-adapter.js';
 export async function buildApp(store:Store,adminToken?:string,push?:PushService,config:{stage?:AppEnv;buildSha?:string;trustProxy?:boolean}={}){
  const production=config.stage==='production';
  const app=Fastify({logger:production?{redact:{paths:['req.headers.authorization','req.headers.cookie','*.token','*.secret'],censor:'[redacted]'}}:false,disableRequestLogging:true,trustProxy:config.trustProxy??false,bodyLimit:128*1024,requestTimeout:30000,connectionTimeout:10000,keepAliveTimeout:5000});
  await app.register(rateLimit,{max:600,timeWindow:'1 minute'});
+ app.addContentTypeParser(['text/csv','application/csv'],{parseAs:'string',bodyLimit:32*1024*1024},(_req,body,done)=>done(null,body));
  const metrics=new Map<string,{count:number;errors:number;totalMs:number;maxMs:number}>();
  app.addHook('onResponse',async(req,r)=>{
   const route=req.routeOptions.url??'unmatched',key=req.method+' '+route,ms=r.elapsedTime;
@@ -131,5 +132,30 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
  app.post('/admin/events',adminRoute,async(req,r)=>{if(!auth(req.headers.authorization))return r.code(401).send({error:'UNAUTHORIZED'});const b=z.object({event:eventSchema,expectedRevision:z.number().int().nonnegative(),reason:z.string().min(10).max(1000)}).parse(req.body);await store.put({...b.event,reviewed:true},'operator',b.reason,b.expectedRevision);return {ok:true};});
  app.post('/admin/neptun',adminRoute,async(req,r)=>{if(!auth(req.headers.authorization))return r.code(401).send({error:'UNAUTHORIZED'});const b=z.object({track:neptunTrackSchema,expectedRevision:z.number().int().nonnegative(),reason:z.string().min(10).max(1000)}).parse(req.body);await store.putNeptunTrack({...b.track,reviewed:true},'operator',b.reason,b.expectedRevision);return {ok:true};});
  let running=false;app.post('/admin/ingest',adminRoute,async(req,r)=>{if(!auth(req.headers.authorization))return r.code(401).send({error:'UNAUTHORIZED'});if(running)return r.code(409).send({error:'INGEST_RUNNING'});running=true;try{await ingest(store);return {ok:true};}finally{running=false;}});
+ const adminShelterImportRoute={bodyLimit:32*1024*1024,config:{rateLimit:{max:2,timeWindow:'10 minutes'}}};
+ app.post('/admin/shelters/import',adminShelterImportRoute,async(req,r)=>{
+  if(!auth(req.headers.authorization))return r.code(401).send({error:'UNAUTHORIZED'});
+  if(typeof req.body!=='string'||!req.body.trim())return r.code(400).send({error:'SHELTER_CSV_REQUIRED'});
+  const started=Date.now(),now=new Date();
+  try{
+   const beforeText=await fetchPublic(SHELTER_RESOURCE),prepared=prepareOperatorShelterSnapshot(req.body,beforeText,now);
+   const after=parseShelterResource(await fetchPublic(SHELTER_RESOURCE),new Date());
+   if(after.dataDate!==prepared.metadata.catalogDataDate||after.sourceUpdatedAt!==prepared.metadata.catalogUpdatedAt||after.count!==prepared.metadata.catalogItemCount)return r.code(409).send({error:'SHELTER_EXPORT_CHANGED_DURING_IMPORT'});
+   await initializeSources(store);
+   const previous=(await store.health()).find(h=>h.id==='SHELTERS');
+   if(!previous)return r.code(503).send({error:'SHELTER_SOURCE_NOT_INITIALIZED'});
+   if(previous.sourceUpdatedAt&&Date.parse(prepared.metadata.sourceUpdatedAt)<Date.parse(previous.sourceUpdatedAt))return r.code(409).send({error:'SHELTER_SNAPSHOT_OLDER_THAN_LAST_GOOD'});
+   const importedAt=new Date().toISOString();
+   await store.applyShelterSync(prepared.shelters,{
+    ...previous,...prepared.metadata,enabled:true,state:'HEALTHY',lastAttempt:importedAt,lastSuccess:importedAt,lastItemTime:prepared.metadata.sourceUpdatedAt,
+    failureCount:0,responseTime:Date.now()-started,complete:true,coverage:'FACILITY_CATALOG',pagesFetched:1,itemCount:prepared.shelters.length,errorCode:null,adapterVersion:'operator-official-csv/1.0.0'
+   });
+   return {ok:true,itemCount:prepared.shelters.length,dataDate:prepared.metadata.dataDate,sourceUpdatedAt:prepared.metadata.sourceUpdatedAt,sourceContentHash:prepared.metadata.sourceContentHash,provenance:prepared.metadata.fallbackSelected};
+  }catch(error){
+   const code=error instanceof Error?error.message:'SHELTER_IMPORT_FAILED';
+   if(/^SHELTER_[A-Z0-9_]{2,100}$/.test(code))return r.code(400).send({error:code});
+   throw error;
+  }
+ });
  await initializeSources(store);return app;
 }
