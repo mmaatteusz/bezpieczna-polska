@@ -7,6 +7,7 @@ const base=(process.env.SMOKE_BASE_URL||'').replace(/\/+$/,'');
 const expectedVersion=process.env.EXPECTED_VERSION||packageVersion;
 const expectedBuildSha=(process.env.EXPECTED_BUILD_SHA||'').trim();
 const deployWaitSeconds=Number(process.env.DEPLOY_WAIT_SECONDS||600);
+const sourceWaitSeconds=Number(process.env.SOURCE_WAIT_SECONDS||180);
 const criticalSourceIds=(process.env.CRITICAL_SOURCE_IDS||'RCB,RSO,LEVELS,SHELTERS,IMGW_METEO,IMGW_HYDRO,PAA,NEPTUN')
   .split(',').map(value=>value.trim()).filter(Boolean);
 const allowStaleSourceIds=new Set((process.env.ALLOW_STALE_SOURCE_IDS||'SHELTERS')
@@ -14,6 +15,7 @@ const allowStaleSourceIds=new Set((process.env.ALLOW_STALE_SOURCE_IDS||'SHELTERS
 if(!/^https:\/\/[^/]+$/.test(base))throw new Error('SMOKE_BASE_URL must be an HTTPS origin');
 if(expectedBuildSha&&!/^[a-f0-9]{40}$/.test(expectedBuildSha))throw new Error('EXPECTED_BUILD_SHA must be a 40-character lowercase git SHA');
 if(!Number.isFinite(deployWaitSeconds)||deployWaitSeconds<30||deployWaitSeconds>1800)throw new Error('DEPLOY_WAIT_SECONDS must be between 30 and 1800');
+if(!Number.isFinite(sourceWaitSeconds)||sourceWaitSeconds<30||sourceWaitSeconds>600)throw new Error('SOURCE_WAIT_SECONDS must be between 30 and 600');
 
 async function json(path,options){
   const response=await fetch(base+path,options);
@@ -114,10 +116,23 @@ function validateNeptun(data){
   const ready=await json('/ready');
   assert(ready.database==='postgres'&&ready.postgis===true,'PostGIS not ready');
 
-  const sources=await json('/v1/sources');
-  assert(Array.isArray(sources.sourceHealth),'sources contract invalid');
-  validateCriticalSources(sources.sourceHealth);
-  validateSourceContracts(sources.sourceHealth);
+  let sources=null,lastSourceError='not checked';
+  const sourceDeadline=Date.now()+sourceWaitSeconds*1000;
+  while(Date.now()<sourceDeadline){
+    sources=await json('/v1/sources');
+    assert(Array.isArray(sources.sourceHealth),'sources contract invalid');
+    validateSourceContracts(sources.sourceHealth);
+    try{
+      validateCriticalSources(sources.sourceHealth);
+      lastSourceError='';
+      break;
+    }catch(error){
+      lastSourceError=error instanceof Error?error.message:String(error);
+      console.warn('PROBE_CRITICAL_SOURCES_RETRY',lastSourceError);
+      await sleep(5000);
+    }
+  }
+  assert(sources&&lastSourceError==='','critical sources did not converge within '+sourceWaitSeconds+' seconds: '+lastSourceError);
 
   const layers=await json('/v1/map/layers');
   const neptunLayer=layers.layers?.find(layer=>layer.id==='NEPTUN');
