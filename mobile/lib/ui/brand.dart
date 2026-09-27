@@ -12,11 +12,7 @@ class BrandMark extends StatelessWidget {
   final double size;
   final String? semanticLabel;
 
-  const BrandMark({
-    super.key,
-    this.size = 96,
-    this.semanticLabel,
-  });
+  const BrandMark({super.key, this.size = 96, this.semanticLabel});
 
   @override
   Widget build(BuildContext context) {
