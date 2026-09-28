@@ -60,6 +60,7 @@ Map<String, dynamic> fixture(DateTime now) {
             },
             'properties': {
               'threatId': 'trk-live-1',
+              'type': 'fpv',
               'live': true,
               'coarse': true,
             },
@@ -196,6 +197,10 @@ void main() {
       operationalLeak['live']['threats'][0]['presumptiveCourse'] = true;
       expect(() => NeptunData.parse(operationalLeak), throwsFormatException);
 
+      final iconMismatch = fixture(now);
+      iconMismatch['live']['map']['features'][0]['properties']['type'] = 'uav';
+      expect(() => NeptunData.parse(iconMismatch), throwsFormatException);
+
       final active = fixture(now);
       active['tracks'][0]['lifecycle'] = 'ACTIVE';
       expect(() => NeptunData.parse(active), throwsFormatException);
@@ -217,7 +222,18 @@ void main() {
     expect(source, contains('featureTapsTriggersMapClick: true'));
   });
 
-  test('NEPTUN map tap resolves the live threat behind a red point', () {
+  test(
+    'NEPTUN live map uses typed threat symbols instead of visible red dots',
+    () {
+      final source = File('lib/neptun.dart').readAsStringSync();
+      expect(source, contains("'neptun-live-symbols'"));
+      expect(source, contains("'neptun-icon-fpv'"));
+      expect(source, contains("'neptun-icon-missile'"));
+      expect(source, isNot(contains("circleColor: '#c62828'")));
+    },
+  );
+
+  test('NEPTUN map tap resolves the live threat behind a threat symbol', () {
     final data = NeptunData.parse(fixture(now));
     final feature = (data.live['map']['features'] as List).first;
     final threat = neptunThreatForFeature(data, feature);
@@ -226,6 +242,10 @@ void main() {
     expect(threat!['id'], 'trk-live-1');
     expect(threat['title'], 'FPV / dron');
     expect(neptunTypeLabel(threat['type'] as String), 'FPV / dron');
+    expect(neptunMapIconId('fpv'), 'neptun-icon-fpv');
+    expect(neptunMapIconId('missile'), 'neptun-icon-missile');
+    expect(neptunMapIconId('unknown'), 'neptun-icon-unknown');
+    expect(neptunMapIconId('future-type'), 'neptun-icon-unknown');
     expect(
       neptunThreatForFeature(data, {
         'properties': {'threatId': 'missing'},
