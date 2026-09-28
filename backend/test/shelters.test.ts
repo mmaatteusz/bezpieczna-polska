@@ -119,6 +119,29 @@ test('shelter sync is isolated from events, retains last good data on failure, a
   assert.equal(sourceHealth([{...old,lastSuccess:now.toISOString()}],new Date('2026-09-22T12:00:00Z'))[0].state,'HEALTHY');assert.equal(sourceHealth([{...old,lastSuccess:now.toISOString()}],new Date('2026-10-05T12:00:01Z'))[0].state,'STALE');
  }finally{await db.close();}
 });
+test('initializeSources repairs complete flag for a preserved shelter LKG',async()=>{
+ const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();await initializeSources(store);
+ try{
+  const base=(await store.health()).find(h=>h.id==='SHELTERS')!;
+  await store.setHealth({...base,state:'DEGRADED',lastSuccess:'2026-09-28T06:55:27.147Z',lastFailure:'2026-09-28T13:30:08.691Z',lastItemTime:'2026-09-21T17:58:20Z',complete:false,errorCode:'SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD',itemCount:86388,coverage:'FACILITY_CATALOG',sourceContentHash:'a'.repeat(64),sourceUpdatedAt:'2026-09-21T17:58:20Z',dataDate:'2026-09-21',fallbackSelected:'OPERATOR_OFFICIAL_SNAPSHOT'});
+  await initializeSources(store);
+  const repaired=(await store.health()).find(h=>h.id==='SHELTERS')!;
+  assert.equal(repaired.complete,true);assert.equal(repaired.state,'DEGRADED');assert.equal(repaired.itemCount,86388);assert.equal(repaired.sourceContentHash,'a'.repeat(64));
+ }finally{await db.close();}
+});
+test('shelter failure re-reads latest health and cannot overwrite a newer imported snapshot',async()=>{
+ const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();await initializeSources(store);
+ try{
+  const adapter={...shelterAdapter,minSyncIntervalSeconds:0,sync:async()=>{
+   const live=(await store.health()).find(h=>h.id==='SHELTERS')!;
+   await store.setHealth({...live,state:'HEALTHY',lastSuccess:'2026-09-28T06:55:27.147Z',lastFailure:null,lastItemTime:'2026-09-21T17:58:20Z',complete:true,errorCode:null,itemCount:86388,coverage:'FACILITY_CATALOG',sourceContentHash:'b'.repeat(64),sourceUpdatedAt:'2026-09-21T17:58:20Z',dataDate:'2026-09-21',fallbackSelected:'OPERATOR_OFFICIAL_SNAPSHOT'});
+   throw new Error('SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD');
+  }};
+  await ingest(store,[adapter]);
+  const after=(await store.health()).find(h=>h.id==='SHELTERS')!;
+  assert.equal(after.state,'DEGRADED');assert.equal(after.complete,true);assert.equal(after.itemCount,86388);assert.equal(after.sourceContentHash,'b'.repeat(64));assert.equal(after.errorCode,'SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD');
+ }finally{await db.close();}
+});
 test('older official archive never replaces a newer last-known-good shelter catalog',async()=>{
  const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();
  try{
