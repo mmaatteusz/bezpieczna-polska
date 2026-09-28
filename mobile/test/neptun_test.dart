@@ -198,7 +198,8 @@ void main() {
       expect(() => NeptunData.parse(operationalLeak), throwsFormatException);
 
       final iconMismatch = fixture(now);
-      iconMismatch['live']['map']['features'][0]['properties']['type'] = 'uav';
+      iconMismatch['live']['map']['features'][0]['properties']['type'] =
+          'uav';
       expect(() => NeptunData.parse(iconMismatch), throwsFormatException);
 
       final active = fixture(now);
@@ -222,13 +223,16 @@ void main() {
     expect(source, contains('featureTapsTriggersMapClick: true'));
   });
 
-  test('NEPTUN live map uses typed threat symbols instead of visible red dots', () {
-    final source = File('lib/neptun.dart').readAsStringSync();
-    expect(source, contains("'neptun-live-symbols'"));
-    expect(source, contains("'neptun-icon-fpv'"));
-    expect(source, contains("'neptun-icon-missile'"));
-    expect(source, isNot(contains("circleColor: '#c62828'")));
-  });
+  test(
+    'NEPTUN live map uses typed threat symbols instead of visible red dots',
+    () {
+      final source = File('lib/neptun.dart').readAsStringSync();
+      expect(source, contains("'neptun-live-symbols'"));
+      expect(source, contains("'neptun-icon-fpv'"));
+      expect(source, contains("'neptun-icon-missile'"));
+      expect(source, isNot(contains("circleColor: '#c62828'")));
+    },
+  );
 
   test('NEPTUN map tap resolves the live threat behind a threat symbol', () {
     final data = NeptunData.parse(fixture(now));
