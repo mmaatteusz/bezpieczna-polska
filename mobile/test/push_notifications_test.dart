@@ -178,7 +178,8 @@ void main() {
     final testButton = find.text('Wyślij test na ten telefon');
     await tester.ensureVisible(testButton);
     await tester.tap(testButton);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     expect(requests, hasLength(2));
     expect(requests.last.url.path, endsWith('/test'));
     expect(
