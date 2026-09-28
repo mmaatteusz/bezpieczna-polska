@@ -62,6 +62,7 @@ test('PostGIS shelters: exact points, regional bbox, full replacement and transa
    assert.equal((await mapApp.inject(path+'&regionId=02')).json().metadata.total,0);
    const many=Array.from({length:1200},(_,i)=>({...points[0],id:'PSP-OZO-'+i.toString(16).toUpperCase().padStart(12,'0'),longitude:18+(i%40)*0.001,latitude:53.1+Math.floor(i/40)*0.001}));
    await store.applyShelterSync(many,{...health,itemCount:many.length,sourceContentHash:'c'.repeat(64)});
+   assert.equal(Number((await db.all("SELECT COUNT(*) AS total FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'shelters_stage_%'"))[0].total),0,'successful replacement must clean staging tables');
    const clustered=(await mapApp.inject(path)).json();assert.equal(clustered.metadata.total,1200);assert.equal(clustered.metadata.clustered,true);assert.ok(clustered.features.length<=1089);assert.equal(clustered.features.reduce((n:number,f:any)=>n+f.properties.point_count,0),1200);
    assert.equal((await mapApp.inject(path+'&availability=UNKNOWN')).json().metadata.total,many[0].availability==='UNKNOWN'?1200:0);
    const near=(await mapApp.inject('/v1/map/shelters?bbox=18,53.1,18.002,53.102&zoom=18')).json();assert.ok(near.metadata.total<500);assert.equal(near.metadata.clustered,false);assert.ok(near.features.every((f:any)=>f.geometry.coordinates[0]<=18.002));
@@ -75,11 +76,13 @@ test('PostGIS shelters: exact points, regional bbox, full replacement and transa
   await assert.rejects(store.applyShelterSync([points[0]],{...health,itemCount:1,sourceContentHash:'b'.repeat(64)}),/fixture_write_failure/);
   assert.equal((await store.shelterPage({regionId:'PL',q:'',offset:0,limit:50})).total,3);
   assert.equal((await store.health()).find(h=>h.id==='SHELTERS')!.sourceContentHash,health.sourceContentHash);
+  assert.equal(Number((await db.all("SELECT COUNT(*) AS total FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'shelters_stage_%'"))[0].total),0,'failed replacement must clean staging tables');
   await db.run('DROP TRIGGER fixture_shelter_failure ON shelters');
   await store.applyShelterSync([points[0]],{...health,itemCount:1,sourceContentHash:'b'.repeat(64)});
   assert.equal((await store.shelterPage({regionId:'PL',q:'',offset:0,limit:50})).total,1);
  }finally{
   await db.run('DROP TRIGGER IF EXISTS fixture_shelter_failure ON shelters');await db.run('DROP FUNCTION IF EXISTS fixture_reject_shelter()');
+  for(const row of await db.all("SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'shelters_stage_%'"))await db.run('DROP TABLE IF EXISTS '+String(row.tablename));
   for(const p of points)await db.run('DELETE FROM shelters WHERE id=?',[p.id]);await store.setHealth(original);await db.close();
  }
 });

@@ -90,10 +90,44 @@ export class Store{
  }
  async applyShelterSync(items:Shelter[],health:Health){
   if(health.id!=='SHELTERS'||health.coverage!=='FACILITY_CATALOG'||!health.complete||!items.length||items.length!==health.itemCount||!health.sourceContentHash)throw new Error('SHELTER_INVALID_BATCH');
-  // Validate everything before beginning replacement. A failed transaction keeps
-  // the entire previous national package and its previous success timestamp.
+  // Validate the whole package before any user-visible replacement.
   const rows=items.map(s=>shelterSchema.parse(s));
   if(new Set(rows.map(s=>s.id)).size!==rows.length)throw new Error('SHELTER_DUPLICATE_ID');
+
+  if(this.db.kind==='postgres'){
+   const stage=`shelters_stage_${process.pid}_${Date.now()}`;
+   try{
+    // Stage outside the final transaction so a large national catalog does not
+    // hold locks or one long-running transaction while thousands of rows load.
+    await this.db.run(`CREATE TABLE ${stage}(id TEXT PRIMARY KEY,region_id TEXT NOT NULL,search_text TEXT NOT NULL,payload TEXT NOT NULL)`);
+    for(let i=0;i<rows.length;i+=500){
+     const batch=rows.slice(i,i+500),params=batch.flatMap(s=>[s.id,s.regionId,searchText(`${s.municipality} ${s.county} ${s.address}`),JSON.stringify(s)]);
+     await this.db.run(`INSERT INTO ${stage}(id,region_id,search_text,payload) VALUES ${batch.map(()=>'(?,?,?,?)').join(',')}`,params);
+    }
+    const staged=Number((await this.db.all(`SELECT COUNT(*) AS total FROM ${stage}`))[0].total);
+    if(staged!==rows.length)throw new Error('SHELTER_STAGE_COUNT_MISMATCH');
+
+    await this.db.transaction(async db=>{
+     const scoped=new Store(db),previous=(await scoped.health()).find(h=>h.id==='SHELTERS');
+     if(previous?.sourceUpdatedAt&&health.sourceUpdatedAt&&Date.parse(health.sourceUpdatedAt)<Date.parse(previous.sourceUpdatedAt))throw new Error('SHELTER_SNAPSHOT_OLDER_THAN_LAST_GOOD');
+     if(previous?.sourceContentHash===health.sourceContentHash&&previous?.sourceUpdatedAt===health.sourceUpdatedAt&&previous?.dataDate===health.dataDate){
+      await scoped.setHealth(health);return;
+     }
+     // The only user-visible lock is the short atomic replacement. A failure
+     // rolls back DELETE + INSERT + health together and preserves the old package.
+     await db.run("SET LOCAL statement_timeout='120s'");
+     await db.run("SET LOCAL lock_timeout='30s'");
+     await db.run('LOCK TABLE shelters IN ACCESS EXCLUSIVE MODE');
+     await db.run('DELETE FROM shelters');
+     await db.run(`INSERT INTO shelters(id,region_id,search_text,payload) SELECT id,region_id,search_text,payload FROM ${stage} ORDER BY id`);
+     await scoped.setHealth(health);
+    });
+   }finally{
+    try{await this.db.run(`DROP TABLE IF EXISTS ${stage}`);}catch{}
+   }
+   return;
+  }
+
   await this.db.transaction(async db=>{
    const scoped=new Store(db),previous=(await scoped.health()).find(h=>h.id==='SHELTERS');
    if(previous?.sourceContentHash!==health.sourceContentHash||previous?.sourceUpdatedAt!==health.sourceUpdatedAt||previous?.dataDate!==health.dataDate){
