@@ -407,11 +407,9 @@ class _UkraineMapState extends State<UkraineMap> {
     final c = controller, data = widget.data;
     if (!ready || c == null || data == null || !mounted) return;
     try {
-      final features = await c.queryRenderedFeatures(
-        point,
-        const ['ua-alert-areas'],
-        null,
-      );
+      final features = await c.queryRenderedFeatures(point, const [
+        'ua-alert-areas',
+      ], null);
       if (!mounted || features.isEmpty) return;
       final event = uaEventForFeature(data, features.first);
       if (event == null) return;
@@ -444,10 +442,14 @@ class _UkraineMapState extends State<UkraineMap> {
                 const SizedBox(height: 10),
                 Text('Obszar: ${ukraine['regionName']}'),
                 Text('Zakres: ${ukraine['regionType']}'),
-                Text('Status: ${event['lifecycle']} • ${current ? 'FRESH' : 'STALE'}'),
+                Text(
+                  'Status: ${event['lifecycle']} • ${current ? 'FRESH' : 'STALE'}',
+                ),
                 Text('Rozpoczęcie: ${time(event['validFrom'])}'),
                 Text('Zakończenie: ${time(event['validTo'])}'),
-                Text('Aktualizacja źródła: ${time(ukraine['sourceUpdatedAt'])}'),
+                Text(
+                  'Aktualizacja źródła: ${time(ukraine['sourceUpdatedAt'])}',
+                ),
                 const SizedBox(height: 10),
                 Text(event['description'] as String),
                 const SizedBox(height: 10),
