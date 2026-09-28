@@ -11,7 +11,7 @@
 
 ## Wersja i wydania
 
-Aktualny kod rozwojowy: **0.1.0-alpha.39** (`build 40`).
+Aktualny kod rozwojowy: **0.1.0-alpha.40** (`build 41`).
 
 Najnowsze publiczne APK Android: [v0.1.0-alpha.23](https://github.com/mmaatteusz/bezpieczna-polska/releases/latest).
 
