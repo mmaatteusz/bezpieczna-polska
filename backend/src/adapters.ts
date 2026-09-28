@@ -107,7 +107,7 @@ export async function fetchPublicBytes(url:string):Promise<Uint8Array>{
 }
 // Sharing the same coordinator prevents timer/admin overlap on this Store.
 const running = new WeakMap<Store, Promise<void>>();
-export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters,imgwMeteoAdapter,imgwHydroAdapter,paaAdapter,paaMeasurementsAdapter,certAdapter,sgAdapter,policeAdapter,pspIncidentsAdapter,ukraineAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
+export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters,imgwMeteoAdapter,imgwHydroAdapter,paaAdapter,paaMeasurementsAdapter,certAdapter,sgAdapter,policeAdapter,pspIncidentsAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
  const existing=running.get(store);if(existing)return existing;
  const task=syncSources(store,adapters,fetchText,fetchBytes).finally(()=>running.delete(store));
  running.set(store,task);return task;
@@ -154,6 +154,23 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
  }
 }
 
+
+// UkraineAlarm is latency-sensitive and must not wait behind the slower
+// general-source ingestion loop. Keep it on an independent in-process
+// coordinator; the server adds a cross-process lease for blue/green deploys.
+const ukraineRunning = new WeakMap<Store, Promise<void>>();
+
+export function ingestUkraineLive(
+ store:Store,
+ fetchText:(url:string)=>Promise<string>=fetchPublic,
+ fetchBytes:(url:string)=>Promise<Uint8Array>=fetchPublicBytes
+):Promise<void>{
+ const existing=ukraineRunning.get(store);
+ if(existing)return existing;
+ const task=syncSources(store,[ukraineAdapter],fetchText,fetchBytes).finally(()=>ukraineRunning.delete(store));
+ ukraineRunning.set(store,task);
+ return task;
+}
 
 const neptunRunning = new WeakMap<Store, Promise<void>>();
 
