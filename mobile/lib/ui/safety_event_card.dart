@@ -544,10 +544,7 @@ class SafetyEventCard extends StatelessWidget {
                   _secondaryBadge(context, verificationLabel),
                   _secondaryBadge(context, event.badge),
                   if (groupedCount > 1)
-                    _secondaryBadge(
-                      context,
-                      _groupedBadgeLabel(groupedCount),
-                    ),
+                    _secondaryBadge(context, _groupedBadgeLabel(groupedCount)),
                   if (sourceCount > 1)
                     _secondaryBadge(context, 'NIEZALEŻNE ŹRÓDŁA: $sourceCount'),
                   if (event.hasConflictingReports)
