@@ -131,7 +131,8 @@ export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncInt
    if(typeof raw==='number'&&!Number.isSafeInteger(raw))throw new Error('UA_STATUS_INDEX_UNSAFE_NUMBER');
    throw new Error('UA_STATUS_SCHEMA_CHANGED');
   };
-  const before=parseContract('UA_STATUS_SCHEMA_CHANGED',()=>parseStatusBody(await fetchText(UA_API+'/alerts/status')));
+  const beforeBody=await fetchText(UA_API+'/alerts/status');
+  const before=parseContract('UA_STATUS_SCHEMA_CHANGED',()=>parseStatusBody(beforeBody));
   const regionsRaw=await read('/regions','UA_REGIONS_JSON_INVALID');
   const regions=parseContract('UA_REGIONS_SCHEMA_CHANGED',()=>parseUaRegions(regionsRaw));
   const activeRaw=await read('/alerts','UA_ALERTS_JSON_INVALID');
@@ -145,7 +146,8 @@ export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncInt
    if(rows.some(r=>r.regionId!==regionId))throw new Error('UA_HISTORY_REGION_CONFLICT');
    history.push(...rows);
   }
-  const after=parseContract('UA_STATUS_SCHEMA_CHANGED',()=>parseStatusBody(await fetchText(UA_API+'/alerts/status')));
+  const afterBody=await fetchText(UA_API+'/alerts/status');
+  const after=parseContract('UA_STATUS_SCHEMA_CHANGED',()=>parseStatusBody(afterBody));
   if(after.lastActionIndex!==before.lastActionIndex)throw new Error('UA_SOURCE_CHANGED_DURING_SYNC');
   const batch=parseContract('UA_BATCH_SCHEMA_CHANGED',()=>parseUaBatch(regions,active,history,previousEvents,now));
   // Geography failure must not suppress valid civil alerts. Retain prior geometry.
