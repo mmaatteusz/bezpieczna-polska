@@ -69,14 +69,17 @@ test('PostGIS shelters: exact points, regional bbox, full replacement and transa
    assert.equal((await mapApp.inject(path)).json().metadata.version,health.sourceContentHash);
    assert.equal((await mapApp.inject(path)).json().metadata.total,3);
   }finally{await mapApp.close();}
-  // Force a real database error during replacement, after DELETE and INSERT.
-  await db.run("CREATE OR REPLACE FUNCTION fixture_reject_shelter() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture_write_failure'; END $$");
-  await db.run('CREATE TRIGGER fixture_shelter_failure BEFORE INSERT ON shelters FOR EACH ROW EXECUTE FUNCTION fixture_reject_shelter()');
-  await assert.rejects(store.applyShelterSync([points[0]],{...health,itemCount:1,sourceContentHash:'b'.repeat(64)}),/fixture_write_failure/);
+  // Force a real database error during a changed-row UPSERT. The transaction
+  // must retain the previous catalog and health even though the new package also
+  // removes two points.
+  const changedPoint={...points[0],address:points[0].address+' / rollback-test'};
+  await db.run("CREATE OR REPLACE FUNCTION fixture_reject_shelter() RETURNS trigger LANGUAGE plpgsql AS $ BEGIN RAISE EXCEPTION 'fixture_write_failure'; END $");
+  await db.run('CREATE TRIGGER fixture_shelter_failure BEFORE INSERT OR UPDATE ON shelters FOR EACH ROW EXECUTE FUNCTION fixture_reject_shelter()');
+  await assert.rejects(store.applyShelterSync([changedPoint],{...health,itemCount:1,sourceContentHash:'b'.repeat(64)}),/fixture_write_failure/);
   assert.equal((await store.shelterPage({regionId:'PL',q:'',offset:0,limit:50})).total,3);
   assert.equal((await store.health()).find(h=>h.id==='SHELTERS')!.sourceContentHash,health.sourceContentHash);
   await db.run('DROP TRIGGER fixture_shelter_failure ON shelters');
-  await store.applyShelterSync([points[0]],{...health,itemCount:1,sourceContentHash:'b'.repeat(64)});
+  await store.applyShelterSync([changedPoint],{...health,itemCount:1,sourceContentHash:'b'.repeat(64)});
   assert.equal((await store.shelterPage({regionId:'PL',q:'',offset:0,limit:50})).total,1);
  }finally{
   await db.run('DROP TRIGGER IF EXISTS fixture_shelter_failure ON shelters');await db.run('DROP FUNCTION IF EXISTS fixture_reject_shelter()');
