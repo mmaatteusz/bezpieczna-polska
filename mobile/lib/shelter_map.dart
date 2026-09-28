@@ -677,21 +677,21 @@ class _ShelterMapState extends State<ShelterMap> {
     final eventFeatures = markMapRcbCounts(
       markMapCategoryCollisions(
         contextEvents
-          .where(
-            (event) => mapEventVisibleForLayers(
-              event,
-              showEvents: showEvents,
-              showImgw: showImgw,
-            ),
-          )
-          .expand(
-            (event) => mapEventFeatures(
-              event,
-              now,
-              administrativeAnchors: administrativeAnchors,
-            ),
-          )
-          .toList(),
+            .where(
+              (event) => mapEventVisibleForLayers(
+                event,
+                showEvents: showEvents,
+                showImgw: showImgw,
+              ),
+            )
+            .expand(
+              (event) => mapEventFeatures(
+                event,
+                now,
+                administrativeAnchors: administrativeAnchors,
+              ),
+            )
+            .toList(),
       ),
     );
     final watchedFeatures = showWatched
