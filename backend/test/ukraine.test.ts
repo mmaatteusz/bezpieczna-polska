@@ -37,6 +37,17 @@ test('UA new start creates distinct cycle; old unresolved cycle is not silently 
 test('UA INFO is separate from official alert and never an official warning',()=>{
  const e=parseUaBatch(regions,active('fixture-a','INFO'),history(false,'fixture-a',start,'INFO'),[],now).events[0];assert.equal(e.ukraine?.kind,'OFFICIAL_INFORMATION');assert.equal(e.officialWarning,false);
 });
+test('UA official v3 nullable collections and extended enums are accepted',()=>{
+ const nullableRegistry={states:[{regionId:'fixture-a',regionName:'Область А',regionType:'State',regionChildIds:[{regionId:'fixture-village',regionName:'Село А',regionType:'CityOrVillage',regionChildIds:null}]}]};
+ const rr=parseUaRegions(nullableRegistry);
+ assert.equal(rr.find(r=>r.id==='fixture-village')?.type,'CityOrVillage');
+ const customActive=[{regionId:'fixture-a',regionName:null,regionType:'State',regionEngName:null,lastUpdate:start,activeAlerts:[{regionId:'fixture-a',regionType:'State',type:'CUSTOM',lastUpdate:start,activeAlertLevels:null}]}];
+ const customHistory=[{regionId:'fixture-a',regionName:null,alarms:[{regionId:'fixture-a',startDate:start,endDate:null,alertType:'CUSTOM',regionName:null,isContinue:true}]}];
+ const e=parseUaBatch(rr,customActive,customHistory,[],now).events[0];
+ assert.equal(e.ukraine?.alertType,'CUSTOM');assert.equal(e.ukraine?.kind,'OFFICIAL_ALERT');assert.equal(e.officialWarning,true);
+ const empty=parseUaBatch(rr,[{regionId:'fixture-a',regionName:null,regionType:'State',lastUpdate:start,activeAlerts:null}],[{regionId:'fixture-a',regionName:null,alarms:null}],[],now);
+ assert.equal(empty.events.length,0);
+});
 test('UA changed contracts, unknown regions, contradictory end and unknown types fail closed',()=>{
  for(const broken of [{},[{regionId:'fixture-a',activeAlerts:[]}],active('fixture-a','MISSILE_POSITION')])assert.throws(()=>parseUaBatch(regions,broken,[],[],now));
  const h=history(true);h[0].alarms[0].isContinue=true;assert.throws(()=>parseUaBatch(regions,[],h,[],now),/UA_TIME_CONFLICT/);
