@@ -61,6 +61,12 @@ test('UA adapter reads documented endpoints and rejects mid-sync source change',
  let status=0;const fetchText=async(url:string)=>{if(url.endsWith('/status'))return JSON.stringify({lastActionIndex:++status});if(url.endsWith('/regions'))return JSON.stringify(registry);if(url.endsWith('/alerts'))return JSON.stringify(active());return JSON.stringify([]);};
  await assert.rejects(ukraineAdapter.sync({now,fetchText}),/UA_SOURCE_CHANGED_DURING_SYNC/);
 });
+test('UA status accepts actionIndex compatibility alias used by current service',async()=>{
+ let calls=0;const fetchText=async(url:string)=>{if(url.endsWith('/status'))return JSON.stringify({actionIndex:7});if(url.endsWith('/regions'))return JSON.stringify(registry);if(url.endsWith('/alerts'))return JSON.stringify([]);if(url.includes('/regionHistory'))return JSON.stringify([]);calls++;return JSON.stringify([]);};
+ const batch=await ukraineAdapter.sync({now,fetchText});
+ assert.equal(batch.uaMetadata.lastActionIndex,7);assert.equal(batch.coverage,'ACTIVE_WARNINGS');assert.ok(calls>=0);
+});
+
 test('UA alert, source failure or healthy UA alone never changes Polish status or correlation',()=>{
  const before=computeStatus([],[],'PL',now);assert.deepEqual(computeStatus([parse()],[health()],'PL',now),before);assert.equal(computeStatus([parse()],[health()],'04',now).hazardLevel,'UNKNOWN');assert.deepEqual(correlate([parse()]),[]);
 });
