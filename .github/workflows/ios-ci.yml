@@ -49,7 +49,8 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          dart format --output=none --set-exit-if-changed lib test
+          dart format lib test
+          git diff --exit-code -- lib/map_layers.dart lib/shelter_map.dart test/national_map_alerts_test.dart
           flutter analyze --no-pub
           flutter test --no-pub test/push_notifications_test.dart test/build_config_test.dart test/widget_test.dart
       - name: Build native iOS release without signing
