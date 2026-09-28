@@ -1,5 +1,5 @@
 FROM node:24-bookworm-slim
 WORKDIR /probe
-COPY scripts/railway-runtime-smoke.mjs ./
+COPY scripts/import-shelters-once.cjs ./
 USER node
-CMD ["node","railway-runtime-smoke.mjs"]
+CMD ["node","import-shelters-once.cjs"]
