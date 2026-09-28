@@ -143,10 +143,11 @@ export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncInt
   };
   const beforeBody=await endpoint('/alerts/status','STATUS');
   const before=parseContract('UA_STATUS_SCHEMA_CHANGED',()=>parseStatusBody(beforeBody));
-  const regionsRaw=await read('/regions','REGIONS','UA_REGIONS_JSON_INVALID');
-  const regions=parseContract('UA_REGIONS_SCHEMA_CHANGED',()=>parseUaRegions(regionsRaw));
+  // Probe the primary live alerts endpoint before the region registry so auth scope failures are unambiguous.
   const activeRaw=await read('/alerts','ALERTS','UA_ALERTS_JSON_INVALID');
   const active=parseContract('UA_ALERTS_SCHEMA_CHANGED',()=>activeSchema.parse(activeRaw));
+  const regionsRaw=await read('/regions','REGIONS','UA_REGIONS_JSON_INVALID');
+  const regions=parseContract('UA_REGIONS_SCHEMA_CHANGED',()=>parseUaRegions(regionsRaw));
   const ids=new Set([...regions.filter(r=>r.type==='State').map(r=>r.id),...active.flatMap(r=>r.activeAlerts.map(a=>a.regionId)),...previousEvents.filter(e=>e.countryCode==='UA'&&e.ukraine&&['ACTIVE','UNKNOWN'].includes(e.lifecycle)).map(e=>e.ukraine!.regionId)]);
   if(ids.size>300)throw new Error('UA_HISTORY_SCOPE_LIMIT');
   const history:unknown[]=[];
