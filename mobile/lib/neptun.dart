@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:math' show Point;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -138,6 +140,16 @@ class NeptunData {
           rawFeature['properties'] is! Map ||
           rawFeature['properties']['live'] != true ||
           rawFeature['properties']['coarse'] != true ||
+          ![
+            'uav',
+            'fpv',
+            'recon',
+            'missile',
+            'ballistic',
+            'kab',
+            'mig31k',
+            'unknown',
+          ].contains(rawFeature['properties']['type']) ||
           rawFeature['properties'].containsKey('heading') ||
           rawFeature['properties'].containsKey('velocity') ||
           rawFeature['properties'].containsKey('prediction') ||
@@ -149,6 +161,14 @@ class NeptunData {
           rawFeature['properties'].containsKey('destination') ||
           !liveIds.contains(rawFeature['properties']['threatId'])) {
         throw const FormatException('Niepoprawna mapa live NEPTUN');
+      }
+      final matchingThreat = (live['threats'] as List)
+          .cast<Map>()
+          .firstWhere(
+            (threat) => threat['id'] == rawFeature['properties']['threatId'],
+          );
+      if (matchingThreat['type'] != rawFeature['properties']['type']) {
+        throw const FormatException('Niezgodny typ ikony NEPTUN');
       }
     }
 
@@ -288,6 +308,213 @@ String neptunTypeLabel(String value) => switch (value) {
   'mig31k' => 'MiG-31K',
   _ => 'Nieokreślone',
 };
+
+String neptunMapIconId(String value) => switch (value) {
+  'uav' => 'neptun-icon-uav',
+  'fpv' => 'neptun-icon-fpv',
+  'recon' => 'neptun-icon-recon',
+  'missile' => 'neptun-icon-missile',
+  'ballistic' => 'neptun-icon-ballistic',
+  'kab' => 'neptun-icon-kab',
+  'mig31k' => 'neptun-icon-mig31k',
+  _ => 'neptun-icon-unknown',
+};
+
+const _neptunIconTypes = <String>[
+  'uav',
+  'fpv',
+  'recon',
+  'missile',
+  'ballistic',
+  'kab',
+  'mig31k',
+  'unknown',
+];
+
+Future<Uint8List> _neptunIconPng(String type) async {
+  const size = 72.0;
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  final outline = ui.Paint()
+    ..color = const ui.Color(0xff7f1d1d)
+    ..style = ui.PaintingStyle.stroke
+    ..strokeWidth = 6
+    ..strokeJoin = ui.StrokeJoin.round
+    ..strokeCap = ui.StrokeCap.round;
+  final fill = ui.Paint()
+    ..color = const ui.Color(0xffffffff)
+    ..style = ui.PaintingStyle.fill;
+  final whiteStroke = ui.Paint()
+    ..color = const ui.Color(0xffffffff)
+    ..style = ui.PaintingStyle.stroke
+    ..strokeWidth = 6
+    ..strokeJoin = ui.StrokeJoin.round
+    ..strokeCap = ui.StrokeCap.round;
+
+  void paintPath(ui.Path path) {
+    canvas.drawPath(path, outline);
+    canvas.drawPath(path, fill);
+  }
+
+  ui.Path aircraft({
+    required double wingY,
+    required double wingSpan,
+    required double tailSpan,
+    double noseY = 7,
+    double tailY = 61,
+  }) {
+    return ui.Path()
+      ..moveTo(36, noseY)
+      ..lineTo(41, wingY - 5)
+      ..lineTo(36 + wingSpan, wingY + 7)
+      ..lineTo(39, wingY + 9)
+      ..lineTo(40, tailY - 9)
+      ..lineTo(36 + tailSpan, tailY - 2)
+      ..lineTo(36, tailY - 5)
+      ..lineTo(36 - tailSpan, tailY - 2)
+      ..lineTo(32, tailY - 9)
+      ..lineTo(33, wingY + 9)
+      ..lineTo(36 - wingSpan, wingY + 7)
+      ..lineTo(31, wingY - 5)
+      ..close();
+  }
+
+  switch (type) {
+    case 'uav':
+      paintPath(
+        ui.Path()
+          ..moveTo(36, 7)
+          ..lineTo(61, 49)
+          ..lineTo(43, 43)
+          ..lineTo(36, 63)
+          ..lineTo(29, 43)
+          ..lineTo(11, 49)
+          ..close(),
+      );
+      break;
+    case 'fpv':
+      final armOutline = ui.Paint()
+        ..color = const ui.Color(0xff7f1d1d)
+        ..style = ui.PaintingStyle.stroke
+        ..strokeWidth = 11
+        ..strokeCap = ui.StrokeCap.round;
+      canvas.drawLine(const ui.Offset(20, 20), const ui.Offset(52, 52), armOutline);
+      canvas.drawLine(const ui.Offset(52, 20), const ui.Offset(20, 52), armOutline);
+      canvas.drawLine(const ui.Offset(20, 20), const ui.Offset(52, 52), whiteStroke);
+      canvas.drawLine(const ui.Offset(52, 20), const ui.Offset(20, 52), whiteStroke);
+      for (final center in const [
+        ui.Offset(17, 17),
+        ui.Offset(55, 17),
+        ui.Offset(17, 55),
+        ui.Offset(55, 55),
+      ]) {
+        canvas.drawCircle(center, 8, outline);
+        canvas.drawCircle(center, 7, fill);
+      }
+      canvas.drawCircle(const ui.Offset(36, 36), 9, outline);
+      canvas.drawCircle(const ui.Offset(36, 36), 8, fill);
+      break;
+    case 'recon':
+      paintPath(aircraft(wingY: 31, wingSpan: 25, tailSpan: 10));
+      break;
+    case 'missile':
+      paintPath(
+        ui.Path()
+          ..moveTo(36, 6)
+          ..quadraticBezierTo(45, 16, 44, 29)
+          ..lineTo(43, 49)
+          ..lineTo(55, 61)
+          ..lineTo(42, 57)
+          ..lineTo(36, 66)
+          ..lineTo(30, 57)
+          ..lineTo(17, 61)
+          ..lineTo(29, 49)
+          ..lineTo(28, 29)
+          ..quadraticBezierTo(27, 16, 36, 6)
+          ..close(),
+      );
+      break;
+    case 'ballistic':
+      paintPath(
+        ui.Path()
+          ..moveTo(36, 5)
+          ..quadraticBezierTo(47, 17, 45, 33)
+          ..lineTo(43, 48)
+          ..lineTo(54, 57)
+          ..lineTo(43, 55)
+          ..lineTo(36, 66)
+          ..lineTo(29, 55)
+          ..lineTo(18, 57)
+          ..lineTo(29, 48)
+          ..lineTo(27, 33)
+          ..quadraticBezierTo(25, 17, 36, 5)
+          ..close(),
+      );
+      canvas.drawLine(
+        const ui.Offset(27, 66),
+        const ui.Offset(21, 71),
+        whiteStroke,
+      );
+      canvas.drawLine(
+        const ui.Offset(45, 66),
+        const ui.Offset(51, 71),
+        whiteStroke,
+      );
+      break;
+    case 'kab':
+      paintPath(
+        ui.Path()
+          ..moveTo(36, 8)
+          ..quadraticBezierTo(51, 19, 47, 42)
+          ..quadraticBezierTo(44, 55, 36, 61)
+          ..quadraticBezierTo(28, 55, 25, 42)
+          ..quadraticBezierTo(21, 19, 36, 8)
+          ..close(),
+      );
+      paintPath(
+        ui.Path()
+          ..moveTo(29, 52)
+          ..lineTo(17, 65)
+          ..lineTo(31, 61)
+          ..lineTo(36, 68)
+          ..lineTo(41, 61)
+          ..lineTo(55, 65)
+          ..lineTo(43, 52)
+          ..close(),
+      );
+      break;
+    case 'mig31k':
+      paintPath(aircraft(wingY: 33, wingSpan: 28, tailSpan: 13, tailY: 64));
+      break;
+    default:
+      paintPath(
+        ui.Path()
+          ..moveTo(36, 8)
+          ..lineTo(63, 36)
+          ..lineTo(36, 64)
+          ..lineTo(9, 36)
+          ..close(),
+      );
+      canvas.drawLine(
+        const ui.Offset(36, 22),
+        const ui.Offset(36, 43),
+        whiteStroke,
+      );
+      canvas.drawCircle(const ui.Offset(36, 52), 3.5, fill);
+  }
+
+  final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  if (bytes == null) throw StateError('Nie udało się utworzyć ikony NEPTUN');
+  return bytes.buffer.asUint8List();
+}
+
+Future<void> _registerNeptunMapIcons(MapLibreMapController controller) async {
+  for (final type in _neptunIconTypes) {
+    await controller.addImage(neptunMapIconId(type), await _neptunIconPng(type));
+  }
+}
 
 Map<String, dynamic>? neptunThreatForFeature(NeptunData data, dynamic feature) {
   if (feature is! Map || feature['properties'] is! Map) return null;
@@ -637,7 +864,8 @@ class _NeptunMapState extends State<NeptunMap> {
     if (!ready || c == null || !mounted) return;
     try {
       final features = await c.queryRenderedFeatures(point, const [
-        'neptun-live-points',
+        'neptun-live-symbols',
+        'neptun-live-hit-points',
       ], null);
       if (!mounted || features.isEmpty) return;
       final threat = neptunThreatForFeature(widget.data, features.first);
@@ -703,14 +931,43 @@ class _NeptunMapState extends State<NeptunMap> {
         'neptun-live',
         GeojsonSourceProperties(data: widget.data.live['map']),
       );
+      await _registerNeptunMapIcons(c);
       await c.addCircleLayer(
         'neptun-live',
-        'neptun-live-points',
+        'neptun-live-hit-points',
         const CircleLayerProperties(
-          circleColor: '#c62828',
-          circleRadius: 8,
-          circleStrokeColor: '#ffffff',
-          circleStrokeWidth: 2,
+          circleColor: '#000000',
+          circleRadius: 16,
+          circleOpacity: 0.001,
+        ),
+      );
+      await c.addSymbolLayer(
+        'neptun-live',
+        'neptun-live-symbols',
+        const SymbolLayerProperties(
+          iconImage: [
+            'match',
+            ['get', 'type'],
+            'uav',
+            'neptun-icon-uav',
+            'fpv',
+            'neptun-icon-fpv',
+            'recon',
+            'neptun-icon-recon',
+            'missile',
+            'neptun-icon-missile',
+            'ballistic',
+            'neptun-icon-ballistic',
+            'kab',
+            'neptun-icon-kab',
+            'mig31k',
+            'neptun-icon-mig31k',
+            'neptun-icon-unknown',
+          ],
+          iconSize: 0.58,
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
+          iconAnchor: 'center',
         ),
       );
       await c.addSource(
@@ -768,7 +1025,7 @@ class _NeptunMapState extends State<NeptunMap> {
       ),
       const SizedBox(height: 6),
       const Text(
-        'Czerwone punkty: bieżące, celowo zgrubne pozycje. Fioletowe linie: wyłącznie historia.',
+        'Białe symbole pokazują typ zagrożenia (np. dron, FPV, rakieta, KAB, MiG-31K). Ich orientacja jest wyłącznie graficzna i nie oznacza kierunku lotu. Pozycje pozostają celowo zgrubne. Fioletowe linie: wyłącznie historia.',
       ),
       if (error != null) Text(error!),
     ],
