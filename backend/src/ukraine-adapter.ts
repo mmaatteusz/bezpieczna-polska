@@ -113,9 +113,12 @@ export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncInt
   const parseStatus=(input:unknown)=>{
    if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('UA_STATUS_SHAPE_NOT_OBJECT');
    const value=input as Record<string,unknown>;
-   const raw=value.lastActionIndex??value.actionIndex;
-   if(raw===undefined)throw new Error('UA_STATUS_INDEX_MISSING');
+   const hasLast=Object.prototype.hasOwnProperty.call(value,'lastActionIndex');
+   const hasAlias=Object.prototype.hasOwnProperty.call(value,'actionIndex');
+   if(!hasLast&&!hasAlias)throw new Error('UA_STATUS_INDEX_MISSING');
+   const raw=hasLast?value.lastActionIndex:value.actionIndex;
    if(raw===null)throw new Error('UA_STATUS_INDEX_NULL');
+   if(raw===undefined)throw new Error('UA_STATUS_INDEX_MISSING');
    if(typeof raw!=='number')throw new Error(typeof raw==='string'?'UA_STATUS_INDEX_STRING':'UA_STATUS_INDEX_TYPE');
    if(!Number.isSafeInteger(raw)||raw<0)throw new Error('UA_STATUS_INDEX_INVALID');
    return {lastActionIndex:raw};
