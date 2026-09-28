@@ -27,7 +27,13 @@ export async function initializeSources(store:Store){
   else if(!s.enabled)await store.setHealth({...previous,...s,state:'NOT_CONFIGURED',complete:false});
   else{
    const repairShelterComplete=s.id==='SHELTERS'&&previous.state==='DEGRADED'&&previous.errorCode==='SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD'&&preservableShelterLkg(previous);
-   await store.setHealth({...previous,...s,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?7200:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,...(repairShelterComplete?{complete:true}:{})});
+   const next={...previous,...s,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?7200:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,...(repairShelterComplete?{complete:true}:{})};
+   if(s.id==='UA'){
+    const before={name:previous.name,url:previous.url,enabled:previous.enabled,implementation:previous.implementation,integrationNote:previous.integrationNote,sourceClass:previous.sourceClass,absenceSemantics:previous.absenceSemantics,maxAgeSeconds:previous.maxAgeSeconds};
+    const after={name:next.name,url:next.url,enabled:next.enabled,implementation:next.implementation,integrationNote:next.integrationNote,sourceClass:next.sourceClass,absenceSemantics:next.absenceSemantics,maxAgeSeconds:next.maxAgeSeconds};
+    if(JSON.stringify(before)===JSON.stringify(after))continue;
+   }
+   await store.setHealth(next);
   }
  }
 }
@@ -112,6 +118,26 @@ export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securit
  const task=syncSources(store,adapters,fetchText,fetchBytes).finally(()=>running.delete(store));
  running.set(store,task);return task;
 }
+function uaDbStageError(error:unknown){
+ const code=typeof error==='object'&&error!==null&&'code' in error?String((error as {code?:unknown}).code??''):'';
+ const message=error instanceof Error?error.message:'';
+ if(code==='40001'||/could not serialize access due to concurrent update/i.test(message))return 'UA_DB_SERIALIZATION_CONFLICT';
+ if(code==='57014'||/statement timeout|query timeout/i.test(message))return 'UA_DB_TIMEOUT';
+ if(code==='55P03'||/lock timeout/i.test(message))return 'UA_DB_LOCK_TIMEOUT';
+ if(code.startsWith('08')||/connection terminated|connection reset|connection refused/i.test(message))return 'UA_DB_CONNECTION_FAILED';
+ if(/postgis|st_geom|geometry|\bgeom\b/i.test(message))return 'UA_POSTGIS_WRITE_FAILED';
+ return 'UA_DB_WRITE_FAILED';
+}
+async function applyUkraineSync(store:Store,items:Event[],health:Health){
+ for(let attempt=0;attempt<2;attempt++){
+  try{await store.applySync(items,health);return;}
+  catch(error){
+   const code=uaDbStageError(error);
+   if(code==='UA_DB_SERIALIZATION_CONFLICT'&&attempt===0){await new Promise(resolve=>setTimeout(resolve,75));continue;}
+   throw new Error(code);
+  }
+ }
+}
 async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:string)=>Promise<string>,fetchBytes:(url:string)=>Promise<Uint8Array>){
  await initializeSources(store);
  const healthById=new Map((await store.health()).map(source=>[source.id,source]));
@@ -131,8 +157,10 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
    // batch. STATUS sources with that promise must expose ACTIVE_WARNINGS.
    if(previous.absenceSemantics==='AUTHORITATIVE_EMPTY_SET'&&!batch.complete)throw new Error('SOURCE_EMPTY_SET_CONTRACT_VIOLATION');
    if(previous.sourceClass==='STATUS'&&previous.absenceSemantics==='AUTHORITATIVE_EMPTY_SET'&&batch.coverage!=='ACTIVE_WARNINGS')throw new Error('SOURCE_STATUS_COVERAGE_CONTRACT_VIOLATION');
-   const items=batch.events.map(e=>eventSchema.parse(e));
-   if(items.some(e=>e.isDemo||!e.sources.some(s=>s.id===adapter.id)))throw new Error('SOURCE_INVALID_EVENT');
+   let items:Event[];
+   try{items=batch.events.map(e=>eventSchema.parse(e));}
+   catch(error){if(adapter.id==='UA')throw new Error('UA_EVENT_VALIDATION_FAILED');throw error;}
+   if(items.some(e=>e.isDemo||!e.sources.some(s=>s.id===adapter.id)))throw new Error(adapter.id==='UA'?'UA_EVENT_VALIDATION_FAILED':'SOURCE_INVALID_EVENT');
    const published=items.map(e=>e.publishedAt??(e.securityLevel?.publishedAt?e.securityLevel.publishedAt:null)).filter((v):v is string=>v!==null).sort();
    const measurementTimes=(batch.radiationMeasurements??[]).map(p=>p.measuredAt).sort();
    const health:Health={...previous,...batch.metadata,...(batch.uaMetadata?{uaMetadata:batch.uaMetadata}:{}),...(batch.neptunMetadata?{neptunMetadata:batch.neptunMetadata}:{}),...(adapter.id==='PAA'?{checkedEventIds:items.map(e=>e.id)}:{}),enabled:true,state:'HEALTHY',lastAttempt,lastSuccess:new Date().toISOString(),lastItemTime:batch.neptunMetadata?.serverTime??batch.metadata?.sourceUpdatedAt??measurementTimes.at(-1)??published.at(-1)??null,responseTime:Date.now()-begin,failureCount:0,complete:batch.complete,coverage:batch.coverage,pagesFetched:batch.pagesFetched,itemCount:batch.radiationMeasurements?.length??batch.shelters?.length??items.length,errorCode:null,adapterVersion:adapter.version};
@@ -143,7 +171,8 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
     if(adapter.id!=='SHELTERS'||items.length||batch.coverage!=='FACILITY_CATALOG'||!batch.complete||!batch.metadata)throw new Error('SOURCE_INVALID_BATCH');
     if(previous.sourceUpdatedAt&&Date.parse(batch.metadata.sourceUpdatedAt)<Date.parse(previous.sourceUpdatedAt))throw new Error('SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD');
     await store.applyShelterSync(batch.shelters,health);
-   }else await store.applySync(items,health);
+   }else if(adapter.id==='UA')await applyUkraineSync(store,items,health);
+   else await store.applySync(items,health);
   }catch(error){
    const message=error instanceof Error?error.message:'';
    const errorCode=/^[A-Z][A-Z0-9_]{2,100}$/.test(message)?message:'SOURCE_SYNC_FAILED';
