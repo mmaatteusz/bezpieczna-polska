@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:bezpieczna_polska/map_layers.dart';
 import 'package:bezpieczna_polska/model.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +10,7 @@ SafetyEvent eventFixture({
   double? latitude,
   double? longitude,
   DateTime? validTo,
+  String? locationText,
   String sourceId = 'RCB',
 }) {
   return SafetyEvent({
@@ -32,6 +35,7 @@ SafetyEvent eventFixture({
     'validTo': validTo?.toIso8601String(),
     'latitude': latitude,
     'longitude': longitude,
+    'locationText': locationText,
   });
 }
 
@@ -75,6 +79,75 @@ void main() {
     expect(features.single['geometry']['coordinates'], [18.2, 53.1]);
     expect(features.single['properties']['mapLocationKind'], 'EVENT_POINT');
     expect(features.single['properties']['mapCategory'], 'ALERT');
+  });
+
+
+  test('IMGW TERYT warning uses the affected municipality centroid', () {
+    final index = MapAdminAreaIndex.parse(
+      jsonEncode({
+        'items': [
+          {
+            'code': '0401011',
+            'name': 'Testowa gmina',
+            'kind': 'municipality',
+            'lon': 18.123,
+            'lat': 53.456,
+          },
+          {
+            'code': '0401',
+            'name': 'powiat testowy',
+            'kind': 'county',
+            'lon': 18.2,
+            'lat': 53.4,
+          },
+        ],
+      }),
+    );
+    final event = eventFixture(
+      id: 'imgw-teryt',
+      regions: ['04'],
+      validTo: now.add(const Duration(hours: 2)),
+      sourceId: 'IMGW_METEO',
+      locationText: 'TERYT: 0401011',
+    );
+
+    final features = mapEventFeatures(event, now, adminAreas: index);
+
+    expect(features, hasLength(1));
+    expect(features.single['geometry']['coordinates'], [18.123, 53.456]);
+    expect(
+      features.single['properties']['mapLocationKind'],
+      'ADMIN_AREA_CENTROID',
+    );
+    expect(features.single['properties']['adminCode'], '0401011');
+  });
+
+  test('county named in alert text uses the affected county centroid', () {
+    final index = MapAdminAreaIndex.parse(
+      jsonEncode({
+        'items': [
+          {
+            'code': '0403',
+            'name': 'powiat bydgoski',
+            'kind': 'county',
+            'lon': 18.01,
+            'lat': 53.21,
+          },
+        ],
+      }),
+    );
+    final event = eventFixture(
+      id: 'rcb-county',
+      regions: ['04'],
+      validTo: now.add(const Duration(hours: 2)),
+      locationText: 'Alert obejmuje powiat bydgoski.',
+    );
+
+    final features = mapEventFeatures(event, now, adminAreas: index);
+
+    expect(features, hasLength(1));
+    expect(features.single['geometry']['coordinates'], [18.01, 53.21]);
+    expect(features.single['properties']['adminCode'], '0403');
   });
 
   test('IMGW meteo and hydro warnings use the blue map layer', () {
