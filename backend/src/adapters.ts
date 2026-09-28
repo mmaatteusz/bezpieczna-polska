@@ -77,7 +77,7 @@ export const rsoAdapter:SourceAdapter={
 export async function fetchPublic(url:string):Promise<string>{
  if(isAllowedUaUrl(url))return fetchUa(url);
  const shelterMeta=[SHELTER_DATASET,SHELTER_RESOURCE].includes(url),shelterOrigin=url===SHELTER_ORIGIN_CSV,shelterCurrentResource=url===SHELTER_DOWNLOAD,shelterCurrent=shelterOrigin||shelterCurrentResource,certFeed=url===CERT_FEED,csirtRssPage=url===CSIRT_GOV_RSS_PAGE,sgSource=isAllowedSgUrl(url),policeSource=isAllowedPoliceUrl(url);
- const imgwSource=isAllowedImgwUrl(url),neptunSource=url===NEPTUN_API,paaMeasurementsSource=isAllowedPaaMeasurementsUrl(url);
+ const imgwSource=isAllowedImgwUrl(url),neptunSource=url===NEPTUN_API,paaMeasurementsSource=isAllowedPaaMeasurementsUrl(url),uaBoundary=url===UA_BOUNDARY_QUERY;
  const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.port||(!shelterMeta&&!shelterCurrent&&!certFeed&&!csirtRssPage&&!sgSource&&!policeSource&&!imgwSource&&!neptunSource&&!paaMeasurementsSource&&url!==UA_BOUNDARY_QUERY&&url!==WCZK_PODKARPACKIE&&!['www.gov.pl','komunikaty.tvp.pl'].includes(u.hostname)))throw new Error('SOURCE_URL_DENIED');
  if(shelterOrigin&&(u.hostname!=='gdziesieukryc.pl'||u.pathname!=='/PS_XML/punkty_schronienia.csv'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(shelterCurrentResource&&(u.hostname!=='api.dane.gov.pl'||u.pathname!=='/resources/1393918,punkty-schronienia-dane-csv/file'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
@@ -85,7 +85,7 @@ export async function fetchPublic(url:string):Promise<string>{
  if(csirtRssPage&&(u.hostname!=='www.csirt.gov.pl'||u.pathname!=='/cer/rss'||u.search||u.hash))throw new Error('SOURCE_URL_DENIED');
  if(sgSource&&!isAllowedSgUrl(u.href))throw new Error('SOURCE_URL_DENIED');
  if(policeSource&&!isAllowedPoliceUrl(u.href))throw new Error('SOURCE_URL_DENIED');
- const response=await fetch(u,{redirect:shelterCurrentResource?'follow':'error',signal:AbortSignal.timeout(shelterCurrent?90000:paaMeasurementsSource?30000:20000),headers:paaMeasurementsSource?{'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36','Accept':'application/json,text/plain,*/*','Accept-Language':'pl-PL,pl;q=0.9,en;q=0.8','Referer':'https://monitoring.paa.gov.pl/maps-portal/'}:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/rss+xml,application/xml,application/json,text/csv'}});
+ const response=await fetch(u,{redirect:shelterCurrentResource?'follow':'error',signal:AbortSignal.timeout(shelterCurrent?90000:paaMeasurementsSource?30000:uaBoundary?5000:20000),headers:paaMeasurementsSource?{'User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36','Accept':'application/json,text/plain,*/*','Accept-Language':'pl-PL,pl;q=0.9,en;q=0.8','Referer':'https://monitoring.paa.gov.pl/maps-portal/'}:{'User-Agent':'BezpiecznaPolska-preview/0.1 (source contract evaluation)','Accept':'text/html,application/rss+xml,application/xml,application/json,text/csv'}});
  if(shelterCurrentResource){
   const finalUrl=new URL(response.url||u.href);
   if(finalUrl.protocol!=='https:'||(!finalUrl.hostname.endsWith('.dane.gov.pl')&&finalUrl.hostname!=='dane.gov.pl'&&finalUrl.hostname!=='api.dane.gov.pl'))throw new Error('SHELTER_DOWNLOAD_REDIRECT_DENIED');
