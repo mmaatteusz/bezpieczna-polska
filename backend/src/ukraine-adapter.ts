@@ -98,7 +98,9 @@ export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncInt
   const status=z.object({lastActionIndex:z.number().int().nonnegative()});
   const before=status.parse(await read('/alerts/status'));
   const regions=parseUaRegions(await read('/regions')),active=activeSchema.parse(await read('/alerts'));
-  // Live polling only needs history for regions that are active now or have an unresolved previous cycle.\n  // Fetching every oblast history on every minute delays alerts and unnecessarily loads the official API.\n  const ids=new Set([...active.flatMap(r=>r.activeAlerts.map(a=>a.regionId)),...previousEvents.filter(e=>e.countryCode==='UA'&&e.ukraine&&['ACTIVE','UNKNOWN'].includes(e.lifecycle)).map(e=>e.ukraine!.regionId)]);
+  // Live polling only needs history for regions that are active now or have an unresolved previous cycle.
+  // Fetching every oblast history on every minute delays alerts and unnecessarily loads the official API.
+  const ids=new Set([...active.flatMap(r=>r.activeAlerts.map(a=>a.regionId)),...previousEvents.filter(e=>e.countryCode==='UA'&&e.ukraine&&['ACTIVE','UNKNOWN'].includes(e.lifecycle)).map(e=>e.ukraine!.regionId)]);
   if(ids.size>300)throw new Error('UA_HISTORY_SCOPE_LIMIT');
   const history:unknown[]=[];
   for(const regionId of ids){const rows=historySchema.parse(await read('/alerts/regionHistory?regionId='+encodeURIComponent(regionId)));if(rows.some(r=>r.regionId!==regionId))throw new Error('UA_HISTORY_REGION_CONFLICT');history.push(...rows);}
