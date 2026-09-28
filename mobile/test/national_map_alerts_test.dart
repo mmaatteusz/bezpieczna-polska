@@ -99,13 +99,13 @@ void main() {
     );
 
     expect(features, hasLength(2));
-    expect(
-      features.map((feature) => feature['geometry']['coordinates']).toSet(),
-      {
-        [18.6, 53.0],
-        [21.0, 52.2],
-      },
-    );
+    final coordinatesByTeryt = {
+      for (final feature in features)
+        feature['properties']['terytCode']:
+            feature['geometry']['coordinates'],
+    };
+    expect(coordinatesByTeryt['0403'], [18.6, 53.0]);
+    expect(coordinatesByTeryt['1465'], [21.0, 52.2]);
     expect(
       features.every(
         (feature) =>
