@@ -66,6 +66,19 @@ test('UA status accepts actionIndex compatibility alias used by current service'
  const batch=await ukraineAdapter.sync({now,fetchText});
  assert.equal(batch.uaMetadata.lastActionIndex,7);assert.equal(batch.coverage,'ACTIVE_WARNINGS');assert.ok(calls>=0);
 });
+test('UA status diagnostics fail closed without exposing response values',async()=>{
+ const cases=[
+  [{},/UA_STATUS_INDEX_MISSING/],
+  [{lastActionIndex:null},/UA_STATUS_INDEX_NULL/],
+  [{lastActionIndex:'7'},/UA_STATUS_INDEX_STRING/],
+  [[],/UA_STATUS_SHAPE_NOT_OBJECT/]
+ ] as const;
+ for(const [statusBody,pattern] of cases){
+  const fetchText=async(url:string)=>url.endsWith('/status')?JSON.stringify(statusBody):url.endsWith('/regions')?JSON.stringify(registry):url.endsWith('/alerts')?JSON.stringify([]):JSON.stringify([]);
+  await assert.rejects(ukraineAdapter.sync({now,fetchText}),pattern);
+ }
+});
+
 
 test('UA alert, source failure or healthy UA alone never changes Polish status or correlation',()=>{
  const before=computeStatus([],[],'PL',now);assert.deepEqual(computeStatus([parse()],[health()],'PL',now),before);assert.equal(computeStatus([parse()],[health()],'04',now).hazardLevel,'UNKNOWN');assert.deepEqual(correlate([parse()]),[]);
