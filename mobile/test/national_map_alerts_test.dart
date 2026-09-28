@@ -101,15 +101,13 @@ void main() {
     expect(features, hasLength(2));
     final coordinatesByTeryt = {
       for (final feature in features)
-        feature['properties']['terytCode']:
-            feature['geometry']['coordinates'],
+        feature['properties']['terytCode']: feature['geometry']['coordinates'],
     };
     expect(coordinatesByTeryt['0403'], [18.6, 53.0]);
     expect(coordinatesByTeryt['1465'], [21.0, 52.2]);
     expect(
       features.every(
-        (feature) =>
-            feature['properties']['mapLocationKind'] == 'TERYT_SCOPE',
+        (feature) => feature['properties']['mapLocationKind'] == 'TERYT_SCOPE',
       ),
       isTrue,
     );
