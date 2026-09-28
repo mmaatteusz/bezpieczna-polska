@@ -2,13 +2,14 @@ import {z} from 'zod';
 import {REGIONS,sourceHealth} from './domain.js';
 import {Store} from './store.js';
 import {shelterSchema} from './shelter.js';
+const uaConfigured=Boolean(process.env.UKRAINE_ALARM_API_KEY?.trim());
 // Shared discovery contract: disabled providers never return fabricated data.
 export const mapLayers=[
  {id:'radiation',sourceId:'PAA_MEASUREMENTS',authority:'OFFICIAL_PL',enabled:true,measurementsEnabled:true},
  {id:'shelters',sourceId:'SHELTERS',authority:'OFFICIAL_PL',enabled:true},
  {id:'gps_interference',sourceId:'GPSJAM',authority:'OSINT',enabled:true,geometry:'DAILY_H3_POLYGONS',mode:'DAILY_SNAPSHOT',sourceUrl:'https://gpsjam.org/',integrationNote:'Dobowa mapa obniżonej dokładności nawigacji raportowanej przez statki powietrzne. Nie dowodzi przyczyny ani celowego zagłuszania.'},
  ...['RCB','WCZK','RSO_WCZK','border','police_PSP'].map(id=>({id,sourceId:id,authority:'OFFICIAL_PL',enabled:false})),
- {id:'Ukraine_alerts',sourceId:'UA',authority:'OFFICIAL_FOREIGN',enabled:false,geometry:'ADMINISTRATIVE_POLYGONS_ONLY',integrationNote:'UkraineAlarm pozostaje ukryty do czasu skonfigurowania i zweryfikowania klucza API.'},
+ {id:'Ukraine_alerts',sourceId:'UA',authority:'OFFICIAL_FOREIGN',enabled:uaConfigured,geometry:'ADMINISTRATIVE_POLYGONS_ONLY',integrationNote:uaConfigured?'Oficjalne alarmy UkraineAlarm API v3; warstwa administracyjna Ukrainy.':'UkraineAlarm pozostaje ukryty do czasu skonfigurowania klucza API.'},
  {id:'NEPTUN',sourceId:'NEPTUN',authority:'OSINT',enabled:true,geometry:'COARSE_LIVE_POINTS_AND_HISTORICAL_LINES',mode:'LIVE_AND_HISTORY'},
 ];
 const bounds=z.tuple([z.number().min(-180).max(180),z.number().min(-85).max(85),z.number().min(-180).max(180),z.number().min(-85).max(85)]).refine(b=>b[0]<b[2]&&b[1]<b[3]);
