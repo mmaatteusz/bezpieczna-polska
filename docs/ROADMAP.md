@@ -39,7 +39,7 @@ Legenda: ✅ gotowe i używane • 🟡 kod istnieje / wymaga wdrożenia lub dom
 | PAA komunikaty | ✅ | oficjalne komunikaty |
 | PAA dedykowany panel | 🟡 | widget istnieje, trzeba zdecydować miejsce w UI |
 | PAA pomiary stacji | ⛔ | brak zweryfikowanego kontraktu |
-| UkraineAlarm backend/UI | 🟡 | kod istnieje; brak klucza i produkcyjnego włączenia |
+| UkraineAlarm backend/UI | ✅ | klucz skonfigurowany backendowo; oficjalny `/api/v3/alerts` live, osobny worker 90 s, UI i health aktywne |
 | Push UI/outbox/backend | 🟡 | kod gotowy, produkcyjny provider nie skonfigurowany |
 | `Jestem bezpieczny` | ✅ | systemowy Share Sheet |
 | Pełny basemap offline | ❌ | etap późniejszy |
@@ -64,7 +64,7 @@ Legenda: ✅ gotowe i używane • 🟡 kod istnieje / wymaga wdrożenia lub dom
 | NEPTUN | ✅ |
 | PAA measurements | ⛔ |
 | CSIRT GOV | ⛔ |
-| UkraineAlarm live | 🟡 |
+| UkraineAlarm live | ✅ |
 
 WCZK nie jest modelowane jako 16 niezależnych feedów. RSO jest krajowym kanałem publikacji komunikatów WCZK, a Podkarpackie ma dodatkowy oficjalny mirror tego samego wydawcy.
 
@@ -83,7 +83,7 @@ W repo należy utrzymywać tylko aktywne branche robocze. Historyczne branche po
 1. Podpiąć stopnie alarmowe do aktualnego UI.
 2. Uporządkować prezentację PAA.
 3. Włączyć FCM i wykonać test end-to-end powiadomienia na fizycznym Androidzie.
-4. Po otrzymaniu klucza skonfigurować UkraineAlarm, zweryfikować live i dopiero wtedy wystawić moduł w aplikacji.
+4. UkraineAlarm: utrzymywać runtime HEALTHY, pilnować limitu wywołań upstreamu i testować regresję `/v1/ukraine`/mapy/push.
 5. Posprzątać Railway po backupie.
 6. Uporządkować monitoring, backup i restore drill.
 

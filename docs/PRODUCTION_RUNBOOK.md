@@ -231,7 +231,9 @@ Sam zielony test jednostkowy nie oznacza działającego push.
 
 Brak `UKRAINE_ALARM_API_KEY` oznacza oczekiwane `NOT_CONFIGURED`.
 
-Nie należy prezentować modułu jako live, jeżeli klucz nie jest skonfigurowany.
+W produkcji sekret jest ustawiony wyłącznie po stronie backendu. Worker korzysta z oficjalnego `GET /api/v3/alerts` i wykonuje maksymalnie jeden uwierzytelniony request UkraineAlarm na synchronizację co 90 s. Nie należy wracać do pobierania pełnego rejestru i historii wszystkich regionów w każdym cyklu — upstream zwracał przy takim wzorcu okresowe `401`.
+
+Warunek poprawnej pracy: source `UA` ma być `HEALTHY`, bez `errorCode`, a `/v1/ukraine` ma zachowywać rozdzielenie od Statusu Polski. Brak wpisu w feedzie live może zakończyć poprzedni alarm, ale bez źródłowego czasu końca `validTo` pozostaje `null`.
 
 ## Sprzątanie Railway
 
