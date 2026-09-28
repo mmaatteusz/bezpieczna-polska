@@ -48,7 +48,7 @@ test('UA region registry accepts null child collections without inventing region
  assert.deepEqual(parsed,[{id:'fixture-null-children',name:'Область без підрегіонів',type:'State',parentId:null}]);
 });
 test('UA changed contracts, unknown regions, contradictory end and unknown types fail closed',()=>{
- for(const broken of [{},[{regionId:'fixture-a',activeAlerts:[]}],active('fixture-a','MISSILE_POSITION')])assert.throws(()=>parseUaBatch(regions,broken,[],[],now));
+ for(const broken of [{},[{regionName:'Область А',activeAlerts:[]}],active('fixture-a','MISSILE_POSITION')])assert.throws(()=>parseUaBatch(regions,broken,[],[],now));
  const h=history(true);h[0].alarms[0].isContinue=true;assert.throws(()=>parseUaBatch(regions,[],h,[],now),/UA_TIME_CONFLICT/);
  assert.throws(()=>parseUaBatch(regions,[],history(),[],now),/UA_SNAPSHOT_HISTORY_CONFLICT/);
  assert.throws(()=>parseUaRegions({states:[{...registry.states[0],regionType:'Null'}]}));
@@ -61,6 +61,12 @@ test('UA adapter reads documented endpoints and rejects mid-sync source change',
  let status=0;const fetchText=async(url:string)=>{if(url.endsWith('/status'))return JSON.stringify({lastActionIndex:++status});if(url.endsWith('/regions'))return JSON.stringify(registry);if(url.endsWith('/alerts'))return JSON.stringify(active());return JSON.stringify([]);};
  await assert.rejects(ukraineAdapter.sync({now,fetchText}),/UA_SOURCE_CHANGED_DURING_SYNC/);
 });
+test('UA status accepts actionIndex compatibility alias used by current service',async()=>{
+ let calls=0;const fetchText=async(url:string)=>{if(url.endsWith('/status'))return JSON.stringify({actionIndex:7});if(url.endsWith('/regions'))return JSON.stringify(registry);if(url.endsWith('/alerts'))return JSON.stringify([]);if(url.includes('/regionHistory'))return JSON.stringify([]);calls++;return JSON.stringify([]);};
+ const batch=await ukraineAdapter.sync({now,fetchText});
+ assert.equal(batch.uaMetadata.lastActionIndex,7);assert.equal(batch.coverage,'ACTIVE_WARNINGS');assert.ok(calls>=0);
+});
+
 test('UA alert, source failure or healthy UA alone never changes Polish status or correlation',()=>{
  const before=computeStatus([],[],'PL',now);assert.deepEqual(computeStatus([parse()],[health()],'PL',now),before);assert.equal(computeStatus([parse()],[health()],'04',now).hazardLevel,'UNKNOWN');assert.deepEqual(correlate([parse()]),[]);
 });

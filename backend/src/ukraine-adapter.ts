@@ -18,7 +18,7 @@ const timestamp=z.iso.datetime({offset:true}).transform(s=>new Date(s).toISOStri
 const optionalTime=timestamp.nullish().transform(v=>v??null);
 const activeSchema=z.array(z.object({
  regionId:id,
- regionName:z.string().min(1).max(200),
+ regionName:z.string().min(1).max(200).nullish(),
  regionType:sourceRegionType.nullish(),
  regionEngName:z.string().max(200).nullish(),
  lastUpdate:optionalTime,
@@ -110,7 +110,12 @@ export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncInt
  async sync({now,fetchText,previousEvents=[]}:SourceContext){
   const read=async(path:string,code:string)=>{const body=await fetchText(UA_API+path);try{return JSON.parse(body);}catch{throw new Error(code);}};
   const parseContract=<T>(code:string,fn:()=>T)=>{try{return fn();}catch(error){const message=error instanceof Error?error.message:'';if(/^UA_[A-Z0-9_]+$/.test(message))throw error;throw new Error(code);}};
-  const status=z.object({lastActionIndex:z.number().int().nonnegative()});
+  const statusValue=z.number().int().nonnegative();
+  const status=z.object({lastActionIndex:statusValue.optional(),actionIndex:statusValue.optional()}).transform(value=>{
+   const lastActionIndex=value.lastActionIndex??value.actionIndex;
+   if(lastActionIndex===undefined)throw new Error('UA_STATUS_SCHEMA_CHANGED');
+   return {lastActionIndex};
+  });
   const beforeRaw=await read('/alerts/status','UA_STATUS_JSON_INVALID');
   const before=parseContract('UA_STATUS_SCHEMA_CHANGED',()=>status.parse(beforeRaw));
   const regionsRaw=await read('/regions','UA_REGIONS_JSON_INVALID');
