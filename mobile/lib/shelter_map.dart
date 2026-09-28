@@ -104,6 +104,7 @@ class _ShelterMapState extends State<ShelterMap> {
   Snapshot? nationalSnapshot;
   DateTime? nationalEventsUpdatedAt, radiationLastFetch;
   Map<String, dynamic>? radiationOverride;
+  Map<String, List<double>> administrativeAnchors = const {};
   ShelterMapProvider get provider => ShelterMapProvider(widget.repository);
   GpsInterferenceProvider get gpsInterferenceProvider =>
       GpsInterferenceProvider(widget.repository);
@@ -292,6 +293,41 @@ class _ShelterMapState extends State<ShelterMap> {
                   ),
                 )
                 as Map<String, dynamic>;
+        try {
+          final rawAnchors =
+              jsonDecode(
+                    await rootBundle.loadString(
+                      'assets/poland_powiat_centroids.json',
+                    ),
+                  )
+                  as Map<String, dynamic>;
+          final rawPowiaty = rawAnchors['powiaty'];
+          if (rawAnchors['schemaVersion'] != 2 || rawPowiaty is! Map) {
+            throw const FormatException('Niepoprawne centroidy TERYT');
+          }
+          final parsed = <String, List<double>>{};
+          for (final entry in rawPowiaty.entries) {
+            final coordinates = entry.value;
+            if (entry.key is! String ||
+                !RegExp(r'^\d{4}$').hasMatch(entry.key as String) ||
+                coordinates is! List ||
+                coordinates.length != 2 ||
+                coordinates.any((value) => value is! num)) {
+              throw const FormatException('Niepoprawny punkt TERYT');
+            }
+            parsed[entry.key as String] = [
+              (coordinates[0] as num).toDouble(),
+              (coordinates[1] as num).toDouble(),
+            ];
+          }
+          if (parsed.length < 300) {
+            throw const FormatException('Niepełny zestaw centroidów TERYT');
+          }
+          administrativeAnchors = parsed;
+        } catch (_) {
+          // Map remains usable; a missing local helper must not break live data.
+          administrativeAnchors = const {};
+        }
         await c.addSource(
           'voivodeships',
           GeojsonSourceProperties(data: voivodeships),
@@ -393,9 +429,17 @@ class _ShelterMapState extends State<ShelterMap> {
           circleStrokeWidth: 2,
         ),
         filter: [
-          '==',
-          ['get', 'mapCategory'],
-          'ALERT',
+          'all',
+          [
+            '==',
+            ['get', 'mapCategory'],
+            'ALERT',
+          ],
+          [
+            '==',
+            ['get', 'mapCollision'],
+            false,
+          ],
         ],
       );
       await c.addCircleLayer(
@@ -408,9 +452,65 @@ class _ShelterMapState extends State<ShelterMap> {
           circleStrokeWidth: 2,
         ),
         filter: [
-          '==',
-          ['get', 'mapCategory'],
-          'IMGW',
+          'all',
+          [
+            '==',
+            ['get', 'mapCategory'],
+            'IMGW',
+          ],
+          [
+            '==',
+            ['get', 'mapCollision'],
+            false,
+          ],
+        ],
+      );
+      await c.addCircleLayer(
+        'events',
+        'event-alert-collision-points',
+        const CircleLayerProperties(
+          circleColor: '#b3261e',
+          circleRadius: 8,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: 2,
+          circleTranslate: [-9.0, 0.0],
+        ),
+        filter: [
+          'all',
+          [
+            '==',
+            ['get', 'mapCategory'],
+            'ALERT',
+          ],
+          [
+            '==',
+            ['get', 'mapCollision'],
+            true,
+          ],
+        ],
+      );
+      await c.addCircleLayer(
+        'events',
+        'event-imgw-collision-points',
+        const CircleLayerProperties(
+          circleColor: '#1565c0',
+          circleRadius: 8,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: 2,
+          circleTranslate: [9.0, 0.0],
+        ),
+        filter: [
+          'all',
+          [
+            '==',
+            ['get', 'mapCategory'],
+            'IMGW',
+          ],
+          [
+            '==',
+            ['get', 'mapCollision'],
+            true,
+          ],
         ],
       );
       await c.addSource('watched', GeojsonSourceProperties(data: empty));
@@ -489,16 +589,24 @@ class _ShelterMapState extends State<ShelterMap> {
     if (!ready || c == null || widget.ukraine) return;
 
     final now = DateTime.now();
-    final eventFeatures = contextEvents
-        .where(
-          (event) => mapEventVisibleForLayers(
-            event,
-            showEvents: showEvents,
-            showImgw: showImgw,
-          ),
-        )
-        .expand((event) => mapEventFeatures(event, now))
-        .toList();
+    final eventFeatures = markMapCategoryCollisions(
+      contextEvents
+          .where(
+            (event) => mapEventVisibleForLayers(
+              event,
+              showEvents: showEvents,
+              showImgw: showImgw,
+            ),
+          )
+          .expand(
+            (event) => mapEventFeatures(
+              event,
+              now,
+              administrativeAnchors: administrativeAnchors,
+            ),
+          )
+          .toList(),
+    );
     final watchedFeatures = showWatched
         ? widget.watchedLocations
               .map(
@@ -813,6 +921,8 @@ class _ShelterMapState extends State<ShelterMap> {
       final contextHits = await c.queryRenderedFeatures(point, [
         'event-alert-points',
         'event-imgw-points',
+        'event-alert-collision-points',
+        'event-imgw-collision-points',
         'watched-points',
       ], null);
       if (contextHits.isNotEmpty && mounted) {

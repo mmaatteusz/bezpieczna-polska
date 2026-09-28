@@ -77,6 +77,90 @@ void main() {
     expect(features.single['properties']['mapCategory'], 'ALERT');
   });
 
+  test('IMGW TERYT warning is placed at affected powiats', () {
+    final event = SafetyEvent({
+      ...eventFixture(
+        id: 'imgw-teryt',
+        regions: ['04', '14'],
+        validTo: now.add(const Duration(hours: 2)),
+        sourceId: 'IMGW_METEO',
+      ).data,
+      'locationText': 'TERYT: 0403, 1465',
+      'areaPrecision': 'PROVINCE_SUBSET',
+    });
+
+    final features = mapEventFeatures(
+      event,
+      now,
+      administrativeAnchors: const {
+        '0403': [18.6, 53.0],
+        '1465': [21.0, 52.2],
+      },
+    );
+
+    expect(features, hasLength(2));
+    final coordinatesByTeryt = {
+      for (final feature in features)
+        feature['properties']['terytCode']: feature['geometry']['coordinates'],
+    };
+    expect(coordinatesByTeryt['0403'], [18.6, 53.0]);
+    expect(coordinatesByTeryt['1465'], [21.0, 52.2]);
+    expect(
+      features.every(
+        (feature) => feature['properties']['mapLocationKind'] == 'TERYT_SCOPE',
+      ),
+      isTrue,
+    );
+  });
+
+  test('missing TERYT centroid falls back to its voivodeship anchor', () {
+    final event = SafetyEvent({
+      ...eventFixture(
+        id: 'imgw-teryt-fallback',
+        regions: ['04'],
+        validTo: now.add(const Duration(hours: 2)),
+        sourceId: 'IMGW_METEO',
+      ).data,
+      'locationText': 'TERYT: 0403',
+      'areaPrecision': 'PROVINCE_SUBSET',
+    });
+
+    final features = mapEventFeatures(event, now);
+
+    expect(features, hasLength(1));
+    expect(features.single['geometry']['coordinates'], mapRegionAnchors['04']);
+    expect(features.single['properties']['mapLocationKind'], 'REGION_SCOPE');
+  });
+
+  test('overlapping alert and IMGW markers are marked for deconfliction', () {
+    final alert = mapEventFeatures(
+      eventFixture(
+        id: 'alert-overlap',
+        regions: ['04'],
+        validTo: now.add(const Duration(hours: 2)),
+      ),
+      now,
+    ).single;
+    final imgw = mapEventFeatures(
+      eventFixture(
+        id: 'imgw-overlap',
+        regions: ['04'],
+        validTo: now.add(const Duration(hours: 2)),
+        sourceId: 'IMGW_METEO',
+      ),
+      now,
+    ).single;
+
+    final features = markMapCategoryCollisions([alert, imgw]);
+
+    expect(
+      features.every(
+        (feature) => feature['properties']['mapCollision'] == true,
+      ),
+      isTrue,
+    );
+  });
+
   test('IMGW meteo and hydro warnings use the blue map layer', () {
     for (final sourceId in ['IMGW_METEO', 'IMGW_HYDRO']) {
       final event = eventFixture(
