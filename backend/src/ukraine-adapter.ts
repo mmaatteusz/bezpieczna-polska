@@ -7,7 +7,7 @@ import type {SourceAdapter,SourceContext} from './source-adapter.js';
 // Published contract: UkraineAlarm/UkraineAlarm-javascript, API v3.
 export const UA_API='https://api.ukrainealarm.com/api/v3';
 export const UA_MAP='https://map.ukrainealarm.com/';
-export const UA_VERSION='ukrainealarm-v3/1.0.0';
+export const UA_VERSION='ukrainealarm-v3/1.1.0';
 export const uaRegionSchema=z.object({id:z.string().min(1).max(80),name:z.string().min(1).max(200),type:z.enum(['State','District','Community']),parentId:z.string().nullable()});
 export type UaRegion=z.infer<typeof uaRegionSchema>;
 const id=z.string().regex(/^[A-Za-z0-9_-]{1,80}$/);
@@ -91,6 +91,79 @@ export function parseUaBatch(registry:UaRegion[],activeInput:unknown,historyInpu
  }
  return {events:[...events.values()],activeEventIds:[...events.values()].filter(e=>e.lifecycle==='ACTIVE').map(e=>e.id)};
 }
+
+export function parseUaLiveSnapshot(activeInput:unknown,previous:Event[],now:Date){
+ const active=activeSchema.parse(activeInput);
+ const byId=new Map<string,UaRegion>();
+ for(const group of active){
+  if(!group.regionName||!group.regionType||group.regionType==='Null'){
+   if(group.activeAlerts.length)throw new Error('UA_ACTIVE_REGION_METADATA_MISSING');
+   continue;
+  }
+  const row:UaRegion={id:group.regionId,name:group.regionName,type:group.regionType,parentId:null};
+  const old=byId.get(row.id);
+  if(old&&(old.name!==row.name||old.type!==row.type))throw new Error('UA_ACTIVE_REGION_CONFLICT');
+  byId.set(row.id,row);
+ }
+ for(const group of active){
+  for(const a of group.activeAlerts){
+   const row=byId.get(a.regionId);
+   if(!row)throw new Error('UA_ACTIVE_REGION_UNRESOLVED');
+   if(a.regionType&&a.regionType!=='Null'&&row.type!==a.regionType)throw new Error('UA_REGION_TYPE_CONFLICT');
+   if(a.regionId!==group.regionId&&byId.has(group.regionId)){
+    const parent=byId.get(group.regionId)!;
+    if(row.parentId&&row.parentId!==parent.id)throw new Error('UA_REGION_RELATION_CONFLICT');
+    row.parentId=parent.id;
+   }
+  }
+ }
+ const currentPrevious=[...previous]
+  .filter(e=>e.countryCode==='UA'&&e.ukraine&&['ACTIVE','UNKNOWN'].includes(e.lifecycle))
+  .sort((a,b)=>b.retrievedAt.localeCompare(a.retrievedAt));
+ const previousByKey=new Map<string,Event>();
+ for(const e of currentPrevious){
+  const key=e.ukraine!.regionId+':'+e.ukraine!.alertType;
+  if(!previousByKey.has(key))previousByKey.set(key,e);
+ }
+ const events:Event[]=[];
+ const activeKeys=new Set<string>();
+ const timeCheck=(v:string|null)=>{if(v&&Date.parse(v)>+now+30000)throw new Error('UA_FUTURE_TIMESTAMP');};
+ for(const group of active){
+  timeCheck(group.lastUpdate);
+  for(const a of group.activeAlerts){
+   timeCheck(a.lastUpdate);
+   const r=byId.get(a.regionId)!;
+   const key=a.regionId+':'+a.type;
+   if(activeKeys.has(key))continue;
+   activeKeys.add(key);
+   const old=previousByKey.get(key);
+   const sourceUpdatedAt=a.lastUpdate??group.lastUpdate??null;
+   const informational=a.type==='INFO'||a.type==='UNKNOWN';
+   const eventId=old?.id??'UA-'+hash([a.regionId,a.type,sourceUpdatedAt??now.toISOString(),'LIVE']).slice(0,32);
+   const base={
+    id:eventId,origin:'OFFICIAL_FOREIGN' as const,countryCode:'UA' as const,
+    ukraine:{regionId:r.id,regionName:r.name,regionType:r.type,parentRegionId:r.parentId,alertType:a.type,kind:informational?'OFFICIAL_INFORMATION' as const:'OFFICIAL_ALERT' as const,sourceUpdatedAt},
+    title:`${labels[a.type]} — ${r.name}`,
+    description:informational?'Oficjalny komunikat UkraineAlarm. Nie jest automatycznie alarmem.':'Oficjalny alarm obrony cywilnej Ukrainy. Nie określa zagrożenia w Polsce.',
+    eventType:a.type==='NUCLEAR'?'RADIATION' as const:a.type==='CHEMICAL'?'HAZMAT' as const:a.type==='AIR'?'AIR' as const:a.type==='UNKNOWN'?'OTHER' as const:'PUBLIC_SAFETY' as const,
+    severity:informational?'INFORMATIONAL' as const:'HIGH' as const,verification:'CONFIRMED' as const,lifecycle:'ACTIVE' as const,messageContext:'ACTUAL' as const,
+    regions:[],geographicScope:'REGIONAL' as const,publishedAt:null,publicationDate:null,retrievedAt:now.toISOString(),validFrom:old?.validFrom??null,validTo:null,
+    sources:[{id:'UA',name:'UkraineAlarm / Повітряна тривога',url:UA_MAP,tier:1}],instructions:[],officialWarning:!informational,reviewed:false,revision:old?.revision??1,
+    locationText:r.name,areaPrecision:r.type==='State'?'PROVINCE' as const:'PROVINCE_SUBSET' as const,
+    geometry:old?.geometry??null,geometrySource:old?.geometrySource,latitude:null,longitude:null,adapterVersion:UA_VERSION,
+    sourceContentHash:hash([a.regionId,a.type,'ACTIVE',sourceUpdatedAt]),correction:null,isDemo:false
+   };
+   events.push(eventSchema.parse(base));
+  }
+ }
+ for(const old of currentPrevious){
+  const key=old.ukraine!.regionId+':'+old.ukraine!.alertType;
+  if(activeKeys.has(key))continue;
+  events.push(eventSchema.parse({...old,lifecycle:'ENDED',validTo:null,retrievedAt:now.toISOString(),sourceContentHash:hash([old.id,'ENDED_BY_ACTIVE_SNAPSHOT']),correction:'Bieżący feed UkraineAlarm nie zawiera już tego alarmu; dokładnego czasu zakończenia feed live nie podaje.'}));
+ }
+ return {events,regions:[...byId.values()],activeEventIds:events.filter(e=>e.lifecycle==='ACTIVE').map(e=>e.id)};
+}
+
 export function isAllowedUaUrl(url:string){
  try{const u=new URL(url);return u.origin==='https://api.ukrainealarm.com'&&!u.username&&!u.password&&!u.hash&&(
   ['/api/v3/regions','/api/v3/alerts','/api/v3/alerts/status'].includes(u.pathname)&&!u.search||
@@ -106,9 +179,9 @@ export async function fetchUa(url:string,key=process.env.UKRAINE_ALARM_API_KEY){
  let size=0;const chunks:Uint8Array[]=[];for await(const c of response.body){size+=c.length;if(size>4*1024*1024)throw new Error('UA_RESPONSE_LIMIT');chunks.push(c);}
  return new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks));
 }
-export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncIntervalSeconds:60,
+export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncIntervalSeconds:90,
  async sync({now,fetchText,previousEvents=[]}:SourceContext){
-  const endpoint=async(path:string,label:'STATUS'|'REGIONS'|'ALERTS'|'HISTORY')=>{
+  const endpoint=async(path:string,label:'ALERTS')=>{
    try{return await fetchText(UA_API+path);}
    catch(error){
     const message=error instanceof Error?error.message:'';
@@ -118,51 +191,17 @@ export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncInt
     throw new Error(`UA_${label}_TRANSPORT_FAILED`);
    }
   };
-  const read=async(path:string,label:'REGIONS'|'ALERTS'|'HISTORY',code:string)=>{const body=await endpoint(path,label);try{return JSON.parse(body);}catch{throw new Error(code);}};
-  const parseContract=<T>(code:string,fn:()=>T)=>{try{return fn();}catch(error){const message=error instanceof Error?error.message:'';if(/^UA_[A-Z0-9_]+$/.test(message))throw error;throw new Error(code);}};
-  const parseStatusBody=(body:string)=>{
-   const match=body.match(/^\s*\{\s*"(lastActionIndex|actionIndex)"\s*:\s*(0|[1-9]\d*)\s*\}\s*$/);
-   if(match){
-    const value=BigInt(match[2]);
-    if(value>9223372036854775807n)throw new Error('UA_STATUS_INDEX_INVALID');
-    return {lastActionIndex:match[2]};
-   }
-   let parsed:unknown;
-   try{parsed=JSON.parse(body);}catch{throw new Error('UA_STATUS_JSON_INVALID');}
-   if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw new Error('UA_STATUS_SHAPE_NOT_OBJECT');
-   const value=parsed as Record<string,unknown>;
-   const hasLast=Object.prototype.hasOwnProperty.call(value,'lastActionIndex');
-   const hasAlias=Object.prototype.hasOwnProperty.call(value,'actionIndex');
-   if(!hasLast&&!hasAlias)throw new Error('UA_STATUS_INDEX_MISSING');
-   const raw=hasLast?value.lastActionIndex:value.actionIndex;
-   if(raw===null)throw new Error('UA_STATUS_INDEX_NULL');
-   if(raw===undefined)throw new Error('UA_STATUS_INDEX_MISSING');
-   if(typeof raw==='string')throw new Error('UA_STATUS_INDEX_STRING');
-   if(typeof raw==='number'&&!Number.isSafeInteger(raw))throw new Error('UA_STATUS_INDEX_UNSAFE_NUMBER');
-   throw new Error('UA_STATUS_SCHEMA_CHANGED');
-  };
-  const beforeBody=await endpoint('/alerts/status','STATUS');
-  const before=parseContract('UA_STATUS_SCHEMA_CHANGED',()=>parseStatusBody(beforeBody));
-  const regionsRaw=await read('/regions','REGIONS','UA_REGIONS_JSON_INVALID');
-  const regions=parseContract('UA_REGIONS_SCHEMA_CHANGED',()=>parseUaRegions(regionsRaw));
-  const activeRaw=await read('/alerts','ALERTS','UA_ALERTS_JSON_INVALID');
-  const active=parseContract('UA_ALERTS_SCHEMA_CHANGED',()=>activeSchema.parse(activeRaw));
-  const ids=new Set([...regions.filter(r=>r.type==='State').map(r=>r.id),...active.flatMap(r=>r.activeAlerts.map(a=>a.regionId)),...previousEvents.filter(e=>e.countryCode==='UA'&&e.ukraine&&['ACTIVE','UNKNOWN'].includes(e.lifecycle)).map(e=>e.ukraine!.regionId)]);
-  if(ids.size>300)throw new Error('UA_HISTORY_SCOPE_LIMIT');
-  const history:unknown[]=[];
-  for(const regionId of ids){
-   const raw=await read('/alerts/regionHistory?regionId='+encodeURIComponent(regionId),'HISTORY','UA_HISTORY_JSON_INVALID');
-   const rows=parseContract('UA_HISTORY_SCHEMA_CHANGED',()=>historySchema.parse(raw));
-   if(rows.some(r=>r.regionId!==regionId))throw new Error('UA_HISTORY_REGION_CONFLICT');
-   history.push(...rows);
+  const body=await endpoint('/alerts','ALERTS');
+  let raw:unknown;
+  try{raw=JSON.parse(body);}catch{throw new Error('UA_ALERTS_JSON_INVALID');}
+  let batch:{events:Event[];regions:UaRegion[];activeEventIds:string[]};
+  try{batch=parseUaLiveSnapshot(raw,previousEvents,now);}catch(error){
+   const message=error instanceof Error?error.message:'';
+   if(/^UA_[A-Z0-9_]+$/.test(message))throw error;
+   throw new Error('UA_ALERTS_SCHEMA_CHANGED');
   }
-  const afterBody=await endpoint('/alerts/status','STATUS');
-  const after=parseContract('UA_STATUS_SCHEMA_CHANGED',()=>parseStatusBody(afterBody));
-  if(after.lastActionIndex!==before.lastActionIndex)throw new Error('UA_SOURCE_CHANGED_DURING_SYNC');
-  const batch=parseContract('UA_BATCH_SCHEMA_CHANGED',()=>parseUaBatch(regions,active,history,previousEvents,now));
-  // Geography failure must not suppress valid civil alerts. Retain prior geometry.
-  let events=batch.events.map(e=>{const old=previousEvents.find(p=>p.id===e.id);return old?.geometry?{...e,geometry:old.geometry,geometrySource:old.geometrySource}:e;});
-  try {events=enrichUaGeometry(events,regions,JSON.parse(await fetchText(UA_BOUNDARY_QUERY)));}catch{/* Missing geometry remains explicit. */}
-  return {events,uaMetadata:{regions,activeEventIds:batch.activeEventIds,lastActionIndex:before.lastActionIndex},complete:false,coverage:'ACTIVE_WARNINGS',pagesFetched:4+ids.size};
+  let events=batch.events;
+  try {events=enrichUaGeometry(events,batch.regions,JSON.parse(await fetchText(UA_BOUNDARY_QUERY)));}catch{/* Missing geometry remains explicit. */}
+  return {events,uaMetadata:{regions:batch.regions,activeEventIds:batch.activeEventIds},complete:true,coverage:'ACTIVE_WARNINGS',pagesFetched:1};
  }
 };
