@@ -162,11 +162,9 @@ class NeptunData {
           !liveIds.contains(rawFeature['properties']['threatId'])) {
         throw const FormatException('Niepoprawna mapa live NEPTUN');
       }
-      final matchingThreat = (live['threats'] as List)
-          .cast<Map>()
-          .firstWhere(
-            (threat) => threat['id'] == rawFeature['properties']['threatId'],
-          );
+      final matchingThreat = (live['threats'] as List).cast<Map>().firstWhere(
+        (threat) => threat['id'] == rawFeature['properties']['threatId'],
+      );
       if (matchingThreat['type'] != rawFeature['properties']['type']) {
         throw const FormatException('Niezgodny typ ikony NEPTUN');
       }
@@ -398,10 +396,26 @@ Future<Uint8List> _neptunIconPng(String type) async {
         ..style = ui.PaintingStyle.stroke
         ..strokeWidth = 11
         ..strokeCap = ui.StrokeCap.round;
-      canvas.drawLine(const ui.Offset(20, 20), const ui.Offset(52, 52), armOutline);
-      canvas.drawLine(const ui.Offset(52, 20), const ui.Offset(20, 52), armOutline);
-      canvas.drawLine(const ui.Offset(20, 20), const ui.Offset(52, 52), whiteStroke);
-      canvas.drawLine(const ui.Offset(52, 20), const ui.Offset(20, 52), whiteStroke);
+      canvas.drawLine(
+        const ui.Offset(20, 20),
+        const ui.Offset(52, 52),
+        armOutline,
+      );
+      canvas.drawLine(
+        const ui.Offset(52, 20),
+        const ui.Offset(20, 52),
+        armOutline,
+      );
+      canvas.drawLine(
+        const ui.Offset(20, 20),
+        const ui.Offset(52, 52),
+        whiteStroke,
+      );
+      canvas.drawLine(
+        const ui.Offset(52, 20),
+        const ui.Offset(20, 52),
+        whiteStroke,
+      );
       for (final center in const [
         ui.Offset(17, 17),
         ui.Offset(55, 17),
@@ -503,7 +517,10 @@ Future<Uint8List> _neptunIconPng(String type) async {
       canvas.drawCircle(const ui.Offset(36, 52), 3.5, fill);
   }
 
-  final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+  final image = await recorder.endRecording().toImage(
+    size.toInt(),
+    size.toInt(),
+  );
   final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
   image.dispose();
   if (bytes == null) throw StateError('Nie udało się utworzyć ikony NEPTUN');
@@ -512,7 +529,10 @@ Future<Uint8List> _neptunIconPng(String type) async {
 
 Future<void> _registerNeptunMapIcons(MapLibreMapController controller) async {
   for (final type in _neptunIconTypes) {
-    await controller.addImage(neptunMapIconId(type), await _neptunIconPng(type));
+    await controller.addImage(
+      neptunMapIconId(type),
+      await _neptunIconPng(type),
+    );
   }
 }
 
