@@ -48,7 +48,7 @@ test('UA region registry accepts null child collections without inventing region
  assert.deepEqual(parsed,[{id:'fixture-null-children',name:'Область без підрегіонів',type:'State',parentId:null}]);
 });
 test('UA changed contracts, unknown regions, contradictory end and unknown types fail closed',()=>{
- for(const broken of [{},[{regionId:'fixture-a',activeAlerts:[]}],active('fixture-a','MISSILE_POSITION')])assert.throws(()=>parseUaBatch(regions,broken,[],[],now));
+ for(const broken of [{},[{regionName:'Область А',activeAlerts:[]}],active('fixture-a','MISSILE_POSITION')])assert.throws(()=>parseUaBatch(regions,broken,[],[],now));
  const h=history(true);h[0].alarms[0].isContinue=true;assert.throws(()=>parseUaBatch(regions,[],h,[],now),/UA_TIME_CONFLICT/);
  assert.throws(()=>parseUaBatch(regions,[],history(),[],now),/UA_SNAPSHOT_HISTORY_CONFLICT/);
  assert.throws(()=>parseUaRegions({states:[{...registry.states[0],regionType:'Null'}]}));
