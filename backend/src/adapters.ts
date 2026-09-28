@@ -18,13 +18,17 @@ import {rcbAdapter} from './rcb-adapter.js';
 import {shelterAdapter,SHELTER_DATASET,SHELTER_RESOURCE,SHELTER_DOWNLOAD,SHELTER_ORIGIN_CSV,SHELTER_ARCHIVE} from './shelter-adapter.js';
 export {SOURCES} from './source-adapter.js';
 export {parseRcbIndex,parseRcbArticle} from './rcb-adapter.js';
+const preservableShelterLkg=(h:Health|undefined)=>!!h&&h.id==='SHELTERS'&&!!h.lastSuccess&&!!h.sourceContentHash&&h.coverage==='FACILITY_CATALOG'&&Number(h.itemCount??0)>0;
 export async function initializeSources(store:Store){
  const existing=await store.health();
  for(const s of SOURCES){
   const previous=existing.find(h=>h.id===s.id);
   if(!previous)await store.setHealth({...s,state:'NOT_CONFIGURED',lastSuccess:null,lastFailure:null,lastItemTime:null,failureCount:0,responseTime:null,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?7200:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,complete:false,lastAttempt:null,errorCode:null,itemCount:0,adapterVersion:null});
   else if(!s.enabled)await store.setHealth({...previous,...s,state:'NOT_CONFIGURED',complete:false});
-  else await store.setHealth({...previous,...s,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?7200:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900});
+  else{
+   const repairShelterComplete=s.id==='SHELTERS'&&previous.state==='DEGRADED'&&previous.errorCode==='SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD'&&preservableShelterLkg(previous);
+   await store.setHealth({...previous,...s,maxAgeSeconds:s.id==='NEPTUN'?20:s.id==='UA'?180:s.id==='SHELTERS'?1209600:s.id==='PAA_MEASUREMENTS'?7200:s.id==='LEVELS'?7200:['CERT','SG','POLICE','PSP_INCIDENTS'].includes(s.id)?3600:s.id.startsWith('WCZK-')?1800:900,...(repairShelterComplete?{complete:true}:{})});
+  }
  }
 }
 export function messageContext(text:string):Event['messageContext']{return /ćwicz|cwicz|exercise/i.test(text)?'EXERCISE':/test syren|test systemu/i.test(text)?'TEST':'UNKNOWN';}
@@ -143,8 +147,9 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
   }catch(error){
    const message=error instanceof Error?error.message:'';
    const errorCode=/^[A-Z][A-Z0-9_]{2,100}$/.test(message)?message:'SOURCE_SYNC_FAILED';
-   const keepShelterLkg=adapter.id==='SHELTERS'&&errorCode==='SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD'&&!!previous.lastSuccess&&!!previous.sourceContentHash;
-   await store.setHealth({...previous,enabled:true,state:errorCode==='NOT_CONFIGURED_UA_API_KEY_MISSING'?'NOT_CONFIGURED':keepShelterLkg?'DEGRADED':'BROKEN',lastAttempt,lastFailure:new Date().toISOString(),failureCount:previous.failureCount+1,responseTime:Date.now()-begin,complete:keepShelterLkg?previous.complete:false,errorCode,adapterVersion:adapter.version});
+   const latest=adapter.id==='SHELTERS'?(await store.health()).find(h=>h.id==='SHELTERS')??previous:previous;
+   const keepShelterLkg=adapter.id==='SHELTERS'&&errorCode==='SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD'&&preservableShelterLkg(latest);
+   await store.setHealth({...latest,enabled:true,state:errorCode==='NOT_CONFIGURED_UA_API_KEY_MISSING'?'NOT_CONFIGURED':keepShelterLkg?'DEGRADED':'BROKEN',lastAttempt,lastFailure:new Date().toISOString(),failureCount:latest.failureCount+1,responseTime:Date.now()-begin,complete:keepShelterLkg?true:false,errorCode,adapterVersion:adapter.version});
   }
  }
 }
