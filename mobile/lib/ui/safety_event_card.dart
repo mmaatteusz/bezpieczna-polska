@@ -361,8 +361,7 @@ class SafetyEventCard extends StatelessWidget {
   String _groupedBadgeLabel(int count) {
     final lastTwo = count % 100;
     final last = count % 10;
-    final noun =
-        last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)
+    final noun = last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)
         ? 'KOMUNIKATY'
         : 'KOMUNIKATÓW';
     return 'SCALONO $count $noun → 1 ZAGROŻENIE';
