@@ -358,6 +358,16 @@ class SafetyEventCard extends StatelessWidget {
     return null;
   }
 
+  String _groupedBadgeLabel(int count) {
+    final lastTwo = count % 100;
+    final last = count % 10;
+    final noun =
+        last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)
+        ? 'KOMUNIKATY'
+        : 'KOMUNIKATÓW';
+    return 'SCALONO $count $noun → 1 ZAGROŻENIE';
+  }
+
   Widget _secondaryBadge(BuildContext context, String text) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(
@@ -537,7 +547,7 @@ class SafetyEventCard extends StatelessWidget {
                   if (groupedCount > 1)
                     _secondaryBadge(
                       context,
-                      'POWIĄZANE KOMUNIKATY: $groupedCount',
+                      _groupedBadgeLabel(groupedCount),
                     ),
                   if (sourceCount > 1)
                     _secondaryBadge(context, 'NIEZALEŻNE ŹRÓDŁA: $sourceCount'),
