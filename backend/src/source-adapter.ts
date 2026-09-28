@@ -1,9 +1,9 @@
 import {WCZK_SOURCES} from './wczk-registry.js';
-import type {Event} from './domain.js';
+import type {Event,Health} from './domain.js';
 import type {Shelter} from './shelter.js';
 import type {RadiationMeasurement} from './radiation.js';
 
-export type SourceContext = {now: Date; previousEvents?: Event[]; fetchText: (url: string) => Promise<string>; fetchBytes?: (url: string) => Promise<Uint8Array>};
+export type SourceContext = {now: Date; previousEvents?: Event[]; previousHealth?: Health; fetchText: (url: string) => Promise<string>; fetchBytes?: (url: string) => Promise<Uint8Array>};
 export type SourceBatch = {
   events: Event[];
   uaMetadata?: NonNullable<import('./domain.js').Health['uaMetadata']>;
