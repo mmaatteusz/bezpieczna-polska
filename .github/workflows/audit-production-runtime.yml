@@ -47,6 +47,6 @@ jobs:
           EXPECTED_BUILD_SHA: ${{ github.event.deployment.sha || (github.event_name == 'push' && github.sha) || github.event.inputs.expected_sha || '' }}
           DEPLOY_WAIT_SECONDS: '600'
           SOURCE_WAIT_SECONDS: '180'
-          CRITICAL_SOURCE_IDS: RCB,RSO,LEVELS,SHELTERS,IMGW_METEO,IMGW_HYDRO,PAA,NEPTUN
+          CRITICAL_SOURCE_IDS: RCB,RSO,LEVELS,SHELTERS,IMGW_METEO,IMGW_HYDRO,PAA,UA,NEPTUN
           ALLOW_STALE_SOURCE_IDS: SHELTERS
         run: node scripts/railway-runtime-smoke.mjs

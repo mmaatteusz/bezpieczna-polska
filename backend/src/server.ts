@@ -1,9 +1,9 @@
-import {openDb,Store} from './store.js';import {buildApp} from './app.js';import {ingest,ingestNeptunLive} from './adapters.js';import {createPushServiceFromEnv} from './push.js';
+import {openDb,Store} from './store.js';import {buildApp} from './app.js';import {ingest,ingestNeptunLive,ingestUkraineLive} from './adapters.js';import {createPushServiceFromEnv} from './push.js';
 import {serverConfig} from './config.js';import {assertSchema,migrate} from './migrate.js';import {tryAcquireWorkerLease,releaseWorkerLease} from './worker-lease.js';import {randomUUID} from 'node:crypto';
 const config=serverConfig();
 const db=openDb(process.env.DATABASE_URL,process.env.SQLITE_PATH);
 let app:Awaited<ReturnType<typeof buildApp>>|undefined;
-let timer:NodeJS.Timeout|undefined,neptunTimer:NodeJS.Timeout|undefined,pushTimer:NodeJS.Timeout|undefined;
+let timer:NodeJS.Timeout|undefined,neptunTimer:NodeJS.Timeout|undefined,ukraineTimer:NodeJS.Timeout|undefined,pushTimer:NodeJS.Timeout|undefined;
 try{
  const store=new Store(db);
  if(config.production)await assertSchema(db);else await migrate(db);
@@ -33,6 +33,20 @@ try{
   finally{if(leased)await releaseWorkerLease(db,'neptun-live',workerOwner).catch(()=>{});neptunRunning=false;}}
   neptunTimer=setInterval(()=>void syncNeptun(),5000);
   void syncNeptun();
+
+  let ukraineRunning=false;
+  async function syncUkraine(){if(ukraineRunning)return;ukraineRunning=true;let leased=false;try{
+   leased=await tryAcquireWorkerLease(db,'ukraine-live',workerOwner,3*60*1000);
+   if(!leased)return;
+   const before=(await store.health()).find(source=>source.id==='UA')?.lastAttempt??null;
+   await ingestUkraineLive(store);
+   const source=(await store.health()).find(item=>item.id==='UA');
+   if(source?.lastAttempt&&source.lastAttempt!==before)
+    app?.log.info({component:'ukraine-live',source:'UA',state:source.state,errorCode:source.errorCode??null,durationMs:source.responseTime,itemCount:source.itemCount},'UkraineAlarm refresh');
+  }catch{app?.log.error({component:'ukraine-live',errorCode:'UA_INGEST_FAILED'},'UkraineAlarm live refresh failed; existing data retained');}
+  finally{if(leased)await releaseWorkerLease(db,'ukraine-live',workerOwner).catch(()=>{});ukraineRunning=false;}}
+  ukraineTimer=setInterval(()=>void syncUkraine(),30000);
+  void syncUkraine();
  }
  let pushRunning=false;
  async function dispatchPush(){if(!push||pushRunning)return;pushRunning=true;let leased=false;try{
@@ -44,9 +58,9 @@ try{
  if(push){pushTimer=setInterval(()=>void dispatchPush(),15000);void dispatchPush();}
  await app.listen({port:config.port,host:config.host});
  let closing=false;
- async function shutdown(){if(closing)return;closing=true;if(timer)clearInterval(timer);if(neptunTimer)clearInterval(neptunTimer);if(pushTimer)clearInterval(pushTimer);
+ async function shutdown(){if(closing)return;closing=true;if(timer)clearInterval(timer);if(neptunTimer)clearInterval(neptunTimer);if(ukraineTimer)clearInterval(ukraineTimer);if(pushTimer)clearInterval(pushTimer);
   const deadline=setTimeout(()=>process.exit(1),20000);deadline.unref();
   try{await app?.close();await db.close();clearTimeout(deadline);}catch{process.exitCode=1;}
  }
  for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>void shutdown());
-}catch(e){if(timer)clearInterval(timer);if(neptunTimer)clearInterval(neptunTimer);if(pushTimer)clearInterval(pushTimer);await app?.close();await db.close();throw e;}
+}catch(e){if(timer)clearInterval(timer);if(neptunTimer)clearInterval(neptunTimer);if(ukraineTimer)clearInterval(ukraineTimer);if(pushTimer)clearInterval(pushTimer);await app?.close();await db.close();throw e;}

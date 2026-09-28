@@ -107,7 +107,7 @@ export async function fetchPublicBytes(url:string):Promise<Uint8Array>{
 }
 // Sharing the same coordinator prevents timer/admin overlap on this Store.
 const running = new WeakMap<Store, Promise<void>>();
-export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters,imgwMeteoAdapter,imgwHydroAdapter,paaAdapter,paaMeasurementsAdapter,certAdapter,sgAdapter,policeAdapter,pspIncidentsAdapter,ukraineAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
+export function ingest(store:Store, adapters:SourceAdapter[]=[rcbAdapter,securityLevelsAdapter,shelterAdapter,rsoAdapter,...wczkAdapters,imgwMeteoAdapter,imgwHydroAdapter,paaAdapter,paaMeasurementsAdapter,certAdapter,sgAdapter,policeAdapter,pspIncidentsAdapter], fetchText=fetchPublic, fetchBytes=fetchPublicBytes):Promise<void>{
  const existing=running.get(store);if(existing)return existing;
  const task=syncSources(store,adapters,fetchText,fetchBytes).finally(()=>running.delete(store));
  running.set(store,task);return task;
@@ -152,6 +152,21 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
    await store.setHealth({...latest,enabled:true,state:errorCode==='NOT_CONFIGURED_UA_API_KEY_MISSING'?'NOT_CONFIGURED':keepShelterLkg?'DEGRADED':'BROKEN',lastAttempt,lastFailure:new Date().toISOString(),failureCount:latest.failureCount+1,responseTime:Date.now()-begin,complete:keepShelterLkg?true:false,errorCode,adapterVersion:adapter.version});
   }
  }
+}
+
+
+const ukraineRunning = new WeakMap<Store, Promise<void>>();
+
+export function ingestUkraineLive(
+ store:Store,
+ fetchText:(url:string)=>Promise<string>=fetchPublic
+):Promise<void>{
+ const existing=ukraineRunning.get(store);
+ if(existing)return existing;
+ const task=syncSources(store,[ukraineAdapter],fetchText,fetchPublicBytes)
+  .finally(()=>ukraineRunning.delete(store));
+ ukraineRunning.set(store,task);
+ return task;
 }
 
 
