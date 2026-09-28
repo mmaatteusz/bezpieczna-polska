@@ -117,13 +117,15 @@ export function parseUaLiveSnapshot(activeInput:unknown,previous:Event[],now:Dat
    }
   }
  }
- const currentPrevious=[...previous]
-  .filter(e=>e.countryCode==='UA'&&e.ukraine&&['ACTIVE','UNKNOWN'].includes(e.lifecycle))
+ const uaPrevious=[...previous]
+  .filter(e=>e.countryCode==='UA'&&e.ukraine)
   .sort((a,b)=>b.retrievedAt.localeCompare(a.retrievedAt));
- const previousByKey=new Map<string,Event>();
- for(const e of currentPrevious){
+ const currentPrevious=uaPrevious.filter(e=>['ACTIVE','UNKNOWN'].includes(e.lifecycle));
+ const previousByKey=new Map<string,Event>(),previousAnyByKey=new Map<string,Event>();
+ for(const e of uaPrevious){
   const key=e.ukraine!.regionId+':'+e.ukraine!.alertType;
-  if(!previousByKey.has(key))previousByKey.set(key,e);
+  if(!previousAnyByKey.has(key))previousAnyByKey.set(key,e);
+  if(['ACTIVE','UNKNOWN'].includes(e.lifecycle)&&!previousByKey.has(key))previousByKey.set(key,e);
  }
  const events:Event[]=[];
  const activeKeys=new Set<string>();
@@ -139,7 +141,10 @@ export function parseUaLiveSnapshot(activeInput:unknown,previous:Event[],now:Dat
    const old=previousByKey.get(key);
    const sourceUpdatedAt=a.lastUpdate??group.lastUpdate??null;
    const informational=a.type==='INFO'||a.type==='UNKNOWN';
-   const eventId=old?.id??'UA-'+hash([a.regionId,a.type,sourceUpdatedAt??now.toISOString(),'LIVE']).slice(0,32);
+   const latest=previousAnyByKey.get(key);
+   const eventId=old?.id??'UA-'+hash(latest?.lifecycle==='ENDED'
+    ?[a.regionId,a.type,'RESTART_AFTER_ENDED',latest.id,now.toISOString()]
+    :[a.regionId,a.type,sourceUpdatedAt??now.toISOString(),'LIVE']).slice(0,32);
    const base={
     id:eventId,origin:'OFFICIAL_FOREIGN' as const,countryCode:'UA' as const,
     ukraine:{regionId:r.id,regionName:r.name,regionType:r.type,parentRegionId:r.parentId,alertType:a.type,kind:informational?'OFFICIAL_INFORMATION' as const:'OFFICIAL_ALERT' as const,sourceUpdatedAt},
