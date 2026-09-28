@@ -28,12 +28,26 @@ async function json(path,options){
 }
 function assert(value,message){if(!value)throw new Error(message);}
 function sourceState(source){return source?.healthStatus??source?.state??'MISSING';}
+function validPreservedShelterSnapshot(source){
+  if(source?.id!=='SHELTERS')return false;
+  if(sourceState(source)!=='DEGRADED'||source.errorCode!=='SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD')return false;
+  if(source.complete!==true||source.coverage!=='FACILITY_CATALOG'||source.catalogMismatch===true)return false;
+  if(source.fallbackSelected!=='OPERATOR_OFFICIAL_SNAPSHOT')return false;
+  if(!Number.isFinite(Number(source.itemCount))||Number(source.itemCount)<=0)return false;
+  if(!/^[a-f0-9]{64}$/.test(String(source.sourceContentHash||'')))return false;
+  const updated=Date.parse(source.sourceUpdatedAt||'');
+  if(!Number.isFinite(updated)||updated>Date.now()+30000)return false;
+  if(Date.now()-updated>14*86400000)return false;
+  return true;
+}
 function validateCriticalSources(sourceHealth){
   for(const id of criticalSourceIds){
     const source=sourceHealth.find(item=>item.id===id);
     assert(source,'critical source missing: '+id);
     const state=sourceState(source);
-    if(state==='STALE'&&allowStaleSourceIds.has(id)){
+    if(validPreservedShelterSnapshot(source)){
+      console.warn('PROBE_SHELTER_DEGRADED_LKG_ALLOWED',source.itemCount,source.sourceUpdatedAt,source.errorCode);
+    }else if(state==='STALE'&&allowStaleSourceIds.has(id)){
       console.warn('PROBE_SOURCE_STALE_ALLOWED',id,source.lastSuccessfulSyncAt??'no-success',source.errorCode??'');
     }else{
       assert(state==='HEALTHY','critical source '+id+' is '+state+(source.errorCode?' ('+source.errorCode+')':''));
