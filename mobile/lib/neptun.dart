@@ -330,9 +330,14 @@ const _neptunIconTypes = <String>[
 ];
 
 Future<Uint8List> _neptunIconPng(String type) async {
-  const size = 72.0;
+  // Render on a larger backing image so threat symbols stay crisp on
+  // high-density Android displays. The geometry below uses a 72x72
+  // logical grid and is scaled only at rasterization time.
+  const logicalSize = 72.0;
+  const outputSize = 96.0;
   final recorder = ui.PictureRecorder();
-  final canvas = ui.Canvas(recorder);
+  final canvas = ui.Canvas(recorder)
+    ..scale(outputSize / logicalSize);
   final outline = ui.Paint()
     ..color = const ui.Color(0xff7f1d1d)
     ..style = ui.PaintingStyle.stroke
@@ -379,16 +384,45 @@ Future<Uint8List> _neptunIconPng(String type) async {
 
   switch (type) {
     case 'uav':
-      paintPath(
-        ui.Path()
-          ..moveTo(36, 7)
-          ..lineTo(61, 49)
-          ..lineTo(43, 43)
-          ..lineTo(36, 63)
-          ..lineTo(29, 43)
-          ..lineTo(11, 49)
-          ..close(),
+      // A classic top-view quadcopter silhouette is intentionally used here
+      // instead of a delta/arrow outline. At map scale the old silhouette
+      // was too easy to read as a mouse cursor.
+      final armOutline = ui.Paint()
+        ..color = const ui.Color(0xff7f1d1d)
+        ..style = ui.PaintingStyle.stroke
+        ..strokeWidth = 12
+        ..strokeCap = ui.StrokeCap.round;
+      final armFill = ui.Paint()
+        ..color = const ui.Color(0xffffffff)
+        ..style = ui.PaintingStyle.stroke
+        ..strokeWidth = 6
+        ..strokeCap = ui.StrokeCap.round;
+      for (final pair in const [
+        [ui.Offset(31, 31), ui.Offset(18, 18)],
+        [ui.Offset(41, 31), ui.Offset(54, 18)],
+        [ui.Offset(31, 41), ui.Offset(18, 54)],
+        [ui.Offset(41, 41), ui.Offset(54, 54)],
+      ]) {
+        canvas.drawLine(pair[0], pair[1], armOutline);
+        canvas.drawLine(pair[0], pair[1], armFill);
+      }
+      for (final center in const [
+        ui.Offset(16, 16),
+        ui.Offset(56, 16),
+        ui.Offset(16, 56),
+        ui.Offset(56, 56),
+      ]) {
+        canvas.drawCircle(center, 9.5, outline);
+        canvas.drawCircle(center, 7.5, fill);
+      }
+      final body = ui.RRect.fromRectAndRadius(
+        const ui.Rect.fromLTWH(27, 25, 18, 22),
+        const ui.Radius.circular(6),
       );
+      canvas.drawRRect(body, outline);
+      canvas.drawRRect(body, fill);
+      canvas.drawCircle(const ui.Offset(36, 31), 3, outline);
+      canvas.drawCircle(const ui.Offset(36, 31), 1.5, fill);
       break;
     case 'fpv':
       final armOutline = ui.Paint()
@@ -518,8 +552,8 @@ Future<Uint8List> _neptunIconPng(String type) async {
   }
 
   final image = await recorder.endRecording().toImage(
-    size.toInt(),
-    size.toInt(),
+    outputSize.toInt(),
+    outputSize.toInt(),
   );
   final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
   image.dispose();
@@ -905,7 +939,21 @@ class _NeptunMapState extends State<NeptunMap> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.radar),
+                    FutureBuilder<Uint8List>(
+                      future: _neptunIconPng(threat['type'] as String),
+                      builder: (context, snapshot) => snapshot.hasData
+                          ? Image.memory(
+                              snapshot.data!,
+                              width: 36,
+                              height: 36,
+                              filterQuality: FilterQuality.high,
+                            )
+                          : const SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: Icon(Icons.flight_outlined),
+                            ),
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -957,7 +1005,7 @@ class _NeptunMapState extends State<NeptunMap> {
         'neptun-live-hit-points',
         const CircleLayerProperties(
           circleColor: '#000000',
-          circleRadius: 16,
+          circleRadius: 22,
           circleOpacity: 0.001,
         ),
       );
@@ -984,7 +1032,7 @@ class _NeptunMapState extends State<NeptunMap> {
             'neptun-icon-mig31k',
             'neptun-icon-unknown',
           ],
-          iconSize: 0.58,
+          iconSize: 0.66,
           iconAllowOverlap: true,
           iconIgnorePlacement: true,
           iconAnchor: 'center',
