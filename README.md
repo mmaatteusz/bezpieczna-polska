@@ -19,7 +19,7 @@
 
 Android jest obecnie platformą priorytetową. Backend produkcyjny działa na Railway, jest połączony z PostgreSQL/PostGIS i śledzi gałąź `main`.
 
-Aktualny kod rozwojowy: **0.1.0-alpha.49** (`build 50`).
+Aktualny kod rozwojowy: **0.1.0-alpha.50** (`build 51`).
 
 Najnowsze publiczne APK Android: [GitHub Releases — latest](https://github.com/mmaatteusz/bezpieczna-polska/releases/latest).
 
