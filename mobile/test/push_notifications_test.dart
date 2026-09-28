@@ -119,7 +119,10 @@ void main() {
         expect(request.url.query, isEmpty);
         if (request.url.path.endsWith('/test')) {
           expect(jsonDecode(request.body), isEmpty);
-          expect(request.headers['authorization'], startsWith('Bearer bp_push_'));
+          expect(
+            request.headers['authorization'],
+            startsWith('Bearer bp_push_'),
+          );
           expect(request.url.toString().contains(adapter.currentToken), false);
           return jsonResponse({
             'ok': true,
