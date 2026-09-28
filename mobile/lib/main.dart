@@ -939,11 +939,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   ),
                   if (widget.pushManager != null)
                     ListTile(
-                      title: const Text('Powiadomienia'),
+                      title: const Text('Powiadomienia i test push'),
                       subtitle: Text(
                         widget.pushManager!.state.registered
-                            ? 'Urządzenie zarejestrowane'
-                            : 'Zarządzaj zgodą i kategoriami alertów',
+                            ? 'Kategorie alertów i test na tym urządzeniu'
+                            : 'Zgoda systemowa, kategorie i test dostarczenia',
                       ),
                       leading: const Icon(Icons.notifications_outlined),
                       onTap: () {

@@ -613,6 +613,26 @@ class PushManager extends ChangeNotifier {
     }
   }
 
+  Future<void> sendTestNotification() async {
+    if (!_state.registered || !_permissionAllows(_state.permission)) {
+      throw StateError('PUSH_NOT_REGISTERED');
+    }
+    final identity = await _identity();
+    await _jsonRequest(
+      'POST',
+      _uri('/v1/push/devices/${identity.id}/test'),
+      identity.secret,
+      body: const <String, dynamic>{},
+    );
+    _setState(
+      _state.copyWith(
+        backendReachable: true,
+        providerReady: true,
+        clearError: true,
+      ),
+    );
+  }
+
   Future<void> syncCurrentPreferences() async {
     if (!_state.registered) return;
     try {
@@ -725,6 +745,31 @@ class _NotificationSettingsScreenState
     setState(() => busy = true);
     try {
       await widget.manager.refreshForSettings();
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _testPush() async {
+    setState(() => busy = true);
+    try {
+      await widget.manager.sendTestNotification();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Test został wysłany przez serwer. Sprawdź pasek powiadomień na tym telefonie.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is StateError
+          ? 'Najpierw włącz powiadomienia na tym urządzeniu.'
+          : 'Nie udało się wysłać testu. ${apiFailureMessage(error)}';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -865,7 +910,46 @@ class _NotificationSettingsScreenState
                 ),
               ),
             ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.notification_important_outlined),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Test powiadomienia push',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    deliveryReady
+                        ? 'Wyślemy prawdziwe testowe powiadomienie przez backend i FCM/APNs na ten telefon. To nie jest alert bezpieczeństwa.'
+                        : 'Test będzie dostępny po włączeniu zgody systemowej, rejestracji urządzenia i gotowości usługi wysyłki.',
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: busy || !deliveryReady ? null : _testPush,
+                      icon: const Icon(Icons.send_outlined),
+                      label: const Text('Wyślij test na ten telefon'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           const Text(
             'Kategorie',
             style: TextStyle(fontWeight: FontWeight.bold),

@@ -29,10 +29,20 @@ class _MapLegend extends StatelessWidget {
         spacing: 14,
         runSpacing: 6,
         children: const [
-          _MapLegendItem(color: Color(0xffb3261e), label: 'Alerty'),
-          _MapLegendItem(color: Color(0xff1565c0), label: 'IMGW'),
-          _MapLegendItem(color: Color(0xff2e7d32), label: 'Schrony'),
-          _MapLegendItem(color: Color(0xff7563b8), label: 'PAA'),
+          _MapLegendItem(
+            color: Color(0xffb3261e),
+            label: 'Alerty i komunikaty',
+          ),
+          _MapLegendItem(color: Color(0xff1565c0), label: 'Ostrzeżenia IMGW'),
+          _MapLegendItem(color: Color(0xff2e7d32), label: 'Punkty schronienia'),
+          _MapLegendItem(
+            color: Color(0xffef6c00),
+            label: 'Obserwowane miejsca',
+          ),
+          _MapLegendItem(
+            color: Color(0xff7563b8),
+            label: 'Pomiary promieniowania PAA',
+          ),
         ],
       ),
     ),
@@ -770,7 +780,7 @@ class _ShelterMapState extends State<ShelterMap> {
         if (!mounted || current != ticket) return;
         setState(() {
           message =
-              'Widok Polski: schronienia są ukryte przy tym oddaleniu. Czerwone punkty oznaczają alerty, a niebieskie ostrzeżenia IMGW. Zdarzenie bez dokładnej lokalizacji jest oznaczone symbolicznie dla właściwego województwa.';
+              'Widok Polski: Punkty schronienia są ukryte przy tym oddaleniu. Czerwone punkty oznaczają Alerty i komunikaty, a niebieskie Ostrzeżenia IMGW. Zdarzenie bez dokładnej lokalizacji jest oznaczone symbolicznie dla właściwego województwa.';
         });
         return;
       }
@@ -1198,7 +1208,10 @@ class _ShelterMapState extends State<ShelterMap> {
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Zdarzenia'),
+                  title: const Text('Alerty i komunikaty'),
+                  subtitle: const Text(
+                    'Alerty bezpieczeństwa i komunikaty widoczne na mapie',
+                  ),
                   value: showEvents,
                   onChanged: (value) {
                     setState(() => showEvents = value);
@@ -1208,7 +1221,7 @@ class _ShelterMapState extends State<ShelterMap> {
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('IMGW'),
+                  title: const Text('Ostrzeżenia IMGW'),
                   subtitle: const Text(
                     'Ostrzeżenia meteorologiczne i hydrologiczne',
                   ),
@@ -1231,8 +1244,10 @@ class _ShelterMapState extends State<ShelterMap> {
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Radiacja / PAA'),
-                  subtitle: const Text('Pomiary jako osobna warstwa'),
+                  title: const Text('Pomiary promieniowania PAA'),
+                  subtitle: const Text(
+                    'Punkty pomiarowe Państwowej Agencji Atomistyki',
+                  ),
                   value: showRadiation,
                   onChanged: (value) {
                     setState(() => showRadiation = value);
@@ -1279,7 +1294,7 @@ class _ShelterMapState extends State<ShelterMap> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Czerwone: alerty • niebieskie: IMGW • zielone: schronienia • pomarańczowe: obserwowane miejsca • fioletowe: PAA',
+                  'Czerwone: Alerty i komunikaty • niebieskie: Ostrzeżenia IMGW • zielone: Punkty schronienia • pomarańczowe: Obserwowane miejsca • fioletowe: Pomiary promieniowania PAA',
                 ),
               ],
             ),

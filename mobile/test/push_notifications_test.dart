@@ -109,13 +109,29 @@ void main() {
     tester,
   ) async {
     final adapter = FakePushAdapter();
+    final requests = <http.Request>[];
     final repository = DataRepository(
       await SharedPreferences.getInstance(),
       buildApi: 'https://api.example',
       client: MockClient((request) async {
+        requests.add(request);
         expect(request.method, 'POST');
-        expect(request.url.path, '/v1/push/devices');
         expect(request.url.query, isEmpty);
+        if (request.url.path.endsWith('/test')) {
+          expect(jsonDecode(request.body), isEmpty);
+          expect(
+            request.headers['authorization'],
+            startsWith('Bearer bp_push_'),
+          );
+          expect(request.url.toString().contains(adapter.currentToken), false);
+          return jsonResponse({
+            'ok': true,
+            'providerAccepted': true,
+            'platform': 'ANDROID',
+            'sentAt': '2026-09-22T12:00:01Z',
+          });
+        }
+        expect(request.url.path, '/v1/push/devices');
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         expect(body['token'], adapter.currentToken);
         expect(body['preferences']['ukraine'], false);
@@ -158,6 +174,19 @@ void main() {
       find.textContaining(
         'Systemowa zgoda, rejestracja urządzenia i usługa wysyłki są gotowe',
       ),
+      findsOneWidget,
+    );
+    expect(find.text('Test powiadomienia push'), findsOneWidget);
+
+    final testButton = find.text('Wyślij test na ten telefon');
+    await tester.ensureVisible(testButton);
+    await tester.tap(testButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(requests, hasLength(2));
+    expect(requests.last.url.path, endsWith('/test'));
+    expect(
+      find.textContaining('Test został wysłany przez serwer'),
       findsOneWidget,
     );
 
@@ -328,6 +357,8 @@ void main() {
       find.textContaining('nie ma kompletnej konfiguracji usługi powiadomień'),
       findsOneWidget,
     );
+    await tester.scrollUntilVisible(find.text('Obserwowane lokalizacje'), 250);
+    await tester.pumpAndSettle();
     expect(
       find.text('Brak zapisanych miejsc • stuknij, aby dodać'),
       findsOneWidget,

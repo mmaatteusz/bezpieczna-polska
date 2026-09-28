@@ -228,6 +228,24 @@ test('push API validates payloads, authenticates device management and rate limi
  }finally{await app.close();await db.close();}
 });
 
+test('authenticated device self-test sends one provider message without entering operational outbox',async()=>{
+ const {db,store,push,provider}=await setup();const app=await buildApp(store,undefined,push);
+ try{
+  await push.register(registerBody(deviceA),secret,now);
+  let response=await app.inject({method:'POST',url:'/v1/push/devices/'+deviceA+'/test',headers:{authorization:'Bearer '+secret}});
+  assert.equal(response.statusCode,200);
+  assert.equal(JSON.parse(response.body).providerAccepted,true);
+  assert.equal(provider.sent.length,1);
+  assert.equal(provider.sent[0].title,'Bezpieczna Polska — test powiadomień');
+  assert.equal((await outbox(db)).length,0);
+  response=await app.inject({method:'POST',url:'/v1/push/devices/'+deviceA+'/test',headers:{authorization:'Bearer bp_push_'+ 'Z'.repeat(43)}});
+  assert.equal(response.statusCode,401);
+  provider.isReady=false;
+  response=await app.inject({method:'POST',url:'/v1/push/devices/'+deviceA+'/test',headers:{authorization:'Bearer '+secret}});
+  assert.equal(response.statusCode,503);
+ }finally{await app.close();await db.close();}
+});
+
 test('registration endpoint bounds record creation with per-route rate limit',async()=>{
  const {db,store,push}=await setup();const app=await buildApp(store,undefined,push);
  try{

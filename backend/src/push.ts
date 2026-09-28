@@ -354,6 +354,31 @@ export class PushService{
   const platform=pushPlatformSchema.parse(row!.platform);
   return {registered:Number(row!.enabled)===1,deviceId:id,platform,providerReady:this.provider.ready(platform),lastSeenAt:now.toISOString(),preferences:pushPreferencesSchema.parse(JSON.parse(String(row!.preferences))),pending};
  }
+ async testNotification(id:string,secret:string,now=new Date()){
+  pushDeviceIdSchema.parse(id);const row=await this.deviceRow(id);this.authorize(row,authSecretSchema.parse(secret));
+  if(Number(row!.enabled)!==1){const e=new Error('PUSH_DEVICE_DISABLED') as Error&{statusCode:number};e.statusCode=409;throw e;}
+  const platform=pushPlatformSchema.parse(row!.platform);
+  if(!this.provider.ready(platform)){const e=new Error('PUSH_PROVIDER_NOT_READY') as Error&{statusCode:number};e.statusCode=503;throw e;}
+  let token:string;
+  try{token=decryptToken(this.encryptionKey,String(row!.token_ciphertext));}
+  catch{
+   await this.scrubDevice(this.db,id,'TOKEN_DECRYPT_FAILED',now);
+   const e=new Error('PUSH_TOKEN_INVALID') as Error&{statusCode:number};e.statusCode=409;throw e;
+  }
+  const result=await this.provider.send(platform,token,{
+   title:'Bezpieczna Polska — test powiadomień',
+   body:'Jeśli widzisz tę wiadomość, powiadomienia push działają na tym urządzeniu.',
+   collapseKey:'bezpieczna-polska-test',
+   data:{schemaVersion:'1',kind:'TEST',test:'true'},
+  });
+  if(result.kind==='SUCCESS'){
+   await this.db.run('UPDATE push_devices SET last_seen_at=? WHERE device_id=?',[now.toISOString(),id]);
+   return {ok:true,providerAccepted:true,platform,sentAt:now.toISOString()};
+  }
+  if(result.invalidToken)await this.scrubDevice(this.db,id,'TOKEN_INVALID',now);
+  const e=new Error('PUSH_TEST_'+safeError(result.code)) as Error&{statusCode:number};
+  e.statusCode=result.kind==='PERMANENT_FAILURE'?409:503;throw e;
+ }
  async unregister(id:string,secret:string,now=new Date()){
   pushDeviceIdSchema.parse(id);const row=await this.deviceRow(id);this.authorize(row,authSecretSchema.parse(secret));
   await this.scrubDevice(this.db,id,'USER_UNREGISTERED',now);

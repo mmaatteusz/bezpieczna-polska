@@ -61,6 +61,11 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
   const {id}=z.object({id:pushDeviceIdSchema}).parse(req.params);
   return push.status(id,bearerSecret(req.headers.authorization));
  });
+ app.post('/v1/push/devices/:id/test',{bodyLimit:1024,config:{rateLimit:{max:3,timeWindow:'1 minute'}}},async(req,r)=>{
+  if(!push)return pushUnavailable(r);
+  const {id}=z.object({id:pushDeviceIdSchema}).parse(req.params);
+  return push.testNotification(id,bearerSecret(req.headers.authorization));
+ });
  app.delete('/v1/push/devices/:id',async(req,r)=>{
   if(!push)return pushUnavailable(r);
   const {id}=z.object({id:pushDeviceIdSchema}).parse(req.params);
