@@ -198,8 +198,7 @@ void main() {
       expect(() => NeptunData.parse(operationalLeak), throwsFormatException);
 
       final iconMismatch = fixture(now);
-      iconMismatch['live']['map']['features'][0]['properties']['type'] =
-          'uav';
+      iconMismatch['live']['map']['features'][0]['properties']['type'] = 'uav';
       expect(() => NeptunData.parse(iconMismatch), throwsFormatException);
 
       final active = fixture(now);
