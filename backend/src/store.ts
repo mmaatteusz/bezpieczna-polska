@@ -90,17 +90,42 @@ export class Store{
  }
  async applyShelterSync(items:Shelter[],health:Health){
   if(health.id!=='SHELTERS'||health.coverage!=='FACILITY_CATALOG'||!health.complete||!items.length||items.length!==health.itemCount||!health.sourceContentHash)throw new Error('SHELTER_INVALID_BATCH');
-  // Validate everything before beginning replacement. A failed transaction keeps
-  // the entire previous national package and its previous success timestamp.
+  // Validate the complete package before beginning the transaction. The write
+  // itself is incremental: rewriting the whole national table creates a large
+  // WAL spike and temporarily needs space for both old and new table/index
+  // versions. On small production volumes that can make PostgreSQL unrecoverable.
   const rows=items.map(s=>shelterSchema.parse(s));
   if(new Set(rows.map(s=>s.id)).size!==rows.length)throw new Error('SHELTER_DUPLICATE_ID');
+  const incoming=rows.map(s=>({
+   id:s.id,
+   regionId:s.regionId,
+   searchText:searchText(`${s.municipality} ${s.county} ${s.address}`),
+   payload:JSON.stringify(s)
+  }));
   await this.db.transaction(async db=>{
    const scoped=new Store(db),previous=(await scoped.health()).find(h=>h.id==='SHELTERS');
    if(previous?.sourceContentHash!==health.sourceContentHash||previous?.sourceUpdatedAt!==health.sourceUpdatedAt||previous?.dataDate!==health.dataDate){
-    await db.run('DELETE FROM shelters');
-    for(let i=0;i<rows.length;i+=200){
-     const batch=rows.slice(i,i+200),params=batch.flatMap(s=>[s.id,s.regionId,searchText(`${s.municipality} ${s.county} ${s.address}`),JSON.stringify(s)]);
-     await db.run(`INSERT INTO shelters(id,region_id,search_text,payload) VALUES ${batch.map(()=>'(?,?,?,?)').join(',')}`,params);
+    const current=await db.all('SELECT id,region_id,search_text,payload FROM shelters');
+    const byId=new Map(current.map(row=>[String(row.id),row]));
+    const incomingIds=new Set(incoming.map(row=>row.id));
+    const changed=incoming.filter(row=>{
+     const old=byId.get(row.id);
+     if(!old)return true;
+     if(String(old.region_id)!==row.regionId||String(old.search_text)!==row.searchText)return true;
+     const oldPayload=String(old.payload);
+     if(oldPayload===row.payload)return false;
+     try{return JSON.stringify(shelterSchema.parse(JSON.parse(oldPayload)))!==row.payload;}
+     catch{return true;}
+    });
+    const removed=current.map(row=>String(row.id)).filter(id=>!incomingIds.has(id));
+
+    for(let i=0;i<changed.length;i+=200){
+     const batch=changed.slice(i,i+200),params=batch.flatMap(row=>[row.id,row.regionId,row.searchText,row.payload]);
+     await db.run(`INSERT INTO shelters(id,region_id,search_text,payload) VALUES ${batch.map(()=>'(?,?,?,?)').join(',')} ON CONFLICT(id) DO UPDATE SET region_id=excluded.region_id,search_text=excluded.search_text,payload=excluded.payload`,params);
+    }
+    for(let i=0;i<removed.length;i+=500){
+     const batch=removed.slice(i,i+500);
+     await db.run(`DELETE FROM shelters WHERE id IN (${batch.map(()=>'?').join(',')})`,batch);
     }
    }
    await scoped.setHealth(health);
