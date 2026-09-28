@@ -116,7 +116,7 @@ export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncInt
    const raw=value.lastActionIndex??value.actionIndex;
    if(raw===undefined)throw new Error('UA_STATUS_INDEX_MISSING');
    if(raw===null)throw new Error('UA_STATUS_INDEX_NULL');
-   if(typeof raw!=='number')throw new Error('UA_STATUS_INDEX_'+typeof raw==='string'?'STRING':'TYPE');
+   if(typeof raw!=='number')throw new Error(typeof raw==='string'?'UA_STATUS_INDEX_STRING':'UA_STATUS_INDEX_TYPE');
    if(!Number.isSafeInteger(raw)||raw<0)throw new Error('UA_STATUS_INDEX_INVALID');
    return {lastActionIndex:raw};
   };
