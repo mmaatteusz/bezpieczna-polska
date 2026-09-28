@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {parseUaBatch,parseUaRegions,ukraineAdapter,fetchUa,isAllowedUaUrl,UA_API} from '../src/ukraine-adapter.js';
+import {parseUaBatch,parseUaRegions,parseUaLiveSnapshot,ukraineAdapter,fetchUa,isAllowedUaUrl,UA_API} from '../src/ukraine-adapter.js';
 import {enrichUaGeometry,UA_BOUNDARY_SOURCE} from '../src/ukraine-geography.js';
 import {computeStatus,type Event,type Health} from '../src/domain.js';
 import {Store,openDb} from '../src/store.js';
@@ -57,42 +57,31 @@ test('UA safe allowlist and missing key; credentials never in URL',async()=>{
  assert.equal(isAllowedUaUrl(UA_API+'/alerts'),true);for(const u of [UA_API+'/alerts?token=x',UA_API+'/alerts/regionHistory?regionId=x&token=y','https://evil.test/api/v3/alerts',UA_API+'/missiles'])assert.equal(isAllowedUaUrl(u),false);
  await assert.rejects(fetchUa(UA_API+'/alerts',''),/NOT_CONFIGURED_UA_API_KEY_MISSING/);
 });
-test('UA adapter reads documented endpoints and rejects mid-sync source change',async()=>{
- let status=0;const fetchText=async(url:string)=>{if(url.endsWith('/status'))return JSON.stringify({lastActionIndex:++status});if(url.endsWith('/regions'))return JSON.stringify(registry);if(url.endsWith('/alerts'))return JSON.stringify(active());return JSON.stringify([]);};
- await assert.rejects(ukraineAdapter.sync({now,fetchText}),/UA_SOURCE_CHANGED_DURING_SYNC/);
-});
-test('UA status accepts actionIndex compatibility alias used by current service',async()=>{
- let calls=0;const fetchText=async(url:string)=>{if(url.endsWith('/status'))return JSON.stringify({actionIndex:7});if(url.endsWith('/regions'))return JSON.stringify(registry);if(url.endsWith('/alerts'))return JSON.stringify([]);if(url.includes('/regionHistory'))return JSON.stringify([]);calls++;return JSON.stringify([]);};
- const batch=await ukraineAdapter.sync({now,fetchText});
- assert.equal(batch.uaMetadata.lastActionIndex,'7');assert.equal(batch.coverage,'ACTIVE_WARNINGS');assert.ok(calls>=0);
-});
-test('UA transport errors identify endpoint without exposing credentials',async()=>{
- let statusCalls=0;
+test('UA live adapter performs one authenticated UkraineAlarm request per sync',async()=>{
+ let uaCalls=0;
  const fetchText=async(url:string)=>{
-  if(url.endsWith('/alerts/status')){statusCalls++;return '{"lastActionIndex":7}';}
-  if(url.endsWith('/regions'))throw new Error('UA_HTTP_401');
-  return JSON.stringify([]);
+  if(url===UA_API+'/alerts'){uaCalls++;return JSON.stringify(active());}
+  return JSON.stringify({type:'FeatureCollection',features:[]});
  };
- await assert.rejects(ukraineAdapter.sync({now,fetchText}),/UA_REGIONS_HTTP_401/);
- assert.equal(statusCalls,1);
-});
-test('UA status preserves full signed-int64 precision from JSON token',async()=>{
- const huge='9223372036854775807';
- const fetchText=async(url:string)=>url.endsWith('/status')?'{"lastActionIndex":'+huge+'}':url.endsWith('/regions')?JSON.stringify(registry):url.endsWith('/alerts')?JSON.stringify([]):JSON.stringify([]);
  const batch=await ukraineAdapter.sync({now,fetchText});
- assert.equal(batch.uaMetadata.lastActionIndex,huge);
+ assert.equal(uaCalls,1);assert.equal(batch.pagesFetched,1);assert.equal(batch.complete,true);assert.equal(batch.coverage,'ACTIVE_WARNINGS');assert.equal(batch.events.length,1);
+ assert.equal(ukraineAdapter.minSyncIntervalSeconds,90);
 });
-test('UA status diagnostics fail closed without exposing response values',async()=>{
- const cases=[
-  [{},/UA_STATUS_INDEX_MISSING/],
-  [{lastActionIndex:null},/UA_STATUS_INDEX_NULL/],
-  [{lastActionIndex:'7'},/UA_STATUS_INDEX_STRING/],
-  [[],/UA_STATUS_SHAPE_NOT_OBJECT/]
- ] as const;
- for(const [statusBody,pattern] of cases){
-  const fetchText=async(url:string)=>url.endsWith('/status')?JSON.stringify(statusBody):url.endsWith('/regions')?JSON.stringify(registry):url.endsWith('/alerts')?JSON.stringify([]):JSON.stringify([]);
-  await assert.rejects(ukraineAdapter.sync({now,fetchText}),pattern);
- }
+test('UA live snapshot ends a missing alarm without inventing an end timestamp and starts a new cycle later',()=>{
+ const first=parseUaLiveSnapshot(active(),[],now).events[0];
+ const later=new Date('2026-09-22T12:05:00Z');
+ const ended=parseUaLiveSnapshot([], [first],later).events[0];
+ assert.equal(ended.id,first.id);assert.equal(ended.lifecycle,'ENDED');assert.equal(ended.validTo,null);
+ const restarted=parseUaLiveSnapshot(active(),[ended],new Date('2026-09-22T12:10:00Z')).events[0];
+ assert.equal(restarted.lifecycle,'ACTIVE');assert.notEqual(restarted.id,first.id);assert.equal(restarted.validFrom,null);
+});
+test('UA live snapshot fails closed when an active child cannot be resolved to a named region',()=>{
+ const payload=[{regionId:'fixture-a',regionName:'Область А',regionType:'State',lastUpdate:start,activeAlerts:[{regionId:'missing-child',regionType:'Community',type:'AIR',lastUpdate:start}]}];
+ assert.throws(()=>parseUaLiveSnapshot(payload,[],now),/UA_ACTIVE_REGION_UNRESOLVED/);
+});
+test('UA live transport errors identify alerts endpoint without exposing credentials',async()=>{
+ const fetchText=async(url:string)=>{if(url===UA_API+'/alerts')throw new Error('UA_HTTP_401');return JSON.stringify({type:'FeatureCollection',features:[]});};
+ await assert.rejects(ukraineAdapter.sync({now,fetchText}),/UA_ALERTS_HTTP_401/);
 });
 
 

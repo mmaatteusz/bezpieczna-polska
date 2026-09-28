@@ -27,14 +27,14 @@ try{
   if(process.env.UKRAINE_ALARM_API_KEY?.trim()){
    let ukraineRunning=false;
    async function syncUkraine(){if(ukraineRunning)return;ukraineRunning=true;let leased=false;try{
-    leased=await tryAcquireWorkerLease(db,'ukraine-alarm',workerOwner,120000);
+    leased=await tryAcquireWorkerLease(db,'ukraine-alarm',workerOwner,180000);
     if(!leased)return;
     await ingestUkraineLive(store);
     const source=(await store.health()).find(s=>s.id==='UA');
     app?.log.info({component:'ukraine-alarm',source:'UA',state:source?.state??'MISSING',errorCode:source?.errorCode??null,durationMs:source?.responseTime??null},'UkraineAlarm refresh');
    }catch{app?.log.error({component:'ukraine-alarm',errorCode:'UA_INGEST_FAILED'},'UkraineAlarm live refresh failed; existing data retained');}
    finally{if(leased)await releaseWorkerLease(db,'ukraine-alarm',workerOwner).catch(()=>{});ukraineRunning=false;}}
-   ukraineTimer=setInterval(()=>void syncUkraine(),60000);
+   ukraineTimer=setInterval(()=>void syncUkraine(),90000);
    void syncUkraine();
   }
   let neptunRunning=false;

@@ -67,9 +67,6 @@ class UkraineData {
       ]) {
         if (e.data[key] != null) DateTime.parse(e.data[key] as String);
       }
-      if (e.data['lifecycle'] == 'ENDED' && e.data['validTo'] == null) {
-        throw const FormatException('Brak źródłowego końca alarmu');
-      }
     }
 
     for (final e in m['events'] as List) {
