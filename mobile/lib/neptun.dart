@@ -336,8 +336,7 @@ Future<Uint8List> _neptunIconPng(String type) async {
   const logicalSize = 72.0;
   const outputSize = 96.0;
   final recorder = ui.PictureRecorder();
-  final canvas = ui.Canvas(recorder)
-    ..scale(outputSize / logicalSize);
+  final canvas = ui.Canvas(recorder)..scale(outputSize / logicalSize);
   final outline = ui.Paint()
     ..color = const ui.Color(0xff7f1d1d)
     ..style = ui.PaintingStyle.stroke
