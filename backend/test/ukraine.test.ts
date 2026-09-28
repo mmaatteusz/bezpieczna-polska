@@ -66,6 +66,16 @@ test('UA status accepts actionIndex compatibility alias used by current service'
  const batch=await ukraineAdapter.sync({now,fetchText});
  assert.equal(batch.uaMetadata.lastActionIndex,'7');assert.equal(batch.coverage,'ACTIVE_WARNINGS');assert.ok(calls>=0);
 });
+test('UA transport errors identify endpoint without exposing credentials',async()=>{
+ let statusCalls=0;
+ const fetchText=async(url:string)=>{
+  if(url.endsWith('/alerts/status')){statusCalls++;return '{"lastActionIndex":7}';}
+  if(url.endsWith('/regions'))throw new Error('UA_HTTP_401');
+  return JSON.stringify([]);
+ };
+ await assert.rejects(ukraineAdapter.sync({now,fetchText}),/UA_REGIONS_HTTP_401/);
+ assert.equal(statusCalls,1);
+});
 test('UA status preserves full signed-int64 precision from JSON token',async()=>{
  const huge='9223372036854775807';
  const fetchText=async(url:string)=>url.endsWith('/status')?'{"lastActionIndex":'+huge+'}':url.endsWith('/regions')?JSON.stringify(registry):url.endsWith('/alerts')?JSON.stringify([]):JSON.stringify([]);
