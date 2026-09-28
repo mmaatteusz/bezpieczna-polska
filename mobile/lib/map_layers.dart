@@ -83,9 +83,50 @@ bool mapEventVisibleForLayers(
   required bool showImgw,
 }) => mapEventIsImgw(event) ? showImgw : showEvents;
 
-List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
+List<String> mapEventTerytCodes(SafetyEvent event) {
+  final raw = event.data['locationText'];
+  if (raw is! String) return const [];
+  final match = RegExp(
+    r'^\\s*TERYT\\s*:\\s*(.*)$',
+    caseSensitive: false,
+  ).firstMatch(raw);
+  if (match == null) return const [];
+  return RegExp(r'\\d{2,7}')
+      .allMatches(match.group(1) ?? '')
+      .map((item) => item.group(0)!)
+      .toSet()
+      .toList();
+}
+
+MapEntry<String, List<double>>? _mapTerytAnchor(
+  String code,
+  Map<String, List<double>> administrativeAnchors,
+) {
+  final direct = administrativeAnchors[code];
+  if (direct != null) return MapEntry(code, direct);
+
+  if (code.length >= 4) {
+    final powiatCode = code.substring(0, 4);
+    final powiat = administrativeAnchors[powiatCode];
+    if (powiat != null) return MapEntry(powiatCode, powiat);
+  }
+
+  if (code.length >= 2) {
+    final regionCode = code.substring(0, 2);
+    final region = mapRegionAnchors[regionCode];
+    if (region != null) return MapEntry(regionCode, region);
+  }
+  return null;
+}
+
+List<Map<String, dynamic>> mapEventFeatures(
+  SafetyEvent event,
+  DateTime now, {
+  Map<String, List<double>> administrativeAnchors = const {},
+}) {
   if (!mapEventIsLive(event, now)) return const [];
 
+  final category = mapEventIsImgw(event) ? 'IMGW' : 'ALERT';
   if (event.hasPoint) {
     return [
       {
@@ -101,10 +142,40 @@ List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
           'eventId': event.id,
           'title': event.title,
           'mapLocationKind': 'EVENT_POINT',
-          'mapCategory': mapEventIsImgw(event) ? 'IMGW' : 'ALERT',
+          'mapCategory': category,
+          'mapCollision': false,
         },
       },
     ];
+  }
+
+  final terytCodes = mapEventTerytCodes(event);
+  if (terytCodes.isNotEmpty) {
+    final anchors = <String, List<double>>{};
+    for (final code in terytCodes) {
+      final resolved = _mapTerytAnchor(code, administrativeAnchors);
+      if (resolved != null) anchors[resolved.key] = resolved.value;
+    }
+    if (anchors.isNotEmpty) {
+      return [
+        for (final entry in anchors.entries)
+          {
+            'type': 'Feature',
+            'geometry': {'type': 'Point', 'coordinates': entry.value},
+            'properties': {
+              'eventId': event.id,
+              'title': event.title,
+              'mapLocationKind': entry.key.length >= 4
+                  ? 'TERYT_SCOPE'
+                  : 'REGION_SCOPE',
+              'mapCategory': category,
+              'mapCollision': false,
+              'regionId': entry.key.substring(0, 2),
+              if (entry.key.length >= 4) 'terytCode': entry.key,
+            },
+          },
+      ];
+    }
   }
 
   final regionIds = event.areas.contains('PL')
@@ -122,8 +193,47 @@ List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
           'eventId': event.id,
           'title': event.title,
           'mapLocationKind': 'REGION_SCOPE',
-          'mapCategory': mapEventIsImgw(event) ? 'IMGW' : 'ALERT',
+          'mapCategory': category,
+          'mapCollision': false,
           'regionId': regionId,
+        },
+      },
+  ];
+}
+
+String? _mapPointKey(Map<String, dynamic> feature) {
+  final geometry = feature['geometry'];
+  if (geometry is! Map || geometry['type'] != 'Point') return null;
+  final coordinates = geometry['coordinates'];
+  if (coordinates is! List || coordinates.length != 2) return null;
+  return '${coordinates[0]}:${coordinates[1]}';
+}
+
+List<Map<String, dynamic>> markMapCategoryCollisions(
+  List<Map<String, dynamic>> features,
+) {
+  final categoriesByPoint = <String, Set<String>>{};
+  for (final feature in features) {
+    final key = _mapPointKey(feature);
+    final properties = feature['properties'];
+    final category = properties is Map
+        ? properties['mapCategory']?.toString()
+        : null;
+    if (key == null || category == null) continue;
+    categoriesByPoint.putIfAbsent(key, () => <String>{}).add(category);
+  }
+  final mixedPoints = categoriesByPoint.entries
+      .where((entry) => entry.value.contains('ALERT') && entry.value.contains('IMGW'))
+      .map((entry) => entry.key)
+      .toSet();
+
+  return [
+    for (final feature in features)
+      {
+        ...feature,
+        'properties': {
+          ...Map<String, dynamic>.from(feature['properties'] as Map),
+          'mapCollision': mixedPoints.contains(_mapPointKey(feature)),
         },
       },
   ];
