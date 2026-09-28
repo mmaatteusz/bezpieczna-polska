@@ -357,6 +357,11 @@ void main() {
       find.textContaining('nie ma kompletnej konfiguracji usługi powiadomień'),
       findsOneWidget,
     );
+    await tester.scrollUntilVisible(
+      find.text('Obserwowane lokalizacje'),
+      250,
+    );
+    await tester.pumpAndSettle();
     expect(
       find.text('Brak zapisanych miejsc • stuknij, aby dodać'),
       findsOneWidget,
