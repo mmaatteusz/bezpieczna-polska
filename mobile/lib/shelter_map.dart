@@ -99,6 +99,7 @@ class _ShelterMapState extends State<ShelterMap> {
   String availability = 'ALL', message = 'Przygotowywanie mapy…';
   String? gpsInterferenceError;
   MapViewport? viewport;
+  MapAdminAreaIndex? adminAreas;
   GpsInterferenceViewport? gpsInterference;
   MapRequest? renderedRequest;
   Snapshot? nationalSnapshot;
@@ -285,6 +286,16 @@ class _ShelterMapState extends State<ShelterMap> {
     styleFallback?.cancel();
     try {
       if (!widget.ukraine) {
+        if (adminAreas == null) {
+          try {
+            adminAreas = MapAdminAreaIndex.parse(
+              await rootBundle.loadString('assets/poland_admin_centroids.json'),
+            );
+          } catch (_) {
+            // Province-level fallback remains available if the local index fails.
+            adminAreas = null;
+          }
+        }
         final voivodeships =
             jsonDecode(
                   await rootBundle.loadString(
@@ -391,6 +402,8 @@ class _ShelterMapState extends State<ShelterMap> {
           circleRadius: 8,
           circleStrokeColor: '#ffffff',
           circleStrokeWidth: 2,
+          circleTranslate: [-7.0, 0.0],
+          circleTranslateAnchor: 'viewport',
         ),
         filter: [
           '==',
@@ -406,6 +419,8 @@ class _ShelterMapState extends State<ShelterMap> {
           circleRadius: 8,
           circleStrokeColor: '#ffffff',
           circleStrokeWidth: 2,
+          circleTranslate: [7.0, 0.0],
+          circleTranslateAnchor: 'viewport',
         ),
         filter: [
           '==',
@@ -497,7 +512,9 @@ class _ShelterMapState extends State<ShelterMap> {
             showImgw: showImgw,
           ),
         )
-        .expand((event) => mapEventFeatures(event, now))
+        .expand(
+          (event) => mapEventFeatures(event, now, adminAreas: adminAreas),
+        )
         .toList();
     final watchedFeatures = showWatched
         ? widget.watchedLocations
