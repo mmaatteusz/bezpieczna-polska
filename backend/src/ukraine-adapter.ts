@@ -107,7 +107,7 @@ export async function fetchUa(url:string,key=process.env.UKRAINE_ALARM_API_KEY){
  return new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks));
 }
 export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncIntervalSeconds:60,
- async sync({now,fetchText,previousEvents=[]}:SourceContext){
+ async sync({now,fetchText,previousEvents=[],previousHealth}:SourceContext){
   const endpoint=async(path:string,label:'STATUS'|'REGIONS'|'ALERTS'|'HISTORY')=>{
    try{return await fetchText(UA_API+path);}
    catch(error){
@@ -143,11 +143,20 @@ export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncInt
   };
   const beforeBody=await endpoint('/alerts/status','STATUS');
   const before=parseContract('UA_STATUS_SCHEMA_CHANGED',()=>parseStatusBody(beforeBody));
+  const previousUa=previousHealth?.uaMetadata;
+  const previousToken=previousUa?.lastActionIndex===undefined?null:String(previousUa.lastActionIndex);
+  if(previousUa&&previousToken===before.lastActionIndex){
+   // The official contract says /alerts/status is the change detector. When
+   // unchanged, reuse the last verified UA snapshot instead of re-downloading
+   // the registry, active set and per-region histories.
+   const events=previousEvents.filter(event=>event.countryCode==='UA'&&event.sources.some(source=>source.id==='UA'));
+   return {events,uaMetadata:{...previousUa,lastActionIndex:before.lastActionIndex},complete:false,coverage:'ACTIVE_WARNINGS',pagesFetched:1};
+  }
   const regionsRaw=await read('/regions','REGIONS','UA_REGIONS_JSON_INVALID');
   const regions=parseContract('UA_REGIONS_SCHEMA_CHANGED',()=>parseUaRegions(regionsRaw));
   const activeRaw=await read('/alerts','ALERTS','UA_ALERTS_JSON_INVALID');
   const active=parseContract('UA_ALERTS_SCHEMA_CHANGED',()=>activeSchema.parse(activeRaw));
-  const ids=new Set([...regions.filter(r=>r.type==='State').map(r=>r.id),...active.flatMap(r=>r.activeAlerts.map(a=>a.regionId)),...previousEvents.filter(e=>e.countryCode==='UA'&&e.ukraine&&['ACTIVE','UNKNOWN'].includes(e.lifecycle)).map(e=>e.ukraine!.regionId)]);
+  const ids=new Set([...active.flatMap(r=>r.activeAlerts.map(a=>a.regionId)),...previousEvents.filter(e=>e.countryCode==='UA'&&e.ukraine&&['ACTIVE','UNKNOWN'].includes(e.lifecycle)).map(e=>e.ukraine!.regionId)]);
   if(ids.size>300)throw new Error('UA_HISTORY_SCOPE_LIMIT');
   const history:unknown[]=[];
   for(const regionId of ids){
