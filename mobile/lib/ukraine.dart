@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show Point;
 
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -147,6 +148,18 @@ class UkraineData {
         },
     ],
   };
+}
+
+Map<String, dynamic>? uaEventForFeature(UkraineData data, dynamic feature) {
+  if (feature is! Map || feature['properties'] is! Map) return null;
+  final id = feature['properties']['eventId'];
+  if (id is! String || id.isEmpty) return null;
+  for (final raw in data.data['events'] as List) {
+    if (raw is Map && raw['id'] == id) {
+      return Map<String, dynamic>.from(raw);
+    }
+  }
+  return null;
 }
 
 class UkrainePanel extends StatefulWidget {
@@ -386,6 +399,73 @@ class _UkraineMapState extends State<UkraineMap> {
     }
   }
 
+  String time(dynamic value) => value == null
+      ? 'Nie podano'
+      : DateTime.parse(value as String).toLocal().toString();
+
+  Future<void> handleMapTap(Point<double> point, LatLng _) async {
+    final c = controller, data = widget.data;
+    if (!ready || c == null || data == null || !mounted) return;
+    try {
+      final features = await c.queryRenderedFeatures(point, const [
+        'ua-alert-areas',
+      ], null);
+      if (!mounted || features.isEmpty) return;
+      final event = uaEventForFeature(data, features.first);
+      if (event == null) return;
+      final ukraine = event['ukraine'] as Map;
+      final current =
+          data.freshAt(DateTime.now(), widget.online) &&
+          event['freshness'] == 'FRESH';
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        event['title'] as String,
+                        style: Theme.of(sheetContext).textTheme.titleLarge,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text('Obszar: ${ukraine['regionName']}'),
+                Text('Zakres: ${ukraine['regionType']}'),
+                Text(
+                  'Status: ${event['lifecycle']} • ${current ? 'FRESH' : 'STALE'}',
+                ),
+                Text('Rozpoczęcie: ${time(event['validFrom'])}'),
+                Text('Zakończenie: ${time(event['validTo'])}'),
+                Text(
+                  'Aktualizacja źródła: ${time(ukraine['sourceUpdatedAt'])}',
+                ),
+                const SizedBox(height: 10),
+                Text(event['description'] as String),
+                const SizedBox(height: 10),
+                const Text(
+                  'Oficjalny alarm UkraineAlarm. Status Polski jest oceniany niezależnie.',
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      // A tap must never break map interaction while the style is reloading.
+    }
+  }
+
   Future<void> styled() async {
     try {
       await controller?.addSource(
@@ -448,6 +528,9 @@ class _UkraineMapState extends State<UkraineMap> {
           ),
           onMapCreated: (c) => controller = c,
           onStyleLoadedCallback: styled,
+          onMapClick: (point, coordinates) =>
+              unawaited(handleMapTap(point, coordinates)),
+          featureTapsTriggersMapClick: true,
         ),
       ),
       const Text(

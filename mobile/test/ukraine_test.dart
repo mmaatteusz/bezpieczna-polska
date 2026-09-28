@@ -104,6 +104,36 @@ void main() {
       expect(ended.data['events'][0]['validTo'], isNull);
     },
   );
+  test('UA map feature resolves to its alarm details', () {
+    final raw = ua(now);
+    raw['map']['features'] = [
+      {
+        'type': 'Feature',
+        'geometry': {
+          'type': 'Polygon',
+          'coordinates': [
+            [
+              [30, 48],
+              [31, 48],
+              [31, 49],
+              [30, 48],
+            ],
+          ],
+        },
+        'properties': {'eventId': 'UA-fixture', 'freshness': 'FRESH'},
+      },
+    ];
+    final data = UkraineData.parse(raw);
+    final event = uaEventForFeature(data, raw['map']['features'][0]);
+    expect(event?['id'], 'UA-fixture');
+    expect(event?['title'], 'Alarm powietrzny — obwód testowy');
+    expect(
+      uaEventForFeature(data, {
+        'properties': {'eventId': 'UA-missing'},
+      }),
+      isNull,
+    );
+  });
   test('UA map downgrades fresh polygon to STALE offline', () {
     final raw = ua(now);
     raw['map']['features'] = [
