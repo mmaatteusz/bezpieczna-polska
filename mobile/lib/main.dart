@@ -181,9 +181,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     // rebuild cannot show the permission sequence twice.
     await prefs.setBool(_firstLaunchPermissionsKey, true);
 
-    // Wait until the first frame is fully visible. Requesting Android runtime
-    // permissions during bootstrap can otherwise be ignored by some devices.
-    await Future<void>.delayed(const Duration(milliseconds: 350));
+    // This method is started from addPostFrameCallback, so the first Flutter
+    // frame is already visible before Android receives the permission requests.
     if (!mounted) return;
 
     final pushManager = widget.pushManager;
