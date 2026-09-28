@@ -41,8 +41,22 @@ test('UA changed contracts, unknown regions, contradictory end and unknown types
  for(const broken of [{},[{regionId:'fixture-a',activeAlerts:[]}],active('fixture-a','MISSILE_POSITION')])assert.throws(()=>parseUaBatch(regions,broken,[],[],now));
  const h=history(true);h[0].alarms[0].isContinue=true;assert.throws(()=>parseUaBatch(regions,[],h,[],now),/UA_TIME_CONFLICT/);
  assert.throws(()=>parseUaBatch(regions,[],history(),[],now),/UA_SNAPSHOT_HISTORY_CONFLICT/);
- assert.throws(()=>parseUaRegions({states:[{...registry.states[0],regionType:'Null'}]}));
+ const nullable=parseUaRegions({states:[{...registry.states[0],regionChildIds:[{regionId:'fixture-null',regionName:'Невизначена зона',regionType:'Null',regionChildIds:null}]}]});
+ assert.equal(nullable.find(r=>r.id==='fixture-null')?.type,'Null');
 });
+test('UA accepts official UNKNOWN alert type but refuses an active Null-scope region',()=>{
+ const unknown=parseUaBatch(regions,active('fixture-a','UNKNOWN'),history(false,'fixture-a',start,'UNKNOWN'),[],now).events[0];
+ assert.equal(unknown.ukraine?.alertType,'UNKNOWN');assert.equal(unknown.officialWarning,true);
+ const nullRegistry=parseUaRegions({states:[{regionId:'fixture-a',regionName:'Область А',regionType:'State',regionChildIds:[{regionId:'fixture-null',regionName:'Невизначена зона',regionType:'Null',regionChildIds:null}]}]});
+ const nullActive=[{regionId:'fixture-a',regionName:'Область А',regionType:'State',lastUpdate:start,activeAlerts:[{regionId:'fixture-null',regionType:'Null',type:'AIR',lastUpdate:start}]}];
+ assert.throws(()=>parseUaBatch(nullRegistry,nullActive,[],[],now),/UA_UNSUPPORTED_ACTIVE_REGION_TYPE/);
+});
+
+test('UA official nullable history arrays are treated as bounded empty history',()=>{
+ const result=parseUaBatch(regions,active(),[{regionId:'fixture-a',regionName:null,alarms:null}],[],now);
+ assert.equal(result.events.length,1);assert.equal(result.events[0].lifecycle,'ACTIVE');assert.equal(result.events[0].validFrom,null);
+});
+
 test('UA safe allowlist and missing key; credentials never in URL',async()=>{
  assert.equal(isAllowedUaUrl(UA_API+'/alerts'),true);for(const u of [UA_API+'/alerts?token=x',UA_API+'/alerts/regionHistory?regionId=x&token=y','https://evil.test/api/v3/alerts',UA_API+'/missiles'])assert.equal(isAllowedUaUrl(u),false);
  await assert.rejects(fetchUa(UA_API+'/alerts',''),/NOT_CONFIGURED_UA_API_KEY_MISSING/);
