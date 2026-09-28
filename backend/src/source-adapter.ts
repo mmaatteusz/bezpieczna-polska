@@ -32,6 +32,7 @@ export type AbsenceSemantics='AUTHORITATIVE_EMPTY_SET'|'NOT_PROVABLE';
 // NOT_PROVABLE even when their last synchronization was technically successful.
 const contract=<T extends Record<string,unknown>>(source:T,sourceClass:SourceClass,absenceSemantics:AbsenceSemantics)=>
   ({...source,sourceClass,absenceSemantics});
+const uaConfigured=Boolean(process.env.UKRAINE_ALARM_API_KEY?.trim());
 
 // Enable sources one by one, in the agreed integration order.
 export const SOURCES = [
@@ -49,6 +50,6 @@ export const SOURCES = [
   contract({id: 'SG', name: 'Straż Graniczna — operacyjne informacje graniczne', url: 'https://www.strazgraniczna.pl/pl/aktualnosci', enabled: true, implementation:'OFFICIAL_NEWS_OPERATIONAL_FILTER', integrationNote:'Publiczna lista RSS KGSG jest pusta. Integracja używa oficjalnych Aktualności z konserwatywnym filtrem zamknięć, ograniczeń, kontroli i utrudnień granicznych.'},'CONTEXT','NOT_PROVABLE'),
   contract({id: 'POLICE', name: 'Policja — istotne zdarzenia', url: 'https://policja.pl/pol/aktualnosci', enabled: true, implementation:'OFFICIAL_RSS_INCIDENT_FILTER', integrationNote:'Oficjalny RSS Aktualności Policji. Importowane są wyłącznie zdarzenia o znaczeniu sytuacyjnym; zwykłe zatrzymania, kradzieże, przemyt, statystyki i materiały PR są odrzucane.'},'CONTEXT','NOT_PROVABLE'),
   contract({id: 'PSP_INCIDENTS', name: 'PSP — istotne zdarzenia', url: 'https://www.gov.pl/web/kgpsp/aktualnosci', enabled: true, implementation:'OFFICIAL_NEWS_INCIDENT_FILTER', integrationNote:'Centralne Aktualności KG PSP na gov.pl z konserwatywnym filtrem zdarzeń. Brak zweryfikowanego krajowego live API/RSS incydentów; lista publikacji nie oznacza pełnego pokrycia.'},'CONTEXT','NOT_PROVABLE'),
-  contract({id: 'UA', name: 'UkraineAlarm — oficjalne alarmy Ukrainy', url: 'https://map.ukrainealarm.com/', enabled: false, implementation:'DORMANT_REQUIRES_EXTERNAL_API_KEY', integrationNote:'Adapter pozostaje w backendzie, ale publiczna aplikacja go nie reklamuje i domyślny worker go nie uruchamia do czasu skonfigurowania zweryfikowanego klucza API. Alarmy UA nie wpływają na status Polski.'},'SITUATIONAL','NOT_PROVABLE'),
+  contract({id: 'UA', name: 'UkraineAlarm — oficjalne alarmy Ukrainy', url: 'https://map.ukrainealarm.com/', enabled: uaConfigured, implementation:uaConfigured?'UKRAINEALARM_API_V3':'DORMANT_REQUIRES_EXTERNAL_API_KEY', integrationNote:uaConfigured?'Oficjalny UkraineAlarm API v3 jest skonfigurowany po stronie backendu. Alarmy UA są warstwą sytuacyjną i nie wpływają na status Polski.':'Adapter pozostaje w backendzie, ale publiczna aplikacja go nie reklamuje i worker go nie uruchamia bez klucza API. Alarmy UA nie wpływają na status Polski.'},'SITUATIONAL','NOT_PROVABLE'),
   contract({id: 'NEPTUN', name: 'NEPTUN — bieżące zagrożenia powietrzne', url: 'https://neptun.in.ua/', enabled: true, implementation:'NEPTUN_PUBLIC_API_V1', integrationNote:'Otwarty feed live. Publicznie przekazujemy wyłącznie zgrubną pozycję (minimum 10 km), bez kursu, prędkości i predykcji ruchu. NEPTUN jest agregatorem informacyjnym i nie zastępuje oficjalnych alarmów.'},'SITUATIONAL','NOT_PROVABLE'),
 ];
