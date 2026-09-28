@@ -37,6 +37,16 @@ test('UA new start creates distinct cycle; old unresolved cycle is not silently 
 test('UA INFO is separate from official alert and never an official warning',()=>{
  const e=parseUaBatch(regions,active('fixture-a','INFO'),history(false,'fixture-a',start,'INFO'),[],now).events[0];assert.equal(e.ukraine?.kind,'OFFICIAL_INFORMATION');assert.equal(e.officialWarning,false);
 });
+test('UA accepts documented nullable v3 metadata and keeps UNKNOWN informational',()=>{
+ const activePayload=[{regionId:'fixture-a',regionName:'Область А',regionType:null,regionEngName:null,lastUpdate:start,activeAlerts:[{regionId:'fixture-a',regionType:null,type:'UNKNOWN',lastUpdate:start}]}];
+ const historyPayload=[{regionId:'fixture-a',regionName:null,alarms:[{regionId:'fixture-a',startDate:start,endDate:null,alertType:'UNKNOWN',regionName:null,isContinue:true}]}];
+ const e=parseUaBatch(regions,activePayload,historyPayload,[],now).events[0];
+ assert.equal(e.ukraine?.alertType,'UNKNOWN');assert.equal(e.ukraine?.kind,'OFFICIAL_INFORMATION');assert.equal(e.officialWarning,false);assert.equal(e.severity,'INFORMATIONAL');
+});
+test('UA region registry accepts null child collections without inventing regions',()=>{
+ const parsed=parseUaRegions({states:[{regionId:'fixture-null-children',regionName:'Область без підрегіонів',regionType:'State',regionChildIds:null}]});
+ assert.deepEqual(parsed,[{id:'fixture-null-children',name:'Область без підрегіонів',type:'State',parentId:null}]);
+});
 test('UA changed contracts, unknown regions, contradictory end and unknown types fail closed',()=>{
  for(const broken of [{},[{regionId:'fixture-a',activeAlerts:[]}],active('fixture-a','MISSILE_POSITION')])assert.throws(()=>parseUaBatch(regions,broken,[],[],now));
  const h=history(true);h[0].alarms[0].isContinue=true;assert.throws(()=>parseUaBatch(regions,[],h,[],now),/UA_TIME_CONFLICT/);

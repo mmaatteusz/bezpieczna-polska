@@ -14,7 +14,7 @@ export const eventSchema=z.object({
  geometrySource:z.url().optional(),
  origin:z.enum(['OFFICIAL_PL','OFFICIAL_FOREIGN','AGGREGATOR','OSINT']).optional(),
  countryCode:z.enum(['PL','UA']).optional(),
- ukraine:z.object({regionId:z.string().min(1).max(80),regionName:z.string().min(1).max(200),regionType:z.enum(['State','District','Community']),parentRegionId:z.string().nullable(),alertType:z.enum(['AIR','ARTILLERY','URBAN_FIGHTS','CHEMICAL','NUCLEAR','INFO']),kind:z.enum(['OFFICIAL_ALERT','OFFICIAL_INFORMATION']),sourceUpdatedAt:date.nullable()}).optional(),
+ ukraine:z.object({regionId:z.string().min(1).max(80),regionName:z.string().min(1).max(200),regionType:z.enum(['State','District','Community']),parentRegionId:z.string().nullable(),alertType:z.enum(['UNKNOWN','AIR','ARTILLERY','URBAN_FIGHTS','CHEMICAL','NUCLEAR','INFO']),kind:z.enum(['OFFICIAL_ALERT','OFFICIAL_INFORMATION']),sourceUpdatedAt:date.nullable()}).optional(),
  radiationAssessment:z.object({state:z.enum(['WARNING','ENDED','INFORMATION','UNDETERMINED']),evidence:z.string().nullable()}).optional(),
  securityLevel:securityLevelSchema.optional(),
  id:z.string().min(1).max(150),title:z.string().min(1).max(350),description:z.string().max(40000),
