@@ -67,7 +67,7 @@ Automatyczny bump wersji **nie publikuje Release**. GitHub Release powstaje dopi
 | PSP incidents | ✅ oficjalne publikacje z filtrem istotnych zdarzeń |
 | Schronienia | ✅ PostGIS + mapa + offline |
 | NEPTUN | ✅ live, z publikacją zgrubnej pozycji |
-| UkraineAlarm | ✅ oficjalne API v3, backendowy klucz, osobny worker 60 s, jawny health/freshness; nie wpływa na Status Polski |
+| UkraineAlarm | ✅ oficjalne API v3 live, backendowy klucz, pojedynczy `/api/v3/alerts` na synchronizację co 90 s, osobny worker i jawny health/freshness; nie wpływa na Status Polski |
 | Push | 🟡 backend + UI + outbox istnieją; realne wysyłki wymagają konfiguracji FCM/APNs |
 
 Stan `HEALTHY` potwierdza poprawny ostatni cykl synchronizacji adaptera. Nie oznacza kompletności wszystkich zdarzeń w kraju.
