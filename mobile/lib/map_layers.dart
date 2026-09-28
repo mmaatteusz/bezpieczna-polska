@@ -77,6 +77,9 @@ bool mapEventIsImgw(SafetyEvent event) => event.sources.any((source) {
   return id == 'IMGW_METEO' || id == 'IMGW_HYDRO';
 });
 
+bool mapEventIsRcb(SafetyEvent event) =>
+    event.sources.any((source) => source['id']?.toString() == 'RCB');
+
 bool mapEventVisibleForLayers(
   SafetyEvent event, {
   required bool showEvents,
@@ -127,6 +130,7 @@ List<Map<String, dynamic>> mapEventFeatures(
   if (!mapEventIsLive(event, now)) return const [];
 
   final category = mapEventIsImgw(event) ? 'IMGW' : 'ALERT';
+  final isRcb = mapEventIsRcb(event);
   if (event.hasPoint) {
     return [
       {
@@ -143,6 +147,7 @@ List<Map<String, dynamic>> mapEventFeatures(
           'title': event.title,
           'mapLocationKind': 'EVENT_POINT',
           'mapCategory': category,
+          'mapIsRcb': isRcb,
           'mapCollision': false,
         },
       },
@@ -169,6 +174,7 @@ List<Map<String, dynamic>> mapEventFeatures(
                   ? 'TERYT_SCOPE'
                   : 'REGION_SCOPE',
               'mapCategory': category,
+              'mapIsRcb': isRcb,
               'mapCollision': false,
               'regionId': entry.key.substring(0, 2),
               if (entry.key.length >= 4) 'terytCode': entry.key,
@@ -194,6 +200,7 @@ List<Map<String, dynamic>> mapEventFeatures(
           'title': event.title,
           'mapLocationKind': 'REGION_SCOPE',
           'mapCategory': category,
+          'mapIsRcb': isRcb,
           'mapCollision': false,
           'regionId': regionId,
         },
@@ -207,6 +214,37 @@ String? _mapPointKey(Map<String, dynamic> feature) {
   final coordinates = geometry['coordinates'];
   if (coordinates is! List || coordinates.length != 2) return null;
   return '${coordinates[0]}:${coordinates[1]}';
+}
+
+List<Map<String, dynamic>> markMapRcbCounts(
+  List<Map<String, dynamic>> features,
+) {
+  final countsByPoint = <String, int>{};
+  for (final feature in features) {
+    final properties = feature['properties'];
+    if (properties is! Map || properties['mapIsRcb'] != true) continue;
+    final key = _mapPointKey(feature);
+    if (key == null) continue;
+    countsByPoint.update(key, (count) => count + 1, ifAbsent: () => 1);
+  }
+
+  final labelledPoints = <String>{};
+  return [
+    for (final feature in features)
+      if (feature['properties'] is Map &&
+          (feature['properties'] as Map)['mapIsRcb'] == true &&
+          _mapPointKey(feature) != null)
+        {
+          ...feature,
+          'properties': {
+            ...Map<String, dynamic>.from(feature['properties'] as Map),
+            'mapRcbCount': countsByPoint[_mapPointKey(feature)] ?? 1,
+            'mapRcbCountLeader': labelledPoints.add(_mapPointKey(feature)!),
+          },
+        }
+      else
+        feature,
+  ];
 }
 
 List<Map<String, dynamic>> markMapCategoryCollisions(
