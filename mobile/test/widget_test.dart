@@ -94,15 +94,29 @@ void main() {
     final legend = find.byKey(const ValueKey('map-legend'));
     expect(legend, findsOneWidget);
     expect(
-      find.descendant(of: legend, matching: find.text('Alerty')),
+      find.descendant(of: legend, matching: find.text('Alerty i komunikaty')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: legend, matching: find.text('IMGW')),
+      find.descendant(of: legend, matching: find.text('Ostrzeżenia IMGW')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: legend, matching: find.text('Schrony')),
+      find.descendant(of: legend, matching: find.text('Punkty schronienia')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: legend,
+        matching: find.text('Obserwowane miejsca'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: legend,
+        matching: find.text('Pomiary promieniowania PAA'),
+      ),
       findsOneWidget,
     );
 
