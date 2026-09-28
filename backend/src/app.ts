@@ -39,7 +39,7 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
  app.get('/v1/neptun',async()=>neptunSnapshot(store));
  app.get('/v1/layers/neptun.geojson',async()=>{const s=await neptunSnapshot(store);return {type:'FeatureCollection',features:[...s.live.map.features,...s.map.features],metadata:{mode:s.mode,liveState:s.live.state,coverage:s.coverage,safetyDelayHours:s.safetyDelayHours,minimumPublishedPrecisionKm:s.minimumPublishedPrecisionKm,sourceHealth:s.sourceHealth,attribution:s.live.attribution}};});
  app.get('/v1/neptun/:id/timeline',async req=>store.neptunTimeline(z.object({id:z.string().regex(/^NEPTUN-[A-Za-z0-9._:-]{1,120}$/)}).parse(req.params).id));
- app.get('/v1/sources',async()=>({sourceHealth:publicSourceHealth(await store.health()).filter(s=>s.enabled&&s.id!=='UA')}));
+ app.get('/v1/sources',async()=>({sourceHealth:publicSourceHealth(await store.health()).filter(s=>s.enabled)}));
  const pushUnavailable=(r:any)=>r.code(503).send({error:'PUSH_NOT_CONFIGURED'});
  const pushRoute={bodyLimit:16*1024,config:{rateLimit:{max:10,timeWindow:'1 minute'}}};
  app.post('/v1/push/devices',pushRoute,async(req,r)=>{
