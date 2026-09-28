@@ -106,10 +106,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.descendant(
-        of: legend,
-        matching: find.text('Obserwowane miejsca'),
-      ),
+      find.descendant(of: legend, matching: find.text('Obserwowane miejsca')),
       findsOneWidget,
     );
     expect(
