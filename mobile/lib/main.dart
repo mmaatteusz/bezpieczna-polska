@@ -130,6 +130,9 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> with WidgetsBindingObserver {
+  static const _firstLaunchPermissionsKey =
+      'first_launch_permissions_prompted_v1';
+
   int page = 0, generation = 0;
   final Set<int> visitedPages = <int>{0};
   bool online = false, loading = false, backgroundSync = false;
@@ -148,6 +151,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     if (widget.pushManager != null) {
       unawaited(widget.pushManager!.initializeWithoutPrompt());
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_requestFirstLaunchPermissions());
+    });
     region = widget.repository.region;
     localityLabel = widget.repository.primaryLocationLabel;
     snapshot = widget.repository.cached(region);
@@ -165,6 +171,47 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         unawaited(refresh());
       }
     });
+  }
+
+  Future<void> _requestFirstLaunchPermissions() async {
+    final prefs = widget.repository.prefs;
+    if (prefs.getBool(_firstLaunchPermissionsKey) ?? false) return;
+
+    // Mark the onboarding before opening system dialogs so a lifecycle resume or
+    // rebuild cannot show the permission sequence twice.
+    await prefs.setBool(_firstLaunchPermissionsKey, true);
+
+    // Wait until the first frame is fully visible. Requesting Android runtime
+    // permissions during bootstrap can otherwise be ignored by some devices.
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+
+    final pushManager = widget.pushManager;
+    if (pushManager != null) {
+      try {
+        await pushManager.initializeWithoutPrompt();
+        // This is the real OS notification permission prompt. When accepted it
+        // also registers the FCM token; in-app category switches alone are not
+        // treated as system permission.
+        await pushManager.enable();
+      } catch (_) {
+        // A temporary backend/FCM failure must not block the GPS permission
+        // prompt. The push manager keeps the current permission/error state.
+      }
+    }
+
+    if (!mounted) return;
+    try {
+      var locationPermission = await Geolocator.checkPermission();
+      if (locationPermission == LocationPermission.denied) {
+        locationPermission = await Geolocator.requestPermission();
+      }
+      // deniedForever is intentionally not forced into system settings here.
+      // The first-launch flow asks once; later GPS actions can explain how to
+      // change the permission manually if the user declined it.
+    } catch (_) {
+      // Permission APIs are best-effort on unsupported/broken platform builds.
+    }
   }
 
   void loadSeen() {
@@ -932,7 +979,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       },
                     ),
                   Text(
-                    '$appVersionLabel • Pakiety offline • Push opt-in • GPS tylko na żądanie',
+                    '$appVersionLabel • Pakiety offline • Powiadomienia i GPS za zgodą użytkownika',
                   ),
                 ],
               ),
