@@ -302,7 +302,7 @@ class _ShelterMapState extends State<ShelterMap> {
                   )
                   as Map<String, dynamic>;
           final rawPowiaty = rawAnchors['powiaty'];
-          if (rawAnchors['schemaVersion'] != 1 || rawPowiaty is! Map) {
+          if (rawAnchors['schemaVersion'] != 2 || rawPowiaty is! Map) {
             throw const FormatException('Niepoprawne centroidy TERYT');
           }
           final parsed = <String, List<double>>{};
