@@ -108,7 +108,7 @@ export async function fetchUa(url:string,key=process.env.UKRAINE_ALARM_API_KEY){
 }
 export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncIntervalSeconds:60,
  async sync({now,fetchText,previousEvents=[]}:SourceContext){
-  const read=async(path:string,code:string)=>{try{return JSON.parse(await fetchText(UA_API+path));}catch(error){const message=error instanceof Error?error.message:'';if(/^UA_[A-Z0-9_]+$/.test(message)||message==='NOT_CONFIGURED_UA_API_KEY_MISSING')throw error;throw new Error(code);}};
+  const read=async(path:string,code:string)=>{const body=await fetchText(UA_API+path);try{return JSON.parse(body);}catch{throw new Error(code);}};
   const parseContract=<T>(code:string,fn:()=>T)=>{try{return fn();}catch(error){const message=error instanceof Error?error.message:'';if(/^UA_[A-Z0-9_]+$/.test(message))throw error;throw new Error(code);}};
   const status=z.object({lastActionIndex:z.number().int().nonnegative()});
   const beforeRaw=await read('/alerts/status','UA_STATUS_JSON_INVALID');
