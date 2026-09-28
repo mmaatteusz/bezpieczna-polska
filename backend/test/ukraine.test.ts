@@ -17,7 +17,7 @@ const regions=parseUaRegions(registry);
 const active=(regionId='fixture-a',type='AIR')=>[{regionId,regionName:regions.find(r=>r.id===regionId)!.name,regionType:regions.find(r=>r.id===regionId)!.type,lastUpdate:start,activeAlerts:[{regionId,regionType:regions.find(r=>r.id===regionId)!.type,type,lastUpdate:start}]}];
 const history=(ended=false,regionId='fixture-a',started=start,type='AIR')=>[{regionId,regionName:regions.find(r=>r.id===regionId)!.name,alarms:[{regionId,startDate:started,endDate:ended?end:null,alertType:type,isContinue:!ended}]}];
 const parse=(ended=false,previous:Event[]=[])=>parseUaBatch(regions,ended?[]:active(),history(ended),previous,now).events[0];
-const health=(state:Health['state']='HEALTHY'):Health=>({id:'UA',name:'UA',url:'https://map.ukrainealarm.com/',state,lastSuccess:now.toISOString(),lastFailure:null,lastItemTime:null,failureCount:0,responseTime:1,maxAgeSeconds:180,complete:false,uaMetadata:{regions,activeEventIds:[parse().id],lastActionIndex:1}});
+const health=(state:Health['state']='HEALTHY'):Health=>({id:'UA',name:'UA',url:'https://map.ukrainealarm.com/',state,lastSuccess:now.toISOString(),lastFailure:null,lastItemTime:null,failureCount:0,responseTime:1,maxAgeSeconds:180,complete:false,uaMetadata:{regions,activeEventIds:[parse().id],lastActionIndex:'1'}});
 test('UA official start ACTIVE, end ENDED, source time only, same stable cycle',()=>{
  const a=parse(),b=parse(true);assert.equal(a.lifecycle,'ACTIVE');assert.equal(b.lifecycle,'ENDED');assert.equal(a.id,b.id);assert.equal(a.validFrom,new Date(start).toISOString());assert.equal(a.validTo,null);assert.equal(b.validTo,new Date(end).toISOString());assert.equal(a.publishedAt,null);assert.equal(a.publicationDate,null);assert.equal(a.origin,'OFFICIAL_FOREIGN');assert.equal(a.geometry,null);assert.deepEqual(a.regions,[]);
 });
@@ -64,7 +64,13 @@ test('UA adapter reads documented endpoints and rejects mid-sync source change',
 test('UA status accepts actionIndex compatibility alias used by current service',async()=>{
  let calls=0;const fetchText=async(url:string)=>{if(url.endsWith('/status'))return JSON.stringify({actionIndex:7});if(url.endsWith('/regions'))return JSON.stringify(registry);if(url.endsWith('/alerts'))return JSON.stringify([]);if(url.includes('/regionHistory'))return JSON.stringify([]);calls++;return JSON.stringify([]);};
  const batch=await ukraineAdapter.sync({now,fetchText});
- assert.equal(batch.uaMetadata.lastActionIndex,7);assert.equal(batch.coverage,'ACTIVE_WARNINGS');assert.ok(calls>=0);
+ assert.equal(batch.uaMetadata.lastActionIndex,'7');assert.equal(batch.coverage,'ACTIVE_WARNINGS');assert.ok(calls>=0);
+});
+test('UA status preserves integers above JavaScript safe range as opaque decimal tokens',async()=>{
+ const token='18446744073709551615';
+ const fetchText=async(url:string)=>url.endsWith('/status')?'{"lastActionIndex":'+token+'}':url.endsWith('/regions')?JSON.stringify(registry):url.endsWith('/alerts')?JSON.stringify([]):JSON.stringify([]);
+ const batch=await ukraineAdapter.sync({now,fetchText});
+ assert.equal(batch.uaMetadata.lastActionIndex,token);
 });
 test('UA status diagnostics fail closed without exposing response values',async()=>{
  const cases=[
