@@ -76,6 +76,33 @@ test('UA transport errors identify endpoint without exposing credentials',async(
  await assert.rejects(ukraineAdapter.sync({now,fetchText}),/UA_REGIONS_HTTP_401/);
  assert.equal(statusCalls,1);
 });
+test('UA unchanged status performs one authenticated request and reuses last verified snapshot',async()=>{
+ const previous=parse();
+ const previousHealth=health();
+ let calls=0;
+ const fetchText=async(url:string)=>{calls++;assert.equal(url,UA_API+'/alerts/status');return '{"lastActionIndex":1}';};
+ const batch=await ukraineAdapter.sync({now,fetchText,previousEvents:[previous],previousHealth});
+ assert.equal(calls,1);
+ assert.equal(batch.events.length,1);
+ assert.equal(batch.events[0].id,previous.id);
+ assert.equal(batch.uaMetadata.lastActionIndex,'1');
+ assert.equal(batch.pagesFetched,1);
+});
+test('UA cold sync fetches history only for active or unresolved regions',async()=>{
+ const requested:string[]=[];
+ const fetchText=async(url:string)=>{
+  requested.push(url);
+  if(url.endsWith('/alerts/status'))return '{"lastActionIndex":2}';
+  if(url.endsWith('/regions'))return JSON.stringify(registry);
+  if(url.endsWith('/alerts'))return JSON.stringify(active('fixture-a'));
+  if(url.includes('/regionHistory?regionId=fixture-a'))return JSON.stringify(history(false,'fixture-a'));
+  throw new Error('UNEXPECTED_URL');
+ };
+ const batch=await ukraineAdapter.sync({now,fetchText});
+ assert.equal(batch.events.length,1);
+ assert.equal(requested.some(url=>url.includes('regionId=fixture-b')),false);
+ assert.equal(requested.filter(url=>url.includes('/regionHistory')).length,1);
+});
 test('UA status preserves full signed-int64 precision from JSON token',async()=>{
  const huge='9223372036854775807';
  const fetchText=async(url:string)=>url.endsWith('/status')?'{"lastActionIndex":'+huge+'}':url.endsWith('/regions')?JSON.stringify(registry):url.endsWith('/alerts')?JSON.stringify([]):JSON.stringify([]);
