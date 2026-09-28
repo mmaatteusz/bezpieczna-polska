@@ -64,7 +64,13 @@ test('UA adapter reads documented endpoints and rejects mid-sync source change',
 test('UA status accepts actionIndex compatibility alias used by current service',async()=>{
  let calls=0;const fetchText=async(url:string)=>{if(url.endsWith('/status'))return JSON.stringify({actionIndex:7});if(url.endsWith('/regions'))return JSON.stringify(registry);if(url.endsWith('/alerts'))return JSON.stringify([]);if(url.includes('/regionHistory'))return JSON.stringify([]);calls++;return JSON.stringify([]);};
  const batch=await ukraineAdapter.sync({now,fetchText});
- assert.equal(batch.uaMetadata.lastActionIndex,7);assert.equal(batch.coverage,'ACTIVE_WARNINGS');assert.ok(calls>=0);
+ assert.equal(batch.uaMetadata.lastActionIndex,'7');assert.equal(batch.coverage,'ACTIVE_WARNINGS');assert.ok(calls>=0);
+});
+test('UA status preserves full signed-int64 precision from JSON token',async()=>{
+ const huge='9223372036854775807';
+ const fetchText=async(url:string)=>url.endsWith('/status')?'{"lastActionIndex":'+huge+'}':url.endsWith('/regions')?JSON.stringify(registry):url.endsWith('/alerts')?JSON.stringify([]):JSON.stringify([]);
+ const batch=await ukraineAdapter.sync({now,fetchText});
+ assert.equal(batch.uaMetadata.lastActionIndex,huge);
 });
 test('UA status diagnostics fail closed without exposing response values',async()=>{
  const cases=[
