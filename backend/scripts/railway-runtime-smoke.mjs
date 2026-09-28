@@ -148,9 +148,22 @@ function validateNeptun(data){
   }
   assert(sources&&lastSourceError==='','critical sources did not converge within '+sourceWaitSeconds+' seconds: '+lastSourceError);
 
+  const uaSource=sources.sourceHealth.find(source=>source.id==='UA');
+  assert(uaSource,'UkraineAlarm source missing');
+  if(uaSource.enabled){
+    assert(sourceState(uaSource)==='HEALTHY','UkraineAlarm configured but not HEALTHY: '+sourceState(uaSource)+(uaSource.errorCode?' ('+uaSource.errorCode+')':''));
+    assert(!!uaSource.lastSuccessfulSyncAt,'UkraineAlarm configured but has no successful sync');
+    console.log('PROBE_UKRAINE_SOURCE_OK',JSON.stringify({state:sourceState(uaSource),lastSuccessfulSyncAt:uaSource.lastSuccessfulSyncAt,itemCount:uaSource.itemCount,adapterVersion:uaSource.adapterVersion}));
+  }else{
+    assert(sourceState(uaSource)==='NOT_CONFIGURED','UkraineAlarm disabled but source state is '+sourceState(uaSource));
+    console.log('PROBE_UKRAINE_SOURCE_NOT_CONFIGURED');
+  }
+
   const layers=await json('/v1/map/layers');
   const neptunLayer=layers.layers?.find(layer=>layer.id==='NEPTUN');
   assert(neptunLayer?.mode==='LIVE_AND_HISTORY'&&neptunLayer?.geometry==='COARSE_LIVE_POINTS_AND_HISTORICAL_LINES','NEPTUN layer catalog stale');
+  const ukraineLayer=layers.layers?.find(layer=>layer.id==='Ukraine_alerts');
+  assert(!!ukraineLayer&&ukraineLayer.enabled===!!uaSource.enabled,'UkraineAlarm layer/config mismatch');
 
   const snapshot=await json('/v1/snapshot?regionId=04');
   assert(snapshot.schemaVersion===1&&snapshot.regionId==='04','snapshot contract invalid');
@@ -158,7 +171,15 @@ function validateNeptun(data){
 
   await json('/status?regionId=04');
   await json('/v1/radiation?regionId=04');
-  await json('/v1/ukraine');
+  const ukraine=await json('/v1/ukraine');
+  assert(ukraine.schemaVersion===1&&ukraine.countryCode==='UA','UkraineAlarm endpoint contract invalid');
+  if(uaSource.enabled){
+    assert(ukraine.healthStatus==='HEALTHY','UkraineAlarm endpoint not HEALTHY: '+ukraine.healthStatus);
+    assert(ukraine.coverage==='partial','UkraineAlarm configured but coverage is '+ukraine.coverage);
+    assert(!!ukraine.lastSuccessfulSyncAt,'UkraineAlarm endpoint missing lastSuccessfulSyncAt');
+    assert(ukraine.map?.type==='FeatureCollection','UkraineAlarm GeoJSON contract invalid');
+    console.log('PROBE_UKRAINE_ENDPOINT_OK',JSON.stringify({healthStatus:ukraine.healthStatus,coverage:ukraine.coverage,events:ukraine.events?.length??0,features:ukraine.map?.features?.length??0}));
+  }
 
   const shelters=await json('/v1/shelters?regionId=04&q=&offset=0&limit=5');
   assert(shelters.schemaVersion===1&&shelters.regionId==='04','shelters contract invalid');
