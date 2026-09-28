@@ -223,7 +223,10 @@ List<Map<String, dynamic>> markMapCategoryCollisions(
     categoriesByPoint.putIfAbsent(key, () => <String>{}).add(category);
   }
   final mixedPoints = categoriesByPoint.entries
-      .where((entry) => entry.value.contains('ALERT') && entry.value.contains('IMGW'))
+      .where(
+        (entry) =>
+            entry.value.contains('ALERT') && entry.value.contains('IMGW'),
+      )
       .map((entry) => entry.key)
       .toSet();
 
