@@ -100,7 +100,8 @@ void main() {
       expect(() => UkraineData.parse(geo), throwsFormatException);
       final end = ua(now);
       end['events'][0]['lifecycle'] = 'ENDED';
-      expect(() => UkraineData.parse(end), throwsFormatException);
+      final ended = UkraineData.parse(end);
+      expect(ended.data['events'][0]['validTo'], isNull);
     },
   );
   test('UA map downgrades fresh polygon to STALE offline', () {
