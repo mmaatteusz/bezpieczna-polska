@@ -7,7 +7,7 @@ import type {SourceAdapter,SourceContext} from './source-adapter.js';
 // Published contract: UkraineAlarm/UkraineAlarm-javascript, API v3.
 export const UA_API='https://api.ukrainealarm.com/api/v3';
 export const UA_MAP='https://map.ukrainealarm.com/';
-export const UA_VERSION='ukrainealarm-v3/1.1.0';
+export const UA_VERSION='ukrainealarm-v3/1.2.0';
 export const uaRegionSchema=z.object({id:z.string().min(1).max(80),name:z.string().min(1).max(200),type:z.enum(['State','District','Community']),parentId:z.string().nullable()});
 export type UaRegion=z.infer<typeof uaRegionSchema>;
 const id=z.string().regex(/^[A-Za-z0-9_-]{1,80}$/);
@@ -178,7 +178,13 @@ export function isAllowedUaUrl(url:string){
 export async function fetchUa(url:string,key=process.env.UKRAINE_ALARM_API_KEY){
  if(!isAllowedUaUrl(url))throw new Error('UA_URL_DENIED');
  if(!key?.trim())throw new Error('NOT_CONFIGURED_UA_API_KEY_MISSING');
- const response=await fetch(url,{headers:{Authorization:key,Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(20000)});
+ let response:Response;
+ try{response=await fetch(url,{headers:{Authorization:key,Accept:'application/json'},redirect:'error',signal:AbortSignal.timeout(20000)});}
+ catch(error){
+  const name=error instanceof Error?error.name:'';
+  if(name==='TimeoutError'||name==='AbortError')throw new Error('UA_TIMEOUT');
+  throw new Error('UA_TRANSPORT_FAILED');
+ }
  if(!response.ok)throw new Error(`UA_HTTP_${response.status}`);
  if(!response.headers.get('content-type')?.toLowerCase().includes('application/json')||!response.body)throw new Error('UA_CONTENT_TYPE_CHANGED');
  let size=0;const chunks:Uint8Array[]=[];for await(const c of response.body){size+=c.length;if(size>4*1024*1024)throw new Error('UA_RESPONSE_LIMIT');chunks.push(c);}
@@ -190,6 +196,9 @@ export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncInt
    try{return await fetchText(UA_API+path);}
    catch(error){
     const message=error instanceof Error?error.message:'';
+    const name=error instanceof Error?error.name:'';
+    if(message==='UA_TIMEOUT'||name==='TimeoutError'||name==='AbortError')throw new Error(`UA_${label}_TIMEOUT`);
+    if(message==='UA_TRANSPORT_FAILED')throw new Error(`UA_${label}_TRANSPORT_FAILED`);
     const http=message.match(/^UA_HTTP_(\d{3})$/);
     if(http)throw new Error(`UA_${label}_HTTP_${http[1]}`);
     if(/^UA_[A-Z0-9_]+$/.test(message))throw error;
@@ -205,8 +214,24 @@ export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncInt
    if(/^UA_[A-Z0-9_]+$/.test(message))throw error;
    throw new Error('UA_ALERTS_SCHEMA_CHANGED');
   }
-  let events=batch.events;
-  try {events=enrichUaGeometry(events,batch.regions,JSON.parse(await fetchText(UA_BOUNDARY_QUERY)));}catch{/* Missing geometry remains explicit. */}
-  return {events,uaMetadata:{regions:batch.regions,activeEventIds:batch.activeEventIds},complete:true,coverage:'ACTIVE_WARNINGS',pagesFetched:1};
+  let events=batch.events,geometryErrorCode:string|null=null;
+  try{
+   let geometryBody:string;
+   try{geometryBody=await fetchText(UA_BOUNDARY_QUERY);}
+   catch(error){
+    const message=error instanceof Error?error.message:'',name=error instanceof Error?error.name:'';
+    if(name==='TimeoutError'||name==='AbortError'||message==='SOURCE_TIMEOUT')throw new Error('UA_GEOMETRY_TIMEOUT');
+    const http=message.match(/^SOURCE_HTTP_(\d{3})$/);if(http)throw new Error(`UA_GEOMETRY_HTTP_${http[1]}`);
+    throw new Error('UA_GEOMETRY_TRANSPORT_FAILED');
+   }
+   let geometryRaw:unknown;
+   try{geometryRaw=JSON.parse(geometryBody);}catch{throw new Error('UA_GEOMETRY_JSON_INVALID');}
+   try{events=enrichUaGeometry(events,batch.regions,geometryRaw);}
+   catch{throw new Error('UA_GEOMETRY_SCHEMA_CHANGED');}
+  }catch(error){
+   const message=error instanceof Error?error.message:'';
+   geometryErrorCode=/^UA_GEOMETRY_[A-Z0-9_]+$/.test(message)?message:'UA_GEOMETRY_FAILED';
+  }
+  return {events,uaMetadata:{regions:batch.regions,activeEventIds:batch.activeEventIds,geometryStatus:geometryErrorCode?'UNAVAILABLE':'READY',geometryErrorCode},complete:true,coverage:'ACTIVE_WARNINGS',pagesFetched:1};
  }
 };
