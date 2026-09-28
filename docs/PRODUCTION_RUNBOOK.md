@@ -1,6 +1,6 @@
 # Production runbook — Bezpieczna Polska
 
-Aktualny kod: **0.1.0-alpha.40**.
+Aktualny kod: **0.1.0-alpha.41**.
 
 Schemat wersji: `0.1.0-alpha.N` oznacza etap funkcjonalny, `+build` w `pubspec.yaml` jest monotonicznym numerem produkcyjnym, a preview APK używa dodatkowo własnego rosnącego `versionCode` z CI. W interfejsie aplikacja pokazuje zarówno alphę, jak i konkretny numer buildu.
 
