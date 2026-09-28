@@ -62,6 +62,129 @@ const Map<String, List<double>> mapRegionAnchors = {
   '32': [14.5528, 53.4285],
 };
 
+class MapAdminAreaAnchor {
+  final String code, name, kind;
+  final double longitude, latitude;
+
+  const MapAdminAreaAnchor({
+    required this.code,
+    required this.name,
+    required this.kind,
+    required this.longitude,
+    required this.latitude,
+  });
+
+  String get regionId => code.substring(0, 2);
+  List<double> get coordinates => [longitude, latitude];
+}
+
+class MapAdminAreaIndex {
+  final Map<String, MapAdminAreaAnchor> _byCode;
+  final List<MapAdminAreaAnchor> _counties;
+
+  MapAdminAreaIndex._(this._byCode, this._counties);
+
+  factory MapAdminAreaIndex.parse(String text) {
+    final root = jsonDecode(text);
+    if (root is! Map || root['items'] is! List) {
+      throw const FormatException('Niepoprawny indeks jednostek administracyjnych');
+    }
+    final items = root['items'] as List;
+    if (items.isEmpty || items.length > 4000) {
+      throw const FormatException('Niepoprawny rozmiar indeksu administracyjnego');
+    }
+    final byCode = <String, MapAdminAreaAnchor>{};
+    final counties = <MapAdminAreaAnchor>[];
+    for (final raw in items) {
+      if (raw is! Map ||
+          raw['code'] is! String ||
+          raw['name'] is! String ||
+          raw['kind'] is! String ||
+          raw['lon'] is! num ||
+          raw['lat'] is! num) {
+        throw const FormatException('Niepoprawny punkt administracyjny');
+      }
+      final code = raw['code'] as String;
+      final kind = raw['kind'] as String;
+      final lon = (raw['lon'] as num).toDouble();
+      final lat = (raw['lat'] as num).toDouble();
+      if (!RegExp(r'^\d{4}(?:\d{3})?$').hasMatch(code) ||
+          !const {'county', 'municipality'}.contains(kind) ||
+          !lon.isFinite ||
+          !lat.isFinite ||
+          lon.abs() > 180 ||
+          lat.abs() > 90) {
+        throw const FormatException('Niepoprawny punkt administracyjny');
+      }
+      final area = MapAdminAreaAnchor(
+        code: code,
+        name: raw['name'] as String,
+        kind: kind,
+        longitude: lon,
+        latitude: lat,
+      );
+      byCode[code] = area;
+      if (kind == 'county') counties.add(area);
+    }
+    return MapAdminAreaIndex._(byCode, counties);
+  }
+
+  List<MapAdminAreaAnchor> resolve(SafetyEvent event) {
+    final locationText = event.data['locationText']?.toString().trim() ?? '';
+    if (locationText.isEmpty) return const [];
+    final allowedRegions = event.areas
+        .where((region) => RegExp(r'^\d{2}$').hasMatch(region))
+        .toSet();
+
+    bool allowed(MapAdminAreaAnchor area) =>
+        allowedRegions.isEmpty || allowedRegions.contains(area.regionId);
+
+    final resolvedByCode = <String, MapAdminAreaAnchor>{};
+    for (final match in RegExp(r'\b\d{2,7}\b').allMatches(locationText)) {
+      final code = match.group(0)!;
+      MapAdminAreaAnchor? area = _byCode[code];
+      if (area == null && code.length > 4) {
+        area = _byCode[code.substring(0, 4)];
+      }
+      if (area != null && allowed(area)) {
+        resolvedByCode[area.code] = area;
+      }
+    }
+    if (resolvedByCode.isNotEmpty) {
+      final specific = resolvedByCode.values.toList();
+      if (specific.length <= 40) return specific;
+      final counties = <String, MapAdminAreaAnchor>{};
+      for (final area in specific) {
+        final county = _byCode[area.code.substring(0, 4)];
+        if (county != null && allowed(county)) counties[county.code] = county;
+      }
+      return counties.values.toList();
+    }
+
+    final normalized = _normalizeAdminText(locationText);
+    final matched = <String, MapAdminAreaAnchor>{};
+    for (final county in _counties) {
+      if (!allowed(county)) continue;
+      final full = _normalizeAdminText(county.name);
+      final alias = full
+          .replaceFirst(RegExp(r'^powiat\s+'), '')
+          .replaceFirst(RegExp(r'^m\s+'), '');
+      final exactCounty = full.startsWith('powiat ')
+          ? normalized.contains(full)
+          : normalized.contains('miasto $alias') ||
+                normalized.contains('m $alias');
+      if (exactCounty) matched[county.code] = county;
+    }
+    return matched.values.toList();
+  }
+}
+
+String _normalizeAdminText(String value) => value
+    .toLowerCase()
+    .replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), ' ')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
+
 bool mapEventIsLive(SafetyEvent event, DateTime now) {
   if (event.data['lifecycle'] != 'ACTIVE' ||
       event.data['messageContext'] != 'ACTUAL' ||
@@ -83,9 +206,14 @@ bool mapEventVisibleForLayers(
   required bool showImgw,
 }) => mapEventIsImgw(event) ? showImgw : showEvents;
 
-List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
+List<Map<String, dynamic>> mapEventFeatures(
+  SafetyEvent event,
+  DateTime now, {
+  MapAdminAreaIndex? adminAreas,
+}) {
   if (!mapEventIsLive(event, now)) return const [];
 
+  final mapCategory = mapEventIsImgw(event) ? 'IMGW' : 'ALERT';
   if (event.hasPoint) {
     return [
       {
@@ -101,9 +229,32 @@ List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
           'eventId': event.id,
           'title': event.title,
           'mapLocationKind': 'EVENT_POINT',
-          'mapCategory': mapEventIsImgw(event) ? 'IMGW' : 'ALERT',
+          'mapCategory': mapCategory,
         },
       },
+    ];
+  }
+
+  final administrative = adminAreas?.resolve(event) ?? const [];
+  if (administrative.isNotEmpty) {
+    return [
+      for (final area in administrative)
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'Point',
+            'coordinates': area.coordinates,
+          },
+          'properties': {
+            'eventId': event.id,
+            'title': event.title,
+            'mapLocationKind': 'ADMIN_AREA_CENTROID',
+            'mapCategory': mapCategory,
+            'regionId': area.regionId,
+            'adminCode': area.code,
+            'adminName': area.name,
+          },
+        },
     ];
   }
 
@@ -122,7 +273,7 @@ List<Map<String, dynamic>> mapEventFeatures(SafetyEvent event, DateTime now) {
           'eventId': event.id,
           'title': event.title,
           'mapLocationKind': 'REGION_SCOPE',
-          'mapCategory': mapEventIsImgw(event) ? 'IMGW' : 'ALERT',
+          'mapCategory': mapCategory,
           'regionId': regionId,
         },
       },
