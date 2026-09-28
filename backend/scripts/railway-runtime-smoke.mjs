@@ -133,16 +133,16 @@ function validateNeptun(data){
   let sources=null,lastSourceError='not checked';
   const sourceDeadline=Date.now()+sourceWaitSeconds*1000;
   while(Date.now()<sourceDeadline){
-    sources=await json('/v1/sources');
-    assert(Array.isArray(sources.sourceHealth),'sources contract invalid');
-    validateSourceContracts(sources.sourceHealth);
     try{
+      sources=await json('/v1/sources');
+      assert(Array.isArray(sources.sourceHealth),'sources contract invalid');
+      validateSourceContracts(sources.sourceHealth);
       validateCriticalSources(sources.sourceHealth);
       lastSourceError='';
       break;
     }catch(error){
       lastSourceError=error instanceof Error?error.message:String(error);
-      console.warn('PROBE_CRITICAL_SOURCES_RETRY',lastSourceError);
+      console.warn('PROBE_SOURCE_CONVERGENCE_RETRY',lastSourceError);
       await sleep(5000);
     }
   }
