@@ -8,28 +8,28 @@ import type {SourceAdapter,SourceContext} from './source-adapter.js';
 export const UA_API='https://api.ukrainealarm.com/api/v3';
 export const UA_MAP='https://map.ukrainealarm.com/';
 export const UA_VERSION='ukrainealarm-v3/1.0.0';
-export const uaRegionSchema=z.object({id:z.string().min(1).max(80),name:z.string().min(1).max(200),type:z.enum(['State','District','Community']),parentId:z.string().nullable()});
+export const uaRegionSchema=z.object({id:z.string().min(1).max(80),name:z.string().min(1).max(200),type:z.enum(['State','District','Community','CityOrVillage','CityDistrict','Null']),parentId:z.string().nullable()});
 export type UaRegion=z.infer<typeof uaRegionSchema>;
 const id=z.string().regex(/^[A-Za-z0-9_-]{1,80}$/);
-const regionType=z.enum(['State','District','Community']);
-const alertType=z.enum(['AIR','ARTILLERY','URBAN_FIGHTS','CHEMICAL','NUCLEAR','INFO']);
+const regionType=z.enum(['State','District','Community','CityOrVillage','CityDistrict','Null']);
+const alertType=z.enum(['UNKNOWN','AIR','ARTILLERY','URBAN_FIGHTS','CHEMICAL','NUCLEAR','INFO','CUSTOM']);
 const timestamp=z.iso.datetime({offset:true}).transform(s=>new Date(s).toISOString());
 const optionalTime=timestamp.nullish().transform(v=>v??null);
-const activeSchema=z.array(z.object({regionId:id,regionName:z.string().min(1).max(200),regionType,regionEngName:z.string().optional(),lastUpdate:optionalTime,activeAlerts:z.array(z.object({regionId:id,regionType,type:alertType,lastUpdate:optionalTime})).max(20)})).max(2000);
-const historySchema=z.array(z.object({regionId:id,regionName:z.string().min(1).max(200),alarms:z.array(z.object({regionId:id,startDate:timestamp,endDate:optionalTime,alertType,regionName:z.string().optional(),isContinue:z.boolean()})).max(100)})).max(2000);
+const activeSchema=z.array(z.object({regionId:id,regionName:z.string().min(1).max(200).nullish(),regionType,regionEngName:z.string().nullish(),lastUpdate:optionalTime,activeAlerts:z.array(z.object({regionId:id,regionType,type:alertType,lastUpdate:optionalTime,activeAlertLevels:z.array(z.object({alertLevel:z.enum(['Red','Yellow']),reason:z.string().nullish(),createdAt:timestamp})).nullish().transform(v=>v??[])})).max(20).nullish().transform(v=>v??[])})).max(2000);
+const historySchema=z.array(z.object({regionId:id,regionName:z.string().min(1).max(200).nullish(),alarms:z.array(z.object({regionId:id,startDate:timestamp,endDate:optionalTime,alertType,regionName:z.string().nullish(),isContinue:z.boolean()})).max(100).nullish().transform(v=>v??[])})).max(2000);
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export function parseUaRegions(input:unknown):UaRegion[]{
  const root=z.object({states:z.array(z.unknown()).min(1).max(50)}).parse(input),rows:UaRegion[]=[];
  const visit=(input:unknown,parentId:string|null,depth:number)=>{
   if(depth>3||rows.length>=5000)throw new Error('UA_REGISTRY_LIMIT');
-  const r=z.object({regionId:id,regionName:z.string().min(1).max(200),regionType,regionChildIds:z.array(z.unknown()).max(1000)}).parse(input);
+  const r=z.object({regionId:id,regionName:z.string().min(1).max(200),regionType,regionChildIds:z.array(z.unknown()).max(1000).nullish().transform(v=>v??[])}).parse(input);
   if(rows.some(v=>v.id===r.regionId)||(!parentId&&r.regionType!=='State'))throw new Error('UA_REGISTRY_CONFLICT');
   rows.push({id:r.regionId,name:r.regionName,type:r.regionType,parentId});
   for(const c of r.regionChildIds)visit(c,r.regionId,depth+1);
  };
  root.states.forEach(r=>visit(r,null,0));return rows;
 }
-const labels:Record<string,string>={AIR:'Alarm powietrzny',ARTILLERY:'Zagrożenie ostrzałem artyleryjskim',URBAN_FIGHTS:'Zagrożenie walkami ulicznymi',CHEMICAL:'Zagrożenie chemiczne',NUCLEAR:'Zagrożenie radiacyjne',INFO:'Oficjalna informacja'};
+const labels:Record<z.infer<typeof alertType>,string>={UNKNOWN:'Alarm UkraineAlarm — typ nieokreślony',AIR:'Alarm powietrzny',ARTILLERY:'Zagrożenie ostrzałem artyleryjskim',URBAN_FIGHTS:'Zagrożenie walkami ulicznymi',CHEMICAL:'Zagrożenie chemiczne',NUCLEAR:'Zagrożenie radiacyjne',INFO:'Oficjalna informacja',CUSTOM:'Alarm UkraineAlarm — typ niestandardowy'};
 export function parseUaBatch(registry:UaRegion[],activeInput:unknown,historyInput:unknown,previous:Event[],now:Date){
  const active=activeSchema.parse(activeInput),history=historySchema.parse(historyInput),byId=new Map(registry.map(r=>[r.id,r]));
  const getRegion=(regionId:string)=>{const r=byId.get(regionId);if(!r)throw new Error('UA_UNKNOWN_REGION');return r;};
@@ -94,15 +94,18 @@ export async function fetchUa(url:string,key=process.env.UKRAINE_ALARM_API_KEY){
 }
 export const ukraineAdapter:SourceAdapter={id:'UA',version:UA_VERSION,minSyncIntervalSeconds:60,
  async sync({now,fetchText,previousEvents=[]}:SourceContext){
-  const read=async(path:string)=>JSON.parse(await fetchText(UA_API+path));
+  const read=async(path:string)=>{try{return JSON.parse(await fetchText(UA_API+path));}catch(error){if(error instanceof SyntaxError)throw new Error('UA_JSON_INVALID');throw error;}};
   const status=z.object({lastActionIndex:z.number().int().nonnegative()});
-  const before=status.parse(await read('/alerts/status'));
-  const regions=parseUaRegions(await read('/regions')),active=activeSchema.parse(await read('/alerts'));
+  const parseContract=<T>(schema:z.ZodType<T>,value:unknown,code:string):T=>{try{return schema.parse(value);}catch{throw new Error(code);}};
+  const before=parseContract(status,await read('/alerts/status'),'UA_STATUS_CONTRACT_CHANGED');
+  let regions:UaRegion[],active:z.infer<typeof activeSchema>;
+  try{regions=parseUaRegions(await read('/regions'));}catch{throw new Error('UA_REGIONS_CONTRACT_CHANGED');}
+  active=parseContract(activeSchema,await read('/alerts'),'UA_ALERTS_CONTRACT_CHANGED');
   const ids=new Set([...regions.filter(r=>r.type==='State').map(r=>r.id),...active.flatMap(r=>r.activeAlerts.map(a=>a.regionId)),...previousEvents.filter(e=>e.countryCode==='UA'&&e.ukraine&&['ACTIVE','UNKNOWN'].includes(e.lifecycle)).map(e=>e.ukraine!.regionId)]);
   if(ids.size>300)throw new Error('UA_HISTORY_SCOPE_LIMIT');
   const history:unknown[]=[];
-  for(const regionId of ids){const rows=historySchema.parse(await read('/alerts/regionHistory?regionId='+encodeURIComponent(regionId)));if(rows.some(r=>r.regionId!==regionId))throw new Error('UA_HISTORY_REGION_CONFLICT');history.push(...rows);}
-  if(status.parse(await read('/alerts/status')).lastActionIndex!==before.lastActionIndex)throw new Error('UA_SOURCE_CHANGED_DURING_SYNC');
+  for(const regionId of ids){const rows=parseContract(historySchema,await read('/alerts/regionHistory?regionId='+encodeURIComponent(regionId)),'UA_HISTORY_CONTRACT_CHANGED');if(rows.some(r=>r.regionId!==regionId))throw new Error('UA_HISTORY_REGION_CONFLICT');history.push(...rows);}
+  if(parseContract(status,await read('/alerts/status'),'UA_STATUS_CONTRACT_CHANGED').lastActionIndex!==before.lastActionIndex)throw new Error('UA_SOURCE_CHANGED_DURING_SYNC');
   const batch=parseUaBatch(regions,active,history,previousEvents,now);
   // Geography failure must not suppress valid civil alerts. Retain prior geometry.
   let events=batch.events.map(e=>{const old=previousEvents.find(p=>p.id===e.id);return old?.geometry?{...e,geometry:old.geometry,geometrySource:old.geometrySource}:e;});
