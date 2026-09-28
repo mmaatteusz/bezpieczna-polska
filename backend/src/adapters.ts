@@ -125,7 +125,7 @@ async function syncSources(store:Store,adapters:SourceAdapter[],fetchText:(url:s
   const intervalReference=adapter.id==='SHELTERS'&&previous.state==='DEGRADED'?previous.lastAttempt:previous.lastSuccess;
   if(adapter.minSyncIntervalSeconds&&intervalReference&&['HEALTHY','DEGRADED'].includes(previous.state)&&begin-Date.parse(intervalReference)>=0&&begin-Date.parse(intervalReference)<adapter.minSyncIntervalSeconds*1000)continue;
   try{
-   const batch=await adapter.sync({now:new Date(begin),fetchText,fetchBytes,previousEvents:['UA','PAA','SG','POLICE','PSP_INCIDENTS'].includes(adapter.id)?previousEvents:undefined});
+   const batch=await adapter.sync({now:new Date(begin),fetchText,fetchBytes,previousHealth:previous,previousEvents:['UA','PAA','SG','POLICE','PSP_INCIDENTS'].includes(adapter.id)?previousEvents:undefined});
    // Keep the IMGW-style promise enforceable: a source advertised as capable
    // of proving an empty current-state set must actually return a complete
    // batch. STATUS sources with that promise must expose ACTIVE_WARNINGS.
