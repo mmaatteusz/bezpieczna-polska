@@ -622,6 +622,7 @@ class PushManager extends ChangeNotifier {
       'POST',
       _uri('/v1/push/devices/${identity.id}/test'),
       identity.secret,
+      body: const <String, dynamic>{},
     );
     _setState(
       _state.copyWith(
