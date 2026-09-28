@@ -130,8 +130,7 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> with WidgetsBindingObserver {
-  static const _firstLaunchLocationKey =
-      'first_launch_location_prompted_v2';
+  static const _firstLaunchLocationKey = 'first_launch_location_prompted_v2';
   static const _firstLaunchPushKey = 'first_launch_push_prompted_v2';
 
   int page = 0, generation = 0;
