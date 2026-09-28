@@ -31,7 +31,7 @@ try{
     if(!leased)return;
     await ingestUkraineLive(store);
     const source=(await store.health()).find(s=>s.id==='UA');
-    app?.log.info({component:'ukraine-alarm',source:'UA',state:source?.state??'MISSING',errorCode:source?.errorCode??null,durationMs:source?.responseTime??null},'UkraineAlarm refresh');
+    app?.log.info({component:'ukraine-alarm',source:'UA',state:source?.state??'MISSING',errorCode:source?.errorCode??null,geometryStatus:source?.uaMetadata?.geometryStatus??null,geometryErrorCode:source?.uaMetadata?.geometryErrorCode??null,durationMs:source?.responseTime??null},'UkraineAlarm refresh');
    }catch{app?.log.error({component:'ukraine-alarm',errorCode:'UA_INGEST_FAILED'},'UkraineAlarm live refresh failed; existing data retained');}
    finally{if(leased)await releaseWorkerLease(db,'ukraine-alarm',workerOwner).catch(()=>{});ukraineRunning=false;}}
    ukraineTimer=setInterval(()=>void syncUkraine(),90000);
