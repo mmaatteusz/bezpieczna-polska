@@ -28,7 +28,8 @@ const zlib=require('node:zlib');
   if(lines!==Number(process.env.IMPORT_EXPECTED_LINES))throw new Error('LINE_COUNT_'+lines);
   if(rows!==Number(process.env.IMPORT_EXPECTED_ROWS))throw new Error('ROW_COUNT_'+rows);
   if(sha256!==process.env.IMPORT_EXPECTED_SHA256)throw new Error('SHA256_'+sha256);
-  if(!csv.startsWith('Identyfikator publiczny,Nazwa,Rodzaj obiektu'))throw new Error('CSV_HEADER_INVALID');
+  const normalizedCsv=csv.replace(/^\uFEFF/,'');
+  if(!normalizedCsv.startsWith('Identyfikator publiczny,Nazwa,Rodzaj obiektu'))throw new Error('CSV_HEADER_INVALID');
 
   console.log('IMPORT_ASSEMBLED',JSON.stringify({
     lines,rows,bytes:Buffer.byteLength(csv),sha256
