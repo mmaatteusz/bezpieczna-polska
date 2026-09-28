@@ -67,7 +67,7 @@ Automatyczny bump wersji **nie publikuje Release**. GitHub Release powstaje dopi
 | PSP incidents | ✅ oficjalne publikacje z filtrem istotnych zdarzeń |
 | Schronienia | ✅ PostGIS + mapa + offline |
 | NEPTUN | ✅ live, z publikacją zgrubnej pozycji |
-| UkraineAlarm | ⛔ adapter zachowany, ale źródło jest jawnie wyłączone do czasu klucza API i uruchomienia kontrolowanego workera |
+| UkraineAlarm | ✅ oficjalne API v3, backendowy klucz, osobny worker 60 s, jawny health/freshness; nie wpływa na Status Polski |
 | Push | 🟡 backend + UI + outbox istnieją; realne wysyłki wymagają konfiguracji FCM/APNs |
 
 Stan `HEALTHY` potwierdza poprawny ostatni cykl synchronizacji adaptera. Nie oznacza kompletności wszystkich zdarzeń w kraju.
@@ -183,7 +183,7 @@ Najważniejsze otwarte elementy:
 3. skonfigurować FCM przed reklamowaniem push jako działającego,
 4. podpiąć gotowy panel stopni alarmowych do UI,
 5. dopracować prezentację świeżości pomiarów PAA per stacja i komunikaty o danych nieaktualnych,
-6. UkraineAlarm uruchomić dopiero po uzyskaniu i zweryfikowaniu klucza API,
+6. utrzymywać UkraineAlarm jako krytyczne źródło runtime i alarmować, gdy traci synchronizację,
 7. przygotować politykę prywatności i Google Play Data Safety,
 8. wykonać pierwszy Google Play Internal Test,
 9. posprzątać historyczne zasoby Railway,
