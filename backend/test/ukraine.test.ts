@@ -83,6 +83,18 @@ test('UA live transport errors identify alerts endpoint without exposing credent
  const fetchText=async(url:string)=>{if(url===UA_API+'/alerts')throw new Error('UA_HTTP_401');return JSON.stringify({type:'FeatureCollection',features:[]});};
  await assert.rejects(ukraineAdapter.sync({now,fetchText}),/UA_ALERTS_HTTP_401/);
 });
+test('UA alerts timeout has a stage-specific code',async()=>{
+ const timeout=Object.assign(new Error('timed out'),{name:'TimeoutError'});
+ const fetchText=async(url:string)=>{if(url===UA_API+'/alerts')throw timeout;return JSON.stringify({type:'FeatureCollection',features:[]});};
+ await assert.rejects(ukraineAdapter.sync({now,fetchText}),/UA_ALERTS_TIMEOUT/);
+});
+test('UA geometry timeout is non-fatal and leaves alarm sync healthy-capable',async()=>{
+ const timeout=Object.assign(new Error('timed out'),{name:'TimeoutError'});
+ const fetchText=async(url:string)=>{if(url===UA_API+'/alerts')return JSON.stringify(active());throw timeout;};
+ const batch=await ukraineAdapter.sync({now,fetchText});
+ assert.equal(batch.events.length,1);assert.equal(batch.complete,true);assert.equal(batch.coverage,'ACTIVE_WARNINGS');
+ assert.equal(batch.uaMetadata?.geometryStatus,'UNAVAILABLE');assert.equal(batch.uaMetadata?.geometryErrorCode,'UA_GEOMETRY_TIMEOUT');assert.equal(batch.events[0].geometry,null);
+});
 
 
 test('UA alert, source failure or healthy UA alone never changes Polish status or correlation',()=>{
