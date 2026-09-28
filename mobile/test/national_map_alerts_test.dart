@@ -159,8 +159,7 @@ void main() {
     expect(
       features
           .where(
-            (feature) =>
-                feature['properties']['mapRcbCountLeader'] == true,
+            (feature) => feature['properties']['mapRcbCountLeader'] == true,
           )
           .length,
       1,
