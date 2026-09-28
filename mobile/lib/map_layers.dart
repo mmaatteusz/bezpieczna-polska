@@ -140,14 +140,16 @@ class MapAdminAreaIndex {
         allowedRegions.isEmpty || allowedRegions.contains(area.regionId);
 
     final resolvedByCode = <String, MapAdminAreaAnchor>{};
-    for (final match in RegExp(r'\b\d{2,7}\b').allMatches(locationText)) {
-      final code = match.group(0)!;
-      MapAdminAreaAnchor? area = _byCode[code];
-      if (area == null && code.length > 4) {
-        area = _byCode[code.substring(0, 4)];
-      }
-      if (area != null && allowed(area)) {
-        resolvedByCode[area.code] = area;
+    if (locationText.toUpperCase().contains('TERYT')) {
+      for (final match in RegExp(r'\b\d{2,7}\b').allMatches(locationText)) {
+        final code = match.group(0)!;
+        MapAdminAreaAnchor? area = _byCode[code];
+        if (area == null && code.length > 4) {
+          area = _byCode[code.substring(0, 4)];
+        }
+        if (area != null && allowed(area)) {
+          resolvedByCode[area.code] = area;
+        }
       }
     }
     if (resolvedByCode.isNotEmpty) {
@@ -181,7 +183,7 @@ class MapAdminAreaIndex {
 
 String _normalizeAdminText(String value) => value
     .toLowerCase()
-    .replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), ' ')
+    .replaceAll(RegExp(r'[^a-z0-9ąćęłńóśźż]+'), ' ')
     .replaceAll(RegExp(r'\s+'), ' ')
     .trim();
 
