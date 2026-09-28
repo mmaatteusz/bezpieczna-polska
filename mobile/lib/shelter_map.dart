@@ -523,6 +523,81 @@ class _ShelterMapState extends State<ShelterMap> {
           ],
         ],
       );
+      await c.addSymbolLayer(
+        'events',
+        'event-rcb-counts',
+        const SymbolLayerProperties(
+          textField: [
+            'to-string',
+            ['get', 'mapRcbCount'],
+          ],
+          textSize: 11,
+          textColor: '#ffffff',
+          textAllowOverlap: true,
+          textIgnorePlacement: true,
+        ),
+        filter: [
+          'all',
+          [
+            '==',
+            ['get', 'mapIsRcb'],
+            true,
+          ],
+          [
+            '>',
+            ['get', 'mapRcbCount'],
+            1,
+          ],
+          [
+            '==',
+            ['get', 'mapRcbCountLeader'],
+            true,
+          ],
+          [
+            '==',
+            ['get', 'mapCollision'],
+            false,
+          ],
+        ],
+      );
+      await c.addSymbolLayer(
+        'events',
+        'event-rcb-collision-counts',
+        const SymbolLayerProperties(
+          textField: [
+            'to-string',
+            ['get', 'mapRcbCount'],
+          ],
+          textSize: 11,
+          textColor: '#ffffff',
+          textTranslate: [-9.0, 0.0],
+          textAllowOverlap: true,
+          textIgnorePlacement: true,
+        ),
+        filter: [
+          'all',
+          [
+            '==',
+            ['get', 'mapIsRcb'],
+            true,
+          ],
+          [
+            '>',
+            ['get', 'mapRcbCount'],
+            1,
+          ],
+          [
+            '==',
+            ['get', 'mapRcbCountLeader'],
+            true,
+          ],
+          [
+            '==',
+            ['get', 'mapCollision'],
+            true,
+          ],
+        ],
+      );
       await c.addSource('watched', GeojsonSourceProperties(data: empty));
       await c.addCircleLayer(
         'watched',
@@ -599,23 +674,25 @@ class _ShelterMapState extends State<ShelterMap> {
     if (!ready || c == null || widget.ukraine) return;
 
     final now = DateTime.now();
-    final eventFeatures = markMapCategoryCollisions(
-      contextEvents
-          .where(
-            (event) => mapEventVisibleForLayers(
-              event,
-              showEvents: showEvents,
-              showImgw: showImgw,
-            ),
-          )
-          .expand(
-            (event) => mapEventFeatures(
-              event,
-              now,
-              administrativeAnchors: administrativeAnchors,
-            ),
-          )
-          .toList(),
+    final eventFeatures = markMapRcbCounts(
+      markMapCategoryCollisions(
+        contextEvents
+            .where(
+              (event) => mapEventVisibleForLayers(
+                event,
+                showEvents: showEvents,
+                showImgw: showImgw,
+              ),
+            )
+            .expand(
+              (event) => mapEventFeatures(
+                event,
+                now,
+                administrativeAnchors: administrativeAnchors,
+              ),
+            )
+            .toList(),
+      ),
     );
     final watchedFeatures = showWatched
         ? widget.watchedLocations

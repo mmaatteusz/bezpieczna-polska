@@ -132,6 +132,74 @@ void main() {
     expect(features.single['properties']['mapLocationKind'], 'REGION_SCOPE');
   });
 
+  test('multiple RCB alerts at the same point get one visible count label', () {
+    final first = mapEventFeatures(
+      eventFixture(
+        id: 'rcb-count-1',
+        regions: ['04'],
+        validTo: now.add(const Duration(hours: 2)),
+      ),
+      now,
+    ).single;
+    final second = mapEventFeatures(
+      eventFixture(
+        id: 'rcb-count-2',
+        regions: ['04'],
+        validTo: now.add(const Duration(hours: 2)),
+      ),
+      now,
+    ).single;
+
+    final features = markMapRcbCounts([first, second]);
+
+    expect(
+      features.map((feature) => feature['properties']['mapRcbCount']).toList(),
+      [2, 2],
+    );
+    expect(
+      features
+          .where(
+            (feature) => feature['properties']['mapRcbCountLeader'] == true,
+          )
+          .length,
+      1,
+    );
+  });
+
+  test('RCB count ignores non-RCB alert at the same point', () {
+    final first = mapEventFeatures(
+      eventFixture(
+        id: 'rcb-only-count-1',
+        regions: ['04'],
+        validTo: now.add(const Duration(hours: 2)),
+      ),
+      now,
+    ).single;
+    final second = mapEventFeatures(
+      eventFixture(
+        id: 'rcb-only-count-2',
+        regions: ['04'],
+        validTo: now.add(const Duration(hours: 2)),
+      ),
+      now,
+    ).single;
+    final rso = mapEventFeatures(
+      eventFixture(
+        id: 'rso-same-point',
+        regions: ['04'],
+        validTo: now.add(const Duration(hours: 2)),
+        sourceId: 'RSO',
+      ),
+      now,
+    ).single;
+
+    final features = markMapRcbCounts([first, second, rso]);
+
+    expect(features[0]['properties']['mapRcbCount'], 2);
+    expect(features[1]['properties']['mapRcbCount'], 2);
+    expect(features[2]['properties'].containsKey('mapRcbCount'), isFalse);
+  });
+
   test('overlapping alert and IMGW markers are marked for deconfliction', () {
     final alert = mapEventFeatures(
       eventFixture(
