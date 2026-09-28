@@ -8,7 +8,7 @@ const expectedVersion=process.env.EXPECTED_VERSION||packageVersion;
 const expectedBuildSha=(process.env.EXPECTED_BUILD_SHA||'').trim();
 const deployWaitSeconds=Number(process.env.DEPLOY_WAIT_SECONDS||600);
 const sourceWaitSeconds=Number(process.env.SOURCE_WAIT_SECONDS||180);
-const criticalSourceIds=(process.env.CRITICAL_SOURCE_IDS||'RCB,RSO,LEVELS,SHELTERS,IMGW_METEO,IMGW_HYDRO,PAA,NEPTUN')
+const criticalSourceIds=(process.env.CRITICAL_SOURCE_IDS||'RCB,RSO,LEVELS,SHELTERS,IMGW_METEO,IMGW_HYDRO,PAA,UA,NEPTUN')
   .split(',').map(value=>value.trim()).filter(Boolean);
 const allowStaleSourceIds=new Set((process.env.ALLOW_STALE_SOURCE_IDS||'SHELTERS')
   .split(',').map(value=>value.trim()).filter(Boolean));
@@ -151,6 +151,8 @@ function validateNeptun(data){
   const layers=await json('/v1/map/layers');
   const neptunLayer=layers.layers?.find(layer=>layer.id==='NEPTUN');
   assert(neptunLayer?.mode==='LIVE_AND_HISTORY'&&neptunLayer?.geometry==='COARSE_LIVE_POINTS_AND_HISTORICAL_LINES','NEPTUN layer catalog stale');
+  const uaLayer=layers.layers?.find(layer=>layer.id==='Ukraine_alerts');
+  assert(uaLayer?.enabled===true&&uaLayer?.sourceId==='UA','UkraineAlarm layer not enabled');
 
   const snapshot=await json('/v1/snapshot?regionId=04');
   assert(snapshot.schemaVersion===1&&snapshot.regionId==='04','snapshot contract invalid');
@@ -158,7 +160,11 @@ function validateNeptun(data){
 
   await json('/status?regionId=04');
   await json('/v1/radiation?regionId=04');
-  await json('/v1/ukraine');
+  const ukraine=await json('/v1/ukraine');
+  assert(ukraine.healthStatus==='HEALTHY','UkraineAlarm not HEALTHY: '+ukraine.healthStatus);
+  assert(ukraine.sourceHealth?.id==='UA'&&ukraine.sourceHealth?.enabled===true,'UkraineAlarm source not configured');
+  assert(!!ukraine.lastSuccessfulSyncAt&&Number.isFinite(Date.parse(ukraine.lastSuccessfulSyncAt)),'UkraineAlarm missing successful sync');
+  assert(ukraine.coverage==='partial','UkraineAlarm current coverage is '+ukraine.coverage);
 
   const shelters=await json('/v1/shelters?regionId=04&q=&offset=0&limit=5');
   assert(shelters.schemaVersion===1&&shelters.regionId==='04','shelters contract invalid');
