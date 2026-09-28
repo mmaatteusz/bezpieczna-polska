@@ -146,7 +146,7 @@ test('incremental shelter sync writes only changed, new and removed rows',async(
 
   const previous=(await store.health()).find(h=>h.id==='SHELTERS')!;
   const unchanged=b.shelters![0],changed={...b.shelters![1],address:b.shelters![1].address+' / aktualizacja'};
-  const removed=b.shelters![2],added={...removed,id:'OZO-BBBBBBBBBBBB',address:removed.address+' / nowy'};
+  const removed=b.shelters![2],added={...removed,id:'PSP-OZO-BBBBBBBBBBBB',address:removed.address+' / nowy'};
   const next=[unchanged,changed,added];
 
   await store.applyShelterSync(next,{
