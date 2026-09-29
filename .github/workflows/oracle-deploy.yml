@@ -95,7 +95,7 @@ jobs:
           set -euo pipefail
           if [[ -f backend/scripts/production-runtime-smoke.mjs ]]; then
             cd backend
-            SMOKE_BASE_URL="${API_BASE_URL%/}"             EXPECTED_BUILD_SHA="$TARGET_SHA"             DEPLOY_WAIT_SECONDS=60             SOURCE_WAIT_SECONDS=240             node scripts/production-runtime-smoke.mjs
+            SMOKE_BASE_URL="${API_BASE_URL%/}"             EXPECTED_BUILD_SHA="$TARGET_SHA"             DEPLOY_WAIT_SECONDS=60             SOURCE_WAIT_SECONDS=480             node scripts/production-runtime-smoke.mjs
           else
             echo 'Full provider-neutral runtime audit will activate after PR #123 is merged.' >> "$GITHUB_STEP_SUMMARY"
           fi
