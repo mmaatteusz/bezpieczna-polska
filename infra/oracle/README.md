@@ -7,8 +7,10 @@ Ten katalog przygotowuje równoległą instancję produkcyjną Bezpiecznej Polsk
 Jedna maszyna `VM.Standard.A1.Flex` w home region:
 
 - Ubuntu 24.04 ARM64,
-- 2 OCPU / 12 GB RAM,
+- budżet Always Free: do 2 OCPU / 12 GB RAM; start operacyjny: 1 OCPU / 4 GB RAM,
 - 100 GB boot volume na start (z 200 GB puli Always Free pozostaje zapas),
+- po uruchomieniu monitorować CPU, RAM i sieć w OCI; A1 może zostać odzyskana jako idle, jeśli przez 7 dni wszystkie progi wykorzystania pozostają poniżej 20%,
+- nie generować sztucznego ruchu/obciążenia tylko po to, by omijać mechanizm idle; zamiast tego dobrać rozmiar VM do realnego zużycia,
 - PostgreSQL 17 + PostGIS natywnie na ARM64,
 - API budowane z istniejącego `backend/Dockerfile`,
 - kontener API uruchamiany przez systemd z `--network host`,
