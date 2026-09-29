@@ -552,11 +552,7 @@ Future<Uint8List> _neptunIconPng(String type) async {
         ..style = ui.PaintingStyle.stroke
         ..strokeWidth = 6
         ..strokeCap = ui.StrokeCap.round;
-      canvas.drawLine(
-        const ui.Offset(36, 26),
-        const ui.Offset(36, 47),
-        mark,
-      );
+      canvas.drawLine(const ui.Offset(36, 26), const ui.Offset(36, 47), mark);
       canvas.drawCircle(
         const ui.Offset(36, 56),
         3.5,
