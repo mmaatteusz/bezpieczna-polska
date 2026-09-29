@@ -33,6 +33,8 @@ Security List / NSG:
 
 UFW na VM jest konfigurowany przez `bootstrap-host.sh`, ale reguły OCI nadal trzeba ustawić w konsoli.
 
+Szczegółowy runbook pierwszego uruchomienia i migracji znajduje się w [`docs/ORACLE_CUTOVER_RUNBOOK.md`](../../docs/ORACLE_CUTOVER_RUNBOOK.md).
+
 ## Kolejność
 
 1. Utwórz VM A1 z Ubuntu ARM64.
