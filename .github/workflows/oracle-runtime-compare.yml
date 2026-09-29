@@ -1,4 +1,4 @@
-name: Compare Railway and Oracle runtime
+name: Compare baseline and Oracle runtime
 
 on:
   workflow_dispatch:
