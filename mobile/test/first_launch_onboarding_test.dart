@@ -57,25 +57,25 @@ void main() {
   testWidgets(
     'unavailable push does not pretend that permission can be granted',
     (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: FirstLaunchPermissionOnboarding(
-          notificationsAvailable: false,
-          onRequestLocation: () async {},
-          onRequestNotifications: () async {},
-          onComplete: () async {},
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FirstLaunchPermissionOnboarding(
+            notificationsAvailable: false,
+            onRequestLocation: () async {},
+            onRequestNotifications: () async {},
+            onComplete: () async {},
+          ),
         ),
-      ),
-    );
+      );
 
-    await tester.tap(find.text('Zezwól na lokalizację'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Zezwól na lokalizację'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Przejdź do aplikacji'), findsOneWidget);
-    expect(
-      find.textContaining('nie są dostępne w tym buildzie'),
-      findsOneWidget,
-    );
+      expect(find.text('Przejdź do aplikacji'), findsOneWidget);
+      expect(
+        find.textContaining('nie są dostępne w tym buildzie'),
+        findsOneWidget,
+      );
     },
   );
 }
