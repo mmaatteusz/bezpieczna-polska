@@ -28,7 +28,10 @@ void main() {
 
       expect(locationRequests, 0);
       expect(notificationRequests, 0);
-      expect(find.text('Lokalizacja dla Twojego bezpieczeństwa'), findsOneWidget);
+      expect(
+        find.text('Lokalizacja dla Twojego bezpieczeństwa'),
+        findsOneWidget,
+      );
       expect(find.text('Zezwól na lokalizację'), findsOneWidget);
       expect(
         find.textContaining('Nie zapisujemy historii Twojego przemieszczania'),
@@ -51,9 +54,9 @@ void main() {
     },
   );
 
-  testWidgets('unavailable push does not pretend that permission can be granted', (
-    tester,
-  ) async {
+  testWidgets(
+    'unavailable push does not pretend that permission can be granted',
+    (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: FirstLaunchPermissionOnboarding(
@@ -69,6 +72,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Przejdź do aplikacji'), findsOneWidget);
-    expect(find.textContaining('nie są dostępne w tym buildzie'), findsOneWidget);
-  });
+    expect(
+      find.textContaining('nie są dostępne w tym buildzie'),
+      findsOneWidget,
+    );
+    },
+  );
 }
