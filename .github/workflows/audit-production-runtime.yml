@@ -39,14 +39,19 @@ jobs:
           node-version: '24'
       - name: Validate runtime smoke client
         working-directory: backend
-        run: node --check scripts/railway-runtime-smoke.mjs
-      - name: Probe deployed Railway production
+        run: node --check scripts/production-runtime-smoke.mjs
+      - name: Require configured production API
+        env:
+          SMOKE_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
+        run: |
+          test -n "$SMOKE_BASE_URL" || { echo 'PRODUCTION_API_BASE_URL repository variable is required' >&2; exit 1; }
+      - name: Probe deployed production
         working-directory: backend
         env:
-          SMOKE_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL || 'https://api-production-b6560.up.railway.app' }}
+          SMOKE_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
           EXPECTED_BUILD_SHA: ${{ github.event.deployment.sha || (github.event_name == 'push' && github.sha) || github.event.inputs.expected_sha || '' }}
           DEPLOY_WAIT_SECONDS: '600'
           SOURCE_WAIT_SECONDS: '240'
           # Keep the critical-source list in the smoke client as the single source of truth.
           ALLOW_STALE_SOURCE_IDS: SHELTERS
-        run: node scripts/railway-runtime-smoke.mjs
+        run: node scripts/production-runtime-smoke.mjs

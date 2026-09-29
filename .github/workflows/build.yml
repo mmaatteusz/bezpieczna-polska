@@ -39,7 +39,7 @@ jobs:
           node-version: '24'
       - name: Require a deployed and synchronized backend
         env:
-          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          API_BASE_URL: ${{ vars.PREVIEW_API_BASE_URL || vars.PRODUCTION_API_BASE_URL }}
         run: node scripts/check-backend.mjs
       - uses: actions/setup-java@v6
         with:
@@ -67,7 +67,7 @@ jobs:
         working-directory: mobile
       - name: Build with backend from repository build configuration
         env:
-          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          API_BASE_URL: ${{ vars.PREVIEW_API_BASE_URL || vars.PRODUCTION_API_BASE_URL }}
         run: >-
           flutter build apk --no-pub --debug --split-per-abi --target-platform android-arm64
           --build-number="$PREVIEW_BUILD_NUMBER"
