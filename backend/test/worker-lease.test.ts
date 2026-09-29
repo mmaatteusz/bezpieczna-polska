@@ -19,3 +19,16 @@ test('worker lease is exclusive, expires, and only its owner can release it',asy
   assert.equal(await tryAcquireWorkerLease(db,'ingest','replica-a',60000,new Date('2026-09-23T12:01:03Z')),true);
  }finally{await db.close();}
 });
+
+
+test('worker owner can renew a short lease and block takeover past the original expiry',async()=>{
+ const db=openDb(undefined,':memory:');
+ try{
+  await migrate(db);
+  const t0=new Date('2026-09-23T12:00:00Z');
+  assert.equal(await tryAcquireWorkerLease(db,'ingest','replica-a',60000,t0),true);
+  assert.equal(await tryAcquireWorkerLease(db,'ingest','replica-a',60000,new Date('2026-09-23T12:00:45Z')),true);
+  assert.equal(await tryAcquireWorkerLease(db,'ingest','replica-b',60000,new Date('2026-09-23T12:01:01Z')),false);
+  assert.equal(await tryAcquireWorkerLease(db,'ingest','replica-b',60000,new Date('2026-09-23T12:01:46Z')),true);
+ }finally{await db.close();}
+});
