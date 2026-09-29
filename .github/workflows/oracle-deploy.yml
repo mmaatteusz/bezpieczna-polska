@@ -1,0 +1,101 @@
+name: Deploy Oracle candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Exact 40-character commit SHA from main to deploy
+        required: true
+        type: string
+      api_base_url:
+        description: HTTPS URL of the parallel Oracle API
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracle-candidate-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      TARGET_SHA: ${{ inputs.target_sha }}
+      API_BASE_URL: ${{ inputs.api_base_url }}
+      ORACLE_SSH_HOST: ${{ secrets.ORACLE_SSH_HOST }}
+      ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
+      ORACLE_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
+      ORACLE_SSH_KNOWN_HOSTS: ${{ secrets.ORACLE_SSH_KNOWN_HOSTS }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate target and Oracle endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'target_sha must be an exact lowercase commit SHA' >&2; exit 1; }
+          [[ "$API_BASE_URL" =~ ^https://[^/]+/?$ ]] || { echo 'api_base_url must be a public HTTPS origin' >&2; exit 1; }
+          git fetch origin main
+          git cat-file -e "${TARGET_SHA}^{commit}"
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main || { echo 'Target SHA is not on main' >&2; exit 1; }
+          git checkout --detach "$TARGET_SHA"
+
+      - name: Require SSH deployment secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in ORACLE_SSH_HOST ORACLE_SSH_USER ORACLE_SSH_PRIVATE_KEY ORACLE_SSH_KNOWN_HOSTS; do
+            [[ -n "${!name}" ]] || { echo "Missing GitHub secret: $name" >&2; exit 1; }
+          done
+
+      - name: Package exact release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar --exclude='.git' -czf "/tmp/bp-release-${TARGET_SHA}.tgz" backend infra/oracle
+
+      - name: Configure pinned SSH trust
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$ORACLE_SSH_PRIVATE_KEY" > ~/.ssh/oracle
+          chmod 0600 ~/.ssh/oracle
+          printf '%s\n' "$ORACLE_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/known_hosts
+
+      - name: Upload and deploy exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH=(ssh -i ~/.ssh/oracle -o BatchMode=yes -o StrictHostKeyChecking=yes)
+          SCP=(scp -i ~/.ssh/oracle -o BatchMode=yes -o StrictHostKeyChecking=yes)
+          "${SCP[@]}" "/tmp/bp-release-${TARGET_SHA}.tgz" "${ORACLE_SSH_USER}@${ORACLE_SSH_HOST}:/tmp/bp-release-${TARGET_SHA}.tgz"
+          "${SSH[@]}" "${ORACLE_SSH_USER}@${ORACLE_SSH_HOST}"             "sudo /usr/local/sbin/bp-deploy-release '${TARGET_SHA}' '/tmp/bp-release-${TARGET_SHA}.tgz'"
+
+      - name: Verify external health and deployed identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="${API_BASE_URL%/}"
+          health="$(curl --fail --silent --show-error --max-time 10 "${BASE}/health")"
+          ready="$(curl --fail --silent --show-error --max-time 10 "${BASE}/ready")"
+          jq -e --arg sha "$TARGET_SHA" '.buildSha == $sha and .environment == "production"' <<<"$health"
+          jq -e '.ready == true and .database == "postgres" and .postgis == true' <<<"$ready"
+
+      - name: Run provider-neutral full runtime audit when available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f backend/scripts/production-runtime-smoke.mjs ]]; then
+            cd backend
+            SMOKE_BASE_URL="${API_BASE_URL%/}"             EXPECTED_BUILD_SHA="$TARGET_SHA"             DEPLOY_WAIT_SECONDS=60             SOURCE_WAIT_SECONDS=240             node scripts/production-runtime-smoke.mjs
+          else
+            echo 'Full provider-neutral runtime audit will activate after PR #123 is merged.' >> "$GITHUB_STEP_SUMMARY"
+          fi

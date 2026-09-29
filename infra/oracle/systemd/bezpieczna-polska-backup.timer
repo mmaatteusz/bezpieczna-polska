@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily PostgreSQL backup for Bezpieczna Polska
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+RandomizedDelaySec=20m
+Persistent=true
+Unit=bezpieczna-polska-backup.service
+
+[Install]
+WantedBy=timers.target
