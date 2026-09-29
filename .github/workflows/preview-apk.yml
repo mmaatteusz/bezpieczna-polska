@@ -94,6 +94,19 @@ jobs:
       - name: Flutter dependencies
         working-directory: mobile
         run: flutter pub get
+      - name: Capture formatted NEPTUN source
+        working-directory: mobile
+        run: |
+          dart format lib/neptun.dart
+          mkdir -p ../output/formatter
+          cp lib/neptun.dart ../output/formatter/neptun.dart
+      - name: Upload formatted NEPTUN source
+        uses: actions/upload-artifact@v7
+        with:
+          name: neptun-formatted-source
+          path: output/formatter/neptun.dart
+          if-no-files-found: error
+          retention-days: 1
       - name: Flutter format check
         working-directory: mobile
         run: dart format --output=none --set-exit-if-changed lib test
