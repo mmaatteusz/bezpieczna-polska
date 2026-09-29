@@ -30,8 +30,7 @@ Używane są:
 
 - `PRODUCTION_API_BASE_URL` — produkcyjny backend,
 - `PREVIEW_API_BASE_URL` — opcjonalny osobny backend preview,
-- jeżeli preview nie ma osobnego backendu, może jawnie użyć `PRODUCTION_API_BASE_URL`,
-- `API_BASE_URL` pozostaje wyłącznie tymczasowym, provider-neutral aliasem migracyjnym dla istniejącej konfiguracji GitHub Actions i ma zostać usunięty po ustawieniu docelowych zmiennych.
+- jeżeli preview nie ma osobnego backendu, może jawnie użyć `PRODUCTION_API_BASE_URL`.
 
 Brak obu zmiennych w buildzie preview jest błędem konfiguracji, a nie sygnałem do użycia ukrytego fallbacku.
 
