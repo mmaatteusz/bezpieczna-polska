@@ -70,7 +70,7 @@ function validateSourceContracts(sourceHealth){
     assert(source,'source contract missing: '+id);
     assert(source.sourceClass==='STATUS',id+' must remain STATUS');
     assert(source.absenceSemantics==='AUTHORITATIVE_EMPTY_SET',id+' lost authoritative empty-set contract');
-    assert(source.complete===true&&source.coverage==='ACTIVE_WARNINGS',id+' runtime coverage contract invalid');
+    assert(source.complete===true&&source.coverage==='ACTIVE_WARNINGS',id+' runtime coverage contract invalid complete='+source.complete+' coverage='+(source.coverage??'MISSING')+' state='+sourceState(source)+' errorCode='+(source.errorCode??'NONE'));
   }
   for(const id of ['RCB','RSO','PAA','WCZK-18']){
     const source=sourceHealth.find(item=>item.id===id);
