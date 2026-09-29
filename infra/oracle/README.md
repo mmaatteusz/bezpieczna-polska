@@ -48,9 +48,10 @@ UFW na VM jest konfigurowany przez `bootstrap-host.sh`, ale reguły OCI nadal tr
    ```bash
    sudo bash infra/oracle/enable-tls.sh api.twojadomena.pl admin@twojadomena.pl
    ```
-7. Wdróż konkretny commit przez `deploy-release.sh` lub manualny workflow Oracle.
-8. Wykonaj testy `/health`, `/ready`, źródeł oraz restore drill.
-9. Dopiero po stabilnym teście równoległym zmieniamy URL-e aplikacji.
+7. Wyeksportuj źródłową bazę przez `export-source-database.sh`, przenieś dump na Oracle i wykonaj kontrolowany restore przez `restore-source-database.sh`.
+8. Wdróż konkretny commit przez `deploy-release.sh` lub manualny workflow Oracle.
+9. Wykonaj testy `/health`, `/ready`, źródeł oraz restore drill.
+10. Dopiero po stabilnym teście równoległym zmieniamy URL-e aplikacji.
 
 ## Ważne
 
