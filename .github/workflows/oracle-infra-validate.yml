@@ -7,6 +7,7 @@ on:
       - 'infra/oracle/**'
       - '.github/workflows/oracle-deploy.yml'
       - '.github/workflows/oracle-infra-validate.yml'
+      - '.github/workflows/oracle-host-audit.yml'
   push:
     branches: [main]
     paths:
@@ -32,7 +33,7 @@ jobs:
       - name: Enforce provider-neutral and private database rules
         run: |
           set -euo pipefail
-          if grep -RIE 'railway\.app|RAILWAY_GIT_COMMIT_SHA' infra/oracle .github/workflows/oracle-deploy.yml; then
+          if grep -RIE 'railway\.app|RAILWAY_GIT_COMMIT_SHA' infra/oracle .github/workflows/oracle-deploy.yml .github/workflows/oracle-host-audit.yml; then
             echo 'Oracle infrastructure must not depend on Railway-specific runtime configuration.' >&2
             exit 1
           fi
@@ -47,3 +48,6 @@ jobs:
           grep -Fq '/ready' infra/oracle/deploy-release.sh
           grep -Fq 'StrictHostKeyChecking=yes' .github/workflows/oracle-deploy.yml
           grep -Fq 'git merge-base --is-ancestor' .github/workflows/oracle-deploy.yml
+          grep -Fq 'ORACLE_HOST_AUDIT_PASS' infra/oracle/verify-host.sh
+          grep -Fq 'StrictHostKeyChecking=yes' .github/workflows/oracle-host-audit.yml
+          grep -Fq 'BP_STRICT_COUNTS' infra/oracle/compare-databases.sh
