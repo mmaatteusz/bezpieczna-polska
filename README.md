@@ -17,7 +17,7 @@
 
 **Status: aktywna alpha / przygotowanie do zamkniętej bety Android.**
 
-Android jest obecnie platformą priorytetową. Backend produkcyjny działa na Railway, jest połączony z PostgreSQL/PostGIS i śledzi gałąź `main`.
+Android jest obecnie platformą priorytetową. Backend produkcyjny nadal działa na Railway, jest połączony z PostgreSQL/PostGIS i śledzi gałąź `main`, ale **najbliższym głównym krokiem infrastrukturalnym jest migracja produkcji do Oracle Cloud Free Tier**. Railway pozostaje środowiskiem przejściowym do czasu pełnego restore, smoke testów i przełączenia ruchu.
 
 Aktualny kod rozwojowy: **0.1.0-alpha.54** (`build 55`).
 
@@ -137,12 +137,14 @@ Integracja z oficjalnym UkraineAlarm API v3 działa po stronie backendu:
 
 ### Powiadomienia i GPS — pierwsze uruchomienie
 
-Na pierwszym uruchomieniu aplikacja pyta systemowo o:
+Na pierwszym uruchomieniu aplikacja nie otwiera od razu surowych okien systemowych. Najpierw pokazuje kontekstowy onboarding:
 
-1. **zgodę na powiadomienia**,
-2. **dostęp do lokalizacji**.
+1. ekran lokalizacji z wyjaśnieniem, po co aplikacji dostęp do pozycji,
+2. po naciśnięciu **„Zezwól na lokalizację”** — właściwe okno systemowe Android/iOS,
+3. płynne przejście do ekranu powiadomień,
+4. po naciśnięciu **„Włącz powiadomienia”** — właściwe okno systemowe zgody na powiadomienia.
 
-Sekwencja jest zapamiętywana lokalnie i nie jest wyświetlana przy każdym wejściu do aplikacji.
+Sekwencja jest zapamiętywana lokalnie i nie jest wyświetlana przy każdym wejściu do aplikacji. Lokalizacja służy do funkcji związanych z okolicą i schronieniami; aplikacja nie zapisuje historii przemieszczania.
 
 Samo włączenie kategorii powiadomień wewnątrz aplikacji nie wystarcza — Android musi również udzielić zgody systemowej.
 
@@ -245,6 +247,104 @@ flowchart LR
 - rate limiting,
 - endpointy health/readiness,
 - runtime audit po wdrożeniach.
+
+## Docelowa infrastruktura: Oracle Cloud Free Tier
+
+**Cel: zastąpić Railway własną, bezpłatną produkcją na OCI bez zmiany kontraktu API dla aplikacji mobilnej.**
+
+Migracja ma być wykonana bez „big bang”. Railway pozostaje działającym fallbackiem do momentu potwierdzenia backupu, restore, źródeł live, push i runtime auditu na nowym hoście.
+
+### Założenia docelowe
+
+Pierwsza wersja produkcji OCI ma być możliwie prosta:
+
+- jedna instancja **OCI Ampere A1 / ARM64**,
+- system Ubuntu,
+- backend Node.js 24 uruchamiany w kontenerze lub jako zarządzana usługa systemowa,
+- **PostgreSQL 17 + PostGIS instalowane natywnie na ARM64**,
+- trwały wolumen dla bazy,
+- reverse proxy z HTTPS,
+- firewall / OCI Security List otwierający tylko niezbędne porty,
+- automatyczny start po restarcie hosta,
+- zewnętrzny runtime audit z GitHub Actions.
+
+Nie kopiujemy bezrefleksyjnie obecnego obrazu PostGIS z Railway. Oficjalny obraz `postgis/postgis` jest obecnie publikowany dla `amd64`, natomiast PostgreSQL 17 i PostGIS są dostępne jako pakiety `arm64` w repozytorium PGDG. Dlatego baza na Ampere A1 powinna być instalowana natywnie, bez emulacji x86.
+
+### Plan migracji Railway → OCI
+
+1. **Uniezależnić kod od Railway**
+   - `BUILD_SHA` ma być głównym źródłem tożsamości deploymentu,
+   - usunąć fallbacki i nazwy specyficzne dla Railway tam, gdzie nie są potrzebne,
+   - przemianować runtime smoke z Railway-specific na provider-neutral.
+
+2. **Przygotować OCI**
+   - instancja Ampere A1,
+   - statyczny/publiczny adres,
+   - VCN, Security List / firewall,
+   - SSH tylko z kluczem,
+   - automatyczne aktualizacje bezpieczeństwa.
+
+3. **Postawić PostgreSQL 17 + PostGIS**
+   - osobny użytkownik bazy,
+   - lokalny dostęp z backendu,
+   - brak publicznego portu 5432,
+   - kontrola miejsca na dysku i WAL.
+
+4. **Przenieść dane**
+   - pełny `pg_dump` aktywnej bazy Railway,
+   - restore na OCI,
+   - sprawdzenie rozszerzenia PostGIS,
+   - migracje `node dist/migrate.js`,
+   - porównanie kluczowych tabel i source health.
+
+5. **Przenieść backend i sekrety**
+   - `ADMIN_TOKEN`,
+   - `UKRAINE_ALARM_API_KEY`,
+   - `PUSH_TOKEN_ENCRYPTION_KEY`,
+   - `FCM_SERVICE_ACCOUNT_JSON`,
+   - bootstrap schronień i pozostałe zmienne produkcyjne,
+   - żadnych sekretów w repozytorium.
+
+6. **Stabilny publiczny adres API**
+   - docelowo własna domena/subdomena zamiast adresu dostawcy hostingu,
+   - HTTPS,
+   - `PUBLIC_BASE_URL`, `PRODUCTION_API_BASE_URL` i `PREVIEW_API_BASE_URL` wskazują nowy host.
+
+7. **Automatyczny deploy**
+   - GitHub `main` → OCI,
+   - wdrożenie konkretnego SHA,
+   - migracja bazy przed restartem API,
+   - healthcheck `/ready`,
+   - rollback do konkretnego obrazu/commita.
+
+8. **Runtime audit i cutover**
+   - `/health`,
+   - `/ready`,
+   - `/v1/sources`,
+   - snapshot/status,
+   - schronienia,
+   - PAA,
+   - UkraineAlarm,
+   - NEPTUN,
+   - test FCM.
+
+9. **Dopiero po stabilnym okresie obserwacji**
+   - zmiana produkcyjnych buildów Androida na OCI,
+   - utrzymanie Railway jako krótkiego fallbacku,
+   - końcowy backup,
+   - usunięcie niepotrzebnych usług Railway.
+
+### Backup po migracji
+
+Minimum produkcyjne:
+
+- automatyczny dzienny backup PostgreSQL,
+- rotacja kopii,
+- kopia poza dyskiem systemowym VM,
+- okresowy test restore na pustej bazie,
+- co najmniej jedna zaszyfrowana kopia poza samą instancją OCI.
+
+Migrację uznajemy za zakończoną dopiero wtedy, gdy **restore działa**, a nie tylko wtedy, gdy nowy serwer odpowiada na `/health`.
 
 ## Railway
 
@@ -409,16 +509,17 @@ bezpieczna-polska/
 
 Najważniejsze elementy przed publicznym wydaniem produkcyjnym:
 
-1. pełny test end-to-end Android push na rzeczywistych urządzeniach,
-2. finalizacja production signing i pierwszego production AAB/APK,
-3. Google Play Internal Test,
-4. polityka prywatności i formularz Google Play Data Safety,
-5. dalsze testy aktualizacji „na siebie” między kolejnymi wydaniami,
-6. audyt świeżości i zachowania wszystkich źródeł przy awarii,
-7. porządki historycznych usług Railway po backupie,
-8. dopracowanie pakietów offline i mapy,
-9. iOS / APNs dopiero po ustabilizowaniu Androida,
-10. później: panel administracyjny i dodatkowe narzędzia operatorskie.
+1. **migracja produkcyjnego backendu i PostGIS z Railway do Oracle Cloud Free Tier** z pełnym backup/restore i runtime auditem,
+2. usunięcie zależności deploymentu od nazw i adresów specyficznych dla Railway,
+3. pełny test end-to-end Android push na rzeczywistych urządzeniach,
+4. finalizacja production signing i pierwszego production AAB/APK,
+5. Google Play Internal Test,
+6. polityka prywatności i formularz Google Play Data Safety,
+7. dalsze testy aktualizacji „na siebie” między kolejnymi wydaniami,
+8. audyt świeżości i zachowania wszystkich źródeł przy awarii,
+9. dopracowanie mapy, dynamicznej legendy i pakietów offline,
+10. iOS / APNs dopiero po ustabilizowaniu Androida,
+11. później: panel administracyjny i dodatkowe narzędzia operatorskie.
 
 ## Dokumentacja
 
