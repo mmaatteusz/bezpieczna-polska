@@ -40,7 +40,7 @@ jobs:
           fi
           grep -Eq "listen_addresses = '127\.0\.0\.1'" infra/oracle/configure-database.sh
           grep -Fq 'HOST=127.0.0.1' infra/oracle/backend.env.example
-          ! grep -RE '5432.*0\.0\.0\.0|0\.0\.0\.0.*5432' infra/oracle
+          ! grep -RE '5432.*0\.0\.0\.0|0\.0\.0\.0.*5432|8080.*0\.0\.0\.0|0\.0\.0\.0.*8080' infra/oracle
       - name: Verify release safety contracts
         run: |
           set -euo pipefail
