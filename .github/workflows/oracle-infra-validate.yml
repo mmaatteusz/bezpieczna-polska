@@ -14,6 +14,7 @@ on:
       - 'infra/oracle/**'
       - '.github/workflows/oracle-deploy.yml'
       - '.github/workflows/oracle-infra-validate.yml'
+      - '.github/workflows/oracle-host-audit.yml'
 
 permissions:
   contents: read
