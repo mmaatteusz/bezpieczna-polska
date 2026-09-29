@@ -59,6 +59,7 @@ install -m 0755 "${SCRIPT_DIR}/deploy-release.sh" /usr/local/sbin/bp-deploy-rele
 install -m 0755 "${SCRIPT_DIR}/rollback-release.sh" /usr/local/sbin/bp-rollback-release
 install -m 0755 "${SCRIPT_DIR}/backup-postgres.sh" /usr/local/sbin/bp-backup-postgres
 install -m 0755 "${SCRIPT_DIR}/restore-drill.sh" /usr/local/sbin/bp-restore-drill
+install -m 0755 "${SCRIPT_DIR}/restore-source-database.sh" /usr/local/sbin/bp-restore-source-database
 install -m 0644 "${SCRIPT_DIR}/systemd/bezpieczna-polska-api.service" /etc/systemd/system/bezpieczna-polska-api.service
 install -m 0644 "${SCRIPT_DIR}/systemd/bezpieczna-polska-backup.service" /etc/systemd/system/bezpieczna-polska-backup.service
 install -m 0644 "${SCRIPT_DIR}/systemd/bezpieczna-polska-backup.timer" /etc/systemd/system/bezpieczna-polska-backup.timer
@@ -77,7 +78,7 @@ ufw allow 'Nginx Full'
 ufw --force enable
 
 systemctl daemon-reload
-systemctl enable bezpieczna-polska-backup.timer
+systemctl enable --now bezpieczna-polska-backup.timer
 
 echo "Host bootstrap complete."
 echo "Next: configure-database.sh, /etc/bezpieczna-polska/backend.env, DNS and enable-tls.sh."
