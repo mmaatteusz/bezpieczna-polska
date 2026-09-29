@@ -22,7 +22,7 @@ on:
       - '.github/workflows/preview-apk.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: preview-apk-${{ github.ref }}
   cancel-in-progress: true
@@ -107,6 +107,19 @@ jobs:
           path: output/formatter/neptun.dart
           if-no-files-found: error
           retention-days: 1
+      - name: Commit formatted NEPTUN source
+        working-directory: mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- lib/neptun.dart; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/neptun.dart
+          git commit -m "chore: format NEPTUN source [skip ci]"
+          git push
       - name: Flutter format check
         working-directory: mobile
         run: dart format --output=none --set-exit-if-changed lib test
