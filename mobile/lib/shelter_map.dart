@@ -208,9 +208,15 @@ class _ShelterMapState extends State<ShelterMap> {
         lat <= bbox[3];
   }
 
-  bool viewportHasShelters(MapViewport? value) {
+  bool viewportHasSheltersInBbox(MapViewport? value, List<double> bbox) {
     final features = value?.data['features'];
-    return features is List && features.isNotEmpty;
+    if (features is! List) return false;
+    return features.whereType<Map>().any(
+      (feature) => featureInsideBbox(
+        Map<String, dynamic>.from(feature),
+        bbox,
+      ),
+    );
   }
 
   void updateMapLegend(
@@ -944,6 +950,11 @@ class _ShelterMapState extends State<ShelterMap> {
         updateMapLegend(bbox, radiationVisible: false);
       }
       final zoom = (c.cameraPosition?.zoom ?? 5).clamp(0, 22).toDouble();
+      updateMapLegend(
+        bbox,
+        sheltersVisible:
+            mapShowsShelters(zoom) && viewportHasSheltersInBbox(viewport, bbox),
+      );
       if (!mapShowsShelters(zoom)) {
         if (!overviewMode) {
           setState(() => overviewMode = true);
@@ -978,12 +989,16 @@ class _ShelterMapState extends State<ShelterMap> {
         viewport = null;
         renderedRequest = null;
         await c.setGeoJsonSource('shelters', empty);
+        updateMapLegend(bbox, sheltersVisible: false);
       }
       final result = await provider.fetch(request);
       if (!mounted || current != ticket) return;
       await c.setGeoJsonSource('shelters', result.data);
       if (!mounted || current != ticket) return;
-      updateMapLegend(bbox, sheltersVisible: viewportHasShelters(result));
+      updateMapLegend(
+        bbox,
+        sheltersVisible: viewportHasSheltersInBbox(result, bbox),
+      );
       onlineRetry?.cancel();
       setState(() {
         viewport = result;
@@ -1023,7 +1038,7 @@ class _ShelterMapState extends State<ShelterMap> {
       if (bbox != null) {
         updateMapLegend(
           bbox,
-          sheltersVisible: viewportHasShelters(fallback),
+          sheltersVisible: viewportHasSheltersInBbox(fallback, bbox),
         );
       }
       setState(() {
@@ -1483,7 +1498,7 @@ class _ShelterMapState extends State<ShelterMap> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Czerwone: Alerty i komunikaty • niebieskie: Ostrzeżenia IMGW • zielone: Punkty schronienia • pomarańczowe: Obserwowane miejsca • fioletowe: Pomiary promieniowania PAA',
+                  'Legenda na mapie aktualizuje się automatycznie i pokazuje tylko te typy danych, które są widoczne w bieżącym kadrze.',
                 ),
               ],
             ),
