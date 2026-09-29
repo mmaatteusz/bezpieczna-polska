@@ -24,6 +24,7 @@ import 'screens/more_screen.dart';
 import 'ui/app_theme.dart';
 import 'ui/brand.dart';
 import 'ui/brand_splash.dart';
+import 'ui/first_launch_onboarding.dart';
 
 String? localityRegionSeed(String currentRegion) =>
     currentRegion == 'PL' ? null : currentRegion;
@@ -79,6 +80,7 @@ class _BootstrapAppState extends State<BootstrapApp> {
         return SafetyApp(
           repository: result.repository,
           pushManager: result.pushManager,
+          firstLaunchOnboarding: true,
         );
       }
 
@@ -94,12 +96,137 @@ class _BootstrapAppState extends State<BootstrapApp> {
 class SafetyApp extends StatefulWidget {
   final DataRepository repository;
   final PushManager? pushManager;
-  const SafetyApp({super.key, required this.repository, this.pushManager});
+  final bool firstLaunchOnboarding;
+
+  const SafetyApp({
+    super.key,
+    required this.repository,
+    this.pushManager,
+    this.firstLaunchOnboarding = false,
+  });
+
   @override
   State<SafetyApp> createState() => _SafetyAppState();
 }
 
 class _SafetyAppState extends State<SafetyApp> {
+  static const _firstLaunchLocationKey = 'first_launch_location_prompted_v2';
+  static const _firstLaunchPushKey = 'first_launch_push_prompted_v2';
+  static const _firstLaunchOnboardingKey =
+      'first_launch_permission_onboarding_completed_v1';
+
+  late bool _showFirstLaunchOnboarding;
+
+  @override
+  void initState() {
+    super.initState();
+    final prefs = widget.repository.prefs;
+    final completed = prefs.getBool(_firstLaunchOnboardingKey) ?? false;
+    final legacyHandled =
+        (prefs.getBool(_firstLaunchLocationKey) ?? false) &&
+        (prefs.getBool(_firstLaunchPushKey) ?? false);
+
+    _showFirstLaunchOnboarding =
+        widget.firstLaunchOnboarding && !completed && !legacyHandled;
+
+    if (legacyHandled && !completed) {
+      unawaited(prefs.setBool(_firstLaunchOnboardingKey, true));
+    }
+  }
+
+  String? _regionFromPlacemark(Placemark placemark) {
+    String normalize(String value) => value
+        .toLowerCase()
+        .replaceAll('województwo', '')
+        .replaceAll('woj.', '')
+        .replaceAll(RegExp(r'[^a-ząćęłńóśźż]'), '');
+    final area = normalize(placemark.administrativeArea ?? '');
+    if (area.isEmpty) return null;
+    for (final entry in regions.entries.where((entry) => entry.key != 'PL')) {
+      if (normalize(entry.value) == area) return entry.key;
+    }
+    return null;
+  }
+
+  Future<void> _requestOnboardingLocation() async {
+    final prefs = widget.repository.prefs;
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      final marks = await Geocoding().placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+        locale: const Locale('pl', 'PL'),
+      );
+      if (marks.isEmpty) return;
+
+      final mark = marks.first;
+      final regionId = _regionFromPlacemark(mark);
+      if (regionId == null) return;
+
+      final locality = (mark.locality ?? '').trim();
+      final county = (mark.subAdministrativeArea ?? '').trim();
+      final parts = <String>[
+        if (locality.isNotEmpty) locality,
+        if (county.isNotEmpty && county != locality) county,
+      ];
+      if (parts.isEmpty) return;
+
+      final label = parts.toSet().join(', ');
+      await widget.repository.setPrimaryLocation(
+        label: label.length > 80 ? label.substring(0, 80) : label,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        regionId: regionId,
+      );
+      if (widget.pushManager != null) {
+        unawaited(widget.pushManager!.syncCurrentPreferences());
+      }
+    } catch (_) {
+      // The explicit first-run action must never block the rest of onboarding.
+      // Location can still be configured manually from the dashboard later.
+    } finally {
+      await prefs.setBool(_firstLaunchLocationKey, true);
+    }
+  }
+
+  Future<void> _requestOnboardingNotifications() async {
+    final prefs = widget.repository.prefs;
+    try {
+      final pushManager = widget.pushManager;
+      if (pushManager == null) return;
+      await pushManager.initializeWithoutPrompt();
+      await pushManager.enable();
+    } catch (_) {
+      // A Firebase/backend failure does not trap the user on first launch.
+      // The settings screen remains available for a later retry.
+    } finally {
+      await prefs.setBool(_firstLaunchPushKey, true);
+    }
+  }
+
+  Future<void> _finishFirstLaunchOnboarding() async {
+    await widget.repository.prefs.setBool(_firstLaunchOnboardingKey, true);
+    if (!mounted) return;
+    setState(() => _showFirstLaunchOnboarding = false);
+  }
+
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Bezpieczna Polska',
@@ -107,11 +234,19 @@ class _SafetyAppState extends State<SafetyApp> {
     theme: buildSafetyTheme(Brightness.light),
     darkTheme: buildSafetyTheme(Brightness.dark),
     themeMode: widget.repository.dark ? ThemeMode.dark : ThemeMode.light,
-    home: Home(
-      repository: widget.repository,
-      pushManager: widget.pushManager,
-      onTheme: () => setState(() {}),
-    ),
+    home: _showFirstLaunchOnboarding
+        ? FirstLaunchPermissionOnboarding(
+            notificationsAvailable:
+                widget.pushManager?.adapter?.supported ?? false,
+            onRequestLocation: _requestOnboardingLocation,
+            onRequestNotifications: _requestOnboardingNotifications,
+            onComplete: _finishFirstLaunchOnboarding,
+          )
+        : Home(
+            repository: widget.repository,
+            pushManager: widget.pushManager,
+            onTheme: () => setState(() {}),
+          ),
   );
 }
 
@@ -130,9 +265,6 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> with WidgetsBindingObserver {
-  static const _firstLaunchLocationKey = 'first_launch_location_prompted_v2';
-  static const _firstLaunchPushKey = 'first_launch_push_prompted_v2';
-
   int page = 0, generation = 0;
   final Set<int> visitedPages = <int>{0};
   bool online = false, loading = false, backgroundSync = false;
@@ -151,9 +283,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     if (widget.pushManager != null) {
       unawaited(widget.pushManager!.initializeWithoutPrompt());
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_requestFirstLaunchPermissions());
-    });
     region = widget.repository.region;
     localityLabel = widget.repository.primaryLocationLabel;
     snapshot = widget.repository.cached(region);
@@ -171,96 +300,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         unawaited(refresh());
       }
     });
-  }
-
-  Future<void> _requestFirstLaunchPermissions() async {
-    final prefs = widget.repository.prefs;
-
-    // Location and notifications are intentionally tracked separately. A
-    // temporary Firebase failure must never suppress GPS onboarding forever,
-    // and a failed GPS lookup must never consume the notification prompt.
-    if (!(prefs.getBool(_firstLaunchLocationKey) ?? false)) {
-      try {
-        if (widget.repository.primaryLocationLabel != null &&
-            widget.repository.primaryLocationLatitude != null &&
-            widget.repository.primaryLocationLongitude != null) {
-          await prefs.setBool(_firstLaunchLocationKey, true);
-        } else if (await Geolocator.isLocationServiceEnabled()) {
-          var permission = await Geolocator.checkPermission();
-          if (permission == LocationPermission.denied) {
-            permission = await Geolocator.requestPermission();
-          }
-
-          if (permission == LocationPermission.denied ||
-              permission == LocationPermission.deniedForever) {
-            // The user made an explicit system-level choice. Do not nag on each
-            // launch; manual location selection remains available in the UI.
-            await prefs.setBool(_firstLaunchLocationKey, true);
-          } else {
-            // Permission alone is not enough: resolve and persist the current
-            // place immediately so the dashboard stops showing
-            // "Ustaw lokalizację" after the user taps "Zezwól".
-            final gps = await _localityFromGps();
-            if (gps != null && mounted) {
-              await _applyPrimaryLocation(
-                label: gps.label,
-                latitude: gps.latitude,
-                longitude: gps.longitude,
-                regionId: gps.regionId,
-              );
-              await prefs.setBool(_firstLaunchLocationKey, true);
-            }
-            // If GPS/geocoding failed temporarily, leave the flag unset. The
-            // next app launch may retry silently without another permission
-            // dialog because the OS permission is already granted.
-          }
-        }
-      } catch (_) {
-        // Best effort. Leave the location flag unset so a transient platform
-        // failure can be retried on the next launch.
-      }
-    }
-
-    if (!mounted) return;
-
-    // Give Android one rendered frame after returning from a possible location
-    // permission dialog before opening the notification permission dialog.
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
-
-    if (!(prefs.getBool(_firstLaunchPushKey) ?? false)) {
-      final pushManager = widget.pushManager;
-      if (pushManager == null) {
-        // Do not consume onboarding when Firebase is missing or failed to
-        // initialize. A later correctly configured build can still ask.
-        return;
-      }
-
-      try {
-        await pushManager.initializeWithoutPrompt();
-        final permission = pushManager.state.permission;
-
-        if (permission == PushPermissionState.notDetermined) {
-          // This is the real Android/iOS system notification permission prompt.
-          await pushManager.enable();
-        } else if (permission == PushPermissionState.authorized ||
-            permission == PushPermissionState.provisional) {
-          // Permission may have been granted outside the app. Ensure the token
-          // is registered without relying on another onboarding pass.
-          await pushManager.enable();
-        }
-
-        // Mark only after the platform state was actually inspected. This avoids
-        // the old failure mode where a Firebase initialization error silently
-        // prevented the prompt forever.
-        if (pushManager.state.permission != PushPermissionState.notDetermined) {
-          await prefs.setBool(_firstLaunchPushKey, true);
-        }
-      } catch (_) {
-        // Keep the flag unset. A transient FCM/backend failure is retried on the
-        // next launch instead of permanently disabling first-run push setup.
-      }
-    }
   }
 
   void loadSeen() {
