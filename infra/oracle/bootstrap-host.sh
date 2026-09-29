@@ -60,6 +60,8 @@ install -m 0755 "${SCRIPT_DIR}/rollback-release.sh" /usr/local/sbin/bp-rollback-
 install -m 0755 "${SCRIPT_DIR}/backup-postgres.sh" /usr/local/sbin/bp-backup-postgres
 install -m 0755 "${SCRIPT_DIR}/restore-drill.sh" /usr/local/sbin/bp-restore-drill
 install -m 0755 "${SCRIPT_DIR}/restore-source-database.sh" /usr/local/sbin/bp-restore-source-database
+install -m 0755 "${SCRIPT_DIR}/verify-host.sh" /usr/local/sbin/bp-oracle-audit
+install -m 0755 "${SCRIPT_DIR}/compare-databases.sh" /usr/local/sbin/bp-compare-databases
 install -m 0644 "${SCRIPT_DIR}/systemd/bezpieczna-polska-api.service" /etc/systemd/system/bezpieczna-polska-api.service
 install -m 0644 "${SCRIPT_DIR}/systemd/bezpieczna-polska-backup.service" /etc/systemd/system/bezpieczna-polska-backup.service
 install -m 0644 "${SCRIPT_DIR}/systemd/bezpieczna-polska-backup.timer" /etc/systemd/system/bezpieczna-polska-backup.timer
