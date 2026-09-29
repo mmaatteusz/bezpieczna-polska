@@ -10,17 +10,30 @@ try{
  const push=createPushServiceFromEnv(db);
  app=await buildApp(store,process.env.ADMIN_TOKEN,push??undefined,{stage:config.stage,buildSha:config.buildSha,trustProxy:config.production});
  const workerOwner=`${process.pid}:${randomUUID()}`;
+ const ingestLeaseTtlMs=180000,ingestLeaseRenewMs=60000;
  let running=false;
- async function sync(){if(running)return;running=true;const started=Date.now();let leased=false;try{
-  leased=await tryAcquireWorkerLease(db,'ingest',workerOwner,10*60*1000);
-  if(!leased)return;
+ async function sync(){if(running)return;running=true;const started=Date.now();let leased=false,leaseHeartbeat:NodeJS.Timeout|undefined,renewing=false;try{
+  leased=await tryAcquireWorkerLease(db,'ingest',workerOwner,ingestLeaseTtlMs);
+  if(!leased){
+   app?.log.info({component:'ingestion',workerOwner,leaseTtlMs:ingestLeaseTtlMs},'Ingestion lease busy; retrying on next tick');
+   return;
+  }
+  leaseHeartbeat=setInterval(()=>{
+   if(renewing)return;
+   renewing=true;
+   void tryAcquireWorkerLease(db,'ingest',workerOwner,ingestLeaseTtlMs)
+    .then(ok=>{if(!ok)app?.log.error({component:'ingestion',errorCode:'INGEST_LEASE_LOST'},'Ingestion lease renewal lost ownership');})
+    .catch(()=>app?.log.error({component:'ingestion',errorCode:'INGEST_LEASE_RENEW_FAILED'},'Ingestion lease renewal failed'))
+    .finally(()=>{renewing=false;});
+  },ingestLeaseRenewMs);
+  leaseHeartbeat.unref();
   await ingest(store);
   for(const source of await store.health()){
    if(source.lastAttempt&&Date.parse(source.lastAttempt)>=started)
     app?.log.info({component:'source-adapter',source:source.id,state:source.state,errorCode:source.errorCode??null,durationMs:source.responseTime},'source refresh');
   }
  }catch{app?.log.error({component:'ingestion',errorCode:'INGEST_FAILED'},'Ingestion failed; existing data retained');}
- finally{if(leased)await releaseWorkerLease(db,'ingest',workerOwner).catch(()=>{});running=false;}}
+ finally{if(leaseHeartbeat)clearInterval(leaseHeartbeat);if(leased)await releaseWorkerLease(db,'ingest',workerOwner).catch(()=>{});running=false;}}
  if(process.env.ENABLE_INGESTION!=='false'){
   timer=setInterval(()=>void sync(),60000);
   void sync();
