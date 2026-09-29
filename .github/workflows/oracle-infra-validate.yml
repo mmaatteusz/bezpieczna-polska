@@ -1,0 +1,49 @@
+name: Validate Oracle infrastructure
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/oracle/**'
+      - '.github/workflows/oracle-deploy.yml'
+      - '.github/workflows/oracle-infra-validate.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'infra/oracle/**'
+      - '.github/workflows/oracle-deploy.yml'
+      - '.github/workflows/oracle-infra-validate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Parse shell scripts
+        run: |
+          set -euo pipefail
+          for script in infra/oracle/*.sh; do
+            bash -n "$script"
+          done
+      - name: Enforce provider-neutral and private database rules
+        run: |
+          set -euo pipefail
+          if grep -RIE 'railway\.app|RAILWAY_GIT_COMMIT_SHA' infra/oracle .github/workflows/oracle-deploy.yml; then
+            echo 'Oracle infrastructure must not depend on Railway-specific runtime configuration.' >&2
+            exit 1
+          fi
+          grep -Eq "listen_addresses = '127\.0\.0\.1'" infra/oracle/configure-database.sh
+          grep -Fq 'HOST=127.0.0.1' infra/oracle/backend.env.example
+          ! grep -RE '5432.*0\.0\.0\.0|0\.0\.0\.0.*5432' infra/oracle
+      - name: Verify release safety contracts
+        run: |
+          set -euo pipefail
+          grep -Fq 'BUILD_SHA' infra/oracle/deploy-release.sh
+          grep -Fq 'node dist/migrate.js' infra/oracle/deploy-release.sh
+          grep -Fq '/ready' infra/oracle/deploy-release.sh
+          grep -Fq 'StrictHostKeyChecking=yes' .github/workflows/oracle-deploy.yml
+          grep -Fq 'git merge-base --is-ancestor' .github/workflows/oracle-deploy.yml
