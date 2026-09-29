@@ -32,7 +32,7 @@ env:
   CI: 'true'
   FLUTTER_SUPPRESS_ANALYTICS: 'true'
   BP_ENV: preview
-  PREVIEW_API_BASE_URL: ${{ vars.PREVIEW_API_BASE_URL || vars.PRODUCTION_API_BASE_URL || vars.API_BASE_URL }}
+  PREVIEW_API_BASE_URL: ${{ vars.PREVIEW_API_BASE_URL || vars.PRODUCTION_API_BASE_URL }}
   ANDROID_PREVIEW_KEYSTORE_B64: ${{ secrets.ANDROID_PREVIEW_KEYSTORE_B64 }}
   ANDROID_PREVIEW_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_PREVIEW_KEYSTORE_PASSWORD }}
   ANDROID_PREVIEW_KEY_ALIAS: ${{ secrets.ANDROID_PREVIEW_KEY_ALIAS }}
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Require configured preview API
         run: |
-          test -n "$PREVIEW_API_BASE_URL" || { echo 'PREVIEW_API_BASE_URL, PRODUCTION_API_BASE_URL or API_BASE_URL repository variable is required' >&2; exit 1; }
+          test -n "$PREVIEW_API_BASE_URL" || { echo 'PREVIEW_API_BASE_URL or PRODUCTION_API_BASE_URL repository variable is required' >&2; exit 1; }
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
