@@ -58,6 +58,9 @@ jobs:
       ANDROID_PREVIEW_KEY_PASSWORD: ${{ secrets.ANDROID_PREVIEW_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
+      - name: Require configured preview API
+        run: |
+          test -n "$PREVIEW_API_BASE_URL" || { echo 'PREVIEW_API_BASE_URL or PRODUCTION_API_BASE_URL repository variable is required' >&2; exit 1; }
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
