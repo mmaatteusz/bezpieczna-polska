@@ -1,4 +1,4 @@
-export const APP_VERSION='0.1.0-alpha.54';
+export const APP_VERSION='0.1.0-alpha.55';
 export type AppEnv='development'|'preview'|'production';
 export function publicHttpsUrl(value:string):URL{
  const url=new URL(value);
