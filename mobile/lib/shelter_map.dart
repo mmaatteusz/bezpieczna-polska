@@ -202,20 +202,14 @@ class _ShelterMapState extends State<ShelterMap> {
     if (coordinates is! List || coordinates.length != 2) return false;
     final lon = coordinates[0], lat = coordinates[1];
     if (lon is! num || lat is! num) return false;
-    return lon >= bbox[0] &&
-        lon <= bbox[2] &&
-        lat >= bbox[1] &&
-        lat <= bbox[3];
+    return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
   }
 
   bool viewportHasSheltersInBbox(MapViewport? value, List<double> bbox) {
     final features = value?.data['features'];
     if (features is! List) return false;
     return features.whereType<Map>().any(
-      (feature) => featureInsideBbox(
-        Map<String, dynamic>.from(feature),
-        bbox,
-      ),
+      (feature) => featureInsideBbox(Map<String, dynamic>.from(feature), bbox),
     );
   }
 
@@ -256,6 +250,7 @@ class _ShelterMapState extends State<ShelterMap> {
       }
     });
   }
+
   LatLng get homeTarget {
     final lat = widget.repository.primaryLocationLatitude;
     final lon = widget.repository.primaryLocationLongitude;
