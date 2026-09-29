@@ -27,7 +27,15 @@ df -h /
 
 Oczekiwane: `aarch64` / `arm64`.
 
-## 2. Bootstrap hosta
+## 2. SSH preflight
+
+Zanim cokolwiek zainstalujemy na VM, zweryfikuj host key i dostęp zgodnie z [ORACLE_ACCESS_CHECKLIST.md](ORACLE_ACCESS_CHECKLIST.md).
+
+Po ustawieniu czterech sekretów SSH uruchom ręcznie workflow `Oracle SSH preflight`. Ma przejść bez instalowania pakietów ani modyfikowania hosta.
+
+Dopiero po zielonym preflight przechodzimy do bootstrapu.
+
+## 3. Bootstrap hosta
 
 Na VM:
 
@@ -45,7 +53,7 @@ sudo bash infra/oracle/verify-host.sh
 
 Przed konfiguracją sekretów skrypt może ostrzec, że API/env jeszcze nie istnieją; część systemowa musi być zielona.
 
-## 3. PostgreSQL/PostGIS
+## 4. PostgreSQL/PostGIS
 
 Wygeneruj silne hasło lokalnie i nie zapisuj go w repo:
 
@@ -62,7 +70,7 @@ sudo ss -ltnp | grep 5432
 
 Port 5432 ma być wyłącznie na `127.0.0.1`.
 
-## 4. Konfiguracja backendu
+## 5. Konfiguracja backendu
 
 ```bash
 sudo cp infra/oracle/backend.env.example /etc/bezpieczna-polska/backend.env
@@ -74,7 +82,7 @@ Wypełnij wartości z obecnej produkcji bez kopiowania ich do GitHub.
 
 Nie uruchamiaj jeszcze cutoveru. Oracle ma działać równolegle.
 
-## 5. DNS i HTTPS
+## 6. DNS i HTTPS
 
 Najbezpieczniej użyć osobnej nazwy testowej, np. `oracle-api.<domena>`, zanim docelowe `api.<domena>` zostanie przełączone.
 
@@ -84,7 +92,7 @@ Gdy DNS wskazuje na VM:
 sudo bash infra/oracle/enable-tls.sh oracle-api.example.pl admin@example.pl
 ```
 
-## 6. Eksport Railway
+## 7. Eksport Railway
 
 Na zaufanym komputerze z dostępem do produkcyjnego `DATABASE_URL`:
 
@@ -100,7 +108,7 @@ Powstają:
 
 Przenieś oba pliki na Oracle kanałem SSH/SCP.
 
-## 7. Restore na Oracle
+## 8. Restore na Oracle
 
 Przed restore Oracle API ma być zatrzymane lub jeszcze niewdrożone.
 
@@ -117,7 +125,7 @@ sudo /usr/local/sbin/bp-restore-drill /tmp/railway-production.dump
 
 Restore drill tworzy osobną tymczasową bazę, sprawdza PostGIS i wymagane tabele, a potem ją usuwa.
 
-## 8. Wdrożenie konkretnego SHA
+## 9. Wdrożenie konkretnego SHA
 
 Do pierwszego wdrożenia użyj SHA z `main`, nie nazwy brancha.
 
@@ -133,7 +141,7 @@ curl -fsS http://127.0.0.1:8080/ready | jq
 
 `buildSha` musi być dokładnie wdrożonym SHA.
 
-## 9. Porównanie baz
+## 10. Porównanie baz
 
 Z hosta mającego dostęp do obu baz:
 
@@ -153,7 +161,7 @@ SOURCE_DATABASE_URL='...' TARGET_DATABASE_URL='...' \
   bash infra/oracle/compare-databases.sh
 ```
 
-## 10. Test równoległy
+## 11. Test równoległy
 
 Na Oracle sprawdzamy co najmniej:
 
@@ -172,7 +180,7 @@ Na Oracle sprawdzamy co najmniej:
 
 Railway pozostaje aktywny.
 
-## 11. GitHub Actions
+## 12. GitHub Actions
 
 Dopiero po utworzeniu VM dodamy sekrety SSH potrzebne przez manualny workflow Oracle. Na tym etapie nadal NIE zmieniamy:
 
@@ -181,7 +189,7 @@ Dopiero po utworzeniu VM dodamy sekrety SSH potrzebne przez manualny workflow Or
 
 Najpierw Oracle musi przejść pełny runtime audit pod osobnym adresem.
 
-## 12. Cutover
+## 13. Cutover
 
 Cutover jest osobnym etapem. Wymagania:
 

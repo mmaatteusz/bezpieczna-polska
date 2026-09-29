@@ -1,0 +1,68 @@
+name: Oracle SSH preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ssh-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ORACLE_SSH_HOST: ${{ secrets.ORACLE_SSH_HOST }}
+      ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
+      ORACLE_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_SSH_PRIVATE_KEY }}
+      ORACLE_SSH_KNOWN_HOSTS: ${{ secrets.ORACLE_SSH_KNOWN_HOSTS }}
+    steps:
+      - name: Require SSH secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in ORACLE_SSH_HOST ORACLE_SSH_USER ORACLE_SSH_PRIVATE_KEY ORACLE_SSH_KNOWN_HOSTS; do
+            [[ -n "${!name}" ]] || { echo "Missing GitHub secret: $name" >&2; exit 1; }
+          done
+
+      - name: Configure pinned SSH trust
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$ORACLE_SSH_PRIVATE_KEY" > ~/.ssh/oracle
+          chmod 0600 ~/.ssh/oracle
+          printf '%s\n' "$ORACLE_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/known_hosts
+
+      - name: Verify raw OCI host without changing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/oracle -o BatchMode=yes -o StrictHostKeyChecking=yes             "${ORACLE_SSH_USER}@${ORACLE_SSH_HOST}" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+
+          source /etc/os-release
+          [[ "${ID:-}" == "ubuntu" ]] || { echo "Expected Ubuntu, got ${ID:-unknown}" >&2; exit 1; }
+
+          arch="$(dpkg --print-architecture)"
+          [[ "$arch" == "arm64" ]] || { echo "Expected arm64, got $arch" >&2; exit 1; }
+
+          cpus="$(nproc)"
+          mem_kb="$(awk '/MemTotal:/ {print $2}' /proc/meminfo)"
+          root_bytes="$(df -B1 --output=size / | tail -n1 | tr -d ' ')"
+
+          (( cpus >= 1 )) || { echo "No usable CPU" >&2; exit 1; }
+          (( mem_kb >= 3145728 )) || { echo "Less than 3 GiB RAM" >&2; exit 1; }
+          (( root_bytes >= 64424509440 )) || { echo "Root filesystem below 60 GiB" >&2; exit 1; }
+
+          sudo -n true || { echo "Passwordless sudo is required for bootstrap automation" >&2; exit 1; }
+
+          if command -v ss >/dev/null 2>&1; then
+            if ss -ltnH | awk '{print $4}' | grep -Eq '(^|:)0\.0\.0\.0:5432$|^\[::\]:5432$|(^|:)0\.0\.0\.0:8080$|^\[::\]:8080$'; then
+              echo "5432 or 8080 already listening publicly" >&2
+              exit 1
+            fi
+          fi
+
+          echo "ORACLE_SSH_PREFLIGHT_PASS os=ubuntu arch=$arch cpus=$cpus memory_mib=$((mem_kb/1024)) root_gib=$((root_bytes/1024/1024/1024))"
+          REMOTE

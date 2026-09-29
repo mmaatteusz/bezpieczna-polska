@@ -33,7 +33,7 @@ Security List / NSG:
 
 UFW na VM jest konfigurowany przez `bootstrap-host.sh`, ale reguły OCI nadal trzeba ustawić w konsoli.
 
-Szczegółowy runbook pierwszego uruchomienia i migracji znajduje się w [`docs/ORACLE_CUTOVER_RUNBOOK.md`](../../docs/ORACLE_CUTOVER_RUNBOOK.md).
+Checklistę dostępu SSH i sekretów znajdziesz w [`docs/ORACLE_ACCESS_CHECKLIST.md`](../../docs/ORACLE_ACCESS_CHECKLIST.md). Szczegółowy runbook pierwszego uruchomienia i migracji znajduje się w [`docs/ORACLE_CUTOVER_RUNBOOK.md`](../../docs/ORACLE_CUTOVER_RUNBOOK.md).
 
 ## Kolejność
 
