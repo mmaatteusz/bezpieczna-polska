@@ -15,8 +15,7 @@ export function serverConfig(env:NodeJS.ProcessEnv=process.env){
  const stage=env.APP_ENV??'development';
  if(!['development','preview','production'].includes(stage))throw new Error('Invalid APP_ENV');
  const production=stage==='production';
- const railwayGitSha=/^[a-f0-9]{40}$/.test(env.RAILWAY_GIT_COMMIT_SHA??'')?env.RAILWAY_GIT_COMMIT_SHA:undefined;
- const buildSha=railwayGitSha??env.BUILD_SHA;
+ const buildSha=env.BUILD_SHA;
  if(production){
   if(env.NODE_ENV!=='production')throw new Error('Production requires NODE_ENV=production');
   if(!env.DATABASE_URL||!/^postgres(?:ql)?:\/\//.test(env.DATABASE_URL))throw new Error('Production requires PostgreSQL');
