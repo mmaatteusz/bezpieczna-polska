@@ -56,6 +56,8 @@ class _FirstLaunchPermissionOnboardingState
     await widget.onRequestNotifications();
     if (!mounted) return;
     await widget.onComplete();
+    if (!mounted) return;
+    setState(() => _busy = false);
   }
 
   @override
