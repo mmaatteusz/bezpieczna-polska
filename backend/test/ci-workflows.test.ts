@@ -63,9 +63,9 @@ test('runtime and app build workflows are provider-neutral',()=>{
     assert.doesNotMatch(yaml,/railway-runtime-smoke/i,`${name} still uses Railway-specific smoke client`);
   }
   assert.doesNotMatch(probeDockerfile,/railway-runtime-smoke/i);
-  assert.match(runtimeAudit,/vars\.PRODUCTION_API_BASE_URL/);
+  assert.match(runtimeAudit,/vars\.PRODUCTION_API_BASE_URL\s*\|\|\s*vars\.API_BASE_URL/);
   assert.match(runtimeAudit,/scripts\/production-runtime-smoke\.mjs/);
   for(const yaml of [preview,regression,installable,updateCompat,ios,manualAndroid]){
-    assert.match(yaml,/vars\.PREVIEW_API_BASE_URL\s*\|\|\s*vars\.PRODUCTION_API_BASE_URL/);
+    assert.match(yaml,/vars\.PREVIEW_API_BASE_URL\s*\|\|\s*vars\.PRODUCTION_API_BASE_URL\s*\|\|\s*vars\.API_BASE_URL/);
   }
 });
