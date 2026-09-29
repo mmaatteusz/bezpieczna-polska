@@ -8,8 +8,8 @@ const intervalSeconds=Number(process.env.OBSERVATION_INTERVAL_SECONDS??60);
 const output=process.argv[2]??'oracle-runtime-comparison.json';
 
 const sourceIds=[
-  'RCB','RSO','LEVELS','SHELTERS','IMGW_METEO','IMGW_HYDRO',
-  'PAA','PAA_MEASUREMENTS','SG','UA','NEPTUN'
+  'RCB','RSO','WCZK-18','LEVELS','SHELTERS','IMGW_METEO','IMGW_HYDRO',
+  'PAA','PAA_MEASUREMENTS','CERT','SG','POLICE','PSP_INCIDENTS','UA','NEPTUN'
 ];
 
 function origin(value,name){
@@ -69,7 +69,9 @@ async function observe(base,label){
     json(base,'/ready'),
     json(base,'/v1/sources'),
   ]);
-  if(ready.database!=='postgres'||ready.postgis!==true)
+  if(health.environment!=='production')
+    throw new Error(label+'_ENVIRONMENT_NOT_PRODUCTION');
+  if(ready.ready!==true||ready.database!=='postgres'||ready.postgis!==true)
     throw new Error(label+'_POSTGIS_NOT_READY');
   return {
     label,
@@ -85,10 +87,10 @@ async function observe(base,label){
       database:ready.database??null,
       postgis:ready.postgis??null,
     },
-    sources:Object.fromEntries(sourceIds.map(id=>{
+    sources:(()=>{
       const map=indexSources(sources);
-      return [id,compactSource(map.get(id),id)];
-    })),
+      return Object.fromEntries(sourceIds.map(id=>[id,compactSource(map.get(id),id)]));
+    })(),
   };
 }
 
