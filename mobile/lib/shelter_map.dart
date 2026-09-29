@@ -15,38 +15,66 @@ import 'model.dart';
 import 'shelters.dart';
 
 class _MapLegend extends StatelessWidget {
-  const _MapLegend();
+  final bool showAlerts;
+  final bool showImgw;
+  final bool showShelters;
+  final bool showWatched;
+  final bool showRadiation;
+
+  const _MapLegend({
+    required this.showAlerts,
+    required this.showImgw,
+    required this.showShelters,
+    required this.showWatched,
+    required this.showRadiation,
+  });
 
   @override
-  Widget build(BuildContext context) => Material(
-    key: const ValueKey('map-legend'),
-    color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
-    borderRadius: BorderRadius.circular(12),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        spacing: 14,
-        runSpacing: 6,
-        children: const [
-          _MapLegendItem(
-            color: Color(0xffb3261e),
-            label: 'Alerty i komunikaty',
-          ),
-          _MapLegendItem(color: Color(0xff1565c0), label: 'Ostrzeżenia IMGW'),
-          _MapLegendItem(color: Color(0xff2e7d32), label: 'Punkty schronienia'),
-          _MapLegendItem(
-            color: Color(0xffef6c00),
-            label: 'Obserwowane miejsca',
-          ),
-          _MapLegendItem(
-            color: Color(0xff7563b8),
-            label: 'Pomiary promieniowania PAA',
-          ),
-        ],
+  Widget build(BuildContext context) {
+    final items = <Widget>[
+      if (showAlerts)
+        const _MapLegendItem(
+          color: Color(0xffb3261e),
+          label: 'Alerty i komunikaty',
+        ),
+      if (showImgw)
+        const _MapLegendItem(
+          color: Color(0xff1565c0),
+          label: 'Ostrzeżenia IMGW',
+        ),
+      if (showShelters)
+        const _MapLegendItem(
+          color: Color(0xff2e7d32),
+          label: 'Punkty schronienia',
+        ),
+      if (showWatched)
+        const _MapLegendItem(
+          color: Color(0xffef6c00),
+          label: 'Obserwowane miejsca',
+        ),
+      if (showRadiation)
+        const _MapLegendItem(
+          color: Color(0xff7563b8),
+          label: 'Pomiary promieniowania PAA',
+        ),
+    ];
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Material(
+      key: const ValueKey('map-legend'),
+      color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 14,
+          runSpacing: 6,
+          children: items,
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _MapLegendItem extends StatelessWidget {
@@ -102,6 +130,9 @@ class _ShelterMapState extends State<ShelterMap> {
   bool showRadiation = false, locating = false;
   bool showEvents = true, showImgw = true, showWatched = true;
   bool showGpsInterference = false, gpsInterferenceLoading = false;
+  bool legendAlertsVisible = false, legendImgwVisible = false;
+  bool legendSheltersVisible = false, legendWatchedVisible = false;
+  bool legendRadiationVisible = false;
   bool ready = false, loading = false, online = false, fallbackStyle = false;
   bool overviewMode = false, nationalEventsLoading = false;
   bool radiationRefreshRunning = false, radiationOverrideOnline = false;
@@ -139,6 +170,87 @@ class _ShelterMapState extends State<ShelterMap> {
             ? widget.events
             : nationalSnapshot?.alertEvents ?? widget.events)
       : widget.events;
+
+  List<double>? visibleLegendBbox;
+
+  List<Map<String, dynamic>> contextEventFeatures(DateTime now) =>
+      markMapRcbCounts(
+        markMapCategoryCollisions(
+          contextEvents
+              .where(
+                (event) => mapEventVisibleForLayers(
+                  event,
+                  showEvents: showEvents,
+                  showImgw: showImgw,
+                ),
+              )
+              .expand(
+                (event) => mapEventFeatures(
+                  event,
+                  now,
+                  administrativeAnchors: administrativeAnchors,
+                ),
+              )
+              .toList(),
+        ),
+      );
+
+  bool featureInsideBbox(Map<String, dynamic> feature, List<double> bbox) {
+    final geometry = feature['geometry'];
+    if (geometry is! Map || geometry['type'] != 'Point') return false;
+    final coordinates = geometry['coordinates'];
+    if (coordinates is! List || coordinates.length != 2) return false;
+    final lon = coordinates[0], lat = coordinates[1];
+    if (lon is! num || lat is! num) return false;
+    return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
+  }
+
+  bool viewportHasSheltersInBbox(MapViewport? value, List<double> bbox) {
+    final features = value?.data['features'];
+    if (features is! List) return false;
+    return features.whereType<Map>().any(
+      (feature) => featureInsideBbox(Map<String, dynamic>.from(feature), bbox),
+    );
+  }
+
+  void updateMapLegend(
+    List<double> bbox, {
+    bool? sheltersVisible,
+    bool? radiationVisible,
+  }) {
+    final eventFeatures = contextEventFeatures(DateTime.now());
+    bool categoryVisible(String category) => eventFeatures.any((feature) {
+      if (!featureInsideBbox(feature, bbox)) return false;
+      final properties = feature['properties'];
+      return properties is Map && properties['mapCategory'] == category;
+    });
+    final watchedVisible =
+        showWatched &&
+        widget.watchedLocations.any(
+          (location) =>
+              location.longitude >= bbox[0] &&
+              location.longitude <= bbox[2] &&
+              location.latitude >= bbox[1] &&
+              location.latitude <= bbox[3],
+        );
+    if (!mounted) return;
+    setState(() {
+      visibleLegendBbox = List<double>.from(bbox);
+      legendAlertsVisible = showEvents && categoryVisible('ALERT');
+      legendImgwVisible = showImgw && categoryVisible('IMGW');
+      legendWatchedVisible = watchedVisible;
+      if (sheltersVisible != null) {
+        legendSheltersVisible = sheltersVisible;
+      }
+      if (radiationVisible != null) {
+        legendRadiationVisible = radiationVisible;
+      }
+      if (!showRadiation) {
+        legendRadiationVisible = false;
+      }
+    });
+  }
+
   LatLng get homeTarget {
     final lat = widget.repository.primaryLocationLatitude;
     final lon = widget.repository.primaryLocationLongitude;
@@ -673,27 +785,7 @@ class _ShelterMapState extends State<ShelterMap> {
     final c = controller;
     if (!ready || c == null || widget.ukraine) return;
 
-    final now = DateTime.now();
-    final eventFeatures = markMapRcbCounts(
-      markMapCategoryCollisions(
-        contextEvents
-            .where(
-              (event) => mapEventVisibleForLayers(
-                event,
-                showEvents: showEvents,
-                showImgw: showImgw,
-              ),
-            )
-            .expand(
-              (event) => mapEventFeatures(
-                event,
-                now,
-                administrativeAnchors: administrativeAnchors,
-              ),
-            )
-            .toList(),
-      ),
-    );
+    final eventFeatures = contextEventFeatures(DateTime.now());
     final watchedFeatures = showWatched
         ? widget.watchedLocations
               .map(
@@ -720,6 +812,10 @@ class _ShelterMapState extends State<ShelterMap> {
       'type': 'FeatureCollection',
       'features': watchedFeatures,
     });
+    final bbox = visibleLegendBbox;
+    if (bbox != null) {
+      updateMapLegend(bbox);
+    }
   }
 
   Future<void> refreshGpsInterferenceForCurrentViewport() async {
@@ -801,6 +897,8 @@ class _ShelterMapState extends State<ShelterMap> {
       if (west >= east || south >= north) {
         throw const FormatException('Obszar poza zakresem');
       }
+      final bbox = <double>[west, south, east, north];
+      updateMapLegend(bbox);
       if (showGpsInterference) {
         unawaited(refreshGpsInterferenceForBounds([west, south, east, north]));
       }
@@ -836,14 +934,22 @@ class _ShelterMapState extends State<ShelterMap> {
                 )
                 .toList(),
           });
+          updateMapLegend(bbox, radiationVisible: visible.isNotEmpty);
         } catch (_) {
           // A broken PAA payload must never break shelters/events on the map.
           await c.setGeoJsonSource('radiation', empty);
+          updateMapLegend(bbox, radiationVisible: false);
         }
       } else {
         await c.setGeoJsonSource('radiation', empty);
+        updateMapLegend(bbox, radiationVisible: false);
       }
       final zoom = (c.cameraPosition?.zoom ?? 5).clamp(0, 22).toDouble();
+      updateMapLegend(
+        bbox,
+        sheltersVisible:
+            mapShowsShelters(zoom) && viewportHasSheltersInBbox(viewport, bbox),
+      );
       if (!mapShowsShelters(zoom)) {
         if (!overviewMode) {
           setState(() => overviewMode = true);
@@ -854,6 +960,7 @@ class _ShelterMapState extends State<ShelterMap> {
         renderedRequest = null;
         await refreshNationalEvents();
         await syncContextLayers();
+        updateMapLegend(bbox, sheltersVisible: false);
         if (!mounted || current != ticket) return;
         setState(() {
           message =
@@ -877,11 +984,16 @@ class _ShelterMapState extends State<ShelterMap> {
         viewport = null;
         renderedRequest = null;
         await c.setGeoJsonSource('shelters', empty);
+        updateMapLegend(bbox, sheltersVisible: false);
       }
       final result = await provider.fetch(request);
       if (!mounted || current != ticket) return;
       await c.setGeoJsonSource('shelters', result.data);
       if (!mounted || current != ticket) return;
+      updateMapLegend(
+        bbox,
+        sheltersVisible: viewportHasSheltersInBbox(result, bbox),
+      );
       onlineRetry?.cancel();
       setState(() {
         viewport = result;
@@ -917,6 +1029,13 @@ class _ShelterMapState extends State<ShelterMap> {
         await c.setGeoJsonSource('shelters', empty);
       }
       if (!mounted || current != ticket) return;
+      final bbox = visibleLegendBbox;
+      if (bbox != null) {
+        updateMapLegend(
+          bbox,
+          sheltersVisible: viewportHasSheltersInBbox(fallback, bbox),
+        );
+      }
       setState(() {
         viewport = fallback;
         renderedRequest = fallback == null ? null : fallbackRequest;
@@ -1327,7 +1446,10 @@ class _ShelterMapState extends State<ShelterMap> {
                   ),
                   value: showRadiation,
                   onChanged: (value) {
-                    setState(() => showRadiation = value);
+                    setState(() {
+                      showRadiation = value;
+                      if (!value) legendRadiationVisible = false;
+                    });
                     update(() {});
                     if (value) {
                       unawaited(refreshRadiationSnapshot(force: true));
@@ -1371,7 +1493,7 @@ class _ShelterMapState extends State<ShelterMap> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Czerwone: Alerty i komunikaty • niebieskie: Ostrzeżenia IMGW • zielone: Punkty schronienia • pomarańczowe: Obserwowane miejsca • fioletowe: Pomiary promieniowania PAA',
+                  'Legenda na mapie aktualizuje się automatycznie i pokazuje tylko te typy danych, które są widoczne w bieżącym kadrze.',
                 ),
               ],
             ),
@@ -1384,6 +1506,12 @@ class _ShelterMapState extends State<ShelterMap> {
   @override
   Widget build(BuildContext context) {
     final fresh = online && viewport?.freshAt(DateTime.now()) == true;
+    final showMapLegend =
+        legendAlertsVisible ||
+        legendImgwVisible ||
+        legendSheltersVisible ||
+        legendWatchedVisible ||
+        legendRadiationVisible;
     Widget gpsLegend(Color color, String label) => Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1512,8 +1640,16 @@ class _ShelterMapState extends State<ShelterMap> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        const _MapLegend(),
+                        if (showMapLegend) ...[
+                          const SizedBox(height: 6),
+                          _MapLegend(
+                            showAlerts: legendAlertsVisible,
+                            showImgw: legendImgwVisible,
+                            showShelters: legendSheltersVisible,
+                            showWatched: legendWatchedVisible,
+                            showRadiation: legendRadiationVisible,
+                          ),
+                        ],
                       ],
                     ),
                   ),
