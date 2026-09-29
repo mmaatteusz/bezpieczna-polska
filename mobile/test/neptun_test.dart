@@ -229,6 +229,8 @@ void main() {
       expect(source, contains("'neptun-live-symbols'"));
       expect(source, contains("'neptun-icon-fpv'"));
       expect(source, contains("'neptun-icon-missile'"));
+      expect(source, contains('const ui.Color(0xffffffff)'));
+      expect(source, isNot(contains('0xff7f1d1d')));
       expect(source, isNot(contains("circleColor: '#c62828'")));
     },
   );
