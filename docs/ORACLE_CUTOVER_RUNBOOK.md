@@ -172,6 +172,10 @@ Na Oracle sprawdzamy co najmniej:
 
 Railway pozostaje aktywny.
 
+Dodatkowo uruchamiamy workflow `Compare baseline and Oracle runtime`. Porównuje on równolegle stan, `errorCode`, czas odpowiedzi, liczbę elementów i świeżość synchronizacji dla kluczowych źródeł. Baseline jest parametrem i dziś wskazuje Railway; narzędzie nie jest związane z konkretnym dostawcą hostingu.
+
+Szczególnie obserwujemy `RCB`, `RSO`, `IMGW_HYDRO` i `PAA`, ponieważ baseline Railway z 2026-09-29 miał dla nich wielominutową konwergencję i timeouty, podczas gdy niezależne live-checki GitHub Actions osiągały te upstreamy. Nie uznajemy tego za dowód problemu Railway, dopóki Oracle nie pokaże powtarzalnie lepszego wyniku w kilku rundach.
+
 ## 11. GitHub Actions
 
 Dopiero po utworzeniu VM dodamy sekrety SSH potrzebne przez manualny workflow Oracle. Na tym etapie nadal NIE zmieniamy:
