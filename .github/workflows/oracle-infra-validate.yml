@@ -8,6 +8,7 @@ on:
       - '.github/workflows/oracle-deploy.yml'
       - '.github/workflows/oracle-infra-validate.yml'
       - '.github/workflows/oracle-host-audit.yml'
+      - '.github/workflows/oracle-runtime-compare.yml'
   push:
     branches: [main]
     paths:
@@ -15,6 +16,7 @@ on:
       - '.github/workflows/oracle-deploy.yml'
       - '.github/workflows/oracle-infra-validate.yml'
       - '.github/workflows/oracle-host-audit.yml'
+      - '.github/workflows/oracle-runtime-compare.yml'
 
 permissions:
   contents: read
@@ -31,6 +33,7 @@ jobs:
           for script in infra/oracle/*.sh; do
             bash -n "$script"
           done
+          node --check infra/oracle/compare-runtime-sources.mjs
       - name: Enforce provider-neutral and private database rules
         run: |
           set -euo pipefail
@@ -52,3 +55,5 @@ jobs:
           grep -Fq 'ORACLE_HOST_AUDIT_PASS' infra/oracle/verify-host.sh
           grep -Fq 'StrictHostKeyChecking=yes' .github/workflows/oracle-host-audit.yml
           grep -Fq 'BP_STRICT_COUNTS' infra/oracle/compare-databases.sh
+          grep -Fq 'COMPARE_PASS' infra/oracle/compare-runtime-sources.mjs
+          grep -Fq 'CANDIDATE_EXPECTED_BUILD_SHA' .github/workflows/oracle-runtime-compare.yml
