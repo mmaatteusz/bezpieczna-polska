@@ -205,6 +205,17 @@ class _ShelterMapState extends State<ShelterMap> {
     return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
   }
 
+  String? featurePointKey(Map feature) {
+    final geometry = feature['geometry'];
+    if (geometry is! Map || geometry['type'] != 'Point') return null;
+    final coordinates = geometry['coordinates'];
+    if (coordinates is! List || coordinates.length != 2) return null;
+    final lon = coordinates[0], lat = coordinates[1];
+    if (lon is! num || lat is! num) return null;
+    return '${lon.toDouble().toStringAsFixed(6)}:'
+        '${lat.toDouble().toStringAsFixed(6)}';
+  }
+
   bool viewportHasSheltersInBbox(MapViewport? value, List<double> bbox) {
     final features = value?.data['features'];
     if (features is! List) return false;
@@ -1251,6 +1262,7 @@ class _ShelterMapState extends State<ShelterMap> {
       ], null);
       if (contextHits.isNotEmpty && mounted) {
         final hitEventIds = <String>{};
+        final hitEventPoints = <String>{};
         String? locationId;
         for (final rawHit in contextHits) {
           if (rawHit is! Map || rawHit['properties'] is! Map) continue;
@@ -1260,8 +1272,30 @@ class _ShelterMapState extends State<ShelterMap> {
           final eventId = properties['eventId']?.toString();
           if (eventId != null && eventId.isNotEmpty) {
             hitEventIds.add(eventId);
+            final pointKey = featurePointKey(rawHit);
+            if (pointKey != null) hitEventPoints.add(pointKey);
           }
           locationId ??= properties['locationId']?.toString();
+        }
+
+        // Red and blue collision markers are intentionally shifted on screen,
+        // but still represent the same underlying map coordinate. If the user
+        // taps either one, include every event anchored at that coordinate so
+        // the first choice is always ALERT vs IMGW, never whichever circle
+        // happened to win MapLibre hit-testing.
+        if (hitEventPoints.isNotEmpty) {
+          for (final feature in contextEventFeatures(DateTime.now())) {
+            final pointKey = featurePointKey(feature);
+            if (pointKey == null || !hitEventPoints.contains(pointKey)) {
+              continue;
+            }
+            final properties = feature['properties'];
+            if (properties is! Map) continue;
+            final eventId = properties['eventId']?.toString();
+            if (eventId != null && eventId.isNotEmpty) {
+              hitEventIds.add(eventId);
+            }
+          }
         }
 
         final hitEvents = <SafetyEvent>[
