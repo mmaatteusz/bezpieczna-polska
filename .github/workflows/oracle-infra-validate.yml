@@ -35,6 +35,11 @@ jobs:
           done
       - name: Check append-only backup upload
         run: python3 infra/oracle/test_upload_backup.py
+      - name: Check encrypted configuration recovery
+        run: |
+          python3 -m venv "$RUNNER_TEMP/recovery-test"
+          "$RUNNER_TEMP/recovery-test/bin/pip" install 'cryptography==50.0.2'
+          "$RUNNER_TEMP/recovery-test/bin/python" infra/oracle/test_recovery_config.py
       - name: Enforce provider-neutral and private database rules
         run: |
           set -euo pipefail

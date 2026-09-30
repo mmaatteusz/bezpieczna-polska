@@ -58,6 +58,22 @@ GitHub Secrets nie są magazynem odzyskiwania: zapisanej wartości nie można
 później odczytać. Keystore preview nie zastępuje podpisu release Google Play.
 Play App Signing oddziela klucz podpisujący aplikację od klucza upload.
 
+`recovery-config.py create` uruchomiony jako root przez interpreter venv OCI
+tworzy pakiet pięciu plików konfiguracji hosta. Hasło wpisuje się interaktywnie
+(co najmniej 16 znaków), poza historią poleceń. Scrypt N=131072, r=8, p=1
+wyprowadza klucz AES-256-GCM; losowa sól i nonce są zapisane w kopercie JSON.
+Pakiet trafia do `recovery/host-recovery-TIMESTAMP.enc` w tym samym prywatnym
+buckecie, z zakazem nadpisania i weryfikacją metadanych. Skrypt wymaga obok
+pliku `upload-backup.py`. Hasło przechowuj w niezależnym menedżerze haseł.
+
+Po pobraniu obiektu z konsoli skopiuj go na host i uruchom jako root
+`recovery-config.py verify PATH`. Wymagane `CONFIG_RECOVERY_PASS`.
+Weryfikacja odszyfrowuje archiwum w pamięci i sprawdza komplet plików,
+bez wypisywania wartości lub zapisu sekretów na dysk. Na nowym hoście do
+odzyskania plików wykorzystaj `unseal()` z tego skryptu oraz ręcznie przejrzyj
+ścieżki przed zapisem do katalogu odzyskiwania; nigdy bezpośrednio na aktywny host.
+Kopie konfiguracji odświeżaj po zmianach sekretów. Nie zastępują one dziennego dumpu.
+
 Nie usuwaj lokalnych plików przed potwierdzeniem niezależnej kopii i odzyskania
 dostępu. Repozytorium i publiczne APK mogą być odbudowane przez GitHub Actions.
 
