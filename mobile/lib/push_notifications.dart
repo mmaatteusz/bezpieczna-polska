@@ -11,6 +11,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'model.dart';
 import 'app_version.dart';
+import 'foreground_push.dart';
 import 'watched_locations_panel.dart';
 
 enum PushPermissionState { notDetermined, denied, authorized, provisional }
@@ -58,6 +59,7 @@ class SecurePushSecretStore implements PushSecretStore {
 }
 
 class FirebasePushPlatformAdapter implements PushPlatformAdapter {
+  static StreamSubscription<RemoteMessage>? _foregroundMessages;
   final FirebaseMessaging messaging;
   @override
   final String platform;
@@ -99,6 +101,15 @@ class FirebasePushPlatformAdapter implements PushPlatformAdapter {
       );
     }
     final messaging = FirebaseMessaging.instance;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      _foregroundMessages ??= FirebaseMessaging.onMessage.listen((message) {
+        unawaited(
+          AndroidForegroundPush.show(message).catchError((Object _) {
+            debugPrint('FOREGROUND_PUSH_PRESENTATION_FAILED');
+          }),
+        );
+      });
+    }
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       await messaging.setForegroundNotificationPresentationOptions(
         alert: true,
@@ -758,7 +769,7 @@ class _NotificationSettingsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Test został wysłany przez serwer. Sprawdź pasek powiadomień na tym telefonie.',
+            'FCM/APNs przyjął test do wysyłki. Odbiór potwierdzi powiadomienie na telefonie.',
           ),
         ),
       );
