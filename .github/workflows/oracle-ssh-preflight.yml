@@ -9,7 +9,7 @@ permissions:
 jobs:
   ssh-preflight:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
       ORACLE_SSH_HOST: ${{ secrets.ORACLE_SSH_HOST }}
       ORACLE_SSH_USER: ${{ secrets.ORACLE_SSH_USER }}
@@ -33,6 +33,25 @@ jobs:
           chmod 0600 ~/.ssh/oracle
           printf '%s\n' "$ORACLE_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 0600 ~/.ssh/known_hosts
+
+      - name: Show runner IPv4 and wait for restricted SSH access
+        shell: bash
+        run: |
+          set -euo pipefail
+          runner_ip="$(curl -4 --fail --silent --show-error --max-time 20 https://api.ipify.org)"
+          python3 -c 'import ipaddress,sys; ipaddress.IPv4Address(sys.argv[1])' "$runner_ip"
+          echo "TEMPORARY_SSH_SOURCE=$runner_ip/32"
+          echo "Allow only this source on TCP destination 22 in OCI; remove the rule after this run."
+          for attempt in $(seq 1 60); do
+            if timeout 3 bash -c 'exec 3<>/dev/tcp/"$1"/22' _ "$ORACLE_SSH_HOST" 2>/dev/null; then
+              echo "SSH port reachable; proceeding with pinned host verification."
+              exit 0
+            fi
+            echo "Waiting for restricted SSH rule ($attempt/60)"
+            sleep 10
+          done
+          echo "SSH access timed out; remove any temporary rule before retrying." >&2
+          exit 1
 
       - name: Verify raw OCI host without changing it
         shell: bash
