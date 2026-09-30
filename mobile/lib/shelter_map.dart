@@ -205,6 +205,17 @@ class _ShelterMapState extends State<ShelterMap> {
     return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
   }
 
+  String? featurePointKey(Map feature) {
+    final geometry = feature['geometry'];
+    if (geometry is! Map || geometry['type'] != 'Point') return null;
+    final coordinates = geometry['coordinates'];
+    if (coordinates is! List || coordinates.length != 2) return null;
+    final lon = coordinates[0], lat = coordinates[1];
+    if (lon is! num || lat is! num) return null;
+    return '${lon.toDouble().toStringAsFixed(6)}:'
+        '${lat.toDouble().toStringAsFixed(6)}';
+  }
+
   bool viewportHasSheltersInBbox(MapViewport? value, List<double> bbox) {
     final features = value?.data['features'];
     if (features is! List) return false;
@@ -1060,6 +1071,109 @@ class _ShelterMapState extends State<ShelterMap> {
     }
   }
 
+  Future<String?> chooseEventCategory({
+    required List<SafetyEvent> alerts,
+    required List<SafetyEvent> imgw,
+  }) {
+    if (!mounted) return Future.value(null);
+    return showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Co chcesz otworzyć?',
+                style: Theme.of(sheetContext).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 4),
+              const Text('W tym miejscu nakładają się różne typy informacji.'),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xffb3261e),
+                  child: Icon(Icons.notifications_active_outlined),
+                ),
+                title: const Text('Zdarzenia i komunikaty'),
+                subtitle: Text(
+                  alerts.length == 1 ? '1 pozycja' : '${alerts.length} pozycji',
+                ),
+                onTap: () => Navigator.of(sheetContext).pop('ALERT'),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xff1565c0),
+                  child: Icon(Icons.cloud_outlined),
+                ),
+                title: const Text('Ostrzeżenia IMGW'),
+                subtitle: Text(
+                  imgw.length == 1 ? '1 pozycja' : '${imgw.length} pozycji',
+                ),
+                onTap: () => Navigator.of(sheetContext).pop('IMGW'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> showEventChoice(
+    List<SafetyEvent> events, {
+    required String title,
+    required Color color,
+  }) async {
+    if (!mounted || events.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(sheetContext).textTheme.titleLarge),
+              const SizedBox(height: 4),
+              const Text('Wybierz konkretną pozycję do otwarcia.'),
+              const SizedBox(height: 12),
+              for (final event in events)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  title: Text(event.title),
+                  subtitle: Text(
+                    mapEventIsImgw(event)
+                        ? 'Ostrzeżenie IMGW'
+                        : event.isRcb
+                        ? 'Alert RCB'
+                        : 'Alert lub komunikat',
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    widget.openEvent(event);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> tapped(math.Point<double> point, LatLng location) async {
     final c = controller;
     if (c == null || !ready) return;
@@ -1140,19 +1254,83 @@ class _ShelterMapState extends State<ShelterMap> {
         'watched-points',
       ], null);
       if (contextHits.isNotEmpty && mounted) {
-        final properties = Map<String, dynamic>.from(
-          (contextHits.first as Map)['properties'] as Map,
-        );
-        final eventId = properties['eventId']?.toString();
-        if (eventId != null) {
-          for (final event in contextEvents) {
-            if (event.id == eventId) {
-              widget.openEvent(event);
-              return;
+        final hitEventIds = <String>{};
+        final hitEventPoints = <String>{};
+        String? locationId;
+        for (final rawHit in contextHits) {
+          if (rawHit is! Map || rawHit['properties'] is! Map) continue;
+          final properties = Map<String, dynamic>.from(
+            rawHit['properties'] as Map,
+          );
+          final eventId = properties['eventId']?.toString();
+          if (eventId != null && eventId.isNotEmpty) {
+            hitEventIds.add(eventId);
+            final pointKey = featurePointKey(rawHit);
+            if (pointKey != null) hitEventPoints.add(pointKey);
+          }
+          locationId ??= properties['locationId']?.toString();
+        }
+
+        if (hitEventPoints.isNotEmpty) {
+          for (final feature in contextEventFeatures(DateTime.now())) {
+            final pointKey = featurePointKey(feature);
+            if (pointKey == null || !hitEventPoints.contains(pointKey)) {
+              continue;
+            }
+            final properties = feature['properties'];
+            if (properties is! Map) continue;
+            final eventId = properties['eventId']?.toString();
+            if (eventId != null && eventId.isNotEmpty) {
+              hitEventIds.add(eventId);
             }
           }
         }
-        final locationId = properties['locationId']?.toString();
+
+        final hitEvents = <SafetyEvent>[
+          for (final event in contextEvents)
+            if (hitEventIds.contains(event.id)) event,
+        ];
+        if (hitEvents.length == 1) {
+          widget.openEvent(hitEvents.single);
+          return;
+        }
+        if (hitEvents.length > 1) {
+          final alerts = hitEvents
+              .where((event) => !mapEventIsImgw(event))
+              .toList();
+          final imgw = hitEvents.where(mapEventIsImgw).toList();
+
+          if (alerts.isNotEmpty && imgw.isNotEmpty) {
+            final category = await chooseEventCategory(
+              alerts: alerts,
+              imgw: imgw,
+            );
+            if (!mounted || category == null) return;
+            if (category == 'IMGW') {
+              await showEventChoice(
+                imgw,
+                title: 'Ostrzeżenia IMGW',
+                color: const Color(0xff1565c0),
+              );
+            } else {
+              await showEventChoice(
+                alerts,
+                title: 'Zdarzenia i komunikaty',
+                color: const Color(0xffb3261e),
+              );
+            }
+            return;
+          }
+
+          final onlyImgw = imgw.isNotEmpty;
+          await showEventChoice(
+            onlyImgw ? imgw : alerts,
+            title: onlyImgw ? 'Ostrzeżenia IMGW' : 'Zdarzenia i komunikaty',
+            color: onlyImgw ? const Color(0xff1565c0) : const Color(0xffb3261e),
+          );
+          return;
+        }
+
         if (locationId != null) {
           WatchedLocation? selected;
           for (final item in widget.watchedLocations) {
