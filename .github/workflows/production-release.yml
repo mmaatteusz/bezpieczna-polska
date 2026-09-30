@@ -223,7 +223,7 @@ jobs:
           EXPECTED_CODE="$BUILD"
           cp mobile/build/app/outputs/bundle/release/app-release.aab "output/Bezpieczna_Polska_${VERSION}.aab"
           cp mobile/build/app/outputs/flutter-apk/app-release.apk "output/Bezpieczna_Polska_${VERSION}-arm64.apk"
-          jarsigner -verify -strict output/*.aab
+          jarsigner -verify -strict -keystore "$ANDROID_KEYSTORE_PATH" -storepass:env ANDROID_KEYSTORE_PASSWORD output/*.aab "$ANDROID_KEY_ALIAS" | tee output/aab-signature-check.txt
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs output/*.apk | tee output/signature-check.txt
           grep -F "Signer #1 certificate SHA-256 digest: $PRODUCTION_SIGNING_CERT_SHA256" output/signature-check.txt
           grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' output/signature-check.txt
@@ -263,7 +263,7 @@ jobs:
           - Known source limitations: shelter last-known-good fallback and WCZK-18 adapter degradation. Check the API source status for current details.
           NOTES
           printf '\nSource commit: %s\nBackend commit: %s\nBuild: %s/%s/actions/runs/%s\n' "$GITHUB_SHA" "$BACKEND_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> "$RUNNER_TEMP/release-notes.md"
-          gh release create "$TAG" output/*.aab output/*.apk output/SHA256SUMS.txt output/package-info.txt output/signature-check.txt \
+          gh release create "$TAG" output/*.aab output/*.apk output/SHA256SUMS.txt output/package-info.txt output/signature-check.txt output/aab-signature-check.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "Bezpieczna Polska ${VERSION} — Android / Oracle RC" \
             --notes-file "$RUNNER_TEMP/release-notes.md"
