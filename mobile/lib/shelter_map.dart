@@ -1307,7 +1307,9 @@ class _ShelterMapState extends State<ShelterMap> {
           return;
         }
         if (hitEvents.length > 1) {
-          final alerts = hitEvents.where((event) => !mapEventIsImgw(event)).toList();
+          final alerts = hitEvents
+              .where((event) => !mapEventIsImgw(event))
+              .toList();
           final imgw = hitEvents.where(mapEventIsImgw).toList();
 
           if (alerts.isNotEmpty && imgw.isNotEmpty) {
