@@ -1,26 +1,32 @@
-name: Debug dart format diff
+name: Apply dart format
 on:
   pull_request:
     branches: [main]
 permissions:
-  contents: read
+  contents: write
 jobs:
   format:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.4'
           channel: stable
           cache: true
-      - name: Format target file
+      - name: Format and commit
         working-directory: mobile
-        run: dart format lib/shelter_map.dart
-      - name: Upload formatted file
-        uses: actions/upload-artifact@v7
-        with:
-          name: formatted-shelter-map
-          path: mobile/lib/shelter_map.dart
-          if-no-files-found: error
+        run: |
+          dart format lib/shelter_map.dart
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/shelter_map.dart
+          if git diff --cached --quiet; then
+            echo "Already formatted"
+          else
+            git commit -m "Apply dart format"
+            git push origin "HEAD:${{ github.head_ref }}"
+          fi
