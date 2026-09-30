@@ -1060,6 +1060,60 @@ class _ShelterMapState extends State<ShelterMap> {
     }
   }
 
+  Future<void> showEventChoice(List<SafetyEvent> events) async {
+    if (!mounted || events.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Wybierz zdarzenie',
+                style: Theme.of(sheetContext).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'W tym miejscu nakłada się kilka oznaczeń. Wybierz, które chcesz otworzyć.',
+              ),
+              const SizedBox(height: 12),
+              for (final event in events)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: mapEventIsImgw(event)
+                          ? const Color(0xff1565c0)
+                          : const Color(0xffb3261e),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  title: Text(event.title),
+                  subtitle: Text(
+                    mapEventIsImgw(event)
+                        ? 'Ostrzeżenie IMGW'
+                        : event.isRcb
+                        ? 'Alert RCB'
+                        : 'Alert lub komunikat',
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    widget.openEvent(event);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> tapped(math.Point<double> point, LatLng location) async {
     final c = controller;
     if (c == null || !ready) return;
@@ -1140,19 +1194,33 @@ class _ShelterMapState extends State<ShelterMap> {
         'watched-points',
       ], null);
       if (contextHits.isNotEmpty && mounted) {
-        final properties = Map<String, dynamic>.from(
-          (contextHits.first as Map)['properties'] as Map,
-        );
-        final eventId = properties['eventId']?.toString();
-        if (eventId != null) {
-          for (final event in contextEvents) {
-            if (event.id == eventId) {
-              widget.openEvent(event);
-              return;
-            }
+        final hitEventIds = <String>{};
+        String? locationId;
+        for (final rawHit in contextHits) {
+          if (rawHit is! Map || rawHit['properties'] is! Map) continue;
+          final properties = Map<String, dynamic>.from(
+            rawHit['properties'] as Map,
+          );
+          final eventId = properties['eventId']?.toString();
+          if (eventId != null && eventId.isNotEmpty) {
+            hitEventIds.add(eventId);
           }
+          locationId ??= properties['locationId']?.toString();
         }
-        final locationId = properties['locationId']?.toString();
+
+        final hitEvents = <SafetyEvent>[
+          for (final event in contextEvents)
+            if (hitEventIds.contains(event.id)) event,
+        ];
+        if (hitEvents.length == 1) {
+          widget.openEvent(hitEvents.single);
+          return;
+        }
+        if (hitEvents.length > 1) {
+          await showEventChoice(hitEvents);
+          return;
+        }
+
         if (locationId != null) {
           WatchedLocation? selected;
           for (final item in widget.watchedLocations) {
