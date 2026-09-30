@@ -281,7 +281,6 @@ class _ShelterMapState extends State<ShelterMap> {
           circleOpacity: cluster ? 0.94 : 0.92,
           circleStrokeColor: '#ffffff',
           circleStrokeWidth: cluster ? 2.0 : 1.5,
-          zIndex: 1,
         ),
       );
       data.add(annotationData);
