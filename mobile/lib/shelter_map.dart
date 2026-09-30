@@ -224,6 +224,146 @@ class _ShelterMapState extends State<ShelterMap> {
     );
   }
 
+  Future<void> syncShelterAnnotations(MapViewport? value) async {
+    final c = controller;
+    if (c == null || !ready || widget.ukraine) return;
+
+    await c.clearCircles();
+    final rawFeatures = value?.data['features'];
+    if (rawFeatures is! List || rawFeatures.isEmpty) return;
+
+    final options = <CircleOptions>[];
+    final data = <Map<String, dynamic>>[];
+    for (final rawFeature in rawFeatures) {
+      if (rawFeature is! Map) continue;
+      final feature = Map<String, dynamic>.from(rawFeature);
+      final geometry = feature['geometry'];
+      final properties = feature['properties'];
+      if (geometry is! Map || properties is! Map) continue;
+      final coordinates = geometry['coordinates'];
+      if (geometry['type'] != 'Point' ||
+          coordinates is! List ||
+          coordinates.length != 2 ||
+          coordinates[0] is! num ||
+          coordinates[1] is! num) {
+        continue;
+      }
+      final p = Map<String, dynamic>.from(properties);
+      final lon = (coordinates[0] as num).toDouble();
+      final lat = (coordinates[1] as num).toDouble();
+      final cluster = p['cluster'] == true;
+      options.add(
+        CircleOptions(
+          geometry: LatLng(lat, lon),
+          circleColor: cluster ? '#1b5e20' : '#2e7d32',
+          circleRadius: cluster ? 19 : 7,
+          circleOpacity: 0.96,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: cluster ? 2 : 1.5,
+        ),
+      );
+      data.add({
+        'kind': 'shelter-annotation',
+        'properties': p,
+        'coordinates': [lon, lat],
+      });
+    }
+    if (options.isNotEmpty) {
+      await c.addCircles(options, data);
+    }
+  }
+
+  Future<void> openShelterData(
+    Map<String, dynamic> properties,
+    List<dynamic> coordinates,
+  ) async {
+    final c = controller;
+    if (c == null || !mounted || coordinates.length != 2) return;
+    final lon = coordinates[0], lat = coordinates[1];
+    if (lon is! num || lat is! num) return;
+
+    if (properties['cluster'] == true) {
+      final expansionZoom = properties['expansionZoom'];
+      if (expansionZoom is num) {
+        await c.animateCamera(
+          CameraUpdate.newLatLngZoom(
+            LatLng(lat.toDouble(), lon.toDouble()),
+            expansionZoom.toDouble(),
+          ),
+        );
+      }
+      return;
+    }
+
+    final shelter = ShelterPoint.parse(properties);
+    final navigationUrl = shelterNavigationUrl(
+      latitude: (shelter.data['latitude'] as num).toDouble(),
+      longitude: (shelter.data['longitude'] as num).toDouble(),
+    );
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                shelter.address,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              Text(
+                '${properties['municipality']} • ${properties['county']}',
+              ),
+              Text(shelter.availability),
+              const Text(
+                'Punkt schronienia wg PSP. Klasa ochrony, pojemność i bieżący dostęp nie są potwierdzone.',
+              ),
+              Text('Data danych: ${properties['dataDate']}'),
+              if (!online || viewport?.freshAt(DateTime.now()) != true)
+                const Text(
+                  'Ostatnie zapisane dane — aktualność niepotwierdzona',
+                ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    widget.openLink(navigationUrl);
+                  },
+                  icon: const Icon(Icons.navigation_outlined),
+                  label: const Text('Nawiguj do schronu'),
+                ),
+              ),
+              TextButton(
+                onPressed: () => widget.openLink(
+                  'https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce',
+                ),
+                child: const Text('Źródło: KG PSP / dane.gov.pl'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> openShelterCircle(Circle circle) async {
+    final raw = circle.data;
+    if (raw == null || raw['kind'] != 'shelter-annotation') return;
+    final properties = raw['properties'];
+    final coordinates = raw['coordinates'];
+    if (properties is! Map || coordinates is! List) return;
+    await openShelterData(
+      Map<String, dynamic>.from(properties),
+      List<dynamic>.from(coordinates),
+    );
+  }
+
   void updateMapLegend(
     List<double> bbox, {
     bool? sheltersVisible,
@@ -511,52 +651,10 @@ class _ShelterMapState extends State<ShelterMap> {
         const CircleLayerProperties(circleColor: '#7563b8', circleRadius: 7),
       );
       await c.addSource('shelters', GeojsonSourceProperties(data: empty));
-      // Native MapLibre builds can occasionally fail to match the boolean
-      // cluster filter after a GeoJSON source is replaced for a distant
-      // viewport. Keep an unfiltered marker underneath the typed layers so a
-      // shelter returned by the backend can never become invisible merely
-      // because the filter state did not refresh.
-      await c.addCircleLayer(
-        'shelters',
-        'shelter-visible-fallback',
-        const CircleLayerProperties(
-          circleColor: '#2e7d32',
-          circleRadius: 8,
-          circleOpacity: 0.92,
-          circleStrokeColor: '#ffffff',
-          circleStrokeWidth: 1,
-        ),
-      );
-      await c.addCircleLayer(
-        'shelters',
-        'shelter-points',
-        const CircleLayerProperties(
-          circleColor: '#2e7d32',
-          circleRadius: 6,
-          circleStrokeColor: '#ffffff',
-          circleStrokeWidth: 1,
-        ),
-        filter: [
-          '==',
-          ['get', 'cluster'],
-          false,
-        ],
-      );
-      await c.addCircleLayer(
-        'shelters',
-        'shelter-clusters',
-        const CircleLayerProperties(
-          circleColor: '#1b5e20',
-          circleRadius: 19,
-          circleStrokeColor: '#ffffff',
-          circleStrokeWidth: 1,
-        ),
-        filter: [
-          '==',
-          ['get', 'cluster'],
-          true,
-        ],
-      );
+      // Shelter circles are rendered through MapLibre's annotation manager.
+      // This avoids Android style-layer/source refresh issues observed after
+      // panning far away from the user's selected/home location. The GeoJSON
+      // source remains for cluster count labels and as a validated data mirror.
       await c.addSymbolLayer(
         'shelters',
         'shelter-counts',
@@ -991,6 +1089,7 @@ class _ShelterMapState extends State<ShelterMap> {
         }
         onlineRetry?.cancel();
         await c.setGeoJsonSource('shelters', empty);
+        await c.clearCircles();
         viewport = null;
         renderedRequest = null;
         await refreshNationalEvents();
@@ -1019,11 +1118,13 @@ class _ShelterMapState extends State<ShelterMap> {
         viewport = null;
         renderedRequest = null;
         await c.setGeoJsonSource('shelters', empty);
+        await c.clearCircles();
         updateMapLegend(bbox, sheltersVisible: false);
       }
       final result = await provider.fetch(request);
       if (!mounted || current != ticket) return;
       await c.setGeoJsonSource('shelters', result.data);
+      await syncShelterAnnotations(result);
       if (!mounted || current != ticket) return;
       updateMapLegend(
         bbox,
@@ -1059,9 +1160,11 @@ class _ShelterMapState extends State<ShelterMap> {
       final fallback = cached ?? offline;
       if (fallback != null) {
         await c.setGeoJsonSource('shelters', fallback.data);
+        await syncShelterAnnotations(fallback);
       } else {
         // The previous viewport is no longer valid for the new camera area.
         await c.setGeoJsonSource('shelters', empty);
+        await c.clearCircles();
       }
       if (!mounted || current != ticket) return;
       final bbox = visibleLegendBbox;
@@ -1396,84 +1499,7 @@ class _ShelterMapState extends State<ShelterMap> {
           }
         }
       }
-      var hits = await c.queryRenderedFeatures(point, [
-        'shelter-points',
-        'shelter-clusters',
-      ], null);
-      if (hits.isEmpty) {
-        hits = await c.queryRenderedFeatures(point, [
-          'shelter-visible-fallback',
-        ], null);
-      }
-      if (hits.isEmpty || !mounted) return;
-      final f = hits.first as Map,
-          p = Map<String, dynamic>.from(f['properties'] as Map);
-      if (p['cluster'] == true) {
-        final coordinates = f['geometry']['coordinates'] as List;
-        await c.animateCamera(
-          CameraUpdate.newLatLngZoom(
-            LatLng(
-              (coordinates[1] as num).toDouble(),
-              (coordinates[0] as num).toDouble(),
-            ),
-            (p['expansionZoom'] as num).toDouble(),
-          ),
-        );
-        return;
-      }
-      final shelter = ShelterPoint.parse(p);
-      final navigationUrl = shelterNavigationUrl(
-        latitude: (shelter.data['latitude'] as num).toDouble(),
-        longitude: (shelter.data['longitude'] as num).toDouble(),
-      );
-      if (!mounted) return;
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        builder: (context) => SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  shelter.address,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                Text('${p['municipality']} • ${p['county']}'),
-                Text(shelter.availability),
-                const Text(
-                  'Punkt schronienia wg PSP. Klasa ochrony, pojemność i bieżący dostęp nie są potwierdzone.',
-                ),
-                Text('Data danych: ${p['dataDate']}'),
-                if (!online || viewport?.freshAt(DateTime.now()) != true)
-                  const Text(
-                    'Ostatnie zapisane dane — aktualność niepotwierdzona',
-                  ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      widget.openLink(navigationUrl);
-                    },
-                    icon: const Icon(Icons.navigation_outlined),
-                    label: const Text('Nawiguj do schronu'),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => widget.openLink(
-                    'https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce',
-                  ),
-                  child: const Text('Źródło: KG PSP / dane.gov.pl'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+      return;
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1759,6 +1785,10 @@ class _ShelterMapState extends State<ShelterMap> {
                   onMapCreated: (c) {
                     if (!mounted) return;
                     controller = c;
+                    c.onCircleTapped.add((circle) {
+                      if (!mounted) return;
+                      unawaited(openShelterCircle(circle));
+                    });
                     armStyleFallback(c);
                   },
                   onStyleLoadedCallback: styled,
