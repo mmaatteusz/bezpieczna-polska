@@ -91,30 +91,11 @@ void main() {
     expect(find.byKey(const ValueKey('native-map-surface')), findsOneWidget);
     expect(find.byTooltip('Warstwy mapy'), findsOneWidget);
     expect(find.byTooltip('Wróć do wybranej miejscowości'), findsOneWidget);
-    final legend = find.byKey(const ValueKey('map-legend'));
-    expect(legend, findsOneWidget);
     expect(
-      find.descendant(of: legend, matching: find.text('Alerty i komunikaty')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: legend, matching: find.text('Ostrzeżenia IMGW')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: legend, matching: find.text('Punkty schronienia')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: legend, matching: find.text('Obserwowane miejsca')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: legend,
-        matching: find.text('Pomiary promieniowania PAA'),
-      ),
-      findsOneWidget,
+      find.byKey(const ValueKey('map-legend')),
+      findsNothing,
+      reason:
+          'Legenda ma się pojawiać tylko wtedy, gdy bieżący kadr faktycznie zawiera oznaczenia.',
     );
 
     await tester.tap(find.text('Więcej').last);
