@@ -2,7 +2,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/foreground_push.dart';
+import 'package:bezpieczna_polska/foreground_push.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
