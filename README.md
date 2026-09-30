@@ -12,7 +12,7 @@
 
 Projekt jest w aktywnej fazie alpha. Android jest platformą priorytetową; publikacja w Google Play jest przygotowywana.
 
-Aktualny kod rozwojowy: **0.1.0-alpha.63** (`build 64`).
+Aktualny kod rozwojowy: **0.1.0-alpha.64** (`build 65`).
 
 **[Pobierz opublikowane wydania Android z GitHub Releases](https://github.com/mmaatteusz/bezpieczna-polska/releases)**
 
