@@ -1060,7 +1060,67 @@ class _ShelterMapState extends State<ShelterMap> {
     }
   }
 
-  Future<void> showEventChoice(List<SafetyEvent> events) async {
+  Future<String?> chooseEventCategory({
+    required List<SafetyEvent> alerts,
+    required List<SafetyEvent> imgw,
+  }) {
+    if (!mounted) return Future.value(null);
+    return showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Co chcesz otworzyć?',
+                style: Theme.of(sheetContext).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'W tym miejscu nakładają się różne typy informacji.',
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xffb3261e),
+                  child: Icon(Icons.notifications_active_outlined),
+                ),
+                title: const Text('Zdarzenia i komunikaty'),
+                subtitle: Text(
+                  alerts.length == 1
+                      ? '1 pozycja'
+                      : '${alerts.length} pozycji',
+                ),
+                onTap: () => Navigator.of(sheetContext).pop('ALERT'),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xff1565c0),
+                  child: Icon(Icons.cloud_outlined),
+                ),
+                title: const Text('Ostrzeżenia IMGW'),
+                subtitle: Text(
+                  imgw.length == 1 ? '1 pozycja' : '${imgw.length} pozycji',
+                ),
+                onTap: () => Navigator.of(sheetContext).pop('IMGW'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> showEventChoice(
+    List<SafetyEvent> events, {
+    required String title,
+    required Color color,
+  }) async {
     if (!mounted || events.isEmpty) return;
     await showModalBottomSheet<void>(
       context: context,
@@ -1073,13 +1133,11 @@ class _ShelterMapState extends State<ShelterMap> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Wybierz zdarzenie',
+                title,
                 style: Theme.of(sheetContext).textTheme.titleLarge,
               ),
               const SizedBox(height: 4),
-              const Text(
-                'W tym miejscu nakłada się kilka oznaczeń. Wybierz, które chcesz otworzyć.',
-              ),
+              const Text('Wybierz konkretną pozycję do otwarcia.'),
               const SizedBox(height: 12),
               for (final event in events)
                 ListTile(
@@ -1088,9 +1146,7 @@ class _ShelterMapState extends State<ShelterMap> {
                     width: 14,
                     height: 14,
                     decoration: BoxDecoration(
-                      color: mapEventIsImgw(event)
-                          ? const Color(0xff1565c0)
-                          : const Color(0xffb3261e),
+                      color: color,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -1217,7 +1273,39 @@ class _ShelterMapState extends State<ShelterMap> {
           return;
         }
         if (hitEvents.length > 1) {
-          await showEventChoice(hitEvents);
+          final alerts = hitEvents.where((event) => !mapEventIsImgw(event)).toList();
+          final imgw = hitEvents.where(mapEventIsImgw).toList();
+
+          if (alerts.isNotEmpty && imgw.isNotEmpty) {
+            final category = await chooseEventCategory(
+              alerts: alerts,
+              imgw: imgw,
+            );
+            if (!mounted || category == null) return;
+            if (category == 'IMGW') {
+              await showEventChoice(
+                imgw,
+                title: 'Ostrzeżenia IMGW',
+                color: const Color(0xff1565c0),
+              );
+            } else {
+              await showEventChoice(
+                alerts,
+                title: 'Zdarzenia i komunikaty',
+                color: const Color(0xffb3261e),
+              );
+            }
+            return;
+          }
+
+          final onlyImgw = imgw.isNotEmpty;
+          await showEventChoice(
+            onlyImgw ? imgw : alerts,
+            title: onlyImgw ? 'Ostrzeżenia IMGW' : 'Zdarzenia i komunikaty',
+            color: onlyImgw
+                ? const Color(0xff1565c0)
+                : const Color(0xffb3261e),
+          );
           return;
         }
 
