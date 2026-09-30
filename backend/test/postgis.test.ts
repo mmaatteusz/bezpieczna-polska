@@ -54,21 +54,31 @@ test('PostGIS shelters: exact points, regional bbox, full replacement and transa
   assert.equal((await store.shelterPage({regionId:'04',q:'',offset:0,limit:50,bbox})).total,3);
   assert.equal((await store.shelterPage({regionId:'02',q:'',offset:0,limit:50,bbox})).total,0);
   const app=await buildApp(store);try{const geo=(await app.inject('/v1/layers/shelters.geojson?bbox=17.8,53,18.3,53.3')).json();assert.equal(geo.features.length,3);}finally{await app.close();}
-  // Bounded map contract, count conservation and atomic refresh with a new version.
+  // Bounded map contract, zoom-tier clustering, count conservation and atomic refresh.
   const mapApp=await buildApp(store);
   try{
-   const path='/v1/map/shelters?bbox=17.8,53,18.3,53.3&zoom=10';
-   const detail=(await mapApp.inject(path)).json();assert.equal(detail.features.length,3);assert.equal(detail.metadata.clustered,false);
-   assert.equal((await mapApp.inject(path+'&regionId=02')).json().metadata.total,0);
+   const detailPath='/v1/map/shelters?bbox=17.8,53,18.3,53.3&zoom=15';
+   const detail=(await mapApp.inject(detailPath)).json();assert.equal(detail.features.length,3);assert.equal(detail.metadata.clustered,false);
+   assert.equal((await mapApp.inject(detailPath+'&regionId=02')).json().metadata.total,0);
    const many=Array.from({length:1200},(_,i)=>({...points[0],id:'PSP-OZO-'+i.toString(16).toUpperCase().padStart(12,'0'),longitude:18+(i%40)*0.001,latitude:53.1+Math.floor(i/40)*0.001}));
    await store.applyShelterSync(many,{...health,itemCount:many.length,sourceContentHash:'c'.repeat(64)});
    assert.equal(Number((await db.all("SELECT COUNT(*) AS total FROM pg_tables WHERE schemaname='public' AND tablename LIKE 'shelters_stage_%'"))[0].total),0,'successful replacement must clean staging tables');
-   const clustered=(await mapApp.inject(path)).json();assert.equal(clustered.metadata.total,1200);assert.equal(clustered.metadata.clustered,true);assert.ok(clustered.features.length<=1089);assert.equal(clustered.features.reduce((n:number,f:any)=>n+f.properties.point_count,0),1200);
-   assert.equal((await mapApp.inject(path+'&availability=UNKNOWN')).json().metadata.total,many[0].availability==='UNKNOWN'?1200:0);
+
+   const regionCluster=(await mapApp.inject('/v1/map/shelters?bbox=17.8,53,18.3,53.3&zoom=8')).json();
+   assert.equal(regionCluster.metadata.total,1200);assert.equal(regionCluster.metadata.clustered,true);assert.equal(regionCluster.metadata.clusterTier,'REGION');assert.equal(regionCluster.features.length,1);assert.equal(regionCluster.features[0].properties.point_count,1200);
+
+   const localPath='/v1/map/shelters?bbox=17.8,53,18.3,53.3&zoom=10';
+   const localCluster=(await mapApp.inject(localPath)).json();
+   assert.equal(localCluster.metadata.total,1200);assert.equal(localCluster.metadata.clustered,true);assert.equal(localCluster.metadata.clusterTier,'LOCAL');assert.ok(localCluster.features.length<=36);assert.equal(localCluster.features.reduce((n:number,f:any)=>n+f.properties.point_count,0),1200);
+
+   const nearCluster=(await mapApp.inject('/v1/map/shelters?bbox=17.8,53,18.3,53.3&zoom=13')).json();
+   assert.equal(nearCluster.metadata.clusterTier,'NEAR');assert.ok(nearCluster.features.length<=144);assert.equal(nearCluster.features.reduce((n:number,f:any)=>n+f.properties.point_count,0),1200);
+
+   assert.equal((await mapApp.inject(localPath+'&availability=UNKNOWN')).json().metadata.total,many[0].availability==='UNKNOWN'?1200:0);
    const near=(await mapApp.inject('/v1/map/shelters?bbox=18,53.1,18.002,53.102&zoom=18')).json();assert.ok(near.metadata.total<500);assert.equal(near.metadata.clustered,false);assert.ok(near.features.every((f:any)=>f.geometry.coordinates[0]<=18.002));
    await store.applyShelterSync(points,health);
-   assert.equal((await mapApp.inject(path)).json().metadata.version,health.sourceContentHash);
-   assert.equal((await mapApp.inject(path)).json().metadata.total,3);
+   assert.equal((await mapApp.inject(detailPath)).json().metadata.version,health.sourceContentHash);
+   assert.equal((await mapApp.inject(detailPath)).json().metadata.total,3);
   }finally{await mapApp.close();}
   // Force a real database error during replacement, after DELETE and INSERT.
   await db.run("CREATE OR REPLACE FUNCTION fixture_reject_shelter() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture_write_failure'; END $$");
