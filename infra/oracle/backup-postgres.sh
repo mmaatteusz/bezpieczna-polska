@@ -43,6 +43,10 @@ jq -n   --arg createdAt "$(date -u +%FT%TZ)"   --arg serverVersion "${SERVER_VER
 if [[ -x "${UPLOAD_HOOK}" ]]; then
   "${UPLOAD_HOOK}" "${DUMP}" "${DUMP}.sha256" "${META}"
 else
+  if [[ ${BP_REQUIRE_OFF_VM_BACKUP:-NO} == YES ]]; then
+    echo "Required off-VM upload hook missing; backup job failed." >&2
+    exit 1
+  fi
   echo "No off-VM upload hook installed yet; local backup only." >&2
 fi
 

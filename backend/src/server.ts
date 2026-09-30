@@ -67,7 +67,8 @@ try{
   await push.dispatchDue();
  }catch{app?.log.error({component:'push',errorCode:'DISPATCH_FAILED'},'Push dispatch failed');}
  finally{if(leased)await releaseWorkerLease(db,'push',workerOwner).catch(()=>{});pushRunning=false;}}
- if(push){pushTimer=setInterval(()=>void dispatchPush(),15000);void dispatchPush();}
+ if(push&&config.enablePushDispatch){pushTimer=setInterval(()=>void dispatchPush(),15000);void dispatchPush();}
+ else if(push)app.log.info({component:'push'},'Automatic push dispatch disabled; device registration and manual tests remain available');
  await app.listen({port:config.port,host:config.host});
  let closing=false;
  async function shutdown(){if(closing)return;closing=true;if(timer)clearInterval(timer);if(neptunTimer)clearInterval(neptunTimer);if(ukraineTimer)clearInterval(ukraineTimer);if(pushTimer)clearInterval(pushTimer);

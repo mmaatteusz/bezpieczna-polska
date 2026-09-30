@@ -186,7 +186,7 @@ void main() {
     expect(requests, hasLength(2));
     expect(requests.last.url.path, endsWith('/test'));
     expect(
-      find.textContaining('Test został wysłany przez serwer'),
+      find.textContaining('FCM/APNs przyjął test do wysyłki'),
       findsOneWidget,
     );
 
