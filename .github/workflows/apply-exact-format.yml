@@ -33,3 +33,5 @@ jobs:
             git commit -m "Apply exact CI dart format"
             git push origin "HEAD:${{ github.head_ref }}"
           fi
+
+# trigger exact format helper
