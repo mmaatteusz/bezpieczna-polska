@@ -305,6 +305,8 @@ class _ShelterMapState extends State<ShelterMap> {
       await c.addCircles(options, data);
     }
     if (labels.isNotEmpty) {
+      await c.setSymbolTextAllowOverlap(true);
+      await c.setSymbolTextIgnorePlacement(true);
       await c.addSymbols(labels, labelData);
     }
   }
@@ -1100,33 +1102,33 @@ class _ShelterMapState extends State<ShelterMap> {
         updateMapLegend(bbox, radiationVisible: false);
       }
       final zoom = (c.cameraPosition?.zoom ?? 5).clamp(0, 22).toDouble();
+      final shouldUseNationalOverview = zoom < 9;
+      if (overviewMode != shouldUseNationalOverview) {
+        setState(() => overviewMode = shouldUseNationalOverview);
+      }
+      if (shouldUseNationalOverview) {
+        await refreshNationalEvents();
+      }
       updateMapLegend(
         bbox,
         sheltersVisible:
             mapShowsShelters(zoom) && viewportHasSheltersInBbox(viewport, bbox),
       );
       if (!mapShowsShelters(zoom)) {
-        if (!overviewMode) {
-          setState(() => overviewMode = true);
-        }
         onlineRetry?.cancel();
         await c.setGeoJsonSource('shelters', empty);
         await c.clearCircles();
         await c.clearSymbols();
         viewport = null;
         renderedRequest = null;
-        await refreshNationalEvents();
         await syncContextLayers();
         updateMapLegend(bbox, sheltersVisible: false);
         if (!mounted || current != ticket) return;
         setState(() {
           message =
-              'Widok Polski: Punkty schronienia są ukryte przy tym oddaleniu. Czerwone punkty oznaczają Alerty i komunikaty, a niebieskie Ostrzeżenia IMGW. Zdarzenie bez dokładnej lokalizacji jest oznaczone symbolicznie dla właściwego województwa.';
+              'Punkty schronienia są ukryte tylko przy bardzo dużym oddaleniu mapy. Przybliż mapę, aby zobaczyć klastry.';
         });
         return;
-      }
-      if (overviewMode) {
-        setState(() => overviewMode = false);
       }
       await syncContextLayers();
       request = shelterViewportRequest(
