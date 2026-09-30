@@ -256,10 +256,10 @@ class _ShelterMapState extends State<ShelterMap> {
         CircleOptions(
           geometry: LatLng(lat, lon),
           circleColor: cluster ? '#1b5e20' : '#2e7d32',
-          circleRadius: cluster ? 19 : 7,
+          circleRadius: cluster ? 19.0 : 7.0,
           circleOpacity: 0.96,
           circleStrokeColor: '#ffffff',
-          circleStrokeWidth: cluster ? 2 : 1.5,
+          circleStrokeWidth: cluster ? 2.0 : 1.5,
         ),
       );
       data.add({
