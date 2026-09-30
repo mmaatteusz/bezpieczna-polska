@@ -511,6 +511,22 @@ class _ShelterMapState extends State<ShelterMap> {
         const CircleLayerProperties(circleColor: '#7563b8', circleRadius: 7),
       );
       await c.addSource('shelters', GeojsonSourceProperties(data: empty));
+      // Native MapLibre builds can occasionally fail to match the boolean
+      // cluster filter after a GeoJSON source is replaced for a distant
+      // viewport. Keep an unfiltered marker underneath the typed layers so a
+      // shelter returned by the backend can never become invisible merely
+      // because the filter state did not refresh.
+      await c.addCircleLayer(
+        'shelters',
+        'shelter-visible-fallback',
+        const CircleLayerProperties(
+          circleColor: '#2e7d32',
+          circleRadius: 8,
+          circleOpacity: 0.92,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: 1,
+        ),
+      );
       await c.addCircleLayer(
         'shelters',
         'shelter-points',
@@ -1380,10 +1396,15 @@ class _ShelterMapState extends State<ShelterMap> {
           }
         }
       }
-      final hits = await c.queryRenderedFeatures(point, [
+      var hits = await c.queryRenderedFeatures(point, [
         'shelter-points',
         'shelter-clusters',
       ], null);
+      if (hits.isEmpty) {
+        hits = await c.queryRenderedFeatures(point, [
+          'shelter-visible-fallback',
+        ], null);
+      }
       if (hits.isEmpty || !mounted) return;
       final f = hits.first as Map,
           p = Map<String, dynamic>.from(f['properties'] as Map);
