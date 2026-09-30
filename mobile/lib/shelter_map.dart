@@ -229,11 +229,19 @@ class _ShelterMapState extends State<ShelterMap> {
     if (c == null || !ready || widget.ukraine) return;
 
     await c.clearCircles();
+    await c.clearSymbols();
     final rawFeatures = value?.data['features'];
     if (rawFeatures is! List || rawFeatures.isEmpty) return;
 
+    final metadataZoom = value?.metadata['zoom'];
+    final zoom =
+        c.cameraPosition?.zoom ??
+        (metadataZoom is num ? metadataZoom.toDouble() : 10.0);
     final options = <CircleOptions>[];
     final data = <Map<String, dynamic>>[];
+    final labels = <SymbolOptions>[];
+    final labelData = <Map<String, dynamic>>[];
+
     for (final rawFeature in rawFeatures) {
       if (rawFeature is! Map) continue;
       final feature = Map<String, dynamic>.from(rawFeature);
@@ -252,24 +260,53 @@ class _ShelterMapState extends State<ShelterMap> {
       final lon = (coordinates[0] as num).toDouble();
       final lat = (coordinates[1] as num).toDouble();
       final cluster = p['cluster'] == true;
+      final radius = cluster
+          ? zoom < 9
+                ? 22.0
+                : zoom < 12
+                ? 18.0
+                : 14.0
+          : 8.0;
+      final annotationData = <String, dynamic>{
+        'kind': 'shelter-annotation',
+        'properties': p,
+        'coordinates': [lon, lat],
+      };
+
       options.add(
         CircleOptions(
           geometry: LatLng(lat, lon),
           circleColor: cluster ? '#1b5e20' : '#2e7d32',
-          circleRadius: cluster ? 19.0 : 7.0,
-          circleOpacity: 0.96,
+          circleRadius: radius,
+          circleOpacity: cluster ? 0.94 : 0.92,
           circleStrokeColor: '#ffffff',
           circleStrokeWidth: cluster ? 2.0 : 1.5,
+          zIndex: 1,
         ),
       );
-      data.add({
-        'kind': 'shelter-annotation',
-        'properties': p,
-        'coordinates': [lon, lat],
-      });
+      data.add(annotationData);
+
+      if (cluster) {
+        labels.add(
+          SymbolOptions(
+            geometry: LatLng(lat, lon),
+            textField: '${p['point_count']}',
+            textSize: zoom < 9 ? 13.0 : 12.0,
+            textColor: '#ffffff',
+            textHaloColor: '#1b5e20',
+            textHaloWidth: 0.8,
+            textAnchor: 'center',
+            zIndex: 2,
+          ),
+        );
+        labelData.add(annotationData);
+      }
     }
     if (options.isNotEmpty) {
       await c.addCircles(options, data);
+    }
+    if (labels.isNotEmpty) {
+      await c.addSymbols(labels, labelData);
     }
   }
 
@@ -352,8 +389,7 @@ class _ShelterMapState extends State<ShelterMap> {
     );
   }
 
-  Future<void> openShelterCircle(Circle circle) async {
-    final raw = circle.data;
+  Future<void> openShelterAnnotation(Map<String, dynamic>? raw) async {
     if (raw == null || raw['kind'] != 'shelter-annotation') return;
     final properties = raw['properties'];
     final coordinates = raw['coordinates'];
@@ -363,6 +399,12 @@ class _ShelterMapState extends State<ShelterMap> {
       List<dynamic>.from(coordinates),
     );
   }
+
+  Future<void> openShelterCircle(Circle circle) =>
+      openShelterAnnotation(circle.data);
+
+  Future<void> openShelterSymbol(Symbol symbol) =>
+      openShelterAnnotation(symbol.data);
 
   void updateMapLegend(
     List<double> bbox, {
@@ -651,28 +693,9 @@ class _ShelterMapState extends State<ShelterMap> {
         const CircleLayerProperties(circleColor: '#7563b8', circleRadius: 7),
       );
       await c.addSource('shelters', GeojsonSourceProperties(data: empty));
-      // Shelter circles are rendered through MapLibre's annotation manager.
-      // This avoids Android style-layer/source refresh issues observed after
-      // panning far away from the user's selected/home location. The GeoJSON
-      // source remains for cluster count labels and as a validated data mirror.
-      await c.addSymbolLayer(
-        'shelters',
-        'shelter-counts',
-        const SymbolLayerProperties(
-          textField: [
-            'to-string',
-            ['get', 'point_count'],
-          ],
-          textSize: 12,
-          textColor: '#ffffff',
-          textAllowOverlap: true,
-        ),
-        filter: [
-          '==',
-          ['get', 'cluster'],
-          true,
-        ],
-      );
+      // Shelter circles and cluster counts are rendered through MapLibre
+      // annotations. This avoids Android style-source refresh issues after
+      // panning and keeps count labels above the green cluster circles.
       await c.addSource('events', GeojsonSourceProperties(data: empty));
       await c.addCircleLayer(
         'events',
@@ -1090,6 +1113,7 @@ class _ShelterMapState extends State<ShelterMap> {
         onlineRetry?.cancel();
         await c.setGeoJsonSource('shelters', empty);
         await c.clearCircles();
+        await c.clearSymbols();
         viewport = null;
         renderedRequest = null;
         await refreshNationalEvents();
@@ -1119,6 +1143,7 @@ class _ShelterMapState extends State<ShelterMap> {
         renderedRequest = null;
         await c.setGeoJsonSource('shelters', empty);
         await c.clearCircles();
+        await c.clearSymbols();
         updateMapLegend(bbox, sheltersVisible: false);
       }
       final result = await provider.fetch(request);
@@ -1137,7 +1162,7 @@ class _ShelterMapState extends State<ShelterMap> {
         online = true;
         message = result.freshAt(DateTime.now())
             ? ''
-            : 'Połączono z serwerem, ale źródłowy wykaz schronień jest oznaczony jako STALE.';
+            : 'Dane o schronieniach mogą być nieaktualne.';
       });
     } catch (failure) {
       if (!mounted || current != ticket) return;
@@ -1165,6 +1190,7 @@ class _ShelterMapState extends State<ShelterMap> {
         // The previous viewport is no longer valid for the new camera area.
         await c.setGeoJsonSource('shelters', empty);
         await c.clearCircles();
+        await c.clearSymbols();
       }
       if (!mounted || current != ticket) return;
       final bbox = visibleLegendBbox;
@@ -1788,6 +1814,10 @@ class _ShelterMapState extends State<ShelterMap> {
                     c.onCircleTapped.add((circle) {
                       if (!mounted) return;
                       unawaited(openShelterCircle(circle));
+                    });
+                    c.onSymbolTapped.add((symbol) {
+                      if (!mounted) return;
+                      unawaited(openShelterSymbol(symbol));
                     });
                     armStyleFallback(c);
                   },
