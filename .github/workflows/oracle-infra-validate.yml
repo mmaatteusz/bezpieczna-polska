@@ -33,6 +33,8 @@ jobs:
           for script in infra/oracle/*.sh; do
             bash -n "$script"
           done
+      - name: Check append-only backup upload
+        run: python3 infra/oracle/test_upload_backup.py
       - name: Enforce provider-neutral and private database rules
         run: |
           set -euo pipefail

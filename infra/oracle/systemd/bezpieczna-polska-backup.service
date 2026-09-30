@@ -5,4 +5,6 @@ Requires=postgresql.service
 
 [Service]
 Type=oneshot
+EnvironmentFile=-/etc/bezpieczna-polska/backup.env
+TimeoutStartSec=15min
 ExecStart=/usr/local/sbin/bp-backup-postgres

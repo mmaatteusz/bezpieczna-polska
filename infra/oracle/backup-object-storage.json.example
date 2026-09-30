@@ -1,0 +1,6 @@
+{
+  "region": "eu-frankfurt-1",
+  "namespace": "REPLACE_WITH_OBJECT_STORAGE_NAMESPACE",
+  "bucket": "bezpieczna-polska-backups",
+  "prefix": "backups/"
+}
