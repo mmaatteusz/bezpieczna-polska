@@ -127,6 +127,7 @@ Firebase ma odrębną rejestrację aplikacji produkcyjnej. Workflow produkcyjny 
 
 - [Preview APK](.github/workflows/preview-apk.yml): testy backendu i Flutter, kontrola źródeł, stabilny podpis preview i APK ARM64.
 - [Production release gate](.github/workflows/production-release.yml): regresja z prawdziwym PostgreSQL/PostGIS, sprawdzenie API i wdrożonego SHA, kontrola podpisu oraz podpisany AAB i APK.
+- Ręczne uruchomienie workflow produkcyjnego z `publish_release=true` publikuje GitHub prerelease dopiero po pomyślnym buildzie i weryfikacji. Ponowna publikacja istniejącego tagu jest blokowana.
 - Wydanie powinno wskazywać konkretny commit i zawierać pliki z zakończonego builda, ich SHA-256 oraz informacje o pakiecie i podpisie.
 - Produkcyjny build wymaga zgodnej wersji wdrożonego API, adresu backendu, konfiguracji Firebase i klucza podpisującego.
 - Publikacja GitHub Release nie oznacza dostępności w Google Play. Play wymaga osobnego przesłania AAB i zakończenia procesu w Play Console.
