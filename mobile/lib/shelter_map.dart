@@ -224,6 +224,189 @@ class _ShelterMapState extends State<ShelterMap> {
     );
   }
 
+  Future<void> syncShelterAnnotations(MapViewport? value) async {
+    final c = controller;
+    if (c == null || !ready || widget.ukraine) return;
+
+    await c.clearCircles();
+    await c.clearSymbols();
+    final rawFeatures = value?.data['features'];
+    if (rawFeatures is! List || rawFeatures.isEmpty) return;
+
+    final metadataZoom = value?.metadata['zoom'];
+    final zoom =
+        c.cameraPosition?.zoom ??
+        (metadataZoom is num ? metadataZoom.toDouble() : 10.0);
+    final options = <CircleOptions>[];
+    final data = <Map<String, dynamic>>[];
+    final labels = <SymbolOptions>[];
+    final labelData = <Map<String, dynamic>>[];
+
+    for (final rawFeature in rawFeatures) {
+      if (rawFeature is! Map) continue;
+      final feature = Map<String, dynamic>.from(rawFeature);
+      final geometry = feature['geometry'];
+      final properties = feature['properties'];
+      if (geometry is! Map || properties is! Map) continue;
+      final coordinates = geometry['coordinates'];
+      if (geometry['type'] != 'Point' ||
+          coordinates is! List ||
+          coordinates.length != 2 ||
+          coordinates[0] is! num ||
+          coordinates[1] is! num) {
+        continue;
+      }
+      final p = Map<String, dynamic>.from(properties);
+      final lon = (coordinates[0] as num).toDouble();
+      final lat = (coordinates[1] as num).toDouble();
+      final cluster = p['cluster'] == true;
+      final radius = cluster
+          ? zoom < 9
+                ? 22.0
+                : zoom < 12
+                ? 18.0
+                : 14.0
+          : 8.0;
+      final annotationData = <String, dynamic>{
+        'kind': 'shelter-annotation',
+        'properties': p,
+        'coordinates': [lon, lat],
+      };
+
+      options.add(
+        CircleOptions(
+          geometry: LatLng(lat, lon),
+          circleColor: cluster ? '#1b5e20' : '#2e7d32',
+          circleRadius: radius,
+          circleOpacity: cluster ? 0.94 : 0.92,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: cluster ? 2.0 : 1.5,
+        ),
+      );
+      data.add(annotationData);
+
+      if (cluster) {
+        labels.add(
+          SymbolOptions(
+            geometry: LatLng(lat, lon),
+            textField: '${p['point_count']}',
+            textSize: zoom < 9 ? 13.0 : 12.0,
+            textColor: '#ffffff',
+            textHaloColor: '#1b5e20',
+            textHaloWidth: 0.8,
+            textAnchor: 'center',
+            zIndex: 2,
+          ),
+        );
+        labelData.add(annotationData);
+      }
+    }
+    if (options.isNotEmpty) {
+      await c.addCircles(options, data);
+    }
+    if (labels.isNotEmpty) {
+      await c.setSymbolTextAllowOverlap(true);
+      await c.setSymbolTextIgnorePlacement(true);
+      await c.addSymbols(labels, labelData);
+    }
+  }
+
+  Future<void> openShelterData(
+    Map<String, dynamic> properties,
+    List<dynamic> coordinates,
+  ) async {
+    final c = controller;
+    if (c == null || !mounted || coordinates.length != 2) return;
+    final lon = coordinates[0], lat = coordinates[1];
+    if (lon is! num || lat is! num) return;
+
+    if (properties['cluster'] == true) {
+      final expansionZoom = properties['expansionZoom'];
+      if (expansionZoom is num) {
+        await c.animateCamera(
+          CameraUpdate.newLatLngZoom(
+            LatLng(lat.toDouble(), lon.toDouble()),
+            expansionZoom.toDouble(),
+          ),
+        );
+      }
+      return;
+    }
+
+    final shelter = ShelterPoint.parse(properties);
+    final navigationUrl = shelterNavigationUrl(
+      latitude: (shelter.data['latitude'] as num).toDouble(),
+      longitude: (shelter.data['longitude'] as num).toDouble(),
+    );
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                shelter.address,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              Text(
+                '${properties['municipality']} • ${properties['county']}',
+              ),
+              Text(shelter.availability),
+              const Text(
+                'Punkt schronienia wg PSP. Klasa ochrony, pojemność i bieżący dostęp nie są potwierdzone.',
+              ),
+              Text('Data danych: ${properties['dataDate']}'),
+              if (!online || viewport?.freshAt(DateTime.now()) != true)
+                const Text(
+                  'Ostatnie zapisane dane — aktualność niepotwierdzona',
+                ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    widget.openLink(navigationUrl);
+                  },
+                  icon: const Icon(Icons.navigation_outlined),
+                  label: const Text('Nawiguj do schronu'),
+                ),
+              ),
+              TextButton(
+                onPressed: () => widget.openLink(
+                  'https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce',
+                ),
+                child: const Text('Źródło: KG PSP / dane.gov.pl'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> openShelterAnnotation(Map<String, dynamic>? raw) async {
+    if (raw == null || raw['kind'] != 'shelter-annotation') return;
+    final properties = raw['properties'];
+    final coordinates = raw['coordinates'];
+    if (properties is! Map || coordinates is! List) return;
+    await openShelterData(
+      Map<String, dynamic>.from(properties),
+      List<dynamic>.from(coordinates),
+    );
+  }
+
+  Future<void> openShelterCircle(Circle circle) =>
+      openShelterAnnotation(circle.data);
+
+  Future<void> openShelterSymbol(Symbol symbol) =>
+      openShelterAnnotation(symbol.data);
+
   void updateMapLegend(
     List<double> bbox, {
     bool? sheltersVisible,
@@ -511,70 +694,9 @@ class _ShelterMapState extends State<ShelterMap> {
         const CircleLayerProperties(circleColor: '#7563b8', circleRadius: 7),
       );
       await c.addSource('shelters', GeojsonSourceProperties(data: empty));
-      // Native MapLibre builds can occasionally fail to match the boolean
-      // cluster filter after a GeoJSON source is replaced for a distant
-      // viewport. Keep an unfiltered marker underneath the typed layers so a
-      // shelter returned by the backend can never become invisible merely
-      // because the filter state did not refresh.
-      await c.addCircleLayer(
-        'shelters',
-        'shelter-visible-fallback',
-        const CircleLayerProperties(
-          circleColor: '#2e7d32',
-          circleRadius: 8,
-          circleOpacity: 0.92,
-          circleStrokeColor: '#ffffff',
-          circleStrokeWidth: 1,
-        ),
-      );
-      await c.addCircleLayer(
-        'shelters',
-        'shelter-points',
-        const CircleLayerProperties(
-          circleColor: '#2e7d32',
-          circleRadius: 6,
-          circleStrokeColor: '#ffffff',
-          circleStrokeWidth: 1,
-        ),
-        filter: [
-          '==',
-          ['get', 'cluster'],
-          false,
-        ],
-      );
-      await c.addCircleLayer(
-        'shelters',
-        'shelter-clusters',
-        const CircleLayerProperties(
-          circleColor: '#1b5e20',
-          circleRadius: 19,
-          circleStrokeColor: '#ffffff',
-          circleStrokeWidth: 1,
-        ),
-        filter: [
-          '==',
-          ['get', 'cluster'],
-          true,
-        ],
-      );
-      await c.addSymbolLayer(
-        'shelters',
-        'shelter-counts',
-        const SymbolLayerProperties(
-          textField: [
-            'to-string',
-            ['get', 'point_count'],
-          ],
-          textSize: 12,
-          textColor: '#ffffff',
-          textAllowOverlap: true,
-        ),
-        filter: [
-          '==',
-          ['get', 'cluster'],
-          true,
-        ],
-      );
+      // Shelter circles and cluster counts are rendered through MapLibre
+      // annotations. This avoids Android style-source refresh issues after
+      // panning and keeps count labels above the green cluster circles.
       await c.addSource('events', GeojsonSourceProperties(data: empty));
       await c.addCircleLayer(
         'events',
@@ -980,31 +1102,33 @@ class _ShelterMapState extends State<ShelterMap> {
         updateMapLegend(bbox, radiationVisible: false);
       }
       final zoom = (c.cameraPosition?.zoom ?? 5).clamp(0, 22).toDouble();
+      final shouldUseNationalOverview = zoom < 9;
+      if (overviewMode != shouldUseNationalOverview) {
+        setState(() => overviewMode = shouldUseNationalOverview);
+      }
+      if (shouldUseNationalOverview) {
+        await refreshNationalEvents();
+      }
       updateMapLegend(
         bbox,
         sheltersVisible:
             mapShowsShelters(zoom) && viewportHasSheltersInBbox(viewport, bbox),
       );
       if (!mapShowsShelters(zoom)) {
-        if (!overviewMode) {
-          setState(() => overviewMode = true);
-        }
         onlineRetry?.cancel();
         await c.setGeoJsonSource('shelters', empty);
+        await c.clearCircles();
+        await c.clearSymbols();
         viewport = null;
         renderedRequest = null;
-        await refreshNationalEvents();
         await syncContextLayers();
         updateMapLegend(bbox, sheltersVisible: false);
         if (!mounted || current != ticket) return;
         setState(() {
           message =
-              'Widok Polski: Punkty schronienia są ukryte przy tym oddaleniu. Czerwone punkty oznaczają Alerty i komunikaty, a niebieskie Ostrzeżenia IMGW. Zdarzenie bez dokładnej lokalizacji jest oznaczone symbolicznie dla właściwego województwa.';
+              'Punkty schronienia są ukryte tylko przy bardzo dużym oddaleniu mapy. Przybliż mapę, aby zobaczyć klastry.';
         });
         return;
-      }
-      if (overviewMode) {
-        setState(() => overviewMode = false);
       }
       await syncContextLayers();
       request = shelterViewportRequest(
@@ -1019,11 +1143,14 @@ class _ShelterMapState extends State<ShelterMap> {
         viewport = null;
         renderedRequest = null;
         await c.setGeoJsonSource('shelters', empty);
+        await c.clearCircles();
+        await c.clearSymbols();
         updateMapLegend(bbox, sheltersVisible: false);
       }
       final result = await provider.fetch(request);
       if (!mounted || current != ticket) return;
       await c.setGeoJsonSource('shelters', result.data);
+      await syncShelterAnnotations(result);
       if (!mounted || current != ticket) return;
       updateMapLegend(
         bbox,
@@ -1036,7 +1163,7 @@ class _ShelterMapState extends State<ShelterMap> {
         online = true;
         message = result.freshAt(DateTime.now())
             ? ''
-            : 'Połączono z serwerem, ale źródłowy wykaz schronień jest oznaczony jako STALE.';
+            : 'Dane o schronieniach mogą być nieaktualne.';
       });
     } catch (failure) {
       if (!mounted || current != ticket) return;
@@ -1059,9 +1186,12 @@ class _ShelterMapState extends State<ShelterMap> {
       final fallback = cached ?? offline;
       if (fallback != null) {
         await c.setGeoJsonSource('shelters', fallback.data);
+        await syncShelterAnnotations(fallback);
       } else {
         // The previous viewport is no longer valid for the new camera area.
         await c.setGeoJsonSource('shelters', empty);
+        await c.clearCircles();
+        await c.clearSymbols();
       }
       if (!mounted || current != ticket) return;
       final bbox = visibleLegendBbox;
@@ -1396,84 +1526,7 @@ class _ShelterMapState extends State<ShelterMap> {
           }
         }
       }
-      var hits = await c.queryRenderedFeatures(point, [
-        'shelter-points',
-        'shelter-clusters',
-      ], null);
-      if (hits.isEmpty) {
-        hits = await c.queryRenderedFeatures(point, [
-          'shelter-visible-fallback',
-        ], null);
-      }
-      if (hits.isEmpty || !mounted) return;
-      final f = hits.first as Map,
-          p = Map<String, dynamic>.from(f['properties'] as Map);
-      if (p['cluster'] == true) {
-        final coordinates = f['geometry']['coordinates'] as List;
-        await c.animateCamera(
-          CameraUpdate.newLatLngZoom(
-            LatLng(
-              (coordinates[1] as num).toDouble(),
-              (coordinates[0] as num).toDouble(),
-            ),
-            (p['expansionZoom'] as num).toDouble(),
-          ),
-        );
-        return;
-      }
-      final shelter = ShelterPoint.parse(p);
-      final navigationUrl = shelterNavigationUrl(
-        latitude: (shelter.data['latitude'] as num).toDouble(),
-        longitude: (shelter.data['longitude'] as num).toDouble(),
-      );
-      if (!mounted) return;
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        builder: (context) => SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  shelter.address,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                Text('${p['municipality']} • ${p['county']}'),
-                Text(shelter.availability),
-                const Text(
-                  'Punkt schronienia wg PSP. Klasa ochrony, pojemność i bieżący dostęp nie są potwierdzone.',
-                ),
-                Text('Data danych: ${p['dataDate']}'),
-                if (!online || viewport?.freshAt(DateTime.now()) != true)
-                  const Text(
-                    'Ostatnie zapisane dane — aktualność niepotwierdzona',
-                  ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      widget.openLink(navigationUrl);
-                    },
-                    icon: const Icon(Icons.navigation_outlined),
-                    label: const Text('Nawiguj do schronu'),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => widget.openLink(
-                    'https://dane.gov.pl/pl/dataset/28058,punkty-schronienia-w-polsce',
-                  ),
-                  child: const Text('Źródło: KG PSP / dane.gov.pl'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+      return;
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1759,6 +1812,14 @@ class _ShelterMapState extends State<ShelterMap> {
                   onMapCreated: (c) {
                     if (!mounted) return;
                     controller = c;
+                    c.onCircleTapped.add((circle) {
+                      if (!mounted) return;
+                      unawaited(openShelterCircle(circle));
+                    });
+                    c.onSymbolTapped.add((symbol) {
+                      if (!mounted) return;
+                      unawaited(openShelterSymbol(symbol));
+                    });
                     armStyleFallback(c);
                   },
                   onStyleLoadedCallback: styled,
