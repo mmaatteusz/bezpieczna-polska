@@ -92,35 +92,38 @@ void main() {
 
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('push open request accepts event targets and rejects tests or malformed data', () {
-    final request = PushOpenRequest.tryParse(const {
-      'schemaVersion': '1',
-      'eventId': 'RCB-fixture-1',
-      'kind': 'NEW',
-      'category': 'REGION_PL',
-    });
-    expect(request?.eventId, 'RCB-fixture-1');
-    expect(request?.kind, 'NEW');
-    expect(
-      PushOpenRequest.tryParse(const {
+  test(
+    'push open request accepts event targets and rejects tests or malformed data',
+    () {
+      final request = PushOpenRequest.tryParse(const {
         'schemaVersion': '1',
-        'kind': 'TEST',
-        'test': 'true',
-      }),
-      isNull,
-    );
-    expect(
-      PushOpenRequest.tryParse(const {
-        'schemaVersion': '2',
         'eventId': 'RCB-fixture-1',
-      }),
-      isNull,
-    );
-    expect(
-      PushOpenRequest.tryParse(const {'schemaVersion': '1', 'eventId': ''}),
-      isNull,
-    );
-  });
+        'kind': 'NEW',
+        'category': 'REGION_PL',
+      });
+      expect(request?.eventId, 'RCB-fixture-1');
+      expect(request?.kind, 'NEW');
+      expect(
+        PushOpenRequest.tryParse(const {
+          'schemaVersion': '1',
+          'kind': 'TEST',
+          'test': 'true',
+        }),
+        isNull,
+      );
+      expect(
+        PushOpenRequest.tryParse(const {
+          'schemaVersion': '2',
+          'eventId': 'RCB-fixture-1',
+        }),
+        isNull,
+      );
+      expect(
+        PushOpenRequest.tryParse(const {'schemaVersion': '1', 'eventId': ''}),
+        isNull,
+      );
+    },
+  );
 
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
