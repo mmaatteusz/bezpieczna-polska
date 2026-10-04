@@ -1,0 +1,21 @@
+name: P0 format debug with pub
+on:
+  push:
+    branches:
+      - fix/p0-push-alert-handling
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.4
+          cache: true
+      - name: Print formatter diff after pub get
+        run: |
+          cd mobile
+          flutter pub get
+          dart format lib/main.dart lib/push_notifications.dart test/push_notifications_test.dart
+          git diff -- lib/main.dart lib/push_notifications.dart test/push_notifications_test.dart
