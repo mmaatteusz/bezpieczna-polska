@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  smoke:
+  runtime-health:
     if: >-
       github.event_name != 'deployment_status' ||
       github.event.deployment_status.state == 'success'
@@ -40,13 +40,39 @@ jobs:
       - name: Validate runtime smoke client
         working-directory: backend
         run: node --check scripts/railway-runtime-smoke.mjs
-      - name: Probe deployed Railway production
+      - name: Probe production health independently of deployment identity
         working-directory: backend
         env:
           SMOKE_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL || 'https://api-production-b6560.up.railway.app' }}
+          AUDIT_MODE: health
           EXPECTED_BUILD_SHA: ${{ github.event.deployment.sha || (github.event_name == 'push' && github.sha) || github.event.inputs.expected_sha || '' }}
-          DEPLOY_WAIT_SECONDS: '600'
           SOURCE_WAIT_SECONDS: '480'
           # Keep the critical-source list in the smoke client as the single source of truth.
           ALLOW_STALE_SOURCE_IDS: SHELTERS
+        run: node scripts/railway-runtime-smoke.mjs
+
+  deployment-identity:
+    if: >-
+      (github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success') ||
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.expected_sha != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.deployment.sha || github.event.inputs.expected_sha || github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Validate deployment identity probe
+        working-directory: backend
+        run: node --check scripts/railway-runtime-smoke.mjs
+      - name: Require the explicitly expected production commit
+        working-directory: backend
+        env:
+          SMOKE_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL || 'https://api-production-b6560.up.railway.app' }}
+          AUDIT_MODE: identity
+          EXPECTED_BUILD_SHA: ${{ github.event.deployment.sha || (github.event_name == 'push' && github.sha) || github.event.inputs.expected_sha }}
+          DEPLOY_WAIT_SECONDS: '600'
         run: node scripts/railway-runtime-smoke.mjs

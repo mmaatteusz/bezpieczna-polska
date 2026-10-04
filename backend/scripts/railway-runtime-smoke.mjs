@@ -8,6 +8,7 @@ const expectedVersion=process.env.EXPECTED_VERSION||packageVersion;
 const expectedBuildSha=(process.env.EXPECTED_BUILD_SHA||'').trim();
 const deployWaitSeconds=Number(process.env.DEPLOY_WAIT_SECONDS||600);
 const sourceWaitSeconds=Number(process.env.SOURCE_WAIT_SECONDS||180);
+const auditMode=(process.env.AUDIT_MODE||'health').trim().toLowerCase();
 const criticalSourceIds=(process.env.CRITICAL_SOURCE_IDS||'RCB,RSO,LEVELS,SHELTERS,IMGW_METEO,IMGW_HYDRO,PAA,UA,NEPTUN')
   .split(',').map(value=>value.trim()).filter(Boolean);
 const allowStaleSourceIds=new Set((process.env.ALLOW_STALE_SOURCE_IDS||'SHELTERS')
@@ -16,6 +17,7 @@ if(!/^https:\/\/[^/]+$/.test(base))throw new Error('SMOKE_BASE_URL must be an HT
 if(expectedBuildSha&&!/^[a-f0-9]{40}$/.test(expectedBuildSha))throw new Error('EXPECTED_BUILD_SHA must be a 40-character lowercase git SHA');
 if(!Number.isFinite(deployWaitSeconds)||deployWaitSeconds<30||deployWaitSeconds>1800)throw new Error('DEPLOY_WAIT_SECONDS must be between 30 and 1800');
 if(!Number.isFinite(sourceWaitSeconds)||sourceWaitSeconds<30||sourceWaitSeconds>600)throw new Error('SOURCE_WAIT_SECONDS must be between 30 and 600');
+if(!['health','identity'].includes(auditMode))throw new Error('AUDIT_MODE must be health or identity');
 
 async function json(path,options){
   const response=await fetch(base+path,options);
@@ -101,31 +103,62 @@ function validateNeptun(data){
 }
 
 (async()=>{
-  const deadline=Date.now()+deployWaitSeconds*1000;
-  let converged=false;
-  let lastSeen='unreachable';
-  while(Date.now()<deadline){
-    try{
-      const response=await fetch(base+'/health');
-      if(response.ok){
-        const candidate=await response.json();
-        lastSeen='version='+candidate.version+' buildSha='+candidate.buildSha;
-        if(candidate.version===expectedVersion&&(!expectedBuildSha||candidate.buildSha===expectedBuildSha)){
-          converged=true;
-          break;
-        }
-      }else lastSeen='HTTP '+response.status;
-    }catch(error){
-      lastSeen=error instanceof Error?error.message:String(error);
+  if(auditMode==='identity'){
+    assert(expectedBuildSha,'EXPECTED_BUILD_SHA is required when AUDIT_MODE=identity');
+    const deadline=Date.now()+deployWaitSeconds*1000;
+    let converged=false;
+    let lastSeen='unreachable';
+    while(Date.now()<deadline){
+      try{
+        const response=await fetch(base+'/health');
+        if(response.ok){
+          const candidate=await response.json();
+          lastSeen='version='+candidate.version+' buildSha='+candidate.buildSha;
+          if(candidate.version===expectedVersion&&candidate.buildSha===expectedBuildSha){
+            converged=true;
+            break;
+          }
+        }else lastSeen='HTTP '+response.status;
+      }catch(error){
+        lastSeen=error instanceof Error?error.message:String(error);
+      }
+      await sleep(5000);
     }
-    await sleep(5000);
+    assert(converged,'production deployment identity did not converge before timeout; expected version='+expectedVersion+' buildSha='+expectedBuildSha+' lastSeen='+lastSeen);
+
+    const identityHealth=await json('/health');
+    assert(identityHealth.version===expectedVersion,'wrong version '+identityHealth.version);
+    assert(identityHealth.buildSha===expectedBuildSha,'wrong buildSha '+identityHealth.buildSha);
+    console.log('PROBE_DEPLOYMENT_IDENTITY_OK',JSON.stringify({
+      expectedVersion,
+      expectedBuildSha,
+      version:identityHealth.version,
+      buildSha:identityHealth.buildSha,
+      environment:identityHealth.environment
+    }));
+    return;
   }
-  assert(converged,'production runtime did not converge before timeout; expected version='+expectedVersion+(expectedBuildSha?' buildSha='+expectedBuildSha:'')+' lastSeen='+lastSeen);
 
   const health=await json('/health');
-  assert(health.version===expectedVersion,'wrong version '+health.version);
-  if(expectedBuildSha)assert(health.buildSha===expectedBuildSha,'wrong buildSha '+health.buildSha);
-  console.log('PROBE_RUNTIME_IDENTITY',JSON.stringify({version:health.version,buildSha:health.buildSha,environment:health.environment}));
+  const versionMatches=health.version===expectedVersion;
+  const shaMatches=!expectedBuildSha||health.buildSha===expectedBuildSha;
+  console.log('PROBE_RUNTIME_IDENTITY_OBSERVED',JSON.stringify({
+    expectedVersion,
+    expectedBuildSha:expectedBuildSha||null,
+    version:health.version,
+    buildSha:health.buildSha,
+    environment:health.environment,
+    versionMatches,
+    shaMatches
+  }));
+  if(!versionMatches||!shaMatches){
+    console.warn('PROBE_DEPLOYMENT_DRIFT_IGNORED_BY_HEALTH_AUDIT',JSON.stringify({
+      expectedVersion,
+      expectedBuildSha:expectedBuildSha||null,
+      actualVersion:health.version,
+      actualBuildSha:health.buildSha
+    }));
+  }
 
   const ready=await json('/ready');
   assert(ready.database==='postgres'&&ready.postgis===true,'PostGIS not ready');
