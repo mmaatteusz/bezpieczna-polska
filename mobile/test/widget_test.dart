@@ -79,6 +79,11 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.scrollUntilVisible(
+      find.text('Polska'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Polska'));
     await tester.pumpAndSettle();
     expect(find.text('Alerty'), findsWidgets);
@@ -94,9 +99,15 @@ void main() {
     expect(
       find.byKey(const ValueKey('map-legend')),
       findsNothing,
-      reason:
-          'Legenda ma się pojawiać tylko wtedy, gdy bieżący kadr faktycznie zawiera oznaczenia.',
+      reason: 'Legenda ma się pojawiać tylko wtedy, gdy bieżący kadr faktycznie zawiera oznaczenia.',
     );
+
+    await tester.tap(find.byTooltip('Warstwy mapy'));
+    await tester.pumpAndSettle();
+    expect(find.text('Monitoring GNSS / GPS RTGMS'), findsOneWidget);
+    expect(find.textContaining('zewnętrzną mapę'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Więcej').last);
     await tester.pumpAndSettle();
@@ -248,11 +259,17 @@ void main() {
       await tester.pumpWidget(SafetyApp(repository: r));
       await tester.pumpAndSettle();
       expect(requests, greaterThanOrEqualTo(2));
+      expect(find.text('Ustaw lokalizację'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Polska'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
       expect(
         find.text('Brak wystarczających aktualnych danych'),
         findsOneWidget,
       );
-      expect(find.text('Ustaw lokalizację'), findsOneWidget);
       await tester.tap(find.byTooltip('Ustawienia'));
       await tester.pumpAndSettle();
       expect(find.text('Developer Settings'), findsNothing);

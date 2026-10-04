@@ -57,9 +57,11 @@ test('loaded shelter snapshot ahead of catalog counter is not marked mismatched'
 test('authenticated admin can atomically import a validated official shelter CSV',async t=>{
  t.mock.timers.enable({apis:['Date'],now});
  const db=openDb(undefined,':memory:'),store=new Store(db),token='t'.repeat(32),original=globalThis.fetch;await store.init();
+ const importNow=new Date(),importDate=importNow.toISOString().slice(0,10),importModified=importNow.toISOString();
+ const importResource=resource.replace('2026-09-19T08:24:06Z',importModified).replace('"data_date": "2026-09-19"',`"data_date": "${importDate}"`);
  globalThis.fetch=async input=>{
   const url=typeof input==='string'?input:input instanceof URL?input.href:input.url;
-  if(url===SHELTER_RESOURCE)return new Response(resource,{status:200,headers:{'content-type':'application/json'}});
+  if(url===SHELTER_RESOURCE)return new Response(importResource,{status:200,headers:{'content-type':'application/json'}});
   throw new Error('UNEXPECTED_FETCH_'+url);
  };
  const app=await buildApp(store,token);
@@ -67,7 +69,7 @@ test('authenticated admin can atomically import a validated official shelter CSV
   const unauthorized=await app.inject({method:'POST',url:'/admin/shelters/import',headers:{'content-type':'text/csv'},payload:csv});
   assert.equal(unauthorized.statusCode,401);
   const response=await app.inject({method:'POST',url:'/admin/shelters/import',headers:{authorization:`Bearer ${token}`,'content-type':'text/csv'},payload:csv});
-  assert.equal(response.statusCode,200);const body=response.json();assert.equal(body.itemCount,3);assert.equal(body.dataDate,'2026-09-19');assert.equal(body.provenance,'OPERATOR_OFFICIAL_SNAPSHOT');
+  assert.equal(response.statusCode,200);const body=response.json();assert.equal(body.itemCount,3);assert.equal(body.dataDate,importDate);assert.equal(body.provenance,'OPERATOR_OFFICIAL_SNAPSHOT');
   const page=await store.shelterPage({regionId:'PL',q:'',limit:50,offset:0});assert.equal(page.total,3);
   const health=(await store.health()).find(h=>h.id==='SHELTERS')!;assert.equal(health.state,'HEALTHY');assert.equal(health.fallbackSelected,'OPERATOR_OFFICIAL_SNAPSHOT');assert.equal(health.itemCount,3);
  }finally{await app.close();await db.close();globalThis.fetch=original;}
@@ -153,11 +155,48 @@ test('older official archive never replaces a newer last-known-good shelter cata
   await ingest(store,[{...shelterAdapter,minSyncIntervalSeconds:0,sync:async()=>stale}]);
   const after=(await store.health()).find(h=>h.id==='SHELTERS')!;
   assert.equal(after.state,'DEGRADED');assert.equal(after.errorCode,'SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD');assert.equal(after.sourceUpdatedAt,before.sourceUpdatedAt);assert.equal(after.complete,true);
-  const shortlyAfterSuccess=new Date(Date.parse(after.lastSuccess!)+60_000);
+  const clockStableAfter={...after,lastSuccess:after.sourceUpdatedAt};
+  const shortlyAfterSuccess=new Date(Date.parse(after.sourceUpdatedAt!)+60_000);
   const afterSourceExpiry=new Date(Date.parse(after.sourceUpdatedAt!)+14*86400000+1000);
-  assert.equal(sourceHealth([after],shortlyAfterSuccess)[0].state,'DEGRADED');
-  assert.equal(sourceHealth([after],afterSourceExpiry)[0].state,'STALE');
+  assert.equal(sourceHealth([clockStableAfter],shortlyAfterSuccess)[0].state,'DEGRADED');
+  assert.equal(sourceHealth([clockStableAfter],afterSourceExpiry)[0].state,'STALE');
   assert.equal((await store.shelterPage({regionId:'PL',q:'',limit:50,offset:0})).total,count);
+ }finally{await db.close();}
+});
+test('incremental shelter sync writes only changed, new and removed rows',async()=>{
+ const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();await initializeSources(store);
+ try{
+  const b=await batch();await ingest(store,[{...shelterAdapter,sync:async()=>b}]);
+  await db.run("CREATE TABLE shelter_write_audit(kind TEXT NOT NULL,id TEXT NOT NULL)");
+  await db.run("CREATE TRIGGER shelter_audit_insert AFTER INSERT ON shelters BEGIN INSERT INTO shelter_write_audit(kind,id) VALUES('INSERT',NEW.id); END");
+  await db.run("CREATE TRIGGER shelter_audit_update AFTER UPDATE ON shelters BEGIN INSERT INTO shelter_write_audit(kind,id) VALUES('UPDATE',NEW.id); END");
+  await db.run("CREATE TRIGGER shelter_audit_delete AFTER DELETE ON shelters BEGIN INSERT INTO shelter_write_audit(kind,id) VALUES('DELETE',OLD.id); END");
+
+  const previous=(await store.health()).find(h=>h.id==='SHELTERS')!;
+  const unchanged=b.shelters![0],changed={...b.shelters![1],address:b.shelters![1].address+' / aktualizacja'};
+  const removed=b.shelters![2],added={...removed,id:'PSP-OZO-BBBBBBBBBBBB',address:removed.address+' / nowy'};
+  const next=[unchanged,changed,added];
+
+  await store.applyShelterSync(next,{
+   ...previous,itemCount:next.length,sourceContentHash:'d'.repeat(64)
+  });
+  const writes=(await db.all('SELECT kind,id FROM shelter_write_audit ORDER BY kind,id')).map(row=>`${row.kind}:${row.id}`);
+  assert.deepEqual(writes.sort(),[
+   `DELETE:${removed.id}`,
+   `INSERT:${added.id}`,
+   `UPDATE:${changed.id}`
+  ].sort());
+  assert.ok(!writes.some(value=>value.endsWith(':'+unchanged.id)));
+  const page=await store.shelterPage({regionId:'PL',q:'',limit:50,offset:0});
+  assert.equal(page.total,3);assert.ok(page.items.some(item=>item.id===added.id));assert.ok(!page.items.some(item=>item.id===removed.id));
+  assert.equal(page.items.find(item=>item.id===changed.id)!.address,changed.address);
+
+  await db.run('DELETE FROM shelter_write_audit');
+  await store.applyShelterSync(next,{
+   ...(await store.health()).find(h=>h.id==='SHELTERS')!,itemCount:next.length,
+   sourceContentHash:'e'.repeat(64)
+  });
+  assert.deepEqual(await db.all('SELECT kind,id FROM shelter_write_audit'),[]);
  }finally{await db.close();}
 });
 test('whole-package replacement removes absent points, validates all records and rejects mixed-version pagination',async()=>{

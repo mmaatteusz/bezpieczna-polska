@@ -329,235 +329,225 @@ const _neptunIconTypes = <String>[
   'unknown',
 ];
 
+ui.Color _neptunAccentColor(String type) => switch (type) {
+  'uav' => const ui.Color(0xffffa726),
+  'fpv' => const ui.Color(0xffffb74d),
+  'recon' => const ui.Color(0xff42a5f5),
+  'missile' => const ui.Color(0xffef5350),
+  'ballistic' => const ui.Color(0xffd81b60),
+  'kab' => const ui.Color(0xffc96a3d),
+  'mig31k' => const ui.Color(0xffab47bc),
+  _ => const ui.Color(0xff90a4ae),
+};
+
 Future<Uint8List> _neptunIconPng(String type) async {
-  // Threat icons are drawn locally instead of using third-party artwork.
-  // White is the primary map colour; a thin dark halo is only used to keep
-  // the symbols readable over bright basemap labels and roads.
+  // Compact type badges are intentionally fixed upright. The marker shape and
+  // colour describe the threat class only and must never imply heading/course.
   const logicalSize = 72.0;
   const outputSize = 96.0;
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder)..scale(outputSize / logicalSize);
-  final halo = ui.Paint()
-    ..color = const ui.Color(0xa6000000)
+  final accent = _neptunAccentColor(type);
+
+  final plate = ui.Paint()
+    ..color = const ui.Color(0xe61a1f24)
+    ..style = ui.PaintingStyle.fill;
+  final ring = ui.Paint()
+    ..color = accent
     ..style = ui.PaintingStyle.stroke
-    ..strokeWidth = 4
-    ..strokeJoin = ui.StrokeJoin.round
-    ..strokeCap = ui.StrokeCap.round;
-  final fill = ui.Paint()
+    ..strokeWidth = 4;
+  final white = ui.Paint()
     ..color = const ui.Color(0xffffffff)
     ..style = ui.PaintingStyle.fill;
   final whiteStroke = ui.Paint()
     ..color = const ui.Color(0xffffffff)
     ..style = ui.PaintingStyle.stroke
-    ..strokeWidth = 5
-    ..strokeJoin = ui.StrokeJoin.round
-    ..strokeCap = ui.StrokeCap.round;
-  final haloStroke = ui.Paint()
-    ..color = const ui.Color(0xa6000000)
-    ..style = ui.PaintingStyle.stroke
-    ..strokeWidth = 9
+    ..strokeWidth = 4
     ..strokeJoin = ui.StrokeJoin.round
     ..strokeCap = ui.StrokeCap.round;
 
-  void paintPath(ui.Path path) {
-    canvas.drawPath(path, halo);
-    canvas.drawPath(path, fill);
-  }
+  canvas.drawCircle(const ui.Offset(36, 36), 30, plate);
+  canvas.drawCircle(const ui.Offset(36, 36), 29, ring);
 
-  void paintLine(ui.Offset a, ui.Offset b, {double whiteWidth = 5}) {
-    final dark = ui.Paint()
-      ..color = const ui.Color(0xa6000000)
-      ..style = ui.PaintingStyle.stroke
-      ..strokeWidth = whiteWidth + 4
-      ..strokeCap = ui.StrokeCap.round;
-    final white = ui.Paint()
+  void fillPath(ui.Path path) => canvas.drawPath(path, white);
+  void strokePath(ui.Path path, {double width = 4}) {
+    final p = ui.Paint()
       ..color = const ui.Color(0xffffffff)
       ..style = ui.PaintingStyle.stroke
-      ..strokeWidth = whiteWidth
+      ..strokeWidth = width
+      ..strokeJoin = ui.StrokeJoin.round
       ..strokeCap = ui.StrokeCap.round;
-    canvas.drawLine(a, b, dark);
-    canvas.drawLine(a, b, white);
+    canvas.drawPath(path, p);
   }
 
-  ui.Path aircraft({
-    required double wingY,
-    required double wingSpan,
-    required double tailSpan,
-    double noseY = 6,
-    double tailY = 64,
-  }) {
-    return ui.Path()
-      ..moveTo(36, noseY)
-      ..quadraticBezierTo(40, 14, 40, wingY - 8)
-      ..lineTo(36 + wingSpan, wingY + 6)
-      ..lineTo(42, wingY + 8)
-      ..lineTo(41, tailY - 12)
-      ..lineTo(36 + tailSpan, tailY - 2)
-      ..lineTo(40, tailY - 4)
-      ..lineTo(36, tailY)
-      ..lineTo(32, tailY - 4)
-      ..lineTo(36 - tailSpan, tailY - 2)
-      ..lineTo(31, tailY - 12)
-      ..lineTo(30, wingY + 8)
-      ..lineTo(36 - wingSpan, wingY + 6)
-      ..lineTo(32, wingY - 8)
-      ..quadraticBezierTo(32, 14, 36, noseY)
-      ..close();
+  void line(ui.Offset a, ui.Offset b, {double width = 4}) {
+    final p = ui.Paint()
+      ..color = const ui.Color(0xffffffff)
+      ..style = ui.PaintingStyle.stroke
+      ..strokeWidth = width
+      ..strokeCap = ui.StrokeCap.round;
+    canvas.drawLine(a, b, p);
   }
 
   switch (type) {
     case 'uav':
-      // Delta-wing / Shahed-like top silhouette with a rear propeller.
-      paintPath(
+      // Broad delta silhouette: deliberately unlike a conventional aircraft.
+      fillPath(
         ui.Path()
-          ..moveTo(36, 6)
-          ..lineTo(63, 49)
-          ..lineTo(45, 43)
-          ..lineTo(41, 56)
-          ..lineTo(31, 56)
-          ..lineTo(27, 43)
-          ..lineTo(9, 49)
+          ..moveTo(36, 15)
+          ..lineTo(57, 49)
+          ..lineTo(43, 44)
+          ..lineTo(40, 57)
+          ..lineTo(32, 57)
+          ..lineTo(29, 44)
+          ..lineTo(15, 49)
           ..close(),
       );
-      paintLine(
-        const ui.Offset(36, 54),
-        const ui.Offset(36, 63),
-        whiteWidth: 4,
-      );
-      paintLine(
-        const ui.Offset(27, 64),
-        const ui.Offset(45, 64),
-        whiteWidth: 4,
-      );
-      canvas.drawCircle(const ui.Offset(36, 64), 3.2, halo);
-      canvas.drawCircle(const ui.Offset(36, 64), 2.3, fill);
       break;
     case 'fpv':
-      // Compact quadcopter: four arms and clearly visible propellers.
+      // Quadcopter with four visible rotors.
       for (final pair in const [
-        [ui.Offset(32, 32), ui.Offset(18, 18)],
-        [ui.Offset(40, 32), ui.Offset(54, 18)],
-        [ui.Offset(32, 40), ui.Offset(18, 54)],
-        [ui.Offset(40, 40), ui.Offset(54, 54)],
+        [ui.Offset(31, 31), ui.Offset(22, 22)],
+        [ui.Offset(41, 31), ui.Offset(50, 22)],
+        [ui.Offset(31, 41), ui.Offset(22, 50)],
+        [ui.Offset(41, 41), ui.Offset(50, 50)],
       ]) {
-        canvas.drawLine(pair[0], pair[1], haloStroke);
-        canvas.drawLine(pair[0], pair[1], whiteStroke);
+        line(pair[0], pair[1], width: 4);
       }
-      final body = ui.Path()
-        ..moveTo(31, 25)
-        ..lineTo(41, 25)
-        ..lineTo(46, 36)
-        ..lineTo(41, 47)
-        ..lineTo(31, 47)
-        ..lineTo(26, 36)
-        ..close();
-      paintPath(body);
+      canvas.drawRRect(
+        ui.RRect.fromRectAndRadius(
+          const ui.Rect.fromLTWH(29, 29, 14, 14),
+          const ui.Radius.circular(4),
+        ),
+        white,
+      );
       for (final center in const [
-        ui.Offset(16, 16),
-        ui.Offset(56, 16),
-        ui.Offset(16, 56),
-        ui.Offset(56, 56),
+        ui.Offset(20, 20),
+        ui.Offset(52, 20),
+        ui.Offset(20, 52),
+        ui.Offset(52, 52),
       ]) {
-        paintLine(
-          ui.Offset(center.dx - 8, center.dy - 3),
-          ui.Offset(center.dx + 8, center.dy + 3),
-          whiteWidth: 4,
-        );
-        canvas.drawCircle(center, 3.2, halo);
-        canvas.drawCircle(center, 2.3, fill);
+        canvas.drawCircle(center, 6, whiteStroke);
+        canvas.drawCircle(center, 1.8, white);
       }
       break;
     case 'recon':
-      // Generic fixed-wing reconnaissance aircraft.
-      paintPath(aircraft(wingY: 31, wingSpan: 26, tailSpan: 10));
+      // Eye/radar pictogram keeps reconnaissance visually separate from aircraft.
+      strokePath(
+        ui.Path()
+          ..moveTo(15, 36)
+          ..quadraticBezierTo(25, 22, 36, 22)
+          ..quadraticBezierTo(47, 22, 57, 36)
+          ..quadraticBezierTo(47, 50, 36, 50)
+          ..quadraticBezierTo(25, 50, 15, 36)
+          ..close(),
+      );
+      canvas.drawCircle(const ui.Offset(36, 36), 7, white);
+      canvas.drawCircle(
+        const ui.Offset(36, 36),
+        3,
+        ui.Paint()..color = const ui.Color(0xff1a1f24),
+      );
       break;
     case 'missile':
-      // Cruise missile / rocket silhouette.
-      paintPath(
+      // Winged cruise-missile silhouette.
+      fillPath(
         ui.Path()
-          ..moveTo(36, 5)
-          ..quadraticBezierTo(43, 13, 42, 25)
-          ..lineTo(41, 33)
-          ..lineTo(59, 43)
-          ..lineTo(42, 42)
-          ..lineTo(41, 55)
-          ..lineTo(50, 64)
-          ..lineTo(39, 60)
-          ..lineTo(36, 67)
-          ..lineTo(33, 60)
-          ..lineTo(22, 64)
-          ..lineTo(31, 55)
-          ..lineTo(30, 42)
-          ..lineTo(13, 43)
-          ..lineTo(31, 33)
-          ..lineTo(30, 25)
-          ..quadraticBezierTo(29, 13, 36, 5)
+          ..moveTo(36, 13)
+          ..quadraticBezierTo(41, 18, 40, 28)
+          ..lineTo(40, 31)
+          ..lineTo(56, 39)
+          ..lineTo(40, 40)
+          ..lineTo(40, 53)
+          ..lineTo(47, 59)
+          ..lineTo(38, 57)
+          ..lineTo(36, 62)
+          ..lineTo(34, 57)
+          ..lineTo(25, 59)
+          ..lineTo(32, 53)
+          ..lineTo(32, 40)
+          ..lineTo(16, 39)
+          ..lineTo(32, 31)
+          ..lineTo(32, 28)
+          ..quadraticBezierTo(31, 18, 36, 13)
           ..close(),
       );
       break;
     case 'ballistic':
-      // Slender ballistic-rocket silhouette, intentionally distinct from KAB.
-      paintPath(
+      // Slim rocket with small tail fins; no wings, so it reads differently
+      // from the cruise-missile icon even at small map sizes.
+      fillPath(
         ui.Path()
-          ..moveTo(36, 4)
-          ..quadraticBezierTo(45, 16, 43, 33)
-          ..lineTo(42, 52)
-          ..lineTo(54, 63)
-          ..lineTo(41, 59)
-          ..lineTo(36, 68)
-          ..lineTo(31, 59)
-          ..lineTo(18, 63)
-          ..lineTo(30, 52)
-          ..lineTo(29, 33)
-          ..quadraticBezierTo(27, 16, 36, 4)
+          ..moveTo(36, 12)
+          ..quadraticBezierTo(42, 19, 41, 31)
+          ..lineTo(40, 52)
+          ..lineTo(47, 59)
+          ..lineTo(40, 57)
+          ..lineTo(36, 64)
+          ..lineTo(32, 57)
+          ..lineTo(25, 59)
+          ..lineTo(32, 52)
+          ..lineTo(31, 31)
+          ..quadraticBezierTo(30, 19, 36, 12)
           ..close(),
       );
+      line(const ui.Offset(30, 47), const ui.Offset(42, 47), width: 3);
       break;
     case 'kab':
-      // Aerial/glide bomb: long body, rounded nose and wide tail fins.
-      paintPath(
+      // Bomb body with a rounded nose and four tail fins.
+      fillPath(
         ui.Path()
-          ..moveTo(22, 9)
-          ..lineTo(32, 16)
-          ..lineTo(32, 9)
-          ..lineTo(40, 9)
-          ..lineTo(40, 16)
-          ..lineTo(50, 9)
-          ..lineTo(48, 28)
-          ..quadraticBezierTo(47, 35, 44, 39)
-          ..lineTo(44, 50)
-          ..quadraticBezierTo(43, 61, 36, 67)
-          ..quadraticBezierTo(29, 61, 28, 50)
-          ..lineTo(28, 39)
-          ..quadraticBezierTo(25, 35, 24, 28)
+          ..moveTo(36, 17)
+          ..quadraticBezierTo(45, 24, 44, 38)
+          ..quadraticBezierTo(43, 51, 36, 59)
+          ..quadraticBezierTo(29, 51, 28, 38)
+          ..quadraticBezierTo(27, 24, 36, 17)
+          ..close(),
+      );
+      fillPath(
+        ui.Path()
+          ..moveTo(31, 20)
+          ..lineTo(23, 15)
+          ..lineTo(27, 27)
+          ..lineTo(31, 29)
+          ..close(),
+      );
+      fillPath(
+        ui.Path()
+          ..moveTo(41, 20)
+          ..lineTo(49, 15)
+          ..lineTo(45, 27)
+          ..lineTo(41, 29)
+          ..close(),
+      );
+      line(const ui.Offset(31, 34), const ui.Offset(41, 34), width: 3);
+      break;
+    case 'mig31k':
+      // Only this class uses a conventional jet silhouette.
+      fillPath(
+        ui.Path()
+          ..moveTo(36, 11)
+          ..quadraticBezierTo(40, 17, 40, 28)
+          ..lineTo(59, 40)
+          ..lineTo(42, 39)
+          ..lineTo(41, 51)
+          ..lineTo(50, 58)
+          ..lineTo(40, 55)
+          ..lineTo(36, 62)
+          ..lineTo(32, 55)
+          ..lineTo(22, 58)
+          ..lineTo(31, 51)
+          ..lineTo(30, 39)
+          ..lineTo(13, 40)
+          ..lineTo(32, 28)
+          ..quadraticBezierTo(32, 17, 36, 11)
           ..close(),
       );
       break;
-    case 'mig31k':
-      // Military aircraft / MiG marker, top-down and symmetric.
-      paintPath(aircraft(wingY: 32, wingSpan: 29, tailSpan: 14, tailY: 65));
-      break;
     default:
-      // Unknown threat: white warning triangle with a dark exclamation mark.
-      final warning = ui.Path()
-        ..moveTo(36, 7)
-        ..lineTo(66, 61)
-        ..quadraticBezierTo(67, 65, 62, 65)
-        ..lineTo(10, 65)
-        ..quadraticBezierTo(5, 65, 6, 61)
-        ..close();
-      paintPath(warning);
-      final mark = ui.Paint()
-        ..color = const ui.Color(0xff202124)
-        ..style = ui.PaintingStyle.stroke
-        ..strokeWidth = 6
-        ..strokeCap = ui.StrokeCap.round;
-      canvas.drawLine(const ui.Offset(36, 26), const ui.Offset(36, 47), mark);
-      canvas.drawCircle(
-        const ui.Offset(36, 56),
-        3.5,
-        ui.Paint()..color = const ui.Color(0xff202124),
-      );
+      // Unknown threat: neutral warning mark.
+      line(const ui.Offset(36, 24), const ui.Offset(36, 43), width: 5);
+      canvas.drawCircle(const ui.Offset(36, 51), 3.4, white);
   }
 
   final image = await recorder.endRecording().toImage(
@@ -1041,7 +1031,7 @@ class _NeptunMapState extends State<NeptunMap> {
             'neptun-icon-mig31k',
             'neptun-icon-unknown',
           ],
-          iconSize: 0.66,
+          iconSize: 0.40,
           iconAllowOverlap: true,
           iconIgnorePlacement: true,
           iconAnchor: 'center',
@@ -1102,7 +1092,7 @@ class _NeptunMapState extends State<NeptunMap> {
       ),
       const SizedBox(height: 6),
       const Text(
-        'Białe symbole pokazują typ zagrożenia (np. dron, FPV, rakieta, KAB, MiG-31K). Ich orientacja jest wyłącznie graficzna i nie oznacza kierunku lotu. Pozycje pozostają celowo zgrubne. Fioletowe linie: wyłącznie historia.',
+        'Kolor obwódki i kształt oznaczają typ: pomarańczowy — dron/FPV, niebieski — rozpoznanie, czerwony — rakieta, różowy — balistyka, ceglasty — KAB, fioletowy — MiG-31K. Ikony są zawsze ustawione pionowo i nie pokazują kierunku lotu. Pozycje pozostają celowo zgrubne. Fioletowe linie: wyłącznie historia.',
       ),
       if (error != null) Text(error!),
     ],

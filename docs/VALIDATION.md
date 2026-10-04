@@ -1,6 +1,6 @@
 # Walidacja i CI
 
-Ten dokument opisuje bieżącą strategię walidacji. Historyczne zrzuty pojedynczych przebiegów testów nie są źródłem prawdy; aktualny stan należy odczytywać z GitHub Actions i runtime auditu Railway.
+Ten dokument opisuje bieżącą strategię walidacji. Historyczne zrzuty pojedynczych przebiegów testów nie są źródłem prawdy; aktualny stan należy odczytywać z GitHub Actions i provider-neutral runtime auditu produkcji.
 
 ## Backend
 
@@ -69,7 +69,7 @@ Release gate sprawdza m.in.:
 
 Job `android-release` nie uruchamia się przy każdym pushu do `main`. Jest przeznaczony dla release tag/manualnego uruchomienia i dlatego zwykły push może pokazywać go jako `Skipped`.
 
-## Runtime Railway
+## Runtime produkcyjny
 
 `.github/workflows/audit-production-runtime.yml` sprawdza faktycznie wdrożony backend.
 
@@ -89,7 +89,7 @@ Test obejmuje:
 - NEPTUN i jego GeoJSON,
 - postęp workera NEPTUN.
 
-Audit oczekuje dokładnego wdrożonego SHA przy deployowalnych zmianach backendu. Nie używa historycznego hardcoded commita.
+Audit oczekuje dokładnego wdrożonego SHA przy deployowalnych zmianach backendu. Host pochodzi z `PRODUCTION_API_BASE_URL`, a tożsamość deploymentu z `BUILD_SHA`; workflow nie wymaga domeny ani zmiennych specyficznych dla dostawcy hostingu.
 
 ## Zewnętrzne źródła
 

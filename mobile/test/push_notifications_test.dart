@@ -28,6 +28,8 @@ class FakePushSecretStore implements PushSecretStore {
 
 class FakePushAdapter implements PushPlatformAdapter {
   final controller = StreamController<String>.broadcast();
+  final openController = StreamController<PushOpenRequest>.broadcast();
+  PushOpenRequest? initialOpen;
   PushPermissionState current = PushPermissionState.notDetermined;
   PushPermissionState requested = PushPermissionState.authorized;
   String currentToken = 'fcm_token_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -55,7 +57,20 @@ class FakePushAdapter implements PushPlatformAdapter {
   @override
   Stream<String> get tokenChanges => controller.stream;
 
-  Future<void> close() => controller.close();
+  @override
+  Stream<PushOpenRequest> get openRequests => openController.stream;
+
+  @override
+  Future<PushOpenRequest?> takeInitialOpenRequest() async {
+    final value = initialOpen;
+    initialOpen = null;
+    return value;
+  }
+
+  Future<void> close() async {
+    await controller.close();
+    await openController.close();
+  }
 }
 
 http.Response jsonResponse(Object value, [int status = 200]) => http.Response(
@@ -76,6 +91,36 @@ void main() {
   );
 
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('push open request accepts event targets and rejects tests or malformed data', () {
+    final request = PushOpenRequest.tryParse(const {
+      'schemaVersion': '1',
+      'eventId': 'RCB-fixture-1',
+      'kind': 'NEW',
+      'category': 'REGION_PL',
+    });
+    expect(request?.eventId, 'RCB-fixture-1');
+    expect(request?.kind, 'NEW');
+    expect(
+      PushOpenRequest.tryParse(const {
+        'schemaVersion': '1',
+        'kind': 'TEST',
+        'test': 'true',
+      }),
+      isNull,
+    );
+    expect(
+      PushOpenRequest.tryParse(const {
+        'schemaVersion': '2',
+        'eventId': 'RCB-fixture-1',
+      }),
+      isNull,
+    );
+    expect(
+      PushOpenRequest.tryParse(const {'schemaVersion': '1', 'eventId': ''}),
+      isNull,
+    );
+  });
 
   setUp(() => SharedPreferences.setMockInitialValues({}));
 

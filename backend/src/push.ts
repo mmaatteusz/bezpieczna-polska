@@ -74,6 +74,10 @@ export type PushMessage={
  body:string;
  data:Record<string,string>;
  collapseKey:string;
+ expiresAt?:string;
+ ttlSeconds?:number;
+ androidChannelId?:string;
+ priority?:'high'|'normal';
 };
 
 export type PushSendResult={
@@ -253,14 +257,37 @@ function selectCategory(e:Event,p:PushPreferences,isUa:boolean):PushCategory|nul
  if(p.watchedLocations&&locationMatches(e,p))return 'WATCHED_LOCATIONS';
  return null;
 }
-function messageFor(e:Event,kind:string,category:PushCategory,entityId:string):PushMessage{
+function notificationLifetimeSeconds(e:Event,kind:string,category:PushCategory){
+ if(kind==='ENDED')return 2*3600;
+ if(category==='UKRAINE')return 15*60;
+ if(kind==='CORRECTED'&&e.severity==='CRITICAL')return 45*60;
+ if(kind==='CORRECTED')return 2*3600;
+ return ({CRITICAL:45*60,HIGH:2*3600,NORMAL:6*3600,INFORMATIONAL:12*3600} as const)[e.severity];
+}
+function notificationChannel(e:Event,kind:string){
+ if(kind==='ENDED'||e.severity==='INFORMATIONAL'||e.severity==='NORMAL')return 'bp_alerts_info';
+ if(e.severity==='CRITICAL')return 'bp_alerts_critical';
+ return 'bp_alerts_warning';
+}
+function messageFor(e:Event,kind:string,category:PushCategory,entityId:string,now:Date):PushMessage|null{
  const prefix=kind==='ENDED'?'Zakończenie':kind==='CORRECTED'?'Korekta':kind==='ESCALATED'?'Eskalacja':kind==='ACTIVATED'?'Aktywny alert':'Nowy alert';
  const body=(e.correction?.trim()||e.description.trim()||e.title).replace(/\s+/g,' ').slice(0,300);
+ let ttlSeconds=notificationLifetimeSeconds(e,kind,category);
+ if(kind!=='ENDED'&&e.validTo){
+  const validFor=Math.floor((Date.parse(e.validTo)-now.getTime())/1000);
+  if(Number.isFinite(validFor))ttlSeconds=Math.min(ttlSeconds,validFor);
+ }
+ if(ttlSeconds<=0)return null;
+ const channelId=notificationChannel(e,kind),priority=channelId==='bp_alerts_info'?'normal':'high';
  return {
   title:(prefix+': '+e.title).slice(0,160),
   body,
   collapseKey:entityId.slice(0,80),
-  data:{schemaVersion:'1',eventId:e.id,category,kind},
+  data:{schemaVersion:'1',eventId:e.id,category,kind,severity:e.severity,channelId},
+  expiresAt:new Date(now.getTime()+ttlSeconds*1000).toISOString(),
+  ttlSeconds,
+  androidChannelId:channelId,
+  priority,
  };
 }
 
@@ -281,7 +308,8 @@ export async function queuePushChanges(db:PushDb,changes:PushEventChange[],event
    const category=selectCategory(current,device.preferences,decision.isUa);if(!category)continue;
    const key=sha([device.deviceId,entityId,current.revision,decision.kind,category].join('|'));
    if(dedupe.has(key))continue;dedupe.add(key);
-   const payload=messageFor(current,decision.kind,category,entityId),id='PUSH-'+key.slice(0,40);
+   const payload=messageFor(current,decision.kind,category,entityId,now);if(!payload)continue;
+   const id='PUSH-'+key.slice(0,40);
    try{
     await db.run('INSERT INTO push_outbox(id,dedupe_key,device_id,entity_id,event_id,event_revision,category,notification_kind,payload,state,attempt_count,next_attempt_at,last_attempt_at,last_error_code,created_at,delivered_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[
      id,key,device.deviceId,entityId,current.id,current.revision,category,decision.kind,JSON.stringify(payload),'PENDING',0,now.toISOString(),null,null,now.toISOString(),null
@@ -369,7 +397,11 @@ export class PushService{
    title:'Bezpieczna Polska — test powiadomień',
    body:'Jeśli widzisz tę wiadomość, powiadomienia push działają na tym urządzeniu.',
    collapseKey:'bezpieczna-polska-test',
-   data:{schemaVersion:'1',kind:'TEST',test:'true'},
+   data:{schemaVersion:'1',kind:'TEST',test:'true',channelId:'bp_alerts_info'},
+   expiresAt:new Date(now.getTime()+60*1000).toISOString(),
+   ttlSeconds:60,
+   androidChannelId:'bp_alerts_info',
+   priority:'normal',
   });
   if(result.kind==='SUCCESS'){
    await this.db.run('UPDATE push_devices SET last_seen_at=? WHERE device_id=?',[now.toISOString(),id]);
@@ -409,8 +441,32 @@ export class PushService{
    if(Number(row.enabled)!==1||!platform.success){
     await this.db.run("UPDATE push_outbox SET state='PERMANENT_FAILURE',last_error_code=?,next_attempt_at=? WHERE id=?",['DEVICE_DISABLED',now.toISOString(),id]);processed++;continue;
    }
+   let message:PushMessage;
+   try{message=JSON.parse(String(row.payload)) as PushMessage;}
+   catch{
+    await this.db.run("UPDATE push_outbox SET state='PERMANENT_FAILURE',last_error_code='PAYLOAD_INVALID' WHERE id=?",[id]);processed++;continue;
+   }
+   const declaredExpiry=message.expiresAt?Date.parse(message.expiresAt):NaN,createdAt=Date.parse(String(row.created_at));
+   const expiresAt=Number.isFinite(declaredExpiry)?declaredExpiry:createdAt+30*60000;
+   if(!Number.isFinite(expiresAt)||expiresAt<=now.getTime()){
+    await this.db.run("UPDATE push_outbox SET state='EXPIRED',next_attempt_at=?,last_error_code='MESSAGE_EXPIRED' WHERE id=?",[now.toISOString(),id]);processed++;continue;
+   }
+   const latest=(await this.db.all('SELECT revision FROM event_revisions WHERE event_id=? ORDER BY revision DESC LIMIT 1',[String(row.event_id)]))[0];
+   if(!latest){
+    await this.db.run("UPDATE push_outbox SET state='EXPIRED',next_attempt_at=?,last_error_code='EVENT_MISSING' WHERE id=?",[now.toISOString(),id]);processed++;continue;
+   }
+   if(Number(latest.revision)!==Number(row.event_revision)){
+    await this.db.run("UPDATE push_outbox SET state='SUPERSEDED',next_attempt_at=?,last_error_code='EVENT_REVISION_SUPERSEDED' WHERE id=?",[now.toISOString(),id]);processed++;continue;
+   }
+   message={
+    ...message,
+    expiresAt:new Date(expiresAt).toISOString(),
+    ttlSeconds:Math.max(1,Math.min(2419200,Math.ceil((expiresAt-now.getTime())/1000))),
+    androidChannelId:message.androidChannelId??message.data.channelId??'bp_alerts_warning',
+    priority:message.priority??'high',
+   };
    if(!this.provider.ready(platform.data)){
-    const next=new Date(now.getTime()+5*60000).toISOString();
+    const next=new Date(Math.min(expiresAt,now.getTime()+5*60000)).toISOString();
     await this.db.run("UPDATE push_outbox SET state='RETRY',attempt_count=CASE WHEN attempt_count>0 THEN attempt_count-1 ELSE 0 END,next_attempt_at=?,last_error_code='PROVIDER_NOT_READY' WHERE id=?",[next,id]);
     processed++;continue;
    }
@@ -420,17 +476,12 @@ export class PushService{
     await this.db.run("UPDATE push_outbox SET state='PERMANENT_FAILURE',last_error_code='TOKEN_DECRYPT_FAILED' WHERE id=?",[id]);
     await this.scrubDevice(this.db,deviceId,'TOKEN_DECRYPT_FAILED',now);processed++;continue;
    }
-   let message:PushMessage;
-   try{message=JSON.parse(String(row.payload)) as PushMessage;}
-   catch{
-    await this.db.run("UPDATE push_outbox SET state='PERMANENT_FAILURE',last_error_code='PAYLOAD_INVALID' WHERE id=?",[id]);processed++;continue;
-   }
    let result:PushSendResult;
    try{result=await this.provider.send(platform.data,token,message);}
    catch{result={kind:'RETRY',code:'PROVIDER_EXCEPTION'};}
    const code=safeError(result.code);
    if(result.kind==='SUCCESS'){
-    await this.db.run("UPDATE push_outbox SET state='DELIVERED',delivered_at=?,last_error_code=NULL WHERE id=?",[now.toISOString(),id]);
+    await this.db.run("UPDATE push_outbox SET state='ACCEPTED',delivered_at=NULL,last_error_code=NULL WHERE id=?",[id]);
    }else if(result.kind==='PERMANENT_FAILURE'){
     await this.db.run("UPDATE push_outbox SET state='PERMANENT_FAILURE',last_error_code=? WHERE id=?",[code,id]);
     if(result.invalidToken)await this.scrubDevice(this.db,deviceId,'TOKEN_INVALID',now);
@@ -466,7 +517,7 @@ export class FcmProvider{
   try{
    const access=await this.accessToken(),response=await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(c.project_id)}/messages:send`,{
     method:'POST',headers:{authorization:'Bearer '+access,'content-type':'application/json'},
-    body:JSON.stringify({message:{token,notification:{title:message.title,body:message.body},data:message.data,android:{priority:'high',collapse_key:message.collapseKey}}})
+    body:JSON.stringify({message:{token,notification:{title:message.title,body:message.body},data:message.data,android:{priority:message.priority??'high',collapse_key:message.collapseKey,ttl:(Math.max(0,Math.min(2419200,Math.floor(message.ttlSeconds??900))))+'s',notification:{channel_id:message.androidChannelId??'bp_alerts_warning'}}}})
    }),text=await response.text();
    if(response.ok)return {kind:'SUCCESS',code:'FCM_OK'};
    if(response.status===400||response.status===404){
@@ -496,7 +547,8 @@ export class ApnsProvider{
    const result=await new Promise<{status:number;body:string}>((resolve,reject)=>{
     const client=connectHttp2(origin),req=client.request({
      ':method':'POST',':path':'/3/device/'+token,
-     authorization:'bearer '+this.jwt(),'apns-topic':c.bundleId,'apns-push-type':'alert','apns-priority':'10','apns-collapse-id':message.collapseKey.slice(0,64),
+     authorization:'bearer '+this.jwt(),'apns-topic':c.bundleId,'apns-push-type':'alert','apns-priority':message.priority==='normal'?'5':'10','apns-collapse-id':message.collapseKey.slice(0,64),
+     'apns-expiration':String(Math.max(0,Math.floor((message.expiresAt?Date.parse(message.expiresAt):Date.now()+(message.ttlSeconds??900)*1000)/1000))),
      'content-type':'application/json',
     });
     let status=0,body='';

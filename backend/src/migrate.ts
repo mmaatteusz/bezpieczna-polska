@@ -3,7 +3,9 @@ import {serverConfig} from './config.js';
 import {migration001} from './migrations/001_initial.js';
 import {migration002} from './migrations/002_worker_leases.js';
 
-const migrations=[migration001,migration002] as const;
+import {initWorkerMetrics} from './operations.js';
+const migration003={version:3,up:initWorkerMetrics};
+const migrations=[migration001,migration002,migration003] as const;
 export const SCHEMA_VERSION=migrations.at(-1)!.version;
 
 async function appliedVersions(db:Db){
@@ -12,7 +14,7 @@ async function appliedVersions(db:Db){
 export async function assertSchema(db:ReturnType<typeof openDb>){
  const versions=await appliedVersions(db);
  if(versions.length!==migrations.length||versions.some((version,index)=>version!==migrations[index].version))throw new Error('Schema migration missing or incompatible');
- for(const table of ['event_revisions','incident_revisions','source_health','neptun_track_revisions','radiation_measurements','shelters','push_devices','push_outbox','worker_leases']){
+ for(const table of ['event_revisions','incident_revisions','source_health','neptun_track_revisions','radiation_measurements','shelters','push_devices','push_outbox','worker_leases','worker_metrics']){
   await db.all(`SELECT 1 FROM ${table} LIMIT 0`);
  }
  if(db.kind==='postgres'){

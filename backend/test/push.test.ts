@@ -6,22 +6,23 @@ import {join} from 'node:path';
 import {buildApp} from '../src/app.js';
 import {eventSchema,computeStatus,type Event} from '../src/domain.js';
 import {neptunTrackSchema} from '../src/neptun.js';
-import {PushService,type PushProvider,type PushSendResult,type PushPlatform} from '../src/push.js';
+import {PushService,type PushMessage,type PushProvider,type PushSendResult,type PushPlatform} from '../src/push.js';
 import {openDb,Store,type Db} from '../src/store.js';
 
 const key=Buffer.alloc(32,7);
 const secret='bp_push_'+ 'A'.repeat(43);
 // Keep the dispatch clock safely after wall-clock queue insertion times. The
 // production outbox is queued with its actual current timestamp.
-const now=new Date('2030-01-01T12:00:00Z');
+const now=new Date(Date.now()+1000);
+const iso=(offsetMs:number)=>new Date(now.getTime()+offsetMs).toISOString();
 
 class FakeProvider implements PushProvider{
- sent:{platform:PushPlatform;token:string;title:string}[]=[];
+ sent:{platform:PushPlatform;token:string;title:string;message:PushMessage}[]=[];
  results:PushSendResult[]=[];
  isReady=true;
  ready(){return this.isReady;}
- async send(platform:PushPlatform,token:string,message:{title:string}){
-  this.sent.push({platform,token,title:message.title});
+ async send(platform:PushPlatform,token:string,message:PushMessage){
+  this.sent.push({platform,token,title:message.title,message});
   return this.results.shift()??{kind:'SUCCESS',code:'OK'};
  }
 }
@@ -39,8 +40,8 @@ function event(id:string,patch:Partial<Event>={}):Event{
  return eventSchema.parse({
   id:'push-fixture-'+id,title:'Oficjalne ostrzeżenie testowe',description:'Syntetyczny komunikat używany wyłącznie w testach push.',
   eventType:'WEATHER',severity:'CRITICAL',verification:'CONFIRMED',lifecycle:'ACTIVE',messageContext:'ACTUAL',
-  regions:['04'],geographicScope:'REGIONAL',publishedAt:'2026-09-22T11:55:00Z',publicationDate:'2026-09-22',
-  retrievedAt:'2026-09-22T11:56:00Z',validFrom:'2026-09-22T11:50:00Z',validTo:'2026-09-22T14:00:00Z',
+  regions:['04'],geographicScope:'REGIONAL',publishedAt:iso(-5*60000),publicationDate:iso(0).slice(0,10),
+  retrievedAt:iso(-4*60000),validFrom:iso(-10*60000),validTo:iso(2*3600000),
   sources:[{id:'RCB',name:'RCB',url:'https://www.gov.pl/web/rcb/',tier:1}],instructions:['Zachowaj ostrożność.'],
   officialWarning:true,reviewed:false,revision:1,correction:null,latitude:null,longitude:null,geometry:null,
   locationText:'województwo kujawsko-pomorskie',areaPrecision:'PROVINCE',adapterVersion:'fixture',
@@ -51,7 +52,7 @@ function uaEvent(id:string):Event{
  return eventSchema.parse({
   ...event(id),id:'UA-push-'+id,origin:'OFFICIAL_FOREIGN',countryCode:'UA',regions:[],geographicScope:'REGIONAL',
   sources:[{id:'UA',name:'UkraineAlarm',url:'https://map.ukrainealarm.com/',tier:1}],
-  ukraine:{regionId:'fixture',regionName:'Obwód testowy',regionType:'State',parentRegionId:null,alertType:'AIR',kind:'OFFICIAL_ALERT',sourceUpdatedAt:'2026-09-22T11:55:00Z'},
+  ukraine:{regionId:'fixture',regionName:'Obwód testowy',regionType:'State',parentRegionId:null,alertType:'AIR',kind:'OFFICIAL_ALERT',sourceUpdatedAt:iso(-5*60000)},
   geometry:null,geometrySource:undefined
  });
 }
@@ -102,8 +103,57 @@ test('retry is persisted and eventually delivers exactly once',async()=>{
   await push.register(registerBody(deviceA),secret,now);await store.put(event('retry'));
   provider.results.push({kind:'RETRY',code:'TEMPORARY'},{kind:'SUCCESS',code:'OK'});
   assert.equal(await push.dispatchDue(now),1);let row=(await outbox(db))[0];assert.equal(row.state,'RETRY');assert.equal(Number(row.attempt_count),1);
-  assert.equal(await push.dispatchDue(new Date(+now+31000)),1);row=(await outbox(db))[0];assert.equal(row.state,'DELIVERED');assert.equal(Number(row.attempt_count),2);assert.equal(provider.sent.length,2);
+  assert.equal(await push.dispatchDue(new Date(+now+31000)),1);row=(await outbox(db))[0];assert.equal(row.state,'ACCEPTED');assert.equal(Number(row.attempt_count),2);assert.equal(provider.sent.length,2);
   assert.equal(await push.dispatchDue(new Date(+now+62000)),0);
+ }finally{await db.close();}
+});
+
+test('queued alert carries bounded TTL, event target and Android importance channel',async()=>{
+ const {db,store,push,provider}=await setup();
+ try{
+  await push.register(registerBody(deviceA),secret,now);
+  await store.put(event('delivery-policy'));
+  const queued=(await outbox(db))[0],payload=JSON.parse(String(queued.payload)) as PushMessage;
+  assert.equal(payload.data.eventId,'push-fixture-delivery-policy');
+  assert.equal(payload.androidChannelId,'bp_alerts_critical');
+  assert.equal(payload.data.channelId,'bp_alerts_critical');
+  assert.equal(payload.priority,'high');
+  assert.ok(Number(payload.ttlSeconds)>0&&Number(payload.ttlSeconds)<=45*60);
+  assert.ok(Date.parse(String(payload.expiresAt))>now.getTime());
+  await push.dispatchDue(now);
+  const sent=provider.sent[0].message;
+  assert.equal((await outbox(db))[0].state,'ACCEPTED');
+  assert.equal(sent.data.eventId,'push-fixture-delivery-policy');
+  assert.ok(Number(sent.ttlSeconds)>0&&Number(sent.ttlSeconds)<=45*60);
+ }finally{await db.close();}
+});
+
+test('outbox suppresses an older event revision before provider send',async()=>{
+ const {db,store,push,provider}=await setup();
+ try{
+  await push.register(registerBody(deviceA),secret,now);
+  const e=event('superseded',{severity:'HIGH'});
+  await store.put(e);
+  await store.put({...e,description:e.description+' Aktualizacja.'});
+  assert.equal((await outbox(db)).length,2);
+  await push.dispatchDue(now);
+  const rows=await outbox(db);
+  assert.deepEqual(rows.map(r=>r.state),['SUPERSEDED','ACCEPTED']);
+  assert.equal(rows[0].last_error_code,'EVENT_REVISION_SUPERSEDED');
+  assert.equal(provider.sent.length,1);
+ }finally{await db.close();}
+});
+
+test('expired queued alert is dropped instead of reaching the provider',async()=>{
+ const {db,store,push,provider}=await setup();
+ try{
+  await push.register(registerBody(deviceA),secret,now);
+  await store.put(event('expired-before-send',{validTo:iso(5*60000)}));
+  await push.dispatchDue(new Date(now.getTime()+6*60000));
+  const row=(await outbox(db))[0];
+  assert.equal(row.state,'EXPIRED');
+  assert.equal(row.last_error_code,'MESSAGE_EXPIRED');
+  assert.equal(provider.sent.length,0);
  }finally{await db.close();}
 });
 
@@ -133,7 +183,7 @@ test('material correction, escalation and end create revision-specific notificat
   await store.put(e);
   await store.put({...e,description:e.description+' Korekta treści.',correction:'Doprecyzowano obszar.'});
   await store.put({...e,severity:'CRITICAL',description:e.description+' Korekta treści.',correction:'Doprecyzowano obszar.'});
-  await store.put({...e,severity:'CRITICAL',lifecycle:'ENDED',validTo:'2026-09-22T12:10:00Z',description:e.description+' Korekta treści.',correction:'Alert zakończono.'});
+  await store.put({...e,severity:'CRITICAL',lifecycle:'ENDED',validTo:iso(10*60000),description:e.description+' Korekta treści.',correction:'Alert zakończono.'});
   const rows=await outbox(db);assert.deepEqual(rows.map(r=>r.notification_kind),['NEW','CORRECTED','ESCALATED','ENDED']);assert.equal(new Set(rows.map(r=>r.dedupe_key)).size,4);
  }finally{await db.close();}
 });
@@ -276,7 +326,7 @@ test('SQLite restart preserves device and pending outbox without plaintext token
  try{
   await push.register(registerBody(deviceA,token),secret,now);await store.put(event('restart'));await db.close();
   db=openDb(undefined,file);store=new Store(db);await store.init();provider=new FakeProvider();push=new PushService(db,key,provider);
-  assert.equal((await outbox(db))[0].state,'PENDING');await push.dispatchDue(now);assert.equal((await outbox(db))[0].state,'DELIVERED');assert.equal(provider.sent[0].token,token);
+  assert.equal((await outbox(db))[0].state,'PENDING');await push.dispatchDue(now);assert.equal((await outbox(db))[0].state,'ACCEPTED');assert.equal(provider.sent[0].token,token);
  }finally{await db.close();await rm(dir,{recursive:true,force:true});}
 });
 

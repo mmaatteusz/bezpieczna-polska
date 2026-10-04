@@ -39,17 +39,17 @@ jobs:
           node-version: '24'
       - name: Validate runtime smoke client
         working-directory: backend
-        run: node --check scripts/railway-runtime-smoke.mjs
+        run: node --check scripts/production-runtime-smoke.mjs
       - name: Probe production health independently of deployment identity
         working-directory: backend
         env:
-          SMOKE_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL || 'https://api-production-b6560.up.railway.app' }}
+          SMOKE_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
           AUDIT_MODE: health
           EXPECTED_BUILD_SHA: ${{ github.event.deployment.sha || (github.event_name == 'push' && github.sha) || github.event.inputs.expected_sha || '' }}
           SOURCE_WAIT_SECONDS: '480'
           # Keep the critical-source list in the smoke client as the single source of truth.
           ALLOW_STALE_SOURCE_IDS: SHELTERS
-        run: node scripts/railway-runtime-smoke.mjs
+        run: node scripts/production-runtime-smoke.mjs
 
   deployment-identity:
     if: >-
@@ -67,12 +67,12 @@ jobs:
           node-version: '24'
       - name: Validate deployment identity probe
         working-directory: backend
-        run: node --check scripts/railway-runtime-smoke.mjs
+        run: node --check scripts/production-runtime-smoke.mjs
       - name: Require the explicitly expected production commit
         working-directory: backend
         env:
-          SMOKE_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL || 'https://api-production-b6560.up.railway.app' }}
+          SMOKE_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
           AUDIT_MODE: identity
           EXPECTED_BUILD_SHA: ${{ github.event.deployment.sha || (github.event_name == 'push' && github.sha) || github.event.inputs.expected_sha }}
           DEPLOY_WAIT_SECONDS: '600'
-        run: node scripts/railway-runtime-smoke.mjs
+        run: node scripts/production-runtime-smoke.mjs

@@ -635,15 +635,13 @@ class _ShelterMapState extends State<ShelterMap> {
         await c.setStyle(offlineStyle);
         if (mounted) {
           setState(
-            () => message =
-                'OFFLINE MAPA • podkład sieciowy nie odpowiedział. Uruchomiono lokalne płótno dla zapisanych overlayów.',
+            () => message = 'OFFLINE MAPA • podkład sieciowy nie odpowiedział. Uruchomiono lokalne płótno dla zapisanych overlayów.',
           );
         }
       } catch (_) {
         if (mounted) {
           setState(
-            () => message =
-                'Nie udało się uruchomić ani podkładu online, ani lokalnego płótna mapy.',
+            () => message = 'Nie udało się uruchomić ani podkładu online, ani lokalnego płótna mapy.',
           );
         }
       }
@@ -673,21 +671,13 @@ class _ShelterMapState extends State<ShelterMap> {
     styleFallback?.cancel();
     try {
       if (!widget.ukraine) {
-        final voivodeships =
-            jsonDecode(
-                  await rootBundle.loadString(
-                    'assets/poland_voivodeships_min.geojson',
-                  ),
-                )
-                as Map<String, dynamic>;
+        final voivodeships = jsonDecode(
+          await rootBundle.loadString('assets/poland_voivodeships_min.geojson'),
+        ) as Map<String, dynamic>;
         try {
-          final rawAnchors =
-              jsonDecode(
-                    await rootBundle.loadString(
-                      'assets/poland_powiat_centroids.json',
-                    ),
-                  )
-                  as Map<String, dynamic>;
+          final rawAnchors = jsonDecode(
+            await rootBundle.loadString('assets/poland_powiat_centroids.json'),
+          ) as Map<String, dynamic>;
           final rawPowiaty = rawAnchors['powiaty'];
           if (rawAnchors['schemaVersion'] != 2 || rawPowiaty is! Map) {
             throw const FormatException('Niepoprawne centroidy TERYT');
@@ -1190,8 +1180,7 @@ class _ShelterMapState extends State<ShelterMap> {
         updateMapLegend(bbox, sheltersVisible: false);
         if (!mounted || current != ticket) return;
         setState(() {
-          message =
-              'Punkty schronienia są ukryte tylko przy bardzo dużym oddaleniu mapy. Przybliż mapę, aby zobaczyć klastry.';
+          message = 'Punkty schronienia są ukryte tylko przy bardzo dużym oddaleniu mapy. Przybliż mapę, aby zobaczyć klastry.';
         });
         return;
       }
@@ -1788,6 +1777,20 @@ class _ShelterMapState extends State<ShelterMap> {
                     }
                   },
                 ),
+                const Divider(height: 20),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.satellite_alt_outlined),
+                  title: const Text('Monitoring GNSS / GPS RTGMS'),
+                  subtitle: const Text(
+                    'Otwiera zewnętrzną mapę monitoringu GNSS',
+                  ),
+                  trailing: const Icon(Icons.open_in_new_rounded),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    widget.openLink('https://www.rtgms.pl/map');
+                  },
+                ),
                 DropdownButtonFormField<String>(
                   key: ValueKey(availability),
                   initialValue: availability,
@@ -1962,9 +1965,9 @@ class _ShelterMapState extends State<ShelterMap> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Material(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerHigh,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHigh,
                           borderRadius: BorderRadius.circular(10),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
@@ -2049,9 +2052,8 @@ class _ShelterMapState extends State<ShelterMap> {
                       gpsInterference == null
                           ? 'Ładowanie dobowej mapy zakłóceń…'
                           : 'Dane dobowe: ${gpsInterference!.dataDate} UTC',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: Theme.of(context).textTheme.labelLarge
+                          ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 7),
                     Wrap(
@@ -2103,9 +2105,8 @@ class _ShelterMapState extends State<ShelterMap> {
           Text(
             currentRadiation == null
                 ? message
-                : RadiationData.parse(
-                    currentRadiation,
-                  ).measurementText(DateTime.now(), currentRadiationOnline),
+                : RadiationData.parse(currentRadiation)
+                      .measurementText(DateTime.now(), currentRadiationOnline),
           ),
           const Text(
             'Komunikaty PAA są dostępne w Statusie i Alert Center. Brak punktów na mapie nie oznacza braku zagrożenia.',

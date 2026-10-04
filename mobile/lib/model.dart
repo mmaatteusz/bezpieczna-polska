@@ -32,16 +32,12 @@ String apiFailureMessage(Object error) {
     return switch (error.kind) {
       ApiFailureKind.notConfigured =>
         'Aplikacja nie ma skonfigurowanego połączenia z backendem.',
-      ApiFailureKind.timeout =>
-        'Serwer nie odpowiedział na czas. Zachowano ostatnią poprawną kopię danych.',
-      ApiFailureKind.network =>
-        'Brak połączenia z serwerem. Sprawdź internet; zapisane dane pozostają dostępne.',
+      ApiFailureKind.timeout => 'Serwer nie odpowiedział na czas. Zachowano ostatnią poprawną kopię danych.',
+      ApiFailureKind.network => 'Brak połączenia z serwerem. Sprawdź internet; zapisane dane pozostają dostępne.',
       ApiFailureKind.rateLimited =>
         'Serwer chwilowo ogranicza liczbę zapytań. Spróbuj ponownie za moment.',
-      ApiFailureKind.server =>
-        'Usługa jest chwilowo niedostępna. Zachowano ostatnią poprawną kopię danych.',
-      ApiFailureKind.invalidResponse =>
-        'Serwer zwrócił niepoprawne dane. Nie zastąpiono ostatniej poprawnej kopii.',
+      ApiFailureKind.server => 'Usługa jest chwilowo niedostępna. Zachowano ostatnią poprawną kopię danych.',
+      ApiFailureKind.invalidResponse => 'Serwer zwrócił niepoprawne dane. Nie zastąpiono ostatniej poprawnej kopii.',
     };
   }
   if (error is ShelterVersionChanged) {
@@ -92,9 +88,8 @@ class SafetyEvent {
     final items = data['_reports'] == null
         ? (data['sources'] as List).cast<Map>()
         : reports.expand((e) => (e.data['sources'] as List).cast<Map>());
-    return {
-      for (final s in items) s['id']: Map<String, dynamic>.from(s),
-    }.values.toList();
+    return {for (final s in items) s['id']: Map<String, dynamic>.from(s)}.values
+        .toList();
   }
 
   bool get isRcb => sources.any((s) => s['id'] == 'RCB');
@@ -284,9 +279,8 @@ class Snapshot {
           data[national ? 'nationalStatus' : 'status']['validUntil'] as String,
         ),
       ) &&
-      !DateTime.parse(
-        data['serverTime'] as String,
-      ).isAfter(now.add(const Duration(seconds: 30)));
+      !DateTime.parse(data['serverTime'] as String)
+          .isAfter(now.add(const Duration(seconds: 30)));
   String statusText(
     DateTime now, {
     required bool online,
@@ -940,6 +934,14 @@ class DataRepository {
     } catch (_) {
       throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
+  }
+
+  Future<SafetyEvent?> eventById(String id) async {
+    final timeline = await eventTimeline(id);
+    if (timeline.isEmpty) return null;
+    final payload = timeline.last['payload'];
+    if (payload is! Map) throw const ApiFailure(ApiFailureKind.invalidResponse);
+    return SafetyEvent.parse(Map<String, dynamic>.from(payload));
   }
 
   Future<List<Map<String, dynamic>>> eventTimeline(

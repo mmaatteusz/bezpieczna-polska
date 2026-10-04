@@ -16,6 +16,34 @@ import 'watched_locations_panel.dart';
 
 enum PushPermissionState { notDetermined, denied, authorized, provisional }
 
+@immutable
+class PushOpenRequest {
+  final String eventId;
+  final String? kind;
+  final String? category;
+
+  const PushOpenRequest({required this.eventId, this.kind, this.category});
+
+  static PushOpenRequest? tryParse(Map<dynamic, dynamic> data) {
+    if (data['schemaVersion']?.toString() != '1') return null;
+    if (data['kind']?.toString() == 'TEST') return null;
+    final eventId = data['eventId'];
+    if (eventId is! String || eventId.isEmpty || eventId.length > 150) {
+      return null;
+    }
+    String? optional(String key) {
+      final value = data[key];
+      return value is String && value.isNotEmpty ? value : null;
+    }
+
+    return PushOpenRequest(
+      eventId: eventId,
+      kind: optional('kind'),
+      category: optional('category'),
+    );
+  }
+}
+
 Future<PushPlatformAdapter?> safePushPlatformAdapter(
   Future<PushPlatformAdapter?> Function() factory,
 ) async {
@@ -33,6 +61,8 @@ abstract class PushPlatformAdapter {
   Future<PushPermissionState> requestPermission();
   Future<String?> token();
   Stream<String> get tokenChanges;
+  Stream<PushOpenRequest> get openRequests;
+  Future<PushOpenRequest?> takeInitialOpenRequest();
 }
 
 abstract class PushSecretStore {
@@ -60,11 +90,44 @@ class SecurePushSecretStore implements PushSecretStore {
 
 class FirebasePushPlatformAdapter implements PushPlatformAdapter {
   static StreamSubscription<RemoteMessage>? _foregroundMessages;
+  static StreamSubscription<RemoteMessage>? _openedMessages;
+  static StreamSubscription<Map<String, String>>? _nativeTaps;
   final FirebaseMessaging messaging;
   @override
   final String platform;
+  final StreamController<PushOpenRequest> _openRequests =
+      StreamController<PushOpenRequest>.broadcast();
+  PushOpenRequest? _initialOpen;
 
   FirebasePushPlatformAdapter._(this.messaging, this.platform);
+
+  void _emitOpen(Map<dynamic, dynamic> data) {
+    final request = PushOpenRequest.tryParse(data);
+    if (request != null) _openRequests.add(request);
+  }
+
+  Future<void> _initializeOpenHandling() async {
+    _openedMessages ??= FirebaseMessaging.onMessageOpenedApp.listen(
+      (message) => _emitOpen(message.data),
+    );
+    final initialMessage = await messaging.getInitialMessage();
+    if (initialMessage != null) {
+      _initialOpen = PushOpenRequest.tryParse(initialMessage.data);
+    }
+    if (platform == 'ANDROID') {
+      await AndroidForegroundPush.initializeTapHandling();
+      _nativeTaps ??= AndroidForegroundPush.taps.listen(
+        (data) => _emitOpen(<String, String>{'schemaVersion': '1', ...data}),
+      );
+      final nativeInitial = AndroidForegroundPush.takeInitialTap();
+      if (_initialOpen == null && nativeInitial != null) {
+        _initialOpen = PushOpenRequest.tryParse(<String, String>{
+          'schemaVersion': '1',
+          ...nativeInitial,
+        });
+      }
+    }
+  }
 
   static Future<FirebasePushPlatformAdapter?> fromBuildConfiguration() async {
     if (kIsWeb ||
@@ -117,10 +180,12 @@ class FirebasePushPlatformAdapter implements PushPlatformAdapter {
         sound: true,
       );
     }
-    return FirebasePushPlatformAdapter._(
+    final adapter = FirebasePushPlatformAdapter._(
       messaging,
       defaultTargetPlatform == TargetPlatform.iOS ? 'IOS' : 'ANDROID',
     );
+    await adapter._initializeOpenHandling();
+    return adapter;
   }
 
   PushPermissionState _permission(AuthorizationStatus status) =>
@@ -163,6 +228,16 @@ class FirebasePushPlatformAdapter implements PushPlatformAdapter {
             : fcmToken,
       )
       .where((value) => value.isNotEmpty);
+
+  @override
+  Stream<PushOpenRequest> get openRequests => _openRequests.stream;
+
+  @override
+  Future<PushOpenRequest?> takeInitialOpenRequest() async {
+    final value = _initialOpen;
+    _initialOpen = null;
+    return value;
+  }
 }
 
 @immutable
@@ -527,17 +602,13 @@ class PushManager extends ChangeNotifier {
     try {
       final result = Map<String, dynamic>.from(
         await _jsonRequest(
-              update ? 'PUT' : 'POST',
-              _uri(
-                update ? '/v1/push/devices/${identity.id}' : '/v1/push/devices',
-              ),
-              identity.secret,
-              body: update
-                  ? (Map<String, dynamic>.from(payload)
-                      ..remove('installationId'))
-                  : payload,
-            )
-            as Map,
+          update ? 'PUT' : 'POST',
+          _uri(update ? '/v1/push/devices/${identity.id}' : '/v1/push/devices'),
+          identity.secret,
+          body: update
+              ? (Map<String, dynamic>.from(payload)..remove('installationId'))
+              : payload,
+        ) as Map,
       );
       await repository.prefs.setBool(_registeredKey, true);
       _setState(
@@ -570,11 +641,10 @@ class PushManager extends ChangeNotifier {
     try {
       final result = Map<String, dynamic>.from(
         await _jsonRequest(
-              'GET',
-              _uri('/v1/push/devices/${identity.id}'),
-              identity.secret,
-            )
-            as Map,
+          'GET',
+          _uri('/v1/push/devices/${identity.id}'),
+          identity.secret,
+        ) as Map,
       );
       final registered = result['registered'] == true;
       await repository.prefs.setBool(_registeredKey, registered);
@@ -778,9 +848,8 @@ class _NotificationSettingsScreenState
       final message = error is StateError
           ? 'Najpierw włącz powiadomienia na tym urządzeniu.'
           : 'Nie udało się wysłać testu. ${apiFailureMessage(error)}';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -995,6 +1064,15 @@ class _NotificationSettingsScreenState
               onChanged: busy
                   ? null
                   : (value) => _update(prefs.copyWith(watchedLocations: value)),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Włączenie tej kategorii wysyła na serwer nazwy, współrzędne '
+              'i promienie zapisanych miejsc, aby dobierać powiadomienia. '
+              'Zmiana wymaga połączenia z internetem; przy błędzie serwer '
+              'może nadal korzystać z poprzednich ustawień.',
             ),
           ),
           SwitchListTile(

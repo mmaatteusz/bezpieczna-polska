@@ -5,6 +5,41 @@ import '../offline_packages.dart';
 import '../security_levels.dart';
 import '../ui/safety_event_card.dart';
 
+// A successful HTTP response does not establish freshness of upstream feeds.
+bool dashboardSourcesFresh(Snapshot? snapshot, String region, DateTime now) {
+  if (snapshot == null || !snapshot.freshAt(now)) return false;
+  final sources = (snapshot.data['sources'] as List).where((raw) {
+    final source = raw as Map;
+    return source['enabled'] != false &&
+        source['sourceClass'] == 'STATUS' &&
+        (source['regionId'] == null ||
+            region == 'PL' ||
+            source['regionId'] == region);
+  }).toList();
+  return sources.isNotEmpty &&
+      sources.every((raw) {
+        final source = raw as Map;
+        final last = DateTime.tryParse(source['lastSuccess']?.toString() ?? '');
+        final maxAge = source['maxAgeSeconds'];
+        return (source['healthStatus'] ?? source['state']) == 'HEALTHY' &&
+            last != null &&
+            maxAge is num &&
+            maxAge > 0 &&
+            !last.isAfter(now.add(const Duration(seconds: 30))) &&
+            now.difference(last).inMilliseconds < maxAge * 1000;
+      });
+}
+
+bool dashboardAroundFresh(AroundResult? around, DateTime now) {
+  if (around == null || around.data['offlineSnapshotTimestamp'] != null) {
+    return false;
+  }
+  final time = DateTime.tryParse(around.data['serverTime']?.toString() ?? '');
+  return time != null &&
+      !time.isAfter(now.add(const Duration(seconds: 30))) &&
+      now.difference(time) < const Duration(minutes: 1);
+}
+
 class DashboardScreen extends StatelessWidget {
   final Snapshot? snapshot;
   final List<SafetyEvent> events;
@@ -47,7 +82,8 @@ class DashboardScreen extends StatelessWidget {
     return switch (level) {
       'ACTIVE_DANGER' => 'POWAŻNE ZAGROŻENIE',
       'CAUTION' => 'OSTRZEŻENIA',
-      'NO_ACTIVE_WARNINGS' => 'SPOKOJNIE',
+      'NO_ACTIVE_WARNINGS' => 'BRAK AKTYWNYCH OSTRZEŻEŃ',
+      'NO_LOCAL_REPORTS' => 'BRAK LOKALNYCH KOMUNIKATÓW',
       _ => 'BRAK PEWNEJ OCENY',
     };
   }
@@ -224,12 +260,8 @@ class DashboardScreen extends StatelessWidget {
               const SizedBox(height: 7),
               Text(
                 _statusDetail(status, fresh),
-                maxLines: prominent ? 3 : 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: foreground,
-                  height: 1.35,
-                ),
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: foreground, height: 1.35),
               ),
               if (footer != null) ...[
                 const SizedBox(height: 13),
@@ -262,7 +294,14 @@ class DashboardScreen extends StatelessWidget {
     if (loading || backgroundSync) return 'Aktualizacja…';
     if (!online) return offlinePackage != null ? 'Tryb offline' : 'Brak sieci';
     if (snapshot == null) return 'Łączenie…';
-    return 'Dane aktualne';
+    if (!dashboardSourcesFresh(snapshot, region, DateTime.now())) {
+      return 'Ograniczone dane źródeł';
+    }
+    if (localityLabel != null &&
+        !dashboardAroundFresh(localityAround, DateTime.now())) {
+      return 'Brak świeżych danych okolicy';
+    }
+    return 'Źródła ostrzeżeń aktualne';
   }
 
   IconData _freshnessIcon() {
@@ -283,7 +322,13 @@ class DashboardScreen extends StatelessWidget {
 
   Widget _freshnessPill(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final active = online && !loading && !backgroundSync;
+    final active =
+        online &&
+        !loading &&
+        !backgroundSync &&
+        dashboardSourcesFresh(snapshot, region, DateTime.now()) &&
+        (localityLabel == null ||
+            dashboardAroundFresh(localityAround, DateTime.now()));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
@@ -311,9 +356,8 @@ class DashboardScreen extends StatelessWidget {
             child: Text(
               _freshnessLabel(),
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(context).textTheme.labelMedium
+                  ?.copyWith(fontWeight: FontWeight.w800),
             ),
           ),
         ],
@@ -357,9 +401,8 @@ class DashboardScreen extends StatelessWidget {
                   children: [
                     Text(
                       'Twoja okolica',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w900),
                     ),
                     const SizedBox(height: 4),
                     const Text(
@@ -419,9 +462,8 @@ class DashboardScreen extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 subtitle,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
           ),
@@ -455,13 +497,19 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final national = snapshot?.data['nationalStatus'];
-    final local = snapshot?.data['status'];
+
     final nationalFresh =
         online && (snapshot?.freshAt(now, national: true) ?? false);
-    final localFresh = online && (snapshot?.freshAt(now) ?? false);
+    final localFresh = online && dashboardAroundFresh(localityAround, now);
+    final selectedEvents = localityLabel == null
+        ? events
+        : [
+            ...?localityAround?.nearbyEvents.map((item) => item.event),
+            ...?localityAround?.regionalEvents,
+          ];
     final activeEvents =
         deduplicateSafetyEventsForDisplay(
-          events.where((event) => safetyEventIsSignificant(event, now)),
+          selectedEvents.where((event) => safetyEventIsSignificant(event, now)),
         )..sort((a, b) {
           final severity = safetyEventPriority(
             a,
@@ -471,21 +519,18 @@ class DashboardScreen extends StatelessWidget {
           return safetyEventTime(b).compareTo(safetyEventTime(a));
         });
     final active = groupSafetyEventsForDashboard(activeEvents);
-    final groupedWarningCount = active.fold<int>(
-      0,
-      (sum, group) => sum + (group.count - 1),
-    );
-    final localRelevant = localityAround == null
-        ? 0
-        : {
-            ...localityAround!.nearbyEvents
-                .map((item) => item.event)
-                .where((event) => safetyEventIsSignificant(event, now))
-                .map((event) => event.id),
-            ...localityAround!.regionalEvents
-                .where((event) => safetyEventIsSignificant(event, now))
-                .map((event) => event.id),
-          }.length;
+    final local = {
+      'hazardLevel': !localFresh
+          ? 'UNKNOWN'
+          : activeEvents.isEmpty
+          ? 'NO_LOCAL_REPORTS'
+          : activeEvents.any((e) => e.data['severity'] == 'CRITICAL')
+          ? 'ACTIVE_DANGER'
+          : 'CAUTION',
+      'displayText': activeEvents.isEmpty
+          ? 'Nie znaleziono istotnych aktywnych komunikatów w sprawdzanym zakresie. Nie oznacza to braku zagrożeń.'
+          : '${active.length} komunikatów lub grup zagrożeń w sprawdzanym zakresie.',
+    };
     final snapshotTime = _snapshotTime();
 
     BuildContext? threatsSectionContext;
@@ -538,44 +583,29 @@ class DashboardScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 15),
-          _statusCard(
-            context,
-            title: 'Polska',
-            subtitle: 'Status krajowy',
-            status: national,
-            fresh: nationalFresh,
-            prominent: true,
-            onTap: onOpenAlerts,
-            footer: active.isEmpty
-                ? 'Brak istotnych aktywnych komunikatów'
-                : groupedWarningCount == 0
-                ? '${active.length} istotnych aktywnych komunikatów'
-                : '${active.length} grup zagrożeń • połączono $groupedWarningCount podobnych komunikatów',
-          ),
-          const SizedBox(height: 12),
           if (localityLabel == null)
             _localitySetupCard(context)
           else
             _statusCard(
               context,
               title: 'Twoja okolica',
-              subtitle: localityLabel,
+              subtitle:
+                  '$localityLabel • promień ${localityAround?.radiusKm.toStringAsFixed(0) ?? '20'} km + komunikaty regionalne',
               status: local,
               fresh: localFresh,
-              prominent: false,
+              prominent: true,
               onTap: scrollToThreats,
               footer: localityAround == null
-                  ? 'Sprawdzanie lokalnych danych…'
-                  : localRelevant == 0
-                  ? 'Brak istotnych komunikatów lokalnych'
-                  : '$localRelevant istotnych komunikatów lokalnych',
+                  ? 'Brak danych lokalnych. Spróbuj odświeżyć.'
+                  : !localFresh
+                  ? 'Ostatnia zapisana sytuacja • aktualność niepotwierdzona'
+                  : 'Komunikaty regionalne mogą dotyczyć całego województwa.',
             ),
           if (!online && offlinePackage != null) ...[
             const SizedBox(height: 10),
             const _InfoBanner(
               icon: Icons.offline_pin_outlined,
-              text:
-                  'Tryb offline: pokazujemy ostatnie zapisane dane. Mogły pojawić się nowsze ostrzeżenia.',
+              text: 'Tryb offline: pokazujemy ostatnie zapisane dane. Mogły pojawić się nowsze ostrzeżenia.',
             ),
           ],
           if (error != null) ...[
@@ -585,12 +615,6 @@ class DashboardScreen extends StatelessWidget {
               text: 'Nie udało się pobrać świeżych danych. $error',
             ),
           ],
-          const SizedBox(height: 12),
-          SecurityLevelsSummaryCard(
-            snapshot: snapshot,
-            online: online,
-            onTap: onOpenSecurityLevels,
-          ),
           const SizedBox(height: 25),
           Builder(
             builder: (sectionContext) {
@@ -598,8 +622,9 @@ class DashboardScreen extends StatelessWidget {
               return _sectionHeader(
                 sectionContext,
                 title: 'Istotne zagrożenia',
-                subtitle:
-                    'Najważniejsze aktywne komunikaty, bez informacyjnego szumu.',
+                subtitle: localityLabel == null
+                    ? 'Wybierz miejscowość, aby zobaczyć komunikaty dla swojej okolicy.'
+                    : 'Do trzech najważniejszych komunikatów dla wskazanego zakresu.',
                 count: active.length,
               );
             },
@@ -614,7 +639,13 @@ class DashboardScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 3),
-          if (snapshot == null && offlinePackage == null)
+          if (localityLabel != null && localityAround == null)
+            const _EmptyState(
+              icon: Icons.location_searching,
+              title: 'Brak oceny lokalnej',
+              text: 'Nie udało się pobrać danych okolicy. Odśwież ekran; status województwa nie zastępuje danych lokalnych.',
+            )
+          else if (snapshot == null && offlinePackage == null)
             const _EmptyState(
               icon: Icons.cloud_download_outlined,
               title: 'Pobieramy aktualną sytuację',
@@ -624,12 +655,11 @@ class DashboardScreen extends StatelessWidget {
             const _EmptyState(
               icon: Icons.notifications_none_outlined,
               title: 'Brak istotnych aktywnych komunikatów',
-              text:
-                  'Aplikacja nadal sprawdza źródła. Brak komunikatu nie jest gwarancją bezpieczeństwa.',
+              text: 'Aplikacja nadal sprawdza źródła. Brak komunikatu nie jest gwarancją bezpieczeństwa.',
             )
           else
             ...active
-                .take(5)
+                .take(3)
                 .map(
                   (group) => SafetyEventCard(
                     event: group.primary,
@@ -641,6 +671,37 @@ class DashboardScreen extends StatelessWidget {
                         : () => onOpenEvent(group.primary),
                   ),
                 ),
+          if (active.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const _InfoBanner(
+              icon: Icons.directions_outlined,
+              text: 'Co zrobić: przeczytaj zalecenia źródła przy komunikacie. Jeśli ich nie podano, otwórz szczegóły i sprawdź oficjalny komunikat.',
+            ),
+          ],
+          const SizedBox(height: 12),
+          _InfoBanner(
+            icon: Icons.info_outline,
+            text:
+                'Zakres danych: zdarzenia z geometrią w promieniu 20 km oraz komunikaty dla województwa i kraju. '
+                'Część źródeł nie podaje dokładnego miejsca. Brak komunikatów nie jest gwarancją bezpieczeństwa. '
+                '${_freshnessLabel()}${localityAround == null ? '' : ' • Odczyt okolicy: ${stamp(localityAround!.data['serverTime'] as String)}'}.',
+          ),
+          const SizedBox(height: 16),
+          _statusCard(
+            context,
+            title: 'Polska',
+            subtitle: 'Status krajowy • kontekst ogólny',
+            status: national,
+            fresh: nationalFresh,
+            prominent: false,
+            onTap: onOpenAlerts,
+          ),
+          const SizedBox(height: 12),
+          SecurityLevelsSummaryCard(
+            snapshot: snapshot,
+            online: online,
+            onTap: onOpenSecurityLevels,
+          ),
         ],
       ),
     );
@@ -670,9 +731,8 @@ class _InfoBanner extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ),
         ],
@@ -720,17 +780,14 @@ class _EmptyState extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 5),
                 Text(
                   text,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                    height: 1.35,
-                  ),
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: scheme.onSurfaceVariant, height: 1.35),
                 ),
               ],
             ),

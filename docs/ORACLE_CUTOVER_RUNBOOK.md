@@ -197,6 +197,8 @@ APK zachowuje identyfikator i podpis preview. Na własnym Androidzie zainstaluj
 ten APK, włącz powiadomienia i użyj testu powiadomień w aplikacji. Sprawdź
 rzeczywiste odebranie wiadomości; walidacja FCM bez wysyłki tego nie zastępuje.
 
+Porównanie obu backendów uruchamia workflow [Compare baseline and Oracle runtime](../.github/workflows/oracle-runtime-compare.yml). Przyjmuje jawne adresy baseline i kandydata oraz opcjonalny oczekiwany SHA Oracle; nie zmienia Repository Variables. Porównuje źródła, ich świeżość i liczby elementów przez kilka rund. Wynik historycznego baseline nie jest dowodem bieżącego stanu ani przyczyny problemów.
+
 ## 12. GitHub Actions
 
 Dopiero po utworzeniu VM dodamy sekrety SSH potrzebne przez manualny workflow Oracle. Na tym etapie nadal NIE zmieniamy:

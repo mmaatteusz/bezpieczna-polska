@@ -16,6 +16,7 @@ import 'offline_packages.dart';
 import 'offline_repository.dart';
 import 'offline_data_screen.dart';
 import 'build_config.dart';
+import 'privacy_screen.dart';
 import 'app_version.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/alerts_screen.dart';
@@ -274,7 +275,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   AroundResult? localityAround;
   OfflineRegionPackage? offlinePackageData;
   String? error;
+  static const _pendingPushEventKey = 'pending_push_event_v1';
   Timer? timer, refreshTimer;
+  StreamSubscription<PushOpenRequest>? pushOpenSubscription;
+  bool openingPushEvent = false;
   Map<String, int> seen = {};
   @override
   void initState() {
@@ -282,6 +286,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     if (widget.pushManager != null) {
       unawaited(widget.pushManager!.initializeWithoutPrompt());
+      pushOpenSubscription = widget.pushManager!.adapter?.openRequests.listen((
+        request,
+      ) {
+        if (mounted) unawaited(_openPushEvent(request.eventId));
+      });
     }
     region = widget.repository.region;
     localityLabel = widget.repository.primaryLocationLabel;
@@ -300,18 +309,20 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         unawaited(refresh());
       }
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_consumeInitialPushOpen());
+    });
   }
 
   void loadSeen() {
     try {
       seen = Map<String, int>.from(
         jsonDecode(
-              widget.repository.prefs.getString(
-                    'seen:${widget.repository.api}:$region',
-                  ) ??
-                  '{}',
-            )
-            as Map,
+          widget.repository.prefs.getString(
+                'seen:${widget.repository.api}:$region',
+              ) ??
+              '{}',
+        ) as Map,
       );
     } catch (_) {
       seen = {};
@@ -322,6 +333,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   void dispose() {
     timer?.cancel();
     refreshTimer?.cancel();
+    unawaited(pushOpenSubscription?.cancel());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -331,6 +343,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed &&
         widget.repository.api.isNotEmpty) {
       unawaited(refresh());
+    } else if (state == AppLifecycleState.resumed) {
+      unawaited(_retryPendingPushOpen());
     }
   }
 
@@ -360,11 +374,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     });
     try {
       final s = await widget.repository.refresh(target);
+      final localResult = await refreshPrimaryLocation(target);
       if (mounted && ticket == generation) {
         setState(() {
           snapshot = s;
+          localityAround = localResult;
           online = true;
         });
+        unawaited(_retryPendingPushOpen());
       }
     } catch (failure) {
       if (mounted && ticket == generation) {
@@ -408,7 +425,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         if (shouldRefreshOffline)
           ignoreFailure(() => widget.repository.downloadOfflinePackage(target)),
       ]);
-      await refreshPrimaryLocation(target);
       if (mounted && target == region) await loadOffline();
     } finally {
       if (mounted) {
@@ -420,14 +436,13 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> refreshPrimaryLocation(String target) async {
+  Future<AroundResult?> refreshPrimaryLocation(String target) async {
     final latitude = widget.repository.primaryLocationLatitude;
     final longitude = widget.repository.primaryLocationLongitude;
     if (latitude == null ||
         longitude == null ||
         widget.repository.primaryLocationLabel == null) {
-      if (mounted && target == region) setState(() => localityAround = null);
-      return;
+      return null;
     }
 
     AroundResult? result;
@@ -446,9 +461,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         regionId: target,
       );
     }
-    if (mounted && target == region) {
-      setState(() => localityAround = result);
-    }
+    return result;
   }
 
   String? regionFromPlacemark(Placemark placemark) {
@@ -669,8 +682,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                           } catch (_) {
                             update(() {
                               searching = false;
-                              validation =
-                                  'Nie znaleziono miejscowości. Dopisz powiat lub województwo.';
+                              validation = 'Nie znaleziono miejscowości. Dopisz powiat lub województwo.';
                             });
                           }
                         },
@@ -950,6 +962,83 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     );
   }
 
+  SafetyEvent? _localPushEvent(String eventId) {
+    final current = snapshot;
+    if (current == null) return null;
+    for (final event in current.alertEvents) {
+      if (event.id == eventId ||
+          event.reports.any((report) => report.id == eventId)) {
+        return event;
+      }
+    }
+    for (final event in current.events) {
+      if (event.id == eventId) return event;
+    }
+    return null;
+  }
+
+  Future<void> _consumeInitialPushOpen() async {
+    final initial = await widget.pushManager?.adapter?.takeInitialOpenRequest();
+    if (!mounted) return;
+    if (initial != null) {
+      await _openPushEvent(initial.eventId);
+    } else {
+      await _retryPendingPushOpen();
+    }
+  }
+
+  Future<void> _retryPendingPushOpen() async {
+    if (openingPushEvent || !mounted) return;
+    final eventId = widget.repository.prefs.getString(_pendingPushEventKey);
+    if (eventId == null || eventId.isEmpty) return;
+    await _openPushEvent(eventId, announceFailure: false);
+  }
+
+  Future<void> _openPushEvent(
+    String eventId, {
+    bool announceFailure = true,
+  }) async {
+    if (openingPushEvent || eventId.isEmpty || eventId.length > 150) return;
+    openingPushEvent = true;
+    await widget.repository.prefs.setString(_pendingPushEventKey, eventId);
+    try {
+      var event = _localPushEvent(eventId);
+      if (event == null && widget.repository.api.isNotEmpty) {
+        event = await widget.repository.eventById(eventId);
+      }
+      if (!mounted) return;
+      if (event != null) {
+        await widget.repository.prefs.remove(_pendingPushEventKey);
+        details(event);
+        return;
+      }
+      _selectPage(2);
+      if (announceFailure) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Nie udało się jeszcze pobrać tego alertu. Aplikacja spróbuje ponownie po odzyskaniu połączenia.',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      _selectPage(2);
+      if (announceFailure) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Alert jest zapisany do otwarcia. Spróbujemy ponownie po odzyskaniu internetu.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      openingPushEvent = false;
+    }
+  }
+
   void details(SafetyEvent e) {
     Navigator.push(
       context,
@@ -1046,6 +1135,19 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                         );
                       },
                     ),
+                  ListTile(
+                    title: const Text('Polityka prywatności'),
+                    subtitle: const Text('Lokalizacja, powiadomienia i dane'),
+                    leading: const Icon(Icons.privacy_tip_outlined),
+                    onTap: () {
+                      Navigator.pop(sheet);
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => PrivacyScreen(openLink: openLink),
+                        ),
+                      );
+                    },
+                  ),
                   ListTile(
                     title: const Text('Diagnostyka źródeł'),
                     subtitle: const Text(
