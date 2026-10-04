@@ -56,9 +56,11 @@ test('loaded shelter snapshot ahead of catalog counter is not marked mismatched'
 });
 test('authenticated admin can atomically import a validated official shelter CSV',async()=>{
  const db=openDb(undefined,':memory:'),store=new Store(db),token='t'.repeat(32),original=globalThis.fetch;await store.init();
+ const importNow=new Date(),importDate=importNow.toISOString().slice(0,10),importModified=importNow.toISOString();
+ const importResource=resource.replace('2026-09-19T08:24:06Z',importModified).replace('"data_date": "2026-09-19"',`"data_date": "${importDate}"`);
  globalThis.fetch=async input=>{
   const url=typeof input==='string'?input:input instanceof URL?input.href:input.url;
-  if(url===SHELTER_RESOURCE)return new Response(resource,{status:200,headers:{'content-type':'application/json'}});
+  if(url===SHELTER_RESOURCE)return new Response(importResource,{status:200,headers:{'content-type':'application/json'}});
   throw new Error('UNEXPECTED_FETCH_'+url);
  };
  const app=await buildApp(store,token);
@@ -66,7 +68,7 @@ test('authenticated admin can atomically import a validated official shelter CSV
   const unauthorized=await app.inject({method:'POST',url:'/admin/shelters/import',headers:{'content-type':'text/csv'},payload:csv});
   assert.equal(unauthorized.statusCode,401);
   const response=await app.inject({method:'POST',url:'/admin/shelters/import',headers:{authorization:`Bearer ${token}`,'content-type':'text/csv'},payload:csv});
-  assert.equal(response.statusCode,200);const body=response.json();assert.equal(body.itemCount,3);assert.equal(body.dataDate,'2026-09-19');assert.equal(body.provenance,'OPERATOR_OFFICIAL_SNAPSHOT');
+  assert.equal(response.statusCode,200);const body=response.json();assert.equal(body.itemCount,3);assert.equal(body.dataDate,importDate);assert.equal(body.provenance,'OPERATOR_OFFICIAL_SNAPSHOT');
   const page=await store.shelterPage({regionId:'PL',q:'',limit:50,offset:0});assert.equal(page.total,3);
   const health=(await store.health()).find(h=>h.id==='SHELTERS')!;assert.equal(health.state,'HEALTHY');assert.equal(health.fallbackSelected,'OPERATOR_OFFICIAL_SNAPSHOT');assert.equal(health.itemCount,3);
  }finally{await app.close();await db.close();globalThis.fetch=original;}
@@ -151,10 +153,11 @@ test('older official archive never replaces a newer last-known-good shelter cata
   await ingest(store,[{...shelterAdapter,minSyncIntervalSeconds:0,sync:async()=>stale}]);
   const after=(await store.health()).find(h=>h.id==='SHELTERS')!;
   assert.equal(after.state,'DEGRADED');assert.equal(after.errorCode,'SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD');assert.equal(after.sourceUpdatedAt,before.sourceUpdatedAt);assert.equal(after.complete,true);
-  const shortlyAfterSuccess=new Date(Date.parse(after.lastSuccess!)+60_000);
+  const clockStableAfter={...after,lastSuccess:after.sourceUpdatedAt};
+  const shortlyAfterSuccess=new Date(Date.parse(after.sourceUpdatedAt!)+60_000);
   const afterSourceExpiry=new Date(Date.parse(after.sourceUpdatedAt!)+14*86400000+1000);
-  assert.equal(sourceHealth([after],shortlyAfterSuccess)[0].state,'DEGRADED');
-  assert.equal(sourceHealth([after],afterSourceExpiry)[0].state,'STALE');
+  assert.equal(sourceHealth([clockStableAfter],shortlyAfterSuccess)[0].state,'DEGRADED');
+  assert.equal(sourceHealth([clockStableAfter],afterSourceExpiry)[0].state,'STALE');
   assert.equal((await store.shelterPage({regionId:'PL',q:'',limit:50,offset:0})).total,count);
  }finally{await db.close();}
 });
