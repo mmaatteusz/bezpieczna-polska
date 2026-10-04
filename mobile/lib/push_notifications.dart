@@ -16,6 +16,38 @@ import 'watched_locations_panel.dart';
 
 enum PushPermissionState { notDetermined, denied, authorized, provisional }
 
+@immutable
+class PushOpenRequest {
+  final String eventId;
+  final String? kind;
+  final String? category;
+
+  const PushOpenRequest({
+    required this.eventId,
+    this.kind,
+    this.category,
+  });
+
+  static PushOpenRequest? tryParse(Map<dynamic, dynamic> data) {
+    if (data['schemaVersion']?.toString() != '1') return null;
+    if (data['kind']?.toString() == 'TEST') return null;
+    final eventId = data['eventId'];
+    if (eventId is! String || eventId.isEmpty || eventId.length > 150) {
+      return null;
+    }
+    String? optional(String key) {
+      final value = data[key];
+      return value is String && value.isNotEmpty ? value : null;
+    }
+
+    return PushOpenRequest(
+      eventId: eventId,
+      kind: optional('kind'),
+      category: optional('category'),
+    );
+  }
+}
+
 Future<PushPlatformAdapter?> safePushPlatformAdapter(
   Future<PushPlatformAdapter?> Function() factory,
 ) async {
@@ -33,6 +65,8 @@ abstract class PushPlatformAdapter {
   Future<PushPermissionState> requestPermission();
   Future<String?> token();
   Stream<String> get tokenChanges;
+  Stream<PushOpenRequest> get openRequests;
+  Future<PushOpenRequest?> takeInitialOpenRequest();
 }
 
 abstract class PushSecretStore {
@@ -63,8 +97,44 @@ class FirebasePushPlatformAdapter implements PushPlatformAdapter {
   final FirebaseMessaging messaging;
   @override
   final String platform;
+  final StreamController<PushOpenRequest> _openRequests =
+      StreamController<PushOpenRequest>.broadcast();
+  StreamSubscription<RemoteMessage>? _openedMessages;
+  StreamSubscription<Map<String, String>>? _nativeTaps;
+  PushOpenRequest? _initialOpen;
 
   FirebasePushPlatformAdapter._(this.messaging, this.platform);
+
+  void _emitOpen(Map<dynamic, dynamic> data) {
+    final request = PushOpenRequest.tryParse(data);
+    if (request != null) _openRequests.add(request);
+  }
+
+  Future<void> _initializeOpenHandling() async {
+    _openedMessages = FirebaseMessaging.onMessageOpenedApp.listen(
+      (message) => _emitOpen(message.data),
+    );
+    final initialMessage = await messaging.getInitialMessage();
+    if (initialMessage != null) {
+      _initialOpen = PushOpenRequest.tryParse(initialMessage.data);
+    }
+    if (platform == 'ANDROID') {
+      await AndroidForegroundPush.initializeTapHandling();
+      _nativeTaps = AndroidForegroundPush.taps.listen(
+        (data) => _emitOpen(<String, String>{
+          'schemaVersion': '1',
+          ...data,
+        }),
+      );
+      final nativeInitial = AndroidForegroundPush.takeInitialTap();
+      if (_initialOpen == null && nativeInitial != null) {
+        _initialOpen = PushOpenRequest.tryParse(<String, String>{
+          'schemaVersion': '1',
+          ...nativeInitial,
+        });
+      }
+    }
+  }
 
   static Future<FirebasePushPlatformAdapter?> fromBuildConfiguration() async {
     if (kIsWeb ||
@@ -117,10 +187,12 @@ class FirebasePushPlatformAdapter implements PushPlatformAdapter {
         sound: true,
       );
     }
-    return FirebasePushPlatformAdapter._(
+    final adapter = FirebasePushPlatformAdapter._(
       messaging,
       defaultTargetPlatform == TargetPlatform.iOS ? 'IOS' : 'ANDROID',
     );
+    await adapter._initializeOpenHandling();
+    return adapter;
   }
 
   PushPermissionState _permission(AuthorizationStatus status) =>
@@ -163,6 +235,16 @@ class FirebasePushPlatformAdapter implements PushPlatformAdapter {
             : fcmToken,
       )
       .where((value) => value.isNotEmpty);
+
+  @override
+  Stream<PushOpenRequest> get openRequests => _openRequests.stream;
+
+  @override
+  Future<PushOpenRequest?> takeInitialOpenRequest() async {
+    final value = _initialOpen;
+    _initialOpen = null;
+    return value;
+  }
 }
 
 @immutable
