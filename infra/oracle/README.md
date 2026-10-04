@@ -35,6 +35,8 @@ UFW na VM jest konfigurowany przez `bootstrap-host.sh`, ale reguły OCI nadal tr
 
 Checklistę dostępu SSH i sekretów znajdziesz w [`docs/ORACLE_ACCESS_CHECKLIST.md`](../../docs/ORACLE_ACCESS_CHECKLIST.md). Szczegółowy runbook pierwszego uruchomienia i migracji znajduje się w [`docs/ORACLE_CUTOVER_RUNBOOK.md`](../../docs/ORACLE_CUTOVER_RUNBOOK.md).
 
+Po uruchomieniu kandydata Oracle użyj także manualnego workflow `Compare baseline and Oracle runtime`, aby porównać źródła i czasy synchronizacji 1:1 z aktualną produkcją.
+
 ## Kolejność
 
 1. Utwórz VM A1 z Ubuntu ARM64.

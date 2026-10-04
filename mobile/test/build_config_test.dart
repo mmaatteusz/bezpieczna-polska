@@ -14,7 +14,11 @@ void main() {
         'https://api.example',
       ]) {
         expect(
-          () => validateBuildConfiguration(environment: 'production', api: url),
+          () => validateBuildConfiguration(
+            environment: 'production',
+            api: url,
+            privacyPolicyUrl: 'https://bezpiecznapolska.pl/privacy',
+          ),
           throwsStateError,
         );
       }
@@ -23,6 +27,7 @@ void main() {
           environment: 'production',
           api: 'https://api.domain.org',
           developerSettings: true,
+          privacyPolicyUrl: 'https://bezpiecznapolska.pl/privacy',
         ),
         throwsStateError,
       );
@@ -30,7 +35,35 @@ void main() {
         () => validateBuildConfiguration(
           environment: 'production',
           api: 'https://api.domain.org',
+          privacyPolicyUrl: 'https://bezpiecznapolska.pl/privacy',
         ),
+        returnsNormally,
+      );
+    },
+  );
+  test(
+    'production requires a public privacy policy, preview remains usable',
+    () {
+      for (final url in [
+        '',
+        'http://bezpiecznapolska.pl/privacy',
+        'https://localhost/privacy',
+        'https://192.168.0.1/privacy',
+        'https://example.com/privacy',
+        'https://bezpiecznapolska.pl/privacy.pdf',
+        'https://user:password@bezpiecznapolska.pl/privacy',
+      ]) {
+        expect(
+          () => validateBuildConfiguration(
+            environment: 'production',
+            api: 'https://api.domain.org',
+            privacyPolicyUrl: url,
+          ),
+          throwsStateError,
+        );
+      }
+      expect(
+        () => validateBuildConfiguration(environment: 'preview'),
         returnsNormally,
       );
     },

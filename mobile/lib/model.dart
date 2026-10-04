@@ -942,6 +942,14 @@ class DataRepository {
     }
   }
 
+  Future<SafetyEvent?> eventById(String id) async {
+    final timeline = await eventTimeline(id);
+    if (timeline.isEmpty) return null;
+    final payload = timeline.last['payload'];
+    if (payload is! Map) throw const ApiFailure(ApiFailureKind.invalidResponse);
+    return SafetyEvent.parse(Map<String, dynamic>.from(payload));
+  }
+
   Future<List<Map<String, dynamic>>> eventTimeline(
     String id, {
     bool incident = false,

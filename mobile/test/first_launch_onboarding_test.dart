@@ -34,7 +34,7 @@ void main() {
       );
       expect(find.text('Zezwól na lokalizację'), findsOneWidget);
       expect(
-        find.textContaining('Nie zapisujemy historii Twojego przemieszczania'),
+        find.textContaining('wysyłają współrzędne do naszego API'),
         findsOneWidget,
       );
 

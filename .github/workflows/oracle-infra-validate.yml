@@ -9,6 +9,7 @@ on:
       - '.github/workflows/oracle-infra-validate.yml'
       - '.github/workflows/oracle-host-audit.yml'
       - '.github/workflows/oracle-ssh-preflight.yml'
+      - '.github/workflows/oracle-runtime-compare.yml'
   push:
     branches: [main]
     paths:
@@ -17,6 +18,7 @@ on:
       - '.github/workflows/oracle-infra-validate.yml'
       - '.github/workflows/oracle-host-audit.yml'
       - '.github/workflows/oracle-ssh-preflight.yml'
+      - '.github/workflows/oracle-runtime-compare.yml'
 
 permissions:
   contents: read
@@ -43,7 +45,7 @@ jobs:
       - name: Enforce provider-neutral and private database rules
         run: |
           set -euo pipefail
-          if grep -RIE 'railway\.app|RAILWAY_GIT_COMMIT_SHA' infra/oracle .github/workflows/oracle-deploy.yml .github/workflows/oracle-host-audit.yml .github/workflows/oracle-ssh-preflight.yml; then
+          if grep -RIE 'railway\.app|RAILWAY_GIT_COMMIT_SHA' infra/oracle .github/workflows/oracle-deploy.yml .github/workflows/oracle-host-audit.yml .github/workflows/oracle-ssh-preflight.yml .github/workflows/oracle-runtime-compare.yml; then
             echo 'Oracle infrastructure must not depend on Railway-specific runtime configuration.' >&2
             exit 1
           fi
@@ -64,3 +66,5 @@ jobs:
           grep -Fq 'StrictHostKeyChecking=yes' .github/workflows/oracle-ssh-preflight.yml
           ! grep -Fq 'StrictHostKeyChecking=no' .github/workflows/oracle-ssh-preflight.yml
           grep -Fq 'EXPECTED_SSH_FINGERPRINT' infra/oracle/pin-ssh-host-key.sh
+          grep -Fq 'COMPARE_PASS' infra/oracle/compare-runtime-sources.mjs
+          grep -Fq 'CANDIDATE_EXPECTED_BUILD_SHA' .github/workflows/oracle-runtime-compare.yml

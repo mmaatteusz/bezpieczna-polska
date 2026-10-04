@@ -1788,6 +1788,20 @@ class _ShelterMapState extends State<ShelterMap> {
                     }
                   },
                 ),
+                const Divider(height: 20),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.satellite_alt_outlined),
+                  title: const Text('Monitoring GNSS / GPS RTGMS'),
+                  subtitle: const Text(
+                    'Otwiera zewnętrzną mapę monitoringu GNSS',
+                  ),
+                  trailing: const Icon(Icons.open_in_new_rounded),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    widget.openLink('https://www.rtgms.pl/map');
+                  },
+                ),
                 DropdownButtonFormField<String>(
                   key: ValueKey(availability),
                   initialValue: availability,

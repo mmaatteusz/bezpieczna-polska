@@ -15,11 +15,14 @@ export function serverConfig(env:NodeJS.ProcessEnv=process.env){
  const stage=env.APP_ENV??'development';
  if(!['development','preview','production'].includes(stage))throw new Error('Invalid APP_ENV');
  const production=stage==='production';
+ const role=env.PROCESS_ROLE??'combined';
+ if(!['combined','api','worker'].includes(role))throw new Error('Invalid PROCESS_ROLE');
  if(env.ENABLE_PUSH_DISPATCH!==undefined&&!['true','false'].includes(env.ENABLE_PUSH_DISPATCH))
   throw new Error('ENABLE_PUSH_DISPATCH must be true or false');
  const enablePushDispatch=env.ENABLE_PUSH_DISPATCH!=='false';
  const railwayGitSha=/^[a-f0-9]{40}$/.test(env.RAILWAY_GIT_COMMIT_SHA??'')?env.RAILWAY_GIT_COMMIT_SHA:undefined;
- const buildSha=railwayGitSha??env.BUILD_SHA;
+ // BUILD_SHA is authoritative. Legacy Railway deployments remain readable during cutover.
+ const buildSha=env.BUILD_SHA??railwayGitSha;
  if(production){
   if(env.NODE_ENV!=='production')throw new Error('Production requires NODE_ENV=production');
   if(!env.DATABASE_URL||!/^postgres(?:ql)?:\/\//.test(env.DATABASE_URL))throw new Error('Production requires PostgreSQL');
@@ -43,5 +46,5 @@ export function serverConfig(env:NodeJS.ProcessEnv=process.env){
  if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid PORT');
  const poolMax=Number(env.PG_POOL_MAX??10);
  if(!Number.isInteger(poolMax)||poolMax<1||poolMax>50)throw new Error('Invalid PG_POOL_MAX');
- return {stage:stage as AppEnv,production,enablePushDispatch,port,host:env.HOST??(production?'0.0.0.0':'127.0.0.1'),buildSha:buildSha??'unknown'};
+ return {role:role as 'combined'|'api'|'worker',stage:stage as AppEnv,production,enablePushDispatch,port,host:env.HOST??(production?'0.0.0.0':'127.0.0.1'),buildSha:buildSha??'unknown'};
 }

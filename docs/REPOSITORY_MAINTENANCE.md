@@ -1,41 +1,15 @@
 # PR-y i gałęzie — zasady utrzymania
 
-## Aktualne PR-y
+## Wspólna integracja
 
-Przegląd z 4.10.2026. To lista pracy, a nie potwierdzenie scalenia lub wdrożenia.
+Poprawki z 17 PR-ów połączono w jedną historię i wspólny kod aplikacji.
+Numery PR-ów oznaczają zestawy zmian, a nie osobne zainstalowane aplikacje.
+Opis wkładu każdej zmiany oraz rozstrzygnięć konfliktów:
+[PR_INTEGRATION_2026-10-04.md](PR_INTEGRATION_2026-10-04.md).
 
-| PR | Zakres | Dlaczego pozostaje otwarty |
-| --- | --- | --- |
-| [#139](https://github.com/mmaatteusz/bezpieczna-polska/pull/139) | Ostrzeżenia push | Aktualna poprawka P0, integracja i test urządzenia |
-| [#141](https://github.com/mmaatteusz/bezpieczna-polska/pull/141) | Lokalna sytuacja na Start | Aktualna poprawka P0, jeszcze poza main |
-| [#144](https://github.com/mmaatteusz/bezpieczna-polska/pull/144) | Prywatność i testy użytkowników | Draft; brak finalnej polityki i testów na telefonach |
-| [#142](https://github.com/mmaatteusz/bezpieczna-polska/pull/142) | Backend przed większym ruchem | Draft; realny PostGIS i pomiary przed wdrożeniem |
-| [#143](https://github.com/mmaatteusz/bezpieczna-polska/pull/143) | Aktualizacja wydania APK | Kontrola artefaktów i procedura; test danych pozostaje do wykonania |
-| [#140](https://github.com/mmaatteusz/bezpieczna-polska/pull/140) | Daty fixture schronień | Osobna poprawka testów; wymaga integracji z nowszym main |
-| [#123](https://github.com/mmaatteusz/bezpieczna-polska/pull/123) | Kontrakt wdrożenia niezależny od dostawcy | Unikalna zmiana, wymaga przeglądu konfiguracji i konfliktów |
-| [#128](https://github.com/mmaatteusz/bezpieczna-polska/pull/128) | Porównanie równoległych backendów | Dodaje osobny workflow i skrypt; nie jest w main |
-| [#119](https://github.com/mmaatteusz/bezpieczna-polska/pull/119) | Wariant ikon NEPTUN | Oddzielny projekt wizualny; nie należy traktować go jako scalonego |
-
-## Dodatkowe PR-y do integracji
-
-Poniższe osiem PR-ów pozostaje otwarte. Ich gałęzie przywrócono na
-oryginalnych commitach. Nie są oznaczone jako zakończone ani przeznaczone
-do usunięcia. Przywrócenie nie oznacza scalenia: każdy z nich ma obecnie
-konflikty z main, które trzeba rozwiązać z zachowaniem późniejszych zmian.
-
-| PR | Zakres | Powiązane zmiany do uwzględnienia podczas integracji |
-| --- | --- | --- |
-| [#75](https://github.com/mmaatteusz/bezpieczna-polska/pull/75) | Monitoring GNSS / GPS RTGMS | #76, #77 i obecna warstwa GPSJAM |
-| [#81](https://github.com/mmaatteusz/bezpieczna-polska/pull/81) | Ekran ładowania | #82 i obecny BootstrapApp/BrandLoadingScreen |
-| [#90](https://github.com/mmaatteusz/bezpieczna-polska/pull/90) | Synchronizacja schronień | Draft #142 i obecny mechanizm zapisu katalogu |
-| [#97](https://github.com/mmaatteusz/bezpieczna-polska/pull/97) | Worker UkraineAlarm | #96 i późniejsze zmiany na main |
-| [#100](https://github.com/mmaatteusz/bezpieczna-polska/pull/100) | Kontrakt UkraineAlarm | #98 oraz #110 |
-| [#106](https://github.com/mmaatteusz/bezpieczna-polska/pull/106) | Diagnostyka UkraineAlarm | #107, #110 i obecny adapter |
-| [#120](https://github.com/mmaatteusz/bezpieczna-polska/pull/120) | Dynamiczna legenda | #130 i bieżący ekran mapy |
-| [#122](https://github.com/mmaatteusz/bezpieczna-polska/pull/122) | Plan Oracle w README | Aktualne README, roadmapa i runbooki |
-
-Otwarty PR jest pracą oczekującą na integrację. Podobieństwo do późniejszego
-PR lub stary numer gałęzi nie wystarcza do jego zamknięcia.
+PR-y pozostają otwarte do rzeczywistego scalenia ich commitów. Ich historii
+nie zastępuje zamknięcie z powodu podobnego zakresu lub wieku gałęzi.
+Dalsze zadania urządzeń, prywatności i wdrożenia są w [roadmapie](ROADMAP.md).
 
 ## Automatyczne sprzątanie gałęzi
 

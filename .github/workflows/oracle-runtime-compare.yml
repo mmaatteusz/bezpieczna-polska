@@ -1,0 +1,64 @@
+name: Compare baseline and Oracle runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_api_base_url:
+        description: HTTPS origin of the current baseline production API
+        required: true
+        type: string
+      candidate_api_base_url:
+        description: HTTPS origin of the parallel Oracle candidate API
+        required: true
+        type: string
+      candidate_expected_sha:
+        description: Optional exact 40-character Oracle BUILD_SHA
+        required: false
+        type: string
+      observation_rounds:
+        description: Number of comparison rounds (1-10)
+        required: true
+        default: '3'
+        type: string
+      interval_seconds:
+        description: Seconds between rounds (0-300)
+        required: true
+        default: '60'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASELINE_API_BASE_URL: ${{ inputs.baseline_api_base_url }}
+      CANDIDATE_API_BASE_URL: ${{ inputs.candidate_api_base_url }}
+      CANDIDATE_EXPECTED_BUILD_SHA: ${{ inputs.candidate_expected_sha }}
+      OBSERVATION_ROUNDS: ${{ inputs.observation_rounds }}
+      OBSERVATION_INTERVAL_SECONDS: ${{ inputs.interval_seconds }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Validate comparison client
+        run: node --check infra/oracle/compare-runtime-sources.mjs
+
+      - name: Compare live runtimes
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          node infra/oracle/compare-runtime-sources.mjs output/oracle-runtime-comparison.json
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: Oracle_parallel_runtime_comparison
+          path: output/oracle-runtime-comparison.json
+          if-no-files-found: warn
+          retention-days: 30

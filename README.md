@@ -36,13 +36,13 @@ Automatyczne podbicie alphy nie oznacza publikacji w sklepie ani wdrożenia back
 
 | Obszar | Możliwości i granice |
 | --- | --- |
-| Start i alerty | Status Polski/wybranego województwa, stopnie alarmowe, filtrowanie i grupowanie komunikatów, szczegóły oraz historia. Dokładniejsza prezentacja lokalnej sytuacji jest przygotowana w PR #141. |
+| Start i alerty | Status Polski/wybranego województwa, stopnie alarmowe, filtrowanie i grupowanie komunikatów, szczegóły oraz historia. Lokalna sytuacja ma jawny zakres, najwyżej trzy komunikaty i ocenę świeżości źródeł. |
 | Mapa | Warstwy komunikatów, IMGW, schronień i PAA; granice województw, szczegóły obiektów i legenda zależna od widoku. |
 | Schronienia | Lista, wyszukiwanie, najbliższe punkty i przejście do zewnętrznej nawigacji. Wpis w katalogu nie gwarantuje otwarcia ani dostępności obiektu. |
 | PAA | Komunikaty i pomiary promieniowania z datą oraz źródłem. |
 | NEPTUN | Odświeżane dane sytuacyjne i szczegóły punktów. Położenie jest celowo przybliżone; ikona nie określa kierunku lotu. |
 | Ukraina | Warstwa UkraineAlarm API v3, gdy backend ma klucz. Alarmy Ukrainy nie zmieniają statusu Polski. |
-| GPSJAM | Dzienne dane o dokładności pozycji samolotów. Nie są pomiarem GPS telefonu ani samodzielnym dowodem zagłuszania. |
+| GNSS / GPS | Dzienne dane GPSJAM o dokładności pozycji samolotów oraz odnośnik do zewnętrznej mapy RTGMS. GPSJAM nie jest pomiarem GPS telefonu ani samodzielnym dowodem zagłuszania. |
 | Obserwowane miejsca i push | Zapis miejsc, wybór kategorii, rejestracja urządzenia i rzeczywisty test push przez backend. |
 | Offline | Pakiety regionów i ostatnia poprawna kopia danych. **Pełny podkład mapowy nie jest zawarty w pakietach.** |
 
@@ -65,20 +65,20 @@ Wyniki wcześniejszych audytów są zapisami z konkretnego dnia. [Stan infrastru
 
 | Priorytet | Zadanie | Stan pracy |
 | --- | --- | --- |
-| P0 | Precyzyjna sytuacja lokalna na Start, świeżość wszystkich istotnych źródeł | [PR #141](https://github.com/mmaatteusz/bezpieczna-polska/pull/141) — przygotowana poprawka, jeszcze poza `main` |
-| P0 | Wygaśnięcie push, odrzucanie starych komunikatów i otwieranie właściwego alertu | [PR #139](https://github.com/mmaatteusz/bezpieczna-polska/pull/139) — wymaga integracji i testu na urządzeniu |
-| P0 | Pełna polityka prywatności, publiczny kontakt, retencja i Data safety | [Draft PR #144](https://github.com/mmaatteusz/bezpieczna-polska/pull/144) — dokumenty wymagają uzupełnienia; to nie finalna polityka |
+| P0 | Precyzyjna sytuacja lokalna na Start, świeżość wszystkich istotnych źródeł | Kod zintegrowany; pozostaje próba na rzeczywistym Androidzie |
+| P0 | Wygaśnięcie push, odrzucanie starych komunikatów i otwieranie właściwego alertu | Kod zintegrowany: TTL, ponowna kontrola aktualności i otwieranie alertu; pozostaje test urządzenia |
+| P0 | Pełna polityka prywatności, publiczny kontakt, retencja i Data safety | Ekran jest w aplikacji; [projekt polityki](docs/PRIVACY_POLICY_DRAFT.md) i [Data safety](docs/PLAY_DATA_SAFETY.md) wymagają uzupełnienia |
 | P0 | TalkBack, duży tekst, odmowa GPS/push, słaba sieć i dłuższe działanie mapy | Próby z rzeczywistymi użytkownikami pozostają do wykonania |
-| P1 | Poprzedni publiczny APK → nowy APK z zachowaniem danych i push | [PR #143](https://github.com/mmaatteusz/bezpieczna-polska/pull/143) — kontrola artefaktów i procedura; pełny test migracji pozostaje do wykonania |
-| P1 | Wydajność backendu i monitoring przed większym ruchem | [Draft PR #142](https://github.com/mmaatteusz/bezpieczna-polska/pull/142) — pomiary, aktualizacja różnic schronień i rozdzielenie procesów |
+| P1 | Poprzedni publiczny APK → nowy APK z zachowaniem danych i push | [Kontrola artefaktów i procedura](docs/ANDROID_RELEASE_MIGRATION.md) są w repozytorium; pełny test migracji pozostaje do wykonania |
+| P1 | Wydajność backendu i monitoring przed większym ruchem | Aktualizacja różnic, metryki i opcjonalne role procesów są w kodzie; [pomiary i wdrożenie](docs/BACKEND_CAPACITY.md) wymagają weryfikacji na hoście |
 
-Pozostałe zadania i kolejność wdrożeń: [ROADMAP.md](docs/ROADMAP.md). Otwarte PR-y opisują propozycje; stają się częścią aplikacji po scaleniu, buildzie i właściwym wdrożeniu.
+Pozostałe zadania i kolejność wdrożeń: [ROADMAP.md](docs/ROADMAP.md). [Integracja 17 PR-ów](docs/PR_INTEGRATION_2026-10-04.md) łączy poprawki we wspólnym kodzie. Opublikowany APK i działający backend wymagają osobnego builda oraz wdrożenia.
 
 ## Prywatność i powiadomienia
 
 Aplikacja zapisuje ustawienia i miejsca na telefonie. Zapytania o okolicę i najbliższe schronienia wysyłają współrzędne do API. Po włączeniu push dla obserwowanych miejsc backend przechowuje ich nazwy, współrzędne i promienie wraz z preferencjami oraz identyfikatorem instalacji. Android używa **Firebase Cloud Messaging**. Podkład mapowy pobierany jest od zewnętrznego dostawcy.
 
-Wyrejestrowanie push usuwa aktywny token i lokalizacje z rekordu urządzenia, lecz nie usuwa całej historii technicznej ani wszystkich kopii zapasowych. Pełna polityka prywatności oraz deklaracja Data safety wymagają opisania tych przepływów i rzeczywistej retencji.
+Wyrejestrowanie push usuwa aktywny token i lokalizacje z rekordu urządzenia, lecz nie usuwa całej historii technicznej ani wszystkich kopii zapasowych. Ekran „Polityka prywatności” w aplikacji opisuje te przepływy. Pełna polityka i Data safety nadal wymagają danych administratora, kontaktu i rzeczywistej retencji. Produkcyjne wydanie wymaga publicznego adresu HTTPS polityki HTML (`PRIVACY_POLICY_URL`).
 
 Test wysłany przez backend nie dowodzi wyświetlenia na telefonie. Odbiór należy potwierdzić na urządzeniu, również w tle, po ponownym uruchomieniu i przy ograniczeniach baterii.
 

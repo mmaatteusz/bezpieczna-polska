@@ -27,17 +27,15 @@ Twojemu zadaniu. Stan kodu, wdrożenia i opublikowanego APK to odrębne rzeczy.
 - [SOURCES.md](SOURCES.md) — źródła i kontrakty; runtime zdrowia integracji jest pod `/v1/sources`.
 - [VALIDATION.md](VALIDATION.md) i [validation/](validation/) — procedury i materiały walidacyjne.
 
-## Dokumenty w otwartych PR-ach
+## Wydanie Androida i zintegrowane poprawki
 
-Poniższe dokumenty są przygotowane na gałęziach roboczych i jeszcze poza `main`.
-
-| PR | Materiały |
-| --- | --- |
-| [#144 — prywatność](https://github.com/mmaatteusz/bezpieczna-polska/pull/144/files) | Projekt polityki, mapa Data safety i rzeczywiste testy akceptacyjne Androida |
-| [#143 — aktualizacja APK](https://github.com/mmaatteusz/bezpieczna-polska/pull/143/files) | Kontrola dwóch oryginalnych APK i procedura migracji danych |
-| [#142 — backend](https://github.com/mmaatteusz/bezpieczna-polska/pull/142/files) | Pomiary pojemności, metryki i warunki wdrożenia zmian |
-
-Po scaleniu należy dodać bezpośrednie odnośniki do plików i zaktualizować roadmapę.
+- [PR_INTEGRATION_2026-10-04.md](PR_INTEGRATION_2026-10-04.md) — wspólna integracja 17 PR-ów i rozstrzygnięcia konfliktów.
+- [ANDROID_RELEASE_MIGRATION.md](ANDROID_RELEASE_MIGRATION.md) — kontrola dwóch oryginalnych APK i procedura migracji danych.
+- [ANDROID_USER_ACCEPTANCE.md](ANDROID_USER_ACCEPTANCE.md) — rzeczywiste testy urządzeń i dostępności.
+- [PRIVACY_POLICY_DRAFT.md](PRIVACY_POLICY_DRAFT.md) — **projekt wymagający uzupełnienia**, nie finalna polityka.
+- [PLAY_DATA_SAFETY.md](PLAY_DATA_SAFETY.md) — mapa przepływów danych do deklaracji sklepowej.
+- [BACKEND_CAPACITY.md](BACKEND_CAPACITY.md) — metryki, role procesów, aktualizacja różnic i warunki wdrożenia.
+- [backend/DEPLOYMENT.md](../backend/DEPLOYMENT.md) — ogólny kontrakt wdrożenia i zgodność starszego środowiska.
 
 ## Historia etapów
 

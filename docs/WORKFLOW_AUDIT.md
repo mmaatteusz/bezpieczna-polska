@@ -16,6 +16,7 @@ plikach. Nie jest to deklaracja, że wszystkie aktualne runy są zielone.
 | [oracle-deploy.yml](../.github/workflows/oracle-deploy.yml) | ręcznie | Wdrożenie określonego SHA; wymaga dostępu i kontroli endpointu. |
 | [oracle-host-audit.yml](../.github/workflows/oracle-host-audit.yml) | ręcznie | Ręczny audyt hosta Oracle. |
 | [oracle-infra-validate.yml](../.github/workflows/oracle-infra-validate.yml) | PR (`main`); push (`main`) | Kontrola skryptów infrastruktury Oracle. |
+| [oracle-runtime-compare.yml](../.github/workflows/oracle-runtime-compare.yml) | ręcznie | Porównanie dwóch jawnie podanych API w kilku rundach; nie zmienia adresów ani wdrożenia. |
 | [oracle-ssh-preflight.yml](../.github/workflows/oracle-ssh-preflight.yml) | ręcznie | Ręczna weryfikacja dostępu SSH. |
 | [preview-apk.yml](../.github/workflows/preview-apk.yml) | PR (`main`); push (`stage/**`); ręcznie | Preview ARM64 i kontrola źródeł dla wybranych zmian; status źródła zależy od runtime. |
 | [production-release.yml](../.github/workflows/production-release.yml) | PR (`main`); push (`main`); ręcznie | Pełna regresja; artefakty produkcyjne tylko na tag/manual i po spełnieniu warunków. |
@@ -33,6 +34,7 @@ instalacja testowa nie zastępuje prób na fizycznym Androidzie. Nie usuwamy
 workflowów tylko dlatego, że mają w nazwie słowo stage: RCB i schronienia
 nadal dostarczają własne kontrole.
 
-Warunki prywatności i testy oryginalnych wydań są przygotowane w PR #144/#143,
-a nie w obecnym workflow wydania na main. Aktualną kolejność prac opisuje
+Gate produkcyjny wymaga publicznej polityki HTML. Kontrola oryginalnych APK
+jest osobnym skryptem; emulatorowy workflow aktualizacji nadal nie dowodzi
+pełnej migracji danych publicznego wydania. Aktualną kolejność prac opisuje
 [ROADMAP.md](ROADMAP.md).

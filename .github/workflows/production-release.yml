@@ -125,6 +125,7 @@ jobs:
     timeout-minutes: 40
     env:
       API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
+      PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
       APP_ENV: production
       BP_ENV: production
       ENABLE_DEVELOPER_SETTINGS: 'false'
@@ -167,6 +168,16 @@ jobs:
       - name: Validate deployed production API and version
         if: steps.signing.outputs.ready == 'true'
         run: node scripts/validate-release.mjs --production
+      - name: Require publicly accessible HTML privacy policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$PRIVACY_POLICY_URL" || { echo 'Set PRIVACY_POLICY_URL after completing and publishing the privacy policy.' >&2; exit 1; }
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 20 \
+            --output "$RUNNER_TEMP/privacy-policy.html" --write-out '%{content_type}' \
+            "$PRIVACY_POLICY_URL" > "$RUNNER_TEMP/privacy-content-type.txt"
+          grep -Eiq '^text/html([;[:space:]]|$)' "$RUNNER_TEMP/privacy-content-type.txt"
+          test -s "$RUNNER_TEMP/privacy-policy.html"
       - name: Reject non-monotonic production Android versionCode
         if: steps.signing.outputs.ready == 'true' && startsWith(github.ref, 'refs/tags/')
         run: node scripts/check-production-version-history.mjs
@@ -210,8 +221,8 @@ jobs:
           VERSION="$(node -p "require('../backend/package.json').version")"
           BUILD="$(sed -nE 's/^version: [^+]+\+([0-9]+)$/\1/p' pubspec.yaml)"
           test -n "$VERSION" && test -n "$BUILD"
-          flutter build appbundle --release --dart-define=APP_ENV=production --dart-define="APP_VERSION=$VERSION" --dart-define="APP_BUILD_NUMBER=$BUILD" --dart-define=APP_CHANNEL=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
-          flutter build apk --release --split-per-abi --target-platform android-arm64 -P force-version-code-ignoring-abi=true --dart-define=APP_ENV=production --dart-define="APP_VERSION=$VERSION" --dart-define="APP_BUILD_NUMBER=$BUILD" --dart-define=APP_CHANNEL=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
+          flutter build appbundle --release --dart-define=APP_ENV=production --dart-define="APP_VERSION=$VERSION" --dart-define="APP_BUILD_NUMBER=$BUILD" --dart-define=APP_CHANNEL=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define="PRIVACY_POLICY_URL=$PRIVACY_POLICY_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
+          flutter build apk --release --split-per-abi --target-platform android-arm64 -P force-version-code-ignoring-abi=true --dart-define=APP_ENV=production --dart-define="APP_VERSION=$VERSION" --dart-define="APP_BUILD_NUMBER=$BUILD" --dart-define=APP_CHANNEL=production --dart-define="API_BASE_URL=$API_BASE_URL" --dart-define="PRIVACY_POLICY_URL=$PRIVACY_POLICY_URL" --dart-define=ENABLE_DEVELOPER_SETTINGS=false --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY" --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID" --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" --dart-define="FIREBASE_ANDROID_APP_ID=$FIREBASE_ANDROID_APP_ID"
       - name: Verify signatures, identifiers and SHA-256
         if: steps.signing.outputs.ready == 'true'
         shell: bash

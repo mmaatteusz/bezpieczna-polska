@@ -26,12 +26,22 @@ test('production configuration rejects dev endpoints and missing credentials',()
   assert.throws(()=>serverConfig({...valid,[key]:''}));
  }
 });
+test('generic BUILD_SHA is authoritative and validates explicit values',()=>{
+ const valid={APP_ENV:'production',NODE_ENV:'production',DATABASE_URL:'postgresql://user:pass@db:5432/app',
+  ADMIN_TOKEN:'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6',PUBLIC_BASE_URL:'https://api.real-domain.pl',
+  BUILD_SHA:'b'.repeat(40),TRUST_PROXY:'true',RAILWAY_GIT_COMMIT_SHA:'c'.repeat(40)};
+ assert.equal(serverConfig(valid).buildSha,'b'.repeat(40));
+ assert.throws(()=>serverConfig({...valid,BUILD_SHA:''}));
+ const {BUILD_SHA,...legacy}=valid;
+ assert.equal(serverConfig(legacy).buildSha,'c'.repeat(40));
+ assert.throws(()=>serverConfig({...legacy,RAILWAY_GIT_COMMIT_SHA:'invalid'}));
+});
 test('migration is idempotent and required before serving',async()=>{
  const db=openDb(undefined,':memory:');
  try{
   await assert.rejects(assertSchema(db));
   await migrate(db);await migrate(db);await assertSchema(db);
-  assert.deepEqual((await db.all('SELECT version FROM schema_migrations ORDER BY version')).map(r=>r.version),[1,2]);
+  assert.deepEqual((await db.all('SELECT version FROM schema_migrations ORDER BY version')).map(r=>r.version),[1,2,3]);
   await db.run('DROP TABLE push_outbox');
   await assert.rejects(assertSchema(db));
  }finally{await db.close();}
