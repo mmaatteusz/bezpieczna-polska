@@ -79,7 +79,11 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.ensureVisible(find.text('Polska'));
+    await tester.scrollUntilVisible(
+      find.text('Polska'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Polska'));
     await tester.pumpAndSettle();
     expect(find.text('Alerty'), findsWidgets);
@@ -250,7 +254,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(requests, greaterThanOrEqualTo(2));
       expect(find.text('Ustaw lokalizację'), findsOneWidget);
-      await tester.ensureVisible(find.text('Polska'));
+      await tester.scrollUntilVisible(
+        find.text('Polska'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pumpAndSettle();
       expect(
         find.text('Brak wystarczających aktualnych danych'),
