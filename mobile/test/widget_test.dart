@@ -79,6 +79,7 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.ensureVisible(find.text('Polska'));
     await tester.tap(find.text('Polska'));
     await tester.pumpAndSettle();
     expect(find.text('Alerty'), findsWidgets);
@@ -94,8 +95,7 @@ void main() {
     expect(
       find.byKey(const ValueKey('map-legend')),
       findsNothing,
-      reason:
-          'Legenda ma się pojawiać tylko wtedy, gdy bieżący kadr faktycznie zawiera oznaczenia.',
+      reason: 'Legenda ma się pojawiać tylko wtedy, gdy bieżący kadr faktycznie zawiera oznaczenia.',
     );
 
     await tester.tap(find.text('Więcej').last);

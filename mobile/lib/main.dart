@@ -306,12 +306,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     try {
       seen = Map<String, int>.from(
         jsonDecode(
-              widget.repository.prefs.getString(
-                    'seen:${widget.repository.api}:$region',
-                  ) ??
-                  '{}',
-            )
-            as Map,
+          widget.repository.prefs.getString(
+                'seen:${widget.repository.api}:$region',
+              ) ??
+              '{}',
+        ) as Map,
       );
     } catch (_) {
       seen = {};
@@ -360,9 +359,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     });
     try {
       final s = await widget.repository.refresh(target);
+      final localResult = await refreshPrimaryLocation(target);
       if (mounted && ticket == generation) {
         setState(() {
           snapshot = s;
+          localityAround = localResult;
           online = true;
         });
       }
@@ -408,7 +409,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         if (shouldRefreshOffline)
           ignoreFailure(() => widget.repository.downloadOfflinePackage(target)),
       ]);
-      await refreshPrimaryLocation(target);
       if (mounted && target == region) await loadOffline();
     } finally {
       if (mounted) {
@@ -420,14 +420,13 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> refreshPrimaryLocation(String target) async {
+  Future<AroundResult?> refreshPrimaryLocation(String target) async {
     final latitude = widget.repository.primaryLocationLatitude;
     final longitude = widget.repository.primaryLocationLongitude;
     if (latitude == null ||
         longitude == null ||
         widget.repository.primaryLocationLabel == null) {
-      if (mounted && target == region) setState(() => localityAround = null);
-      return;
+      return null;
     }
 
     AroundResult? result;
@@ -446,9 +445,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         regionId: target,
       );
     }
-    if (mounted && target == region) {
-      setState(() => localityAround = result);
-    }
+    return result;
   }
 
   String? regionFromPlacemark(Placemark placemark) {
@@ -669,8 +666,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                           } catch (_) {
                             update(() {
                               searching = false;
-                              validation =
-                                  'Nie znaleziono miejscowości. Dopisz powiat lub województwo.';
+                              validation = 'Nie znaleziono miejscowości. Dopisz powiat lub województwo.';
                             });
                           }
                         },
