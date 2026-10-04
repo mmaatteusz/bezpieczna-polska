@@ -191,7 +191,8 @@ void main() {
       const LatLng(51.1, 16.98),
     ]) {
       await move(target, 10);
-      expect(controller.symbols.single.options.textField, '3');
+      expect(controller.symbols.single.data!['properties']['point_count'], 3);
+      expect(controller.symbols.single.options.iconImage, 'shelter-count-0');
       expect(
         (controller.circles.single.options.geometry!.longitude -
                 target.longitude)

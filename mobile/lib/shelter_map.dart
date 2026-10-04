@@ -3,6 +3,7 @@ import 'radiation.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -255,6 +256,7 @@ class _ShelterMapState extends State<ShelterMap> {
     final data = <Map<String, dynamic>>[];
     final labels = <SymbolOptions>[];
     final labelData = <Map<String, dynamic>>[];
+    final labelImages = <String, String>{};
 
     for (final rawFeature in rawFeatures) {
       if (rawFeature is! Map) continue;
@@ -300,15 +302,48 @@ class _ShelterMapState extends State<ShelterMap> {
       data.add(annotationData);
 
       if (cluster) {
+        final count = '${p['point_count']}';
+        final fontSize = zoom < 9 ? 13.0 : 12.0;
+        final imageKey = '$count:$fontSize';
+        var imageName = labelImages[imageKey];
+        if (imageName == null) {
+          // Fixed slots bound the native image cache to the current cluster cap.
+          imageName = 'shelter-count-${labelImages.length}';
+          final painter = TextPainter(
+            text: TextSpan(
+              text: count,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            textDirection: TextDirection.ltr,
+          )..layout();
+          final recorder = ui.PictureRecorder();
+          final canvas = Canvas(recorder)..scale(2);
+          painter.paint(canvas, const Offset(2, 1));
+          final picture = recorder.endRecording();
+          final image = await picture.toImage(
+            ((painter.width + 4) * 2).ceil(),
+            ((painter.height + 2) * 2).ceil(),
+          );
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          image.dispose();
+          picture.dispose();
+          painter.dispose();
+          if (!isCurrent()) return;
+          if (bytes == null) throw StateError('Brak obrazu liczby klastra');
+          await c.addImage(imageName, bytes.buffer.asUint8List());
+          if (!isCurrent()) return;
+          labelImages[imageKey] = imageName;
+        }
         labels.add(
           SymbolOptions(
             geometry: LatLng(lat, lon),
-            textField: '${p['point_count']}',
-            textSize: zoom < 9 ? 13.0 : 12.0,
-            textColor: '#ffffff',
-            textHaloColor: '#1b5e20',
-            textHaloWidth: 0.8,
-            textAnchor: 'center',
+            iconImage: imageName,
+            iconSize: 0.5,
+            iconAnchor: 'center',
             zIndex: 2,
           ),
         );
@@ -320,9 +355,9 @@ class _ShelterMapState extends State<ShelterMap> {
     }
     if (!isCurrent()) return;
     if (labels.isNotEmpty) {
-      await c.setSymbolTextAllowOverlap(true);
+      await c.setSymbolIconAllowOverlap(true);
       if (!isCurrent()) return;
-      await c.setSymbolTextIgnorePlacement(true);
+      await c.setSymbolIconIgnorePlacement(true);
       if (!isCurrent()) return;
       await c.addSymbols(labels, labelData);
     }
