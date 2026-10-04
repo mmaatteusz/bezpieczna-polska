@@ -28,6 +28,12 @@ void main() {
       await AndroidForegroundPush.show(
         const RemoteMessage(
           messageId: 'received-fcm-message',
+          data: {
+            'eventId': 'fixture-alert',
+            'kind': 'ALERT',
+            'category': 'PUBLIC_SAFETY',
+            'channelId': 'bp_alerts_critical',
+          },
           notification: RemoteNotification(title: 'Test', body: 'Odebrano'),
         ),
       );
@@ -36,6 +42,10 @@ void main() {
         'messageId': 'received-fcm-message',
         'title': 'Test',
         'body': 'Odebrano',
+        'eventId': 'fixture-alert',
+        'kind': 'ALERT',
+        'category': 'PUBLIC_SAFETY',
+        'channelId': 'bp_alerts_critical',
       });
     },
   );

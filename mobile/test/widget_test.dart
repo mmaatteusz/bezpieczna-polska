@@ -107,7 +107,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Monitoring GNSS / GPS RTGMS'), findsOneWidget);
     expect(find.textContaining('zewnętrzną mapę'), findsOneWidget);
-    await tester.pageBack();
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Więcej').last);

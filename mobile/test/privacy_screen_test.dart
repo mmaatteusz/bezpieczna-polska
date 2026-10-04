@@ -31,6 +31,11 @@ void main() {
       250,
       maxScrolls: 40,
     );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Otwórz pełną politykę prywatności').hitTestable(),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Otwórz pełną politykę prywatności'));
     expect(opened, url);
     expect(tester.takeException(), isNull);
