@@ -22,11 +22,7 @@ class PushOpenRequest {
   final String? kind;
   final String? category;
 
-  const PushOpenRequest({
-    required this.eventId,
-    this.kind,
-    this.category,
-  });
+  const PushOpenRequest({required this.eventId, this.kind, this.category});
 
   static PushOpenRequest? tryParse(Map<dynamic, dynamic> data) {
     if (data['schemaVersion']?.toString() != '1') return null;
@@ -121,10 +117,7 @@ class FirebasePushPlatformAdapter implements PushPlatformAdapter {
     if (platform == 'ANDROID') {
       await AndroidForegroundPush.initializeTapHandling();
       _nativeTaps ??= AndroidForegroundPush.taps.listen(
-        (data) => _emitOpen(<String, String>{
-          'schemaVersion': '1',
-          ...data,
-        }),
+        (data) => _emitOpen(<String, String>{'schemaVersion': '1', ...data}),
       );
       final nativeInitial = AndroidForegroundPush.takeInitialTap();
       if (_initialOpen == null && nativeInitial != null) {
@@ -609,17 +602,13 @@ class PushManager extends ChangeNotifier {
     try {
       final result = Map<String, dynamic>.from(
         await _jsonRequest(
-              update ? 'PUT' : 'POST',
-              _uri(
-                update ? '/v1/push/devices/${identity.id}' : '/v1/push/devices',
-              ),
-              identity.secret,
-              body: update
-                  ? (Map<String, dynamic>.from(payload)
-                      ..remove('installationId'))
-                  : payload,
-            )
-            as Map,
+          update ? 'PUT' : 'POST',
+          _uri(update ? '/v1/push/devices/${identity.id}' : '/v1/push/devices'),
+          identity.secret,
+          body: update
+              ? (Map<String, dynamic>.from(payload)..remove('installationId'))
+              : payload,
+        ) as Map,
       );
       await repository.prefs.setBool(_registeredKey, true);
       _setState(
@@ -652,11 +641,10 @@ class PushManager extends ChangeNotifier {
     try {
       final result = Map<String, dynamic>.from(
         await _jsonRequest(
-              'GET',
-              _uri('/v1/push/devices/${identity.id}'),
-              identity.secret,
-            )
-            as Map,
+          'GET',
+          _uri('/v1/push/devices/${identity.id}'),
+          identity.secret,
+        ) as Map,
       );
       final registered = result['registered'] == true;
       await repository.prefs.setBool(_registeredKey, registered);
@@ -860,9 +848,8 @@ class _NotificationSettingsScreenState
       final message = error is StateError
           ? 'Najpierw włącz powiadomienia na tym urządzeniu.'
           : 'Nie udało się wysłać testu. ${apiFailureMessage(error)}';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => busy = false);
     }
