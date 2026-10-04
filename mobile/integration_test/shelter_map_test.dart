@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:bezpieczna_polska/model.dart';
 import 'package:bezpieczna_polska/shelter_map.dart';
@@ -129,7 +130,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       await state.refresh();
       await waitFor(
-        () => state.loading == false && controller.circles.length == (zoom >= 4 ? 1 : 0),
+        () =>
+            state.loading == false &&
+            controller.circles.length == (zoom >= 4 ? 1 : 0),
       );
     }
 
@@ -140,10 +143,14 @@ void main() {
       final point = await controller.toScreenLocation(marker.options.geometry!);
       final dpr = tester.view.devicePixelRatio;
       final origin = tester.getTopLeft(find.byType(MapLibreMap));
-      final hits = await controller.queryRenderedFeatures(point, [
-        ...controller.circleManager!.layerIds,
-        ...controller.symbolManager!.layerIds,
-      ], null);
+      final hits = await controller.queryRenderedFeatures(
+        math.Point<double>(point.x.toDouble(), point.y.toDouble()),
+        [
+          ...controller.circleManager!.layerIds,
+          ...controller.symbolManager!.layerIds,
+        ],
+        null,
+      );
       expect(
         hits,
         isNotEmpty,
