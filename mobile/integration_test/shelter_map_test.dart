@@ -111,11 +111,19 @@ void main() {
         await tester.pump(const Duration(milliseconds: 200));
         if (check()) return;
       }
-      fail('Timed out waiting for native shelter map');
+      fail(
+        'Timed out waiting for native shelter map: zoom=${state.controller?.cameraPosition?.zoom}, ready=${state.ready}, message=${state.message}',
+      );
     }
 
     await waitFor(() => state.ready == true && state.loading == false);
     final controller = state.controller as MapLibreMapController;
+    controller.onCircleTapped.add(
+      (circle) => debugPrint('Native circle tap: ${circle.data}'),
+    );
+    controller.onSymbolTapped.add(
+      (symbol) => debugPrint('Native label tap: ${symbol.data}'),
+    );
     Future<void> move(LatLng target, double zoom) async {
       await controller.moveCamera(CameraUpdate.newLatLngZoom(target, zoom));
       await tester.pump(const Duration(milliseconds: 500));
@@ -126,14 +134,30 @@ void main() {
     }
 
     Future<void> tapMarker({bool rim = false}) async {
+      // Native GeoJSON parsing and drawing can finish after the channel reply.
+      await tester.pump(const Duration(seconds: 1));
       final marker = controller.circles.single;
       final point = await controller.toScreenLocation(marker.options.geometry!);
       final dpr = tester.view.devicePixelRatio;
       final origin = tester.getTopLeft(find.byType(MapLibreMap));
-      await tester.tapAt(
-        origin + Offset(point.x / dpr + (rim ? 16 : 0), point.y / dpr),
+      final hits = await controller.queryRenderedFeatures(point, [
+        ...controller.circleManager!.layerIds,
+        ...controller.symbolManager!.layerIds,
+      ], null);
+      expect(
+        hits,
+        isNotEmpty,
+        reason: 'Native marker must be drawn before tapping',
       );
-      await tester.pump(const Duration(milliseconds: 600));
+      final target =
+          origin + Offset(point.x / dpr + (rim ? 16 : 0), point.y / dpr);
+      debugPrint(
+        'Tap target=$target native=$point dpr=$dpr hits=${hits.length} zoom=${controller.cameraPosition?.zoom}',
+      );
+      final gesture = await tester.startGesture(target);
+      await tester.pump(const Duration(milliseconds: 150));
+      await gesture.up();
+      await tester.pump(const Duration(seconds: 1));
     }
 
     for (final target in [
