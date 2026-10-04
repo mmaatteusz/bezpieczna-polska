@@ -94,13 +94,13 @@ class SecurePushSecretStore implements PushSecretStore {
 
 class FirebasePushPlatformAdapter implements PushPlatformAdapter {
   static StreamSubscription<RemoteMessage>? _foregroundMessages;
+  static StreamSubscription<RemoteMessage>? _openedMessages;
+  static StreamSubscription<Map<String, String>>? _nativeTaps;
   final FirebaseMessaging messaging;
   @override
   final String platform;
   final StreamController<PushOpenRequest> _openRequests =
       StreamController<PushOpenRequest>.broadcast();
-  StreamSubscription<RemoteMessage>? _openedMessages;
-  StreamSubscription<Map<String, String>>? _nativeTaps;
   PushOpenRequest? _initialOpen;
 
   FirebasePushPlatformAdapter._(this.messaging, this.platform);
@@ -111,7 +111,7 @@ class FirebasePushPlatformAdapter implements PushPlatformAdapter {
   }
 
   Future<void> _initializeOpenHandling() async {
-    _openedMessages = FirebaseMessaging.onMessageOpenedApp.listen(
+    _openedMessages ??= FirebaseMessaging.onMessageOpenedApp.listen(
       (message) => _emitOpen(message.data),
     );
     final initialMessage = await messaging.getInitialMessage();
@@ -120,7 +120,7 @@ class FirebasePushPlatformAdapter implements PushPlatformAdapter {
     }
     if (platform == 'ANDROID') {
       await AndroidForegroundPush.initializeTapHandling();
-      _nativeTaps = AndroidForegroundPush.taps.listen(
+      _nativeTaps ??= AndroidForegroundPush.taps.listen(
         (data) => _emitOpen(<String, String>{
           'schemaVersion': '1',
           ...data,
