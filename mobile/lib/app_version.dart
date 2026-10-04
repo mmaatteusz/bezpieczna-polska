@@ -2,11 +2,11 @@
 // Run node scripts/sync-mobile-version.mjs after changing both release versions.
 const appVersion = String.fromEnvironment(
   'APP_VERSION',
-  defaultValue: '0.1.0-alpha.66',
+  defaultValue: '0.1.0-alpha.67',
 );
 const appBuildNumber = String.fromEnvironment(
   'APP_BUILD_NUMBER',
-  defaultValue: '67',
+  defaultValue: '68',
 );
 const appChannel = String.fromEnvironment(
   'APP_CHANNEL',
