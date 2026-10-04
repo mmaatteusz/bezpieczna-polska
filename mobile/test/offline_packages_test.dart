@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:bezpieczna_polska/main.dart';
+import 'package:bezpieczna_polska/map_layers.dart';
 import 'package:bezpieczna_polska/model.dart';
 import 'package:bezpieczna_polska/offline_data_screen.dart';
 import 'package:bezpieczna_polska/offline_packages.dart';
@@ -191,6 +192,85 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test(
+    'offline shelters conserve counts across zoom tiers and distant pans',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final points = List.generate(
+        1200,
+        (i) => {
+          ...shelter(id: 'local-$i'),
+          'longitude': 18.0 + (i % 40) * 0.001,
+          'latitude': 53.1 + (i ~/ 40) * 0.001,
+        },
+      );
+      final value = OfflineRegionPackage.create(
+        regionId: 'PL',
+        createdAt: DateTime.parse('2026-09-22T10:01:00Z'),
+        snapshotTimestamp: DateTime.parse('2026-09-22T10:00:00Z'),
+        snapshot: snapshot(region: 'PL'),
+        shelters: [
+          ...points,
+          {
+            ...shelter(id: 'west', region: '02'),
+            'longitude': 16.98,
+            'latitude': 51.1,
+          },
+          {
+            ...shelter(id: 'east', region: '06'),
+            'longitude': 22.57,
+            'latitude': 51.25,
+          },
+        ],
+        watchedLocations: const [],
+        sourceTimestamps: const {},
+        components: package(region: 'PL').components,
+        layers: const ['shelters-local', 'events-local'],
+        shelterVersion: version,
+        backendVersion: '0.1.0-alpha.66',
+      );
+      await OfflinePackageStore(prefs).commit(value);
+      final provider = ShelterMapProvider(await repoWithDownload(prefs: prefs));
+      for (final (zoom, limit, tier) in [
+        (5.2, 3, 'REGION'),
+        (9.0, 36, 'LOCAL'),
+        (12.0, 144, 'NEAR'),
+        (14.0, 324, 'DETAIL_OVERFLOW'),
+      ]) {
+        final result = (await provider.offline(
+          MapRequest([14, 49, 24.2, 55], zoom, 'PL'),
+        ))!;
+        expect(result.metadata['total'], 1202);
+        expect(result.metadata['clusterTier'], tier);
+        final features = (result.data['features'] as List).cast<Map>();
+        expect(features.length, lessThanOrEqualTo(limit));
+        expect(
+          features.fold<int>(
+            0,
+            (n, f) => n + ((f['properties'] as Map)['point_count'] as int),
+          ),
+          1202,
+        );
+        expect(
+          features.every(
+            (f) => (f['properties'] as Map)['expansionZoom'] > zoom,
+          ),
+          isTrue,
+        );
+      }
+      for (final (bbox, id) in [
+        ([16.9, 51.0, 17.1, 51.2], 'west'),
+        ([22.4, 51.1, 22.7, 51.4], 'east'),
+        ([16.9, 51.0, 17.1, 51.2], 'west'),
+      ]) {
+        final result = (await provider.offline(MapRequest(bbox, 15, 'PL')))!;
+        expect(result.metadata['total'], 1);
+        expect(result.data['features'].single['id'], id);
+        expect(result.metadata['clustered'], isFalse);
+      }
+    },
+  );
 
   test('download region package validates and atomically activates', () async {
     final repo = await repoWithDownload();

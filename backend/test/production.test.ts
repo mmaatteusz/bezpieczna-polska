@@ -5,6 +5,15 @@ import {buildApp} from '../src/app.js';
 import {migrate,assertSchema} from '../src/migrate.js';
 import {serverConfig,publicHttpsUrl} from '../src/config.js';
 
+test('candidate push dispatch can be disabled explicitly and rejects ambiguous values',()=>{
+ assert.equal(serverConfig({}).enablePushDispatch,true);
+ assert.equal(serverConfig({ENABLE_PUSH_DISPATCH:'true'}).enablePushDispatch,true);
+ assert.equal(serverConfig({ENABLE_PUSH_DISPATCH:'false'}).enablePushDispatch,false);
+ for(const value of ['', 'False', '0', 'no']){
+  assert.throws(()=>serverConfig({ENABLE_PUSH_DISPATCH:value}),/ENABLE_PUSH_DISPATCH/);
+ }
+});
+
 test('production configuration rejects dev endpoints and missing credentials',()=>{
  const valid={APP_ENV:'production',NODE_ENV:'production',DATABASE_URL:'postgresql://user:pass@db:5432/app',
   ADMIN_TOKEN:'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6',PUBLIC_BASE_URL:'https://api.real-domain.pl',

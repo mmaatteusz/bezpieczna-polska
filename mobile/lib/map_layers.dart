@@ -541,7 +541,8 @@ class ShelterMapProvider implements MapLayerProvider {
     final features = <Map<String, dynamic>>[];
     final requestedTier = shelterClusterTier(q.zoom);
     final detailOverflow = requestedTier == null && visible.length > 1089;
-    final clusterTier = requestedTier ?? (detailOverflow ? 'DETAIL_OVERFLOW' : null);
+    final clusterTier =
+        requestedTier ?? (detailOverflow ? 'DETAIL_OVERFLOW' : null);
 
     if (clusterTier == null) {
       for (final item in visible) {

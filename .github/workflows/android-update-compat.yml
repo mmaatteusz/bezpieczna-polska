@@ -123,4 +123,6 @@ jobs:
           emulator-boot-timeout: 600
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: bash scripts/verify-android-inplace-update.sh base-preview.apk update-preview.apk
+          script: |
+            bash scripts/verify-android-inplace-update.sh base-preview.apk update-preview.apk
+            cd mobile && flutter drive --driver=test_driver/integration_test.dart --target=integration_test/shelter_map_test.dart -d emulator-5554 --dart-define=APP_ENV=preview --dart-define=MAP_STYLE_URL='{"version":8,"glyphs":"https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf","sources":{},"layers":[{"id":"background","type":"background","paint":{"background-color":"#e9ecef"}}]}'

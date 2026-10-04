@@ -11,6 +11,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 
 import 'map_interaction.dart';
 import 'map_layers.dart';
+import 'map_render_queue.dart';
 import 'model.dart';
 import 'shelters.dart';
 
@@ -137,6 +138,8 @@ class _ShelterMapState extends State<ShelterMap> {
   bool overviewMode = false, nationalEventsLoading = false;
   bool radiationRefreshRunning = false, radiationOverrideOnline = false;
   int ticket = 0, gpsInterferenceTicket = 0;
+  final shelterRenderQueue = MapRenderQueue();
+  bool openingShelter = false;
   String availability = 'ALL', message = 'Przygotowywanie mapy…';
   String? gpsInterferenceError;
   MapViewport? viewport;
@@ -224,12 +227,23 @@ class _ShelterMapState extends State<ShelterMap> {
     );
   }
 
-  Future<void> syncShelterAnnotations(MapViewport? value) async {
+  Future<void> syncShelterAnnotations(MapViewport? value, int current) =>
+      shelterRenderQueue.run(
+        isCurrent: () => mounted && ready && current == ticket,
+        render: (isCurrent) => renderShelterAnnotations(value, isCurrent),
+      );
+
+  Future<void> renderShelterAnnotations(
+    MapViewport? value,
+    bool Function() isCurrent,
+  ) async {
     final c = controller;
     if (c == null || !ready || widget.ukraine) return;
 
     await c.clearCircles();
+    if (!isCurrent()) return;
     await c.clearSymbols();
+    if (!isCurrent()) return;
     final rawFeatures = value?.data['features'];
     if (rawFeatures is! List || rawFeatures.isEmpty) return;
 
@@ -304,9 +318,12 @@ class _ShelterMapState extends State<ShelterMap> {
     if (options.isNotEmpty) {
       await c.addCircles(options, data);
     }
+    if (!isCurrent()) return;
     if (labels.isNotEmpty) {
       await c.setSymbolTextAllowOverlap(true);
+      if (!isCurrent()) return;
       await c.setSymbolTextIgnorePlacement(true);
+      if (!isCurrent()) return;
       await c.addSymbols(labels, labelData);
     }
   }
@@ -353,9 +370,7 @@ class _ShelterMapState extends State<ShelterMap> {
                 shelter.address,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              Text(
-                '${properties['municipality']} • ${properties['county']}',
-              ),
+              Text('${properties['municipality']} • ${properties['county']}'),
               Text(shelter.availability),
               const Text(
                 'Punkt schronienia wg PSP. Klasa ochrony, pojemność i bieżący dostęp nie są potwierdzone.',
@@ -391,14 +406,26 @@ class _ShelterMapState extends State<ShelterMap> {
   }
 
   Future<void> openShelterAnnotation(Map<String, dynamic>? raw) async {
-    if (raw == null || raw['kind'] != 'shelter-annotation') return;
+    if (raw == null || raw['kind'] != 'shelter-annotation' || openingShelter)
+      return;
     final properties = raw['properties'];
     final coordinates = raw['coordinates'];
     if (properties is! Map || coordinates is! List) return;
-    await openShelterData(
-      Map<String, dynamic>.from(properties),
-      List<dynamic>.from(coordinates),
-    );
+    openingShelter = true;
+    try {
+      await openShelterData(
+        Map<String, dynamic>.from(properties),
+        List<dynamic>.from(coordinates),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nie udało się otworzyć schronienia')),
+        );
+      }
+    } finally {
+      openingShelter = false;
+    }
   }
 
   Future<void> openShelterCircle(Circle circle) =>
@@ -1101,6 +1128,7 @@ class _ShelterMapState extends State<ShelterMap> {
         await c.setGeoJsonSource('radiation', empty);
         updateMapLegend(bbox, radiationVisible: false);
       }
+      if (!mounted || current != ticket) return;
       final zoom = (c.cameraPosition?.zoom ?? 5).clamp(0, 22).toDouble();
       final shouldUseNationalOverview = zoom < 9;
       if (overviewMode != shouldUseNationalOverview) {
@@ -1109,6 +1137,7 @@ class _ShelterMapState extends State<ShelterMap> {
       if (shouldUseNationalOverview) {
         await refreshNationalEvents();
       }
+      if (!mounted || current != ticket) return;
       updateMapLegend(
         bbox,
         sheltersVisible:
@@ -1117,8 +1146,8 @@ class _ShelterMapState extends State<ShelterMap> {
       if (!mapShowsShelters(zoom)) {
         onlineRetry?.cancel();
         await c.setGeoJsonSource('shelters', empty);
-        await c.clearCircles();
-        await c.clearSymbols();
+        await syncShelterAnnotations(null, current);
+        if (!mounted || current != ticket) return;
         viewport = null;
         renderedRequest = null;
         await syncContextLayers();
@@ -1131,6 +1160,7 @@ class _ShelterMapState extends State<ShelterMap> {
         return;
       }
       await syncContextLayers();
+      if (!mounted || current != ticket) return;
       request = shelterViewportRequest(
         [west, south, east, north],
         zoom,
@@ -1143,14 +1173,13 @@ class _ShelterMapState extends State<ShelterMap> {
         viewport = null;
         renderedRequest = null;
         await c.setGeoJsonSource('shelters', empty);
-        await c.clearCircles();
-        await c.clearSymbols();
+        await syncShelterAnnotations(null, current);
         updateMapLegend(bbox, sheltersVisible: false);
       }
       final result = await provider.fetch(request);
       if (!mounted || current != ticket) return;
       await c.setGeoJsonSource('shelters', result.data);
-      await syncShelterAnnotations(result);
+      await syncShelterAnnotations(result, current);
       if (!mounted || current != ticket) return;
       updateMapLegend(
         bbox,
@@ -1183,15 +1212,15 @@ class _ShelterMapState extends State<ShelterMap> {
           if (offline != null) fallbackRequest = regionalRequest;
         }
       }
+      if (!mounted || current != ticket) return;
       final fallback = cached ?? offline;
       if (fallback != null) {
         await c.setGeoJsonSource('shelters', fallback.data);
-        await syncShelterAnnotations(fallback);
+        await syncShelterAnnotations(fallback, current);
       } else {
         // The previous viewport is no longer valid for the new camera area.
         await c.setGeoJsonSource('shelters', empty);
-        await c.clearCircles();
-        await c.clearSymbols();
+        await syncShelterAnnotations(null, current);
       }
       if (!mounted || current != ticket) return;
       final bbox = visibleLegendBbox;
@@ -1802,6 +1831,13 @@ class _ShelterMapState extends State<ShelterMap> {
               children: [
                 MapLibreMap(
                   styleString: onlineStyle,
+                  // MapLibre draws later annotation managers above earlier ones.
+                  annotationOrder: const [
+                    AnnotationType.fill,
+                    AnnotationType.line,
+                    AnnotationType.circle,
+                    AnnotationType.symbol,
+                  ],
                   gestureRecognizers: mapGestureRecognizers(),
                   initialCameraPosition: CameraPosition(
                     target: widget.ukraine ? const LatLng(49, 31) : homeTarget,

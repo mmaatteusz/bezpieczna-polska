@@ -4,375 +4,158 @@
   <img src="mobile/assets/brand/bezpieczna_polska_logo_transparent.png" width="320" alt="Logo Bezpieczna Polska">
 </p>
 
-<p align="center">
-  <strong>Cywilna świadomość sytuacyjna w jednym miejscu.</strong><br>
-  Oficjalne komunikaty, status kraju i okolicy, mapa zagrożeń, schronienia, stopnie alarmowe, dane PAA, Ukraina, NEPTUN i powiadomienia.
-</p>
+**Cywilna świadomość sytuacyjna w jednym miejscu:** oficjalne komunikaty, status kraju i okolicy, mapa, schronienia, stopnie alarmowe, dane PAA, Ukraina, NEPTUN i powiadomienia.
 
-> [!IMPORTANT]
-> **Bezpieczna Polska nie jest państwowym systemem alarmowym i nie zastępuje Alert RCB, numeru 112 ani komunikatów właściwych służb.**
-> Brak wpisu w aplikacji nie oznacza braku zagrożenia. Aplikacja pokazuje to, co wynika z monitorowanych źródeł, wraz ze świeżością i pochodzeniem danych.
+> Bezpieczna Polska nie jest państwowym systemem alarmowym. Nie zastępuje Alert RCB, numeru 112 ani komunikatów właściwych służb. Brak wpisu w aplikacji nie oznacza braku zagrożenia.
 
-## Status projektu
+## Status i pobieranie
 
-**Status: aktywna alpha / przygotowanie do zamkniętej bety Android.**
+Projekt jest w aktywnej fazie alpha. Android jest platformą priorytetową; publikacja w Google Play jest przygotowywana.
 
-Android jest obecnie platformą priorytetową. Backend produkcyjny działa na Railway, jest połączony z PostgreSQL/PostGIS i śledzi gałąź `main`.
+Aktualny kod rozwojowy: **0.1.0-alpha.66** (`build 67`).
 
-Aktualny kod rozwojowy: **0.1.0-alpha.62** (`build 63`).
+**[Pobierz opublikowane wydania Android z GitHub Releases](https://github.com/mmaatteusz/bezpieczna-polska/releases)**
 
-Najnowsze publiczne APK Android: [GitHub Releases — latest](https://github.com/mmaatteusz/bezpieczna-polska/releases/latest).
+Wersja w repozytorium, wersja wdrożonego backendu i ostatnie opublikowane wydanie mogą się różnić. Automatyczne podbicie wersji na `main` nie publikuje APK ani nie potwierdza wdrożenia Oracle. Tożsamość uruchomionego API pokazuje `/health`.
 
-Publiczny Release może mieć niższy numer niż kod na `main`. Numer alpha i build są automatycznie podbijane po zmianach na `main`, natomiast Release powstaje dopiero po przejściu kontroli CI i podpisaniu właściwego APK.
+| Plik / kanał | Przeznaczenie |
+|---|---|
+| Preview APK ARM64 | Instalacja i testy na telefonie Android; osobny pakiet preview |
+| Produkcyjny APK ARM64 | Instalacja podpisanej aplikacji produkcyjnej |
+| Produkcyjny AAB | Wysyłka do Google Play; nie instaluje się go bezpośrednio jak APK |
+| SHA256SUMS.txt | Kontrola integralności plików danego wydania |
 
-## Najważniejsze funkcje
+Pakiet produkcyjny instaluje się oddzielnie od preview. GitHub Release i publikacja w Google Play to odrębne operacje. Dostępne pliki oraz status konkretnego wydania są opisane w jego release notes.
 
-### Start
+## Co oferuje aplikacja
 
-Ekran główny ma pokazywać najważniejsze informacje bez zalewania użytkownika komunikatami:
+- **Start:** status Polski i wybranego województwa, stopnie alarmowe, komunikaty oraz widoczna świeżość danych.
+- **Centrum alertów:** komunikaty z monitorowanych źródeł, deduplikacja i historia.
+- **Mapa:** przełączane warstwy zdarzeń, schronień, promieniowania oraz danych sytuacyjnych; szczegóły po wybraniu obiektu.
+- **Schronienia:** wyszukiwanie, mapa, najbliższe obiekty i dane zapisane offline. Wpis w bazie nie gwarantuje dostępności, otwarcia ani bezpieczeństwa obiektu.
+- **PAA:** pomiary i komunikaty dotyczące promieniowania z informacją o źródle i czasie.
+- **Ukraina:** oficjalny UkraineAlarm API v3 jako warstwa sytuacyjna; alarmy Ukrainy nie zmieniają statusu Polski.
+- **NEPTUN:** publiczne dane sytuacyjne, czas serwera i odświeżanie. Przybliżone położenie nie daje podstaw do wyliczania toru, prędkości czy trasy.
+- **GPSJAM:** dzienne dane o dokładności pozycji samolotów; nie stanowią samodzielnego dowodu zagłuszania.
+- **Obserwowane miejsca i powiadomienia:** wybór kategorii i lokalizacji, rejestracja urządzenia, rzeczywisty test push.
+- **Offline:** ostatnia poprawna kopia danych i widoczne oznaczenie ich wieku.
 
-- status Polski i wybranej okolicy,
-- najważniejsze aktywne zagrożenia,
-- stopnie alarmowe RP i CRP,
-- jawny stan świeżości danych,
-- szybkie przejście do szczegółów, mapy i Alert Center.
+## Źródła i interpretacja danych
 
-Stopnie alarmowe są prezentowane osobno od oceny bieżącego zagrożenia. **BRAVO / BRAVO-CRP nie jest automatycznie traktowane jako bezpośrednie zagrożenie dla mieszkańca.**
+Backend integruje m.in. RCB, RSO, stopnie alarmowe, IMGW METEO/HYDRO, PAA, schronienia, komunikaty wojewódzkie i służb, UkraineAlarm oraz NEPTUN. Bieżący stan każdej integracji jest dostępny pod [`/v1/sources`](https://bezpieczna-polska-api.duckdns.org/v1/sources).
 
-### Alert Center i deduplikacja
+Stan `HEALTHY` opisuje poprawność i świeżość integracji, a nie pełną wiedzę o sytuacji. Źródła mają klasy `STATUS`, `CONTEXT`, `REFERENCE` i `SITUATIONAL`. Brak danych może oznaczać `AUTHORITATIVE_EMPTY_SET` lub `NOT_PROVABLE`; tych sytuacji nie wolno utożsamiać. Przy błędzie synchronizacji aplikacja może zachować ostatnią poprawną kopię z oznaczeniem degradacji lub nieaktualności.
 
-Alerty z różnych obszarów i źródeł są normalizowane, korelowane i deduplikowane.
+### Ostatni potwierdzony audyt migracji
 
-Jeżeli kilka komunikatów opisuje to samo zagrożenie, użytkownik nie dostaje sześciu identycznych kart. Interfejs pokazuje jedną kartę i jasno opisuje wynik, np.:
+Podczas audytu 30.09–01.10.2026 uzyskano `ORACLE_HOST_AUDIT_PASS` i `PROBE_ALL_OK`. Smoke test potwierdził kontrakty krytycznych źródeł RCB, RSO, LEVELS, SHELTERS, IMGW METEO/HYDRO, PAA, UA i NEPTUN, odpowiedzi API mapy i schronień oraz odświeżenie NEPTUN.
 
-```text
-SCALONO 6 KOMUNIKATÓW → 1 ZAGROŻENIE
-```
+Znane ograniczenia z tego audytu:
 
-Dzięki temu liczba dokumentów źródłowych nie jest mylona z liczbą niezależnych zagrożeń.
+| Źródło | Stan | Szczegóły |
+|---|---|---|
+| SHELTERS | DEGRADED | `SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD`; zachowano 86 388 obiektów, data źródłowa 21.09.2026 |
+| WCZK-18 | BROKEN | `WCZK_HTML_CONTRACT_CHANGED`; adapter wymaga dostosowania |
 
-Dostępne są m.in.:
+Przejście smoke testu uwzględnia dopuszczoną ostatnią poprawną kopię schronień. Nie oznacza, że wszystkie źródła są zdrowe. Powyższe wyniki są zapisem audytu, a nie obietnicą bieżącej dostępności.
 
-- filtrowanie i wyszukiwanie,
-- podział według regionów i typów zdarzeń,
-- informacja o źródle i weryfikacji,
-- status aktywności i ważności,
-- historia zmian / timeline,
-- powiązane komunikaty i liczba niezależnych rodzin źródeł.
+## Backend na Oracle Cloud
 
-### Mapa Polski
+Docelowy adres nowych buildów Android:
 
-Mapa wykorzystuje MapLibre i OpenFreeMap. Obsługuje m.in.:
+**https://bezpieczna-polska-api.duckdns.org**
 
-- aktywne zdarzenia,
-- granice województw,
-- alerty RCB / zdarzenia bezpieczeństwa,
-- IMGW,
-- schronienia,
-- PAA,
-- lokalizację użytkownika,
-- powrót do wybranej miejscowości,
-- warstwy włączane i wyłączane z poziomu UI.
+| Element | Konfiguracja |
+|---|---|
+| Region | OCI Frankfurt |
+| Host | Ubuntu 24.04 ARM64, VM.Standard.A1.Flex |
+| Zasoby | 1 OCPU, 6 GB RAM, boot volume około 100 GB |
+| API | Node.js 24, TypeScript, Fastify, Docker |
+| Reverse proxy | nginx i HTTPS z automatycznym odnowieniem certyfikatu |
+| Baza | PostgreSQL 17 i PostGIS 3.6 |
+| Publiczne porty | 80 i 443; SSH 22 ograniczany administracyjnie w OCI |
+| Prywatne porty | PostgreSQL 5432 i API 8080 nie są otwarte publicznie |
 
-Legenda mapy rozróżnia podstawowe warstwy kolorami:
+PostgreSQL nasłuchuje na localhost. Aplikacja korzysta z roli `bp_app` bez uprawnień superuser. nginx obsługuje HTTPS i przekazuje ruch do prywatnego API. Sekrety hosta są przechowywane poza repozytorium z ograniczonymi uprawnieniami.
 
-- **czerwony** — alerty / zdarzenia,
-- **niebieski** — IMGW,
-- **zielony** — schronienia,
-- **fioletowy** — PAA.
+Migracja obejmuje sprawdzenie architektury, przypięcie klucza hosta SSH, preflight, audyt usług i sieci, odtworzenie bazy oraz testy API. Szczegóły: [Oracle cutover runbook](docs/ORACLE_CUTOVER_RUNBOOK.md).
 
-Kliknięcie obiektu na mapie otwiera jego szczegóły zamiast pozostawiać użytkownika z samym znacznikiem.
+### Railway w okresie przejściowym
 
-### Zakłócenia GPS / GNSS
+Railway pozostaje uruchomiony dla okresu przejściowego i starszych buildów. Automatyczna wysyłka push została tam wyłączona; na Oracle została włączona po porównaniu rejestracji urządzeń i historii wysyłki.
 
-Warstwa GPSJAM jest dostępna jako osobna opcja pod mapą. Pokazuje dobowe, zagregowane obszary obniżonej dokładności nawigacji zgłaszanej przez samoloty.
+Porównanie potwierdziło: brak urządzeń obecnych wyłącznie na Railway, brak nowszych rejestracji Railway, brak różnic porównanej historii push i zgodność klucza szyfrowania tokenów.
 
-Aplikacja **nie interpretuje tych danych jako dowodu celowego zagłuszania**.
+Zmiana adresu w GitHub Variables wpływa na **nowe buildy**. Nie zmienia adresu zapisanego w już zainstalowanym APK. Railway i Oracle nie mają automatycznej replikacji baz, więc Railway nie jest automatycznie aktualnym zapasowym backendem. Wyłączenie usług Railway wymaga zakończenia przejścia klientów i sprawdzenia pozostałych zależności.
 
-### Schronienia
+## Backup i odzyskiwanie bez komputera autora
 
-Obsługiwane są dane schronień / punktów schronienia z oficjalnych danych PSP / dane.gov.pl:
+- Codzienny timer tworzy dump PostgreSQL, metadane i SHA-256.
+- Hook wysyła kopię poza VM do prywatnego OCI Object Storage przez instance principals.
+- Uprawnienia VM do obiektów backupu umożliwiają tworzenie i inspekcję, bez odczytu, nadpisywania i usuwania.
+- Wymagany upload poza VM jest częścią powodzenia zadania backupu.
+- Kopię pobraną z Object Storage sprawdzono sumą SHA-256 i odtworzono w izolowanej bazie: schema 2, 31 źródeł, 86 388 schronień.
+- Zaszyfrowany pakiet konfiguracji hosta wykorzystuje Scrypt i AES-256-GCM. Pobraną kopię odszyfrowano i zweryfikowano bez wypisywania sekretów.
+- Zdalną kopię klucza SSH zabezpieczono hasłem i potwierdzono logowanie.
+- Zdalną kopię klucza upload Android zabezpieczono hasłem i potwierdzono poprawność keystore.
 
-- mapa,
-- wyszukiwanie,
-- najbliższy punkt,
-- zapytania przestrzenne PostGIS,
-- pakiety offline,
-- przejście do zewnętrznej nawigacji.
+Hasła odzyskiwania muszą być dostępne w niezależnym menedżerze haseł. GitHub Secrets służą CI i nie pozwalają później pobrać ich wartości jako kopii odzyskiwania. Po zmianie konfiguracji lub wdrożenia należy odświeżyć pakiet odzyskiwania.
 
-### PAA
+Testy komponentów odzyskiwania nie zastępują pełnego ćwiczenia odtworzenia nowej VM. Do dalszego dopracowania pozostają monitoring backupów, retencja oraz pełny test awarii hosta.
 
-PAA jest rozdzielone na dwa typy danych:
+Instrukcje: [Backup poza VM i odzyskiwanie](docs/ORACLE_OFF_VM_BACKUP.md).
 
-1. **komunikaty PAA** — mogą być prezentowane jako informacje / alerty,
-2. **sieć pomiarowa** — dane referencyjne i pomiarowe wyświetlane na mapie.
+## Android i powiadomienia push
 
-Pomiar stacji **nie tworzy automatycznie alarmu i nie odwołuje komunikatu alarmowego**.
+Android używa Firebase Cloud Messaging. Test wysłany przez Oracle został odebrany na rzeczywistym telefonie. Obsługa wiadomości w foreground pokazuje systemowe powiadomienie z ikoną aplikacji; wymagana jest systemowa zgoda na powiadomienia.
 
-### NEPTUN
+Komunikat „test wysłany przez serwer” oznacza przyjęcie wysyłki przez backend, nie potwierdzenie wyświetlenia na telefonie. Ustawienia systemu, oszczędzanie baterii i stan aplikacji mogą wpływać na odbiór.
 
-NEPTUN jest oddzielnym modułem świadomości sytuacyjnej dla Ukrainy.
+Dalsze testy przed szeroką publikacją obejmują tło, zamkniętą aplikację, różne urządzenia oraz ograniczenia baterii. iOS/APNs wymaga osobnej konfiguracji i walidacji.
 
-Aplikacja:
+| Kanał | Android application ID |
+|---|---|
+| Development | `pl.bezpiecznapolska.dev` |
+| Preview | `pl.bezpiecznapolska.preview` |
+| Production | `pl.bezpiecznapolska` |
 
-- pokazuje bieżące wpisy live,
-- rozróżnia typy zagrożeń, m.in. BSP/dron, FPV, rakieta, zagrożenie balistyczne, KAB i MiG-31K,
-- używa czytelnych symboli typów zagrożeń na mapie,
-- pozwala otworzyć szczegóły wpisu po dotknięciu symbolu,
-- publikuje wyłącznie **celowo zgrubne pozycje**,
-- nie pokazuje kursu, prędkości ani przewidywanej trasy,
-- trzyma historię oddzielnie od danych live.
+Preview ma stabilny podpis i rosnący `versionCode` w CI. Produkcja używa oddzielnego klucza upload i przypiętego SHA-256 certyfikatu. Klucze, hasła i pliki z sekretami nie trafiają do repozytorium.
 
-NEPTUN jest źródłem informacyjnym i **nie zastępuje oficjalnych alarmów**.
+Firebase ma odrębną rejestrację aplikacji produkcyjnej. Workflow produkcyjny używa `FIREBASE_PRODUCTION_ANDROID_APP_ID` z kompatybilnym fallbackiem do `FIREBASE_ANDROID_APP_ID`; preview zachowuje własną tożsamość.
 
-### UkraineAlarm
+## Buildy, wydania i Google Play
 
-Integracja z oficjalnym UkraineAlarm API v3 działa po stronie backendu:
+- [Preview APK](.github/workflows/preview-apk.yml): testy backendu i Flutter, kontrola źródeł, stabilny podpis preview i APK ARM64.
+- [Production release gate](.github/workflows/production-release.yml): regresja z prawdziwym PostgreSQL/PostGIS, sprawdzenie API i wdrożonego SHA, kontrola podpisu oraz podpisany AAB i APK.
+- Ręczne uruchomienie workflow produkcyjnego z `publish_release=true` publikuje GitHub prerelease dopiero po pomyślnym buildzie i weryfikacji. Ponowna publikacja istniejącego tagu jest blokowana.
+- Wydanie powinno wskazywać konkretny commit i zawierać pliki z zakończonego builda, ich SHA-256 oraz informacje o pakiecie i podpisie.
+- Produkcyjny build wymaga zgodnej wersji wdrożonego API, adresu backendu, konfiguracji Firebase i klucza podpisującego.
+- Publikacja GitHub Release nie oznacza dostępności w Google Play. Play wymaga osobnego przesłania AAB i zakończenia procesu w Play Console.
 
-- sekret API pozostaje wyłącznie na serwerze,
-- worker wykonuje synchronizację co około 90 s,
-- główny live contract opiera się na `GET /api/v3/alerts`,
-- stan źródła ma własny health/freshness,
-- awaria UkraineAlarm **nie wpływa na Status Polski**.
+## API
 
-### Powiadomienia i GPS — pierwsze uruchomienie
+| Metoda | Endpoint | Zastosowanie |
+|---|---|---|
+| GET | `/health` | Wersja, build SHA i środowisko |
+| GET | `/ready` | Gotowość bazy i PostGIS |
+| GET | `/v1/sources` | Stan i świeżość źródeł |
+| GET | `/status?regionId=04` | Status regionu |
+| GET | `/v1/snapshot?regionId=04` | Dane ekranu Start |
+| GET | `/v1/map/layers` | Dostępne warstwy mapy |
+| GET | `/v1/layers/events.geojson` | Zdarzenia na mapie |
+| GET | `/v1/shelters`, `/v1/map/shelters` | Lista i mapa schronień |
+| GET | `/v1/radiation` | Dane PAA |
+| GET | `/v1/ukraine` | Oficjalne alarmy Ukrainy |
+| GET | `/v1/neptun`, `/v1/layers/neptun.geojson` | Warstwa NEPTUN |
+| POST | `/v1/shelters/nearest`, `/v1/around` | Dane dla wskazanej lokalizacji |
 
-Na pierwszym uruchomieniu aplikacja pyta systemowo o:
-
-1. **zgodę na powiadomienia**,
-2. **dostęp do lokalizacji**.
-
-Sekwencja jest zapamiętywana lokalnie i nie jest wyświetlana przy każdym wejściu do aplikacji.
-
-Samo włączenie kategorii powiadomień wewnątrz aplikacji nie wystarcza — Android musi również udzielić zgody systemowej.
-
-Backend produkcyjny ma skonfigurowane wymagane elementy Android FCM, w tym szyfrowanie tokenów i konto usługi FCM. Pełny test end-to-end dostarczenia push pozostaje częścią release gate. iOS / APNs nie blokuje obecnego rozwoju Androida.
-
-## Źródła danych
-
-Stan i kompletność źródeł są traktowane jawnie. `HEALTHY` oznacza poprawny ostatni cykl adaptera, **nie pełną wiedzę o wszystkich zdarzeniach w kraju**.
-
-| Źródło / moduł | Stan | Rola |
-|---|---:|---|
-| RCB | ✅ | oficjalne komunikaty i status |
-| RSO | ✅ | oficjalny eksport komunikatów |
-| WCZK | 🟡 | rejestr 16 centrów, część integracji bezpośrednich; deduplikacja z RSO/RCB |
-| Stopnie alarmowe RP / CRP | ✅ | osobny panel na ekranie Start i szczegóły z RCB |
-| IMGW meteo | ✅ | oficjalne aktywne ostrzeżenia |
-| IMGW hydro | ✅ | oficjalne aktywne ostrzeżenia hydrologiczne |
-| PAA — komunikaty | ✅ | oficjalne informacje |
-| PAA — sieć pomiarowa | ✅ | warstwa referencyjno-pomiarowa |
-| CERT Polska | ✅ | oficjalne komunikaty bezpieczeństwa |
-| CSIRT GOV | ⛔ | brak użytecznego bieżącego publicznego feedu — jawnie NOT_CONFIGURED |
-| Straż Graniczna | ✅ | filtrowane oficjalne publikacje operacyjne |
-| Policja | ✅ | oficjalny RSS z konserwatywnym filtrem |
-| PSP — publikacje istotnych zdarzeń | ✅ | oficjalne publikacje z filtrem |
-| Schronienia | ✅ | PostGIS, mapa, nearest, offline |
-| NEPTUN | ✅ | osobna warstwa sytuacyjna, zgrubna geometria |
-| UkraineAlarm API v3 | ✅ | osobna warstwa sytuacyjna Ukrainy |
-| GPSJAM | ✅ | kontekstowa warstwa zakłóceń GPS/GNSS |
-| Push Android / FCM | 🟡 | infrastruktura skonfigurowana; E2E jest elementem release gate |
-
-Szczegółowy rejestr, semantyka pustych odpowiedzi i ograniczenia adapterów: [docs/SOURCES.md](docs/SOURCES.md).
-
-## Semantyka jakości danych
-
-Każde źródło ma dwie niezależne cechy:
-
-- `sourceClass`: `STATUS`, `CONTEXT`, `REFERENCE` albo `SITUATIONAL`,
-- `absenceSemantics`: `AUTHORITATIVE_EMPTY_SET` albo `NOT_PROVABLE`.
-
-To rozróżnienie jest istotne:
-
-- w niektórych oficjalnych API poprawny pusty wynik rzeczywiście oznacza brak aktywnych ostrzeżeń danego typu,
-- w przypadku list publikacji brak nowego artykułu **nie dowodzi braku zagrożenia**,
-- źródła kontekstowe i sytuacyjne nie mogą przypadkowo zmienić głównego Statusu Polski.
-
-Aplikacja rozróżnia również:
-
-- pochodzenie informacji,
-- poziom weryfikacji,
-- cykl życia,
-- aktualność,
-- rzeczywiste zdarzenie / ćwiczenie / test.
-
-## Offline i odporność
-
-Projekt korzysta z zasady **LAST KNOWN GOOD**:
-
-- ostatnia poprawna kopia danych jest zachowywana,
-- awaria źródła nie kasuje automatycznie poprzedniej informacji,
-- stare dane są jawnie oznaczane jako `STALE`,
-- brak połączenia nie jest zamieniany na fałszywy zielony status,
-- pakiety danych regionów mogą działać offline.
-
-## Architektura
-
-```mermaid
-flowchart LR
-    A[Oficjalne źródła i API] --> B[Adaptery / workery]
-    B --> C[Walidacja i normalizacja]
-    C --> D[Korelacja / deduplikacja]
-    D --> E[(PostgreSQL + PostGIS)]
-    E --> F[Fastify API]
-    E --> G[Push outbox / FCM]
-    F --> H[Flutter Android]
-    G --> H
-    F --> I[Runtime audit]
-```
-
-### Mobile
-
-- Flutter / Dart,
-- MapLibre,
-- SharedPreferences + bezpieczny magazyn sekretów,
-- geolokalizacja i geokodowanie,
-- Firebase Messaging,
-- cache oraz pakiety offline,
-- Android jako platforma priorytetowa.
-
-### Backend
-
-- Node.js 24,
-- TypeScript,
-- Fastify,
-- PostgreSQL + PostGIS 17,
-- workery źródeł,
-- historia rewizji i incydentów,
-- korelacja / deduplikacja,
-- source health,
-- outbox powiadomień,
-- rate limiting,
-- endpointy health/readiness,
-- runtime audit po wdrożeniach.
-
-## Railway
-
-Stan produkcji zweryfikowany **28.09.2026**:
-
-- projekt: `Bezpieczna Polska`,
-- środowisko: `production`,
-- główna usługa: `api`,
-- backend śledzi `main`,
-- root backendu: `/backend`,
-- healthcheck: `/ready`,
-- aktywna baza: PostgreSQL / PostGIS 17,
-- ostatni deployment `api`: **SUCCESS**.
-
-Publiczny backend:
-
-```text
-https://api-production-b6560.up.railway.app
-```
-
-Zmiany dotyczące wyłącznie aplikacji mobilnej nie muszą powodować nowego deploymentu backendu.
-
-Historyczne zasoby Railway z wcześniejszych etapów alpha są opisane w runbooku i powinny zostać usunięte dopiero po potwierdzeniu backupów i zależności.
-
-## Najważniejsze endpointy API
-
-```text
-GET  /health
-GET  /ready
-GET  /status?regionId=04
-GET  /v1/snapshot?regionId=04
-GET  /v1/sources
-GET  /v1/map/layers
-GET  /v1/layers/events.geojson
-GET  /v1/shelters
-GET  /v1/map/shelters
-POST /v1/shelters/nearest
-POST /v1/around
-GET  /v1/radiation
-GET  /v1/ukraine
-GET  /v1/neptun
-GET  /v1/layers/neptun.geojson
-GET  /v1/events/:id/timeline
-GET  /v1/incidents/:id/timeline
-GET  /v1/incidents/:id/history
-```
-
-## Android: pakiety, podpis i aktualizacje
-
-Projekt rozdziela linie instalacyjne:
-
-```text
-development: pl.bezpiecznapolska.dev
-preview:     pl.bezpiecznapolska.preview
-production:  pl.bezpiecznapolska
-```
-
-Dzięki temu lokalny debug nie może przypadkowo zepsuć podpisu preview lub produkcji.
-
-Preview używa:
-
-- stałego signera,
-- monotonicznego `versionCode`,
-- automatycznej kontroli certyfikatu,
-- testu aktualizacji APK „na siebie”.
-
-CI sprawdza prawdziwy scenariusz Android PackageManager:
-
-1. instalacja starszego APK,
-2. zapis danych aplikacji,
-3. `adb install -r` nowszej wersji,
-4. potwierdzenie zachowania danych,
-5. potwierdzenie poprawnego `versionCode`,
-6. potwierdzenie odrzucenia downgrade.
-
-Finalny production keystore jest osobną tożsamością i **nie może trafić do repozytorium**.
-
-## Automatyczne wersjonowanie
-
-Po zmianie na `main` workflow wersjonujący podbija:
-
-- `0.1.0-alpha.N`,
-- build number Fluttera,
-- wersję backendu,
-- dokumentację wersji.
-
-Automatyczny bump nie jest równoznaczny z opublikowaniem Release. Dystrybuowalne APK przechodzą osobny gate.
-
-## CI i walidacja
-
-Backend:
-
-- TypeScript build,
-- testy,
-- PostgreSQL + PostGIS,
-- migracje i idempotencja,
-- persistence / restart,
-- backup / restore smoke,
-- audit zależności.
-
-Flutter:
-
-- `flutter pub get`,
-- format check,
-- `flutter analyze`,
-- `flutter test`,
-- testy map, alertów, offline, push i NEPTUN.
-
-Runtime production:
-
-- `/health`,
-- `/ready`,
-- source health,
-- snapshot i status,
-- map layers,
-- schronienia,
-- PAA,
-- UkraineAlarm,
-- NEPTUN,
-- zgodność wdrożonego SHA.
-
-Więcej: [docs/VALIDATION.md](docs/VALIDATION.md).
+Dokładne parametry i kontrakty należy sprawdzać w kodzie backendu oraz testach.
 
 ## Uruchomienie lokalne
 
-### Backend
+Wymagane są Node.js 24, Flutter zgodny z wersją CI oraz PostgreSQL/PostGIS dla testów integracyjnych.
 
-Wymagany Node.js 24+.
+Backend:
 
 ```bash
 cd backend
@@ -382,68 +165,53 @@ npm test
 npm start
 ```
 
-### Flutter
+Flutter:
 
 ```bash
 cd mobile
 flutter pub get
 flutter analyze
 flutter test
-flutter run
 ```
 
-Lokalny build Androida używa pakietu developerskiego. Dystrybuowalne preview należy budować przez GitHub Actions, aby zachować prawidłowy signer i ciągłość `versionCode`.
+Uruchomienie klienta wymaga konfiguracji środowiska i adresu API. Produkcyjnego builda nie należy tworzyć z demonstracyjnym backendem ani niepełnymi ustawieniami Firebase. Instrukcje wdrożenia i zmienne środowiskowe opisuje [Production runbook](docs/PRODUCTION_RUNBOOK.md).
+
+## Weryfikacja w CI
+
+CI obejmuje kompilację i testy TypeScript, prawdziwy PostgreSQL/PostGIS, migracje, restart bazy, backup/restore, audyt zależności, formatowanie/analyze/testy Flutter, kontrakty push i NEPTUN oraz kontrolę tożsamości buildów Android. Testy infrastruktury Oracle sprawdzają m.in. upload backupów i integralność zaszyfrowanego pakietu odzyskiwania.
+
+Zewnętrzne źródła mogą być niedostępne niezależnie od aplikacji. Testy rozróżniają wymagane kontrakty od diagnostyki dostępności; w runtime istotne są bezpieczna degradacja i informacja o wieku danych.
+
+## Dalsze prace
+
+- Podpisany build produkcyjny i publikacja GitHub Release zgodne z wdrożonym API.
+- Google Play: konfiguracja konta, wymagane testy, opis sklepu, polityka prywatności i Data safety.
+- Szersze testy push na Androidzie.
+- Naprawa WCZK-18 i bieżącej synchronizacji schronień.
+- Monitoring, retencja backupów i pełne ćwiczenie odtworzenia hosta.
+- Zakończenie obsługi starszych klientów przed wyłączeniem Railway.
+- Dalszy rozwój offline, mapy i osobna walidacja iOS.
 
 ## Struktura repozytorium
 
-```text
-bezpieczna-polska/
-├── backend/                 # Fastify, workery, adaptery, PostGIS
-├── mobile/                  # Flutter / Android
-├── docs/                    # architektura, źródła, audyty, runbook
-├── scripts/                 # release/signing/utility scripts
-└── .github/workflows/       # CI, release, runtime audit
-```
-
-## Co pozostało przed stabilnym wydaniem
-
-Najważniejsze elementy przed publicznym wydaniem produkcyjnym:
-
-1. pełny test end-to-end Android push na rzeczywistych urządzeniach,
-2. finalizacja production signing i pierwszego production AAB/APK,
-3. Google Play Internal Test,
-4. polityka prywatności i formularz Google Play Data Safety,
-5. dalsze testy aktualizacji „na siebie” między kolejnymi wydaniami,
-6. audyt świeżości i zachowania wszystkich źródeł przy awarii,
-7. porządki historycznych usług Railway po backupie,
-8. dopracowanie pakietów offline i mapy,
-9. iOS / APNs dopiero po ustabilizowaniu Androida,
-10. później: panel administracyjny i dodatkowe narzędzia operatorskie.
+| Katalog | Zawartość |
+|---|---|
+| `backend/` | API, adaptery źródeł, baza, ingestion i push |
+| `mobile/` | Aplikacja Flutter i konfiguracja Android/iOS |
+| `infra/oracle/` | Bootstrap, deploy, audyt, backup i odzyskiwanie |
+| `scripts/` | Kontrola wersji i buildów |
+| `.github/workflows/` | CI i buildy Android |
+| `docs/` | Architektura, źródła, audyty i runbooki |
 
 ## Dokumentacja
 
 - [Roadmap](docs/ROADMAP.md)
-- [Audyt projektu](docs/AUDIT_2026-09-26.md)
 - [Architektura](docs/ARCHITECTURE.md)
-- [Rejestr źródeł](docs/SOURCES.md)
-- [Runbook produkcyjny](docs/PRODUCTION_RUNBOOK.md)
-- [Walidacja i CI](docs/VALIDATION.md)
+- [Źródła](docs/SOURCES.md)
+- [Production runbook](docs/PRODUCTION_RUNBOOK.md)
+- [Oracle cutover runbook](docs/ORACLE_CUTOVER_RUNBOOK.md)
+- [Oracle access checklist](docs/ORACLE_ACCESS_CHECKLIST.md)
+- [Backup poza VM i odzyskiwanie](docs/ORACLE_OFF_VM_BACKUP.md)
+- [Walidacja](docs/VALIDATION.md)
 
-Dokumenty etapów w `docs/` zachowują historię decyzji technicznych. README opisuje bieżący obraz projektu, natomiast szczegóły kontraktów należy sprawdzać w aktualnych dokumentach źródłowych i kodzie.
-
-## Zasady projektu
-
-1. **Brak danych ≠ bezpieczeństwo.**
-2. **Brak wpisu w źródle częściowym ≠ brak zagrożenia.**
-3. Oficjalne źródła, agregatory i źródła sytuacyjne zachowują odrębną tożsamość.
-4. Nie zgadujemy geometrii, kompletności źródła ani czasu zakończenia zdarzenia.
-5. `STALE`, `BROKEN` i `NOT_CONFIGURED` mają być widoczne, a nie ukrywane.
-6. Kilka dokumentów o jednym zdarzeniu nie może udawać kilku niezależnych zagrożeń.
-7. Stopnie alarmowe RP nie są automatycznie alarmem dla ludności.
-8. NEPTUN i UkraineAlarm nie wpływają na Status Polski.
-9. Pomiary PAA nie są automatycznie alarmem.
-10. Sekrety API, tokeny, klucze Firebase/APNs, keystore i dane uwierzytelniające nie trafiają do repozytorium.
-
----
-
-Projekt jest rozwijany iteracyjnie. Priorytetem jest **czytelność informacji, odporność na awarie źródeł i brak fałszywego poczucia bezpieczeństwa**, a nie liczba integracji za wszelką cenę.
+Audyty z datą w nazwie dokumentu są zapisem historycznym. Stan bieżący potwierdzają runtime, najnowsze wyniki CI oraz testy konkretnego wydania.

@@ -76,6 +76,23 @@ test('PostGIS shelters: exact points, regional bbox, full replacement and transa
 
    assert.equal((await mapApp.inject(localPath+'&availability=UNKNOWN')).json().metadata.total,many[0].availability==='UNKNOWN'?1200:0);
    const near=(await mapApp.inject('/v1/map/shelters?bbox=18,53.1,18.002,53.102&zoom=18')).json();assert.ok(near.metadata.total<500);assert.equal(near.metadata.clustered,false);assert.ok(near.features.every((f:any)=>f.geometry.coordinates[0]<=18.002));
+   const overflow=(await mapApp.inject(detailPath)).json();
+   assert.equal(overflow.metadata.clusterTier,'DETAIL_OVERFLOW');assert.ok(overflow.features.length<=324);
+   assert.equal(overflow.features.reduce((n:number,f:any)=>n+f.properties.point_count,0),1200);
+   const distant=[
+    {...points[0],id:'PSP-OZO-FFFFFFFFFFF1',regionId:'02',longitude:16.98,latitude:51.1},
+    {...points[0],id:'PSP-OZO-FFFFFFFFFFF2',regionId:'06',longitude:22.57,latitude:51.25},
+   ];
+   await store.applyShelterSync([...many,...distant],{...health,itemCount:1202,sourceContentHash:'d'.repeat(64)});
+   const national=(await mapApp.inject('/v1/map/shelters?bbox=14,49,24.2,55&zoom=5.2')).json();
+   assert.equal(national.metadata.total,1202);assert.equal(national.features.length,3);
+   assert.equal(national.features.reduce((n:number,f:any)=>n+f.properties.point_count,0),1202);
+   // Pan across distant voivodeships and back; selected home region must not leak.
+   for(const [bbox,expected] of [['16.9,51,17.1,51.2',distant[0]],['22.4,51.1,22.7,51.4',distant[1]],['16.9,51,17.1,51.2',distant[0]]] as const){
+    const pan=(await mapApp.inject(`/v1/map/shelters?bbox=${bbox}&zoom=15&regionId=PL`)).json();
+    assert.equal(pan.metadata.total,1);assert.equal(pan.features[0].id,expected.id);
+    assert.deepEqual(pan.features[0].geometry.coordinates,[expected.longitude,expected.latitude]);
+   }
    await store.applyShelterSync(points,health);
    assert.equal((await mapApp.inject(detailPath)).json().metadata.version,health.sourceContentHash);
    assert.equal((await mapApp.inject(detailPath)).json().metadata.total,3);

@@ -180,6 +180,23 @@ Na Oracle sprawdzamy co najmniej:
 
 Railway pozostaje aktywny.
 
+### Ręczny test push na kandydacie
+
+Przed dodaniem kluczy FCM i szyfrowania tokenów do aktywnego `backend.env`
+wdroż kod obsługujący `ENABLE_PUSH_DISPATCH=false` i ustaw tę wartość na Oracle.
+Brak flagi zachowuje dotychczasową automatyczną wysyłkę; niepoprawna wartość
+blokuje start serwera. Flaga wyłącza timer i pierwszą automatyczną wysyłkę,
+ale pozostawia rejestrację urządzeń i autoryzowany test użytkownika.
+Nie włączaj automatycznej wysyłki Oracle, gdy Railway nadal ją realizuje.
+
+Workflow `Build preview APK and source live checks` można uruchomić ręcznie
+z `oracle_candidate=true`. Tylko ten build używa
+`https://bezpieczna-polska-api.duckdns.org`; Repository Variables
+`PRODUCTION_API_BASE_URL` i `PREVIEW_API_BASE_URL` pozostają bez zmian.
+APK zachowuje identyfikator i podpis preview. Na własnym Androidzie zainstaluj
+ten APK, włącz powiadomienia i użyj testu powiadomień w aplikacji. Sprawdź
+rzeczywiste odebranie wiadomości; walidacja FCM bez wysyłki tego nie zastępuje.
+
 ## 12. GitHub Actions
 
 Dopiero po utworzeniu VM dodamy sekrety SSH potrzebne przez manualny workflow Oracle. Na tym etapie nadal NIE zmieniamy:
