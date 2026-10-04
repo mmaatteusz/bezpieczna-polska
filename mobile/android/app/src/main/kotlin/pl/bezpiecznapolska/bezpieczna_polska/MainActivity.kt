@@ -114,11 +114,13 @@ class MainActivity : FlutterActivity() {
                             Notification.Builder(this, selectedChannelId)
                         } else {
                             Notification.Builder(this).apply {
-                                priority = when (selectedChannelId) {
-                                    criticalChannelId -> Notification.PRIORITY_HIGH
-                                    warningChannelId -> Notification.PRIORITY_DEFAULT
-                                    else -> Notification.PRIORITY_LOW
-                                }
+                                setPriority(
+                                    when (selectedChannelId) {
+                                        criticalChannelId -> Notification.PRIORITY_HIGH
+                                        warningChannelId -> Notification.PRIORITY_DEFAULT
+                                        else -> Notification.PRIORITY_LOW
+                                    }
+                                )
                                 if (selectedChannelId != infoChannelId) {
                                     setDefaults(Notification.DEFAULT_ALL)
                                 }
