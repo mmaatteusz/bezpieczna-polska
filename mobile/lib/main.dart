@@ -285,11 +285,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     if (widget.pushManager != null) {
       unawaited(widget.pushManager!.initializeWithoutPrompt());
-      pushOpenSubscription = widget.pushManager!.adapter?.openRequests.listen(
-        (request) {
-          if (mounted) unawaited(_openPushEvent(request.eventId));
-        },
-      );
+      pushOpenSubscription = widget.pushManager!.adapter?.openRequests.listen((
+        request,
+      ) {
+        if (mounted) unawaited(_openPushEvent(request.eventId));
+      });
     }
     region = widget.repository.region;
     localityLabel = widget.repository.primaryLocationLabel;
@@ -317,12 +317,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     try {
       seen = Map<String, int>.from(
         jsonDecode(
-              widget.repository.prefs.getString(
-                    'seen:${widget.repository.api}:$region',
-                  ) ??
-                  '{}',
-            )
-            as Map,
+          widget.repository.prefs.getString(
+                'seen:${widget.repository.api}:$region',
+              ) ??
+              '{}',
+        ) as Map,
       );
     } catch (_) {
       seen = {};
@@ -684,8 +683,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                           } catch (_) {
                             update(() {
                               searching = false;
-                              validation =
-                                  'Nie znaleziono miejscowości. Dopisz powiat lub województwo.';
+                              validation = 'Nie znaleziono miejscowości. Dopisz powiat lub województwo.';
                             });
                           }
                         },
@@ -969,7 +967,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     final current = snapshot;
     if (current == null) return null;
     for (final event in current.alertEvents) {
-      if (event.id == eventId || event.reports.any((report) => report.id == eventId)) {
+      if (event.id == eventId ||
+          event.reports.any((report) => report.id == eventId)) {
         return event;
       }
     }
