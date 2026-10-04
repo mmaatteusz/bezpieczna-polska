@@ -16,22 +16,26 @@ Przegląd z 4.10.2026. To lista pracy, a nie potwierdzenie scalenia lub wdrożen
 | [#128](https://github.com/mmaatteusz/bezpieczna-polska/pull/128) | Porównanie równoległych backendów | Dodaje osobny workflow i skrypt; nie jest w main |
 | [#119](https://github.com/mmaatteusz/bezpieczna-polska/pull/119) | Wariant ikon NEPTUN | Oddzielny projekt wizualny; nie należy traktować go jako scalonego |
 
-## Propozycje zastąpione podczas przeglądu
+## Dodatkowe PR-y do integracji
 
-| Starszy PR | Następca / obecne rozwiązanie |
-| --- | --- |
-| #75 — GNSS | #76, #77 i obecna warstwa GPSJAM |
-| #81 — ekran ładowania | #82 i obecny BootstrapApp/BrandLoadingScreen |
-| #90 — synchronizacja schronień | Draft #142; nie oznacza, że optymalizacja jest już wdrożona |
-| #97 — worker UkraineAlarm | #96 i późniejsze zmiany na main |
-| #100 — kontrakt UkraineAlarm | #98 oraz #110 |
-| #106 — diagnostyka kolejności UkraineAlarm | #107, #110 i obecny adapter |
-| #120 — legenda | Scalony #130 |
-| #122 — plan Oracle w README | Aktualne README, roadmapa i runbooki |
+Poniższe osiem PR-ów pozostaje otwarte. Ich gałęzie przywrócono na
+oryginalnych commitach. Nie są oznaczone jako zakończone ani przeznaczone
+do usunięcia. Przywrócenie nie oznacza scalenia: każdy z nich ma obecnie
+konflikty z main, które trzeba rozwiązać z zachowaniem późniejszych zmian.
 
-Zamknięcie oznacza zakończenie starszej propozycji, nie jej scalenie. Powód
-pozostaje w opisie PR, a kod w historii i referencji PR. Gałąź można usunąć
-po upewnieniu się, że nie zawiera późniejszych zmian.
+| PR | Zakres | Powiązane zmiany do uwzględnienia podczas integracji |
+| --- | --- | --- |
+| [#75](https://github.com/mmaatteusz/bezpieczna-polska/pull/75) | Monitoring GNSS / GPS RTGMS | #76, #77 i obecna warstwa GPSJAM |
+| [#81](https://github.com/mmaatteusz/bezpieczna-polska/pull/81) | Ekran ładowania | #82 i obecny BootstrapApp/BrandLoadingScreen |
+| [#90](https://github.com/mmaatteusz/bezpieczna-polska/pull/90) | Synchronizacja schronień | Draft #142 i obecny mechanizm zapisu katalogu |
+| [#97](https://github.com/mmaatteusz/bezpieczna-polska/pull/97) | Worker UkraineAlarm | #96 i późniejsze zmiany na main |
+| [#100](https://github.com/mmaatteusz/bezpieczna-polska/pull/100) | Kontrakt UkraineAlarm | #98 oraz #110 |
+| [#106](https://github.com/mmaatteusz/bezpieczna-polska/pull/106) | Diagnostyka UkraineAlarm | #107, #110 i obecny adapter |
+| [#120](https://github.com/mmaatteusz/bezpieczna-polska/pull/120) | Dynamiczna legenda | #130 i bieżący ekran mapy |
+| [#122](https://github.com/mmaatteusz/bezpieczna-polska/pull/122) | Plan Oracle w README | Aktualne README, roadmapa i runbooki |
+
+Otwarty PR jest pracą oczekującą na integrację. Podobieństwo do późniejszego
+PR lub stary numer gałęzi nie wystarcza do jego zamknięcia.
 
 ## Automatyczne sprzątanie gałęzi
 

@@ -1,53 +1,5 @@
 [
   {
-    "branch": "docs/oracle-free-migration-roadmap",
-    "sha": "0b719cd70f340f954efaa8c3316fd9811604c39c",
-    "pr": 122,
-    "reason": "Plan migracji Oracle zastąpiony aktualnym README, runbookami i przeglądem dokumentacji."
-  },
-  {
-    "branch": "fix/dynamic-map-legend",
-    "sha": "613624038eaf5b70c6f8b20dcd62b8ead8d4666d",
-    "pr": 120,
-    "reason": "Dynamiczna legenda została zintegrowana przez PR #130."
-  },
-  {
-    "branch": "stage/alpha38-ukraine-alerts-probe",
-    "sha": "04aa08e97fb8504ff9ef01c373994c1e755678a7",
-    "pr": 106,
-    "reason": "Sekwencja diagnostyki UkraineAlarm zastąpiona przez PR #107 i #110 oraz obecny adapter."
-  },
-  {
-    "branch": "stage/alpha33-ukraine-contract-hardening",
-    "sha": "90bd45735be258a4e70d7ef7f80888d534c92967",
-    "pr": 100,
-    "reason": "Kontrakt UkraineAlarm zastąpiony przez PR #98 i późniejsze utwardzenie PR #110."
-  },
-  {
-    "branch": "stage/alpha32-ukraine-live-worker",
-    "sha": "7a652a78089c33145d8935e112cc1f7fc23d92db",
-    "pr": 97,
-    "reason": "Niezależny worker UkraineAlarm zintegrowany przez PR #96; późniejsze zachowanie jest na main."
-  },
-  {
-    "branch": "fix/shelter-incremental-sync",
-    "sha": "aaa7a6767bafd2ed3399872090b557437f0eacaa",
-    "pr": 90,
-    "reason": "Starsza propozycja aktualizacji katalogu schronień zastąpiona przez draft PR #142; jego wdrożenie pozostaje osobnym zadaniem."
-  },
-  {
-    "branch": "stage/startup-loading-screen",
-    "sha": "eab142b6ac00289651a18955745ea467e3e1b060",
-    "pr": 81,
-    "reason": "Ekran ładowania zastąpiony przez PR #82 i obecną inicjalizację BootstrapApp."
-  },
-  {
-    "branch": "stage/map-gnss-interference",
-    "sha": "9f1248e08ffba74cfc2168c8558d088d4065cd2c",
-    "pr": 75,
-    "reason": "Kategoria GNSS zastąpiona przez PR #76 i #77; na main używana jest warstwa GPSJAM."
-  },
-  {
     "branch": "fix/map-overlap-picker-v2",
     "sha": "46b804fd2b3534f180a9dc4897a0bfcb61052bce",
     "pr": 132,
