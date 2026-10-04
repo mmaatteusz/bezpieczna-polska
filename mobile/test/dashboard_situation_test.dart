@@ -1,4 +1,8 @@
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:bezpieczna_polska/main.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -89,6 +93,39 @@ void main() {
       ),
       isFalse,
     );
+  });
+  testWidgets('periodic Start refresh fetches locality again', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    var localRequests = 0;
+    final repo = DataRepository(
+      await SharedPreferences.getInstance(),
+      buildApi: 'https://test.example',
+      client: MockClient((request) async {
+        final now = DateTime.now();
+        if (request.url.path.endsWith('/v1/around')) {
+          localRequests++;
+          return http.Response(jsonEncode(around(now).data), 200);
+        }
+        if (request.url.path.endsWith('/v1/snapshot')) {
+          return http.Response(jsonEncode(snapshot(now).data), 200);
+        }
+        return http.Response('{}', 503);
+      }),
+    );
+    await repo.setPrimaryLocation(
+      label: 'Bydgoszcz',
+      latitude: 53.1,
+      longitude: 18.0,
+      regionId: '04',
+    );
+    await tester.pumpWidget(SafetyApp(repository: repo));
+    await tester.pumpAndSettle();
+    expect(localRequests, 1);
+    await tester.pump(const Duration(minutes: 1));
+    await tester.pumpAndSettle();
+    expect(localRequests, 2);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
   });
   testWidgets(
     'local warning overrides empty province status and caps list at three',
