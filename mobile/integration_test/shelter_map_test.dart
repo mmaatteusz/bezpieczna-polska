@@ -129,7 +129,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       await state.refresh();
       await waitFor(
-        () => state.loading == false && controller.circles.length == 1,
+        () => state.loading == false && controller.circles.length == (zoom >= 4 ? 1 : 0),
       );
     }
 
