@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:bezpieczna_polska/model.dart';
@@ -161,9 +162,25 @@ void main() {
       debugPrint(
         'Tap target=$target native=$point dpr=$dpr hits=${hits.length} zoom=${controller.cameraPosition?.zoom}',
       );
-      final gesture = await tester.startGesture(target);
-      await tester.pump(const Duration(milliseconds: 150));
-      await gesture.up();
+      // WidgetTester synthetic events have no original Android MotionEvent.
+      // Ask the host driver to inject an actual OS touch on the emulator.
+      final socket = await Socket.connect('127.0.0.1', 18443);
+      socket.writeln(
+        jsonEncode({
+          'x': (target.dx * dpr).round(),
+          'y': (target.dy * dpr).round(),
+          'paddingTop': tester.view.padding.top,
+          'width': tester.view.physicalSize.width,
+          'height': tester.view.physicalSize.height,
+        }),
+      );
+      await socket.flush();
+      final reply = await utf8.decoder
+          .bind(socket)
+          .transform(const LineSplitter())
+          .first;
+      socket.destroy();
+      expect(jsonDecode(reply)['ok'], isTrue, reason: reply);
       await tester.pump(const Duration(seconds: 1));
     }
 
