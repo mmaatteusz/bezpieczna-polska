@@ -406,8 +406,9 @@ class _ShelterMapState extends State<ShelterMap> {
   }
 
   Future<void> openShelterAnnotation(Map<String, dynamic>? raw) async {
-    if (raw == null || raw['kind'] != 'shelter-annotation' || openingShelter)
+    if (raw == null || raw['kind'] != 'shelter-annotation' || openingShelter) {
       return;
+    }
     final properties = raw['properties'];
     final coordinates = raw['coordinates'];
     if (properties is! Map || coordinates is! List) return;

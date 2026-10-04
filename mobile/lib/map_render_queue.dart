@@ -10,7 +10,10 @@ class MapRenderQueue {
       if (isCurrent()) await render(isCurrent);
     });
     // A failed native operation must not poison subsequent viewport renders.
-    _tail = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _tail = next.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {},
+    );
     return next;
   }
 }
