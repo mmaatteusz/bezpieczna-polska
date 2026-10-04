@@ -105,10 +105,18 @@ void main() {
         final now = DateTime.now();
         if (request.url.path.endsWith('/v1/around')) {
           localRequests++;
-          return http.Response(jsonEncode(around(now).data), 200);
+          return http.Response(
+            jsonEncode(around(now).data),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
         }
         if (request.url.path.endsWith('/v1/snapshot')) {
-          return http.Response(jsonEncode(snapshot(now).data), 200);
+          return http.Response(
+            jsonEncode(snapshot(now).data),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
         }
         return http.Response('{}', 503);
       }),

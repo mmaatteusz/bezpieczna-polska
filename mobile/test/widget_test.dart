@@ -249,6 +249,8 @@ void main() {
       await tester.pumpWidget(SafetyApp(repository: r));
       await tester.pumpAndSettle();
       expect(requests, greaterThanOrEqualTo(2));
+      await tester.ensureVisible(find.text('Polska'));
+      await tester.pumpAndSettle();
       expect(
         find.text('Brak wystarczających aktualnych danych'),
         findsOneWidget,

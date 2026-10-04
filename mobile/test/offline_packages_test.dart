@@ -625,6 +625,8 @@ void main() {
       }
     }
     expect(find.textContaining('Tryb offline:'), findsOneWidget);
+    await tester.ensureVisible(find.text('Polska'));
+    await tester.pumpAndSettle();
     expect(find.text('BRAK ŚWIEŻEJ OCENY'), findsWidgets);
     expect(find.text('SPOKOJNIE'), findsNothing);
   });
