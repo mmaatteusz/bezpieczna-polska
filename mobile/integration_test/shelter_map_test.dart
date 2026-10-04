@@ -14,14 +14,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  binding.shouldPropagateDevicePointerEvents = true;
   testWidgets('native shelter map pans, cluster taps and navigation', (
     tester,
   ) async {
-    final previousPointerPolicy = binding.shouldPropagateDevicePointerEvents;
-    binding.shouldPropagateDevicePointerEvents = true;
-    addTearDown(() {
-      binding.shouldPropagateDevicePointerEvents = previousPointerPolicy;
-    });
     SharedPreferences.setMockInitialValues({});
     final openedLinks = <String>[];
     final key = GlobalKey();
