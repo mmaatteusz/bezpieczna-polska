@@ -36,6 +36,16 @@ worker start lag > twice its cadence, backup older than 26 hours, free disk <20%
 Tune using baseline observations. No external alert receiver is configured by
 these code changes; polling the endpoint and sending alarms is a deployment step.
 
+## Recorded production baseline (2026-10-04)
+
+The read-only script received HTTP 200 for all 30 requests. Regional `04`
+snapshot was 332,248 decoded bytes (about 332 kB), with p50 6.64 s and p95 7.76 s
+from this execution environment. `/health` itself had p50 6.03 s, so these times
+include substantial transport/environment overhead and must not be interpreted
+as backend execution time. The current production server ignores compact mode;
+its similarly sized response is expected before deployment. Full results are in
+`docs/validation/backend/capacity-baseline-2026-10-04.json`.
+
 ## Shelter catalog
 
 PostgreSQL stages and validates the complete incoming catalog, then atomically

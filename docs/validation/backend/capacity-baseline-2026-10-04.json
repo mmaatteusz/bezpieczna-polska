@@ -1,0 +1,44 @@
+{
+  "measuredAt": "2026-10-04T17:48:44.897Z",
+  "base": "https://bezpieczna-polska-api.duckdns.org",
+  "decodedBodyBytes": true,
+  "results": [
+    {
+      "path": "/health",
+      "samples": 10,
+      "p50Ms": 6029.905301999999,
+      "p95Ms": 9343.406111999999,
+      "minBytes": 119,
+      "maxBytes": 119,
+      "statuses": [
+        200
+      ]
+    },
+    {
+      "path": "/v1/snapshot?regionId=04",
+      "samples": 10,
+      "p50Ms": 6636.173572,
+      "p95Ms": 7755.712664000006,
+      "minBytes": 332248,
+      "maxBytes": 332248,
+      "statuses": [
+        200
+      ]
+    },
+    {
+      "path": "/v1/snapshot?regionId=04&mode=compact",
+      "samples": 10,
+      "p50Ms": 6219.082177000004,
+      "p95Ms": 7772.130214000004,
+      "minBytes": 332246,
+      "maxBytes": 332276,
+      "statuses": [
+        200
+      ]
+    }
+  ],
+  "limitations": [
+    "10 sequential samples per route from the Work execution environment; includes network/proxy/TLS latency.",
+    "Current production does not implement compact mode; this is a pre-change baseline, not a before/after improvement claim."
+  ]
+}
