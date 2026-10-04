@@ -16,13 +16,6 @@ test('PostGIS migration, SRID, GiST, bbox and geometry/payload atomicity', {skip
   await store.init();await store.init();
   const version=await db.all('SELECT PostGIS_Version() AS version');assert.ok(version[0].version);
   await store.put(e);
-  const beforeVersion=(await db.all('SELECT xmin::text AS version FROM shelters WHERE id=?',[points[0].id]))[0].version;
-  const changed=[points[0],{...points[1],name:points[1].name+' updated'}];
-  await store.applyShelterSync(changed,{...health,itemCount:2,sourceContentHash:'e'.repeat(64)});
-  assert.equal((await db.all('SELECT xmin::text AS version FROM shelters WHERE id=?',[points[0].id]))[0].version,beforeVersion,'unchanged rows must not be rewritten');
-  assert.equal((await store.shelterPage({regionId:'PL',q:'',offset:0,limit:50})).total,2);
-  assert.equal((await store.shelterPage({regionId:'PL',q:'',offset:0,limit:50})).items.find(p=>p.id===points[1].id)!.name,changed[1].name);
-  await store.applyShelterSync(points,health);
   const row=(await db.all('SELECT ST_SRID(geom) AS srid, ST_X(geom) AS lon FROM event_revisions WHERE event_id=?',[e.id]))[0];
   assert.equal(row.srid,4326);assert.equal(row.lon,18.01);
   assert.ok((await db.all("SELECT indexdef FROM pg_indexes WHERE indexname='event_geometry_gist'"))[0].indexdef.toString().includes('gist'));
@@ -54,6 +47,13 @@ test('PostGIS shelters: exact points, regional bbox, full replacement and transa
  const original=(await store.health()).find(h=>h.id==='SHELTERS')!;
  const health={...original,state:'HEALTHY' as const,complete:true,coverage:'FACILITY_CATALOG' as const,itemCount:points.length,lastSuccess:new Date().toISOString(),sourceContentHash:'a'.repeat(64)};
  try{
+  await store.applyShelterSync(points,health);
+  const beforeVersion=(await db.all('SELECT xmin::text AS version FROM shelters WHERE id=?',[points[0].id]))[0].version;
+  const changed=[points[0],{...points[1],name:points[1].name+' updated'}];
+  await store.applyShelterSync(changed,{...health,itemCount:2,sourceContentHash:'e'.repeat(64)});
+  assert.equal((await db.all('SELECT xmin::text AS version FROM shelters WHERE id=?',[points[0].id]))[0].version,beforeVersion,'unchanged rows must not be rewritten');
+  assert.equal((await store.shelterPage({regionId:'PL',q:'',offset:0,limit:50})).total,2);
+  assert.equal((await store.shelterPage({regionId:'PL',q:'',offset:0,limit:50})).items.find(p=>p.id===points[1].id)!.name,changed[1].name);
   await store.applyShelterSync(points,health);
   const row=(await db.all('SELECT ST_SRID(geom) AS srid,ST_X(geom) AS lon FROM shelters WHERE id=?',[points[0].id]))[0];assert.equal(row.srid,4326);assert.equal(row.lon,points[0].longitude);
   assert.ok((await db.all("SELECT indexdef FROM pg_indexes WHERE indexname='shelter_geometry_gist'"))[0].indexdef.toString().includes('gist'));
