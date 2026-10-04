@@ -13,10 +13,15 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('native shelter map pans, cluster taps and navigation', (
     tester,
   ) async {
+    final previousPointerPolicy = binding.shouldPropagateDevicePointerEvents;
+    binding.shouldPropagateDevicePointerEvents = true;
+    addTearDown(() {
+      binding.shouldPropagateDevicePointerEvents = previousPointerPolicy;
+    });
     SharedPreferences.setMockInitialValues({});
     final openedLinks = <String>[];
     final key = GlobalKey();
