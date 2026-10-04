@@ -31,8 +31,9 @@ bool dashboardSourcesFresh(Snapshot? snapshot, String region, DateTime now) {
 }
 
 bool dashboardAroundFresh(AroundResult? around, DateTime now) {
-  if (around == null || around.data['offlineSnapshotTimestamp'] != null)
+  if (around == null || around.data['offlineSnapshotTimestamp'] != null) {
     return false;
+  }
   final time = DateTime.tryParse(around.data['serverTime']?.toString() ?? '');
   return time != null &&
       !time.isAfter(now.add(const Duration(seconds: 30))) &&
