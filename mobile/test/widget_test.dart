@@ -249,13 +249,13 @@ void main() {
       await tester.pumpWidget(SafetyApp(repository: r));
       await tester.pumpAndSettle();
       expect(requests, greaterThanOrEqualTo(2));
+      expect(find.text('Ustaw lokalizację'), findsOneWidget);
       await tester.ensureVisible(find.text('Polska'));
       await tester.pumpAndSettle();
       expect(
         find.text('Brak wystarczających aktualnych danych'),
         findsOneWidget,
       );
-      expect(find.text('Ustaw lokalizację'), findsOneWidget);
       await tester.tap(find.byTooltip('Ustawienia'));
       await tester.pumpAndSettle();
       expect(find.text('Developer Settings'), findsNothing);
