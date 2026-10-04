@@ -130,6 +130,7 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
  });
  app.get('/v1/incidents/:id/timeline',async req=>store.incidentTimeline(z.object({id:z.string().regex(/^INC-[a-f0-9]{24}$/)}).parse(req.params).id));
  app.get('/v1/incidents/:id/history',async req=>store.incidentHistory(z.object({id:z.string().regex(/^INC-[a-f0-9]{24}$/)}).parse(req.params).id));
+ app.get('/v1/events/:id',async(req,reply)=>{const id=z.object({id:z.string().min(1).max(150)}).parse(req.params).id;const event=await store.get(id);return event??reply.code(404).send({error:'EVENT_NOT_FOUND'});});
  app.get('/v1/events/:id/timeline',async req=>store.timeline(z.object({id:z.string().max(150)}).parse(req.params).id));
  const auth=(actual:string|undefined)=>{const a=Buffer.from(actual??''),b=Buffer.from(`Bearer ${adminToken??''}`);return !!adminToken&&adminToken.length>=32&&a.length===b.length&&timingSafeEqual(a,b);};
  const adminRoute={config:{rateLimit:{max:10,timeWindow:'1 minute'}}};

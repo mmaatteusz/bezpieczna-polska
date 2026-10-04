@@ -35,6 +35,11 @@ abstract class PushPlatformAdapter {
   Stream<String> get tokenChanges;
 }
 
+abstract class PushOpenAdapter {
+  Stream<String> get openedEvents;
+  Future<String?> initialEvent();
+}
+
 abstract class PushSecretStore {
   Future<String?> read();
   Future<void> write(String value);
@@ -58,13 +63,53 @@ class SecurePushSecretStore implements PushSecretStore {
   Future<void> delete() => storage.delete(key: _key);
 }
 
-class FirebasePushPlatformAdapter implements PushPlatformAdapter {
+class FirebasePushPlatformAdapter
+    implements PushPlatformAdapter, PushOpenAdapter {
   static StreamSubscription<RemoteMessage>? _foregroundMessages;
   final FirebaseMessaging messaging;
   @override
   final String platform;
 
-  FirebasePushPlatformAdapter._(this.messaging, this.platform);
+  final _openedEvents = StreamController<String>.broadcast();
+  late final StreamSubscription<RemoteMessage> _openedSubscription;
+
+  FirebasePushPlatformAdapter._(this.messaging, this.platform) {
+    _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen((
+      message,
+    ) {
+      final id = message.data['eventId']?.toString();
+      if (id != null && id.isNotEmpty) _openedEvents.add(id);
+    });
+    if (platform == 'ANDROID') {
+      AndroidForegroundPush.channel.setMethodCallHandler((call) async {
+        if (call.method == 'notificationOpened' && call.arguments is String) {
+          _openedEvents.add(call.arguments as String);
+        }
+      });
+    }
+  }
+
+  @override
+  Stream<String> get openedEvents => _openedEvents.stream;
+
+  @override
+  Future<String?> initialEvent() async {
+    final message = await messaging.getInitialMessage();
+    final fcmId = message?.data['eventId']?.toString();
+    final nativeId = platform == 'ANDROID'
+        ? await AndroidForegroundPush.channel.invokeMethod<String>(
+            'getInitialEventId',
+          )
+        : null;
+    return fcmId ?? nativeId;
+  }
+
+  Future<void> disposeOpenEvents() async {
+    await _openedSubscription.cancel();
+    await _openedEvents.close();
+    if (platform == 'ANDROID')
+      AndroidForegroundPush.channel.setMethodCallHandler(null);
+  }
 
   static Future<FirebasePushPlatformAdapter?> fromBuildConfiguration() async {
     if (kIsWeb ||
@@ -527,17 +572,13 @@ class PushManager extends ChangeNotifier {
     try {
       final result = Map<String, dynamic>.from(
         await _jsonRequest(
-              update ? 'PUT' : 'POST',
-              _uri(
-                update ? '/v1/push/devices/${identity.id}' : '/v1/push/devices',
-              ),
-              identity.secret,
-              body: update
-                  ? (Map<String, dynamic>.from(payload)
-                      ..remove('installationId'))
-                  : payload,
-            )
-            as Map,
+          update ? 'PUT' : 'POST',
+          _uri(update ? '/v1/push/devices/${identity.id}' : '/v1/push/devices'),
+          identity.secret,
+          body: update
+              ? (Map<String, dynamic>.from(payload)..remove('installationId'))
+              : payload,
+        ) as Map,
       );
       await repository.prefs.setBool(_registeredKey, true);
       _setState(
@@ -570,11 +611,10 @@ class PushManager extends ChangeNotifier {
     try {
       final result = Map<String, dynamic>.from(
         await _jsonRequest(
-              'GET',
-              _uri('/v1/push/devices/${identity.id}'),
-              identity.secret,
-            )
-            as Map,
+          'GET',
+          _uri('/v1/push/devices/${identity.id}'),
+          identity.secret,
+        ) as Map,
       );
       final registered = result['registered'] == true;
       await repository.prefs.setBool(_registeredKey, registered);
@@ -687,6 +727,9 @@ class PushManager extends ChangeNotifier {
   @override
   void dispose() {
     unawaited(_tokenSubscription?.cancel());
+    if (adapter is FirebasePushPlatformAdapter) {
+      unawaited((adapter as FirebasePushPlatformAdapter).disposeOpenEvents());
+    }
     super.dispose();
   }
 }
@@ -778,9 +821,8 @@ class _NotificationSettingsScreenState
       final message = error is StateError
           ? 'Najpierw włącz powiadomienia na tym urządzeniu.'
           : 'Nie udało się wysłać testu. ${apiFailureMessage(error)}';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => busy = false);
     }

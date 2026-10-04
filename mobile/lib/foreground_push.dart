@@ -7,6 +7,10 @@ class AndroidForegroundPush {
   static const channel = MethodChannel('pl.bezpiecznapolska/notifications');
 
   static Future<void> show(RemoteMessage message) async {
+    final expires = DateTime.tryParse(
+      message.data['expiresAt']?.toString() ?? '',
+    );
+    if (expires != null && !expires.isAfter(DateTime.now().toUtc())) return;
     final notification = message.notification;
     if (notification == null) return;
     final title = notification.title ?? 'Bezpieczna Polska';
@@ -16,6 +20,10 @@ class AndroidForegroundPush {
       'messageId': message.messageId,
       'title': title,
       'body': body,
+      'eventId': message.data['eventId'],
+      'channelId':
+          message.data['channelId'] ?? message.notification?.android?.channelId,
+      'expiresAt': message.data['expiresAt'],
     });
   }
 }

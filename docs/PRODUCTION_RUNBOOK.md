@@ -223,7 +223,7 @@ Push jest produkcyjnie gotowy dopiero, gdy:
 - FCM/APNs provider jest skonfigurowany,
 - aplikacja uzyskuje token,
 - rejestracja urządzenia działa,
-- outbox przechodzi z PENDING/RETRY do DELIVERED w realnym teście.
+- outbox przechodzi z PENDING/RETRY do ACCEPTED w realnym teście; odbiór i kliknięcie należy potwierdzić na telefonie.
 
 Sam zielony test jednostkowy nie oznacza działającego push.
 

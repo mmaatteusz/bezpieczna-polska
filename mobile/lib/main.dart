@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'model.dart';
 import 'event_details.dart';
+import 'push_alert_page.dart';
 import 'source_status.dart';
 import 'security_levels.dart';
 import 'push_notifications.dart';
@@ -265,6 +266,40 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> with WidgetsBindingObserver {
+  StreamSubscription<String>? _pushOpens;
+  String? _openedPushId;
+
+  void _openPushEvent(String id) {
+    if (!mounted || id.isEmpty || id.length > 150 || _openedPushId == id)
+      return;
+    _openedPushId = id;
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) => PushAlertPage(
+              eventId: id,
+              repository: widget.repository,
+              openLink: openLink,
+            ),
+          ),
+        )
+        .whenComplete(() {
+          if (_openedPushId == id) _openedPushId = null;
+        });
+  }
+
+  Future<void> _connectPushOpens() async {
+    final adapter = widget.pushManager?.adapter;
+    if (adapter is! PushOpenAdapter) return;
+    _pushOpens = adapter.openedEvents.listen(_openPushEvent);
+    try {
+      final id = await adapter.initialEvent();
+      if (id != null && mounted) _openPushEvent(id);
+    } catch (_) {
+      debugPrint('PUSH_INITIAL_OPEN_FAILED');
+    }
+  }
+
   int page = 0, generation = 0;
   final Set<int> visitedPages = <int>{0};
   bool online = false, loading = false, backgroundSync = false;
@@ -283,6 +318,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     if (widget.pushManager != null) {
       unawaited(widget.pushManager!.initializeWithoutPrompt());
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_connectPushOpens());
+    });
     region = widget.repository.region;
     localityLabel = widget.repository.primaryLocationLabel;
     snapshot = widget.repository.cached(region);
@@ -306,12 +344,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     try {
       seen = Map<String, int>.from(
         jsonDecode(
-              widget.repository.prefs.getString(
-                    'seen:${widget.repository.api}:$region',
-                  ) ??
-                  '{}',
-            )
-            as Map,
+          widget.repository.prefs.getString(
+                'seen:${widget.repository.api}:$region',
+              ) ??
+              '{}',
+        ) as Map,
       );
     } catch (_) {
       seen = {};
@@ -320,6 +357,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    unawaited(_pushOpens?.cancel());
     timer?.cancel();
     refreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
@@ -669,8 +707,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                           } catch (_) {
                             update(() {
                               searching = false;
-                              validation =
-                                  'Nie znaleziono miejscowości. Dopisz powiat lub województwo.';
+                              validation = 'Nie znaleziono miejscowości. Dopisz powiat lub województwo.';
                             });
                           }
                         },

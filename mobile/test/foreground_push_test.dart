@@ -36,6 +36,9 @@ void main() {
         'messageId': 'received-fcm-message',
         'title': 'Test',
         'body': 'Odebrano',
+        'eventId': null,
+        'channelId': null,
+        'expiresAt': null,
       });
     },
   );
@@ -46,4 +49,33 @@ void main() {
     );
     expect(calls, isEmpty);
   });
+  test('expired foreground warning is not displayed', () async {
+    await AndroidForegroundPush.show(
+      RemoteMessage(
+        notification: const RemoteNotification(title: 'Alert', body: 'Stary'),
+        data: {
+          'eventId': 'old',
+          'expiresAt': DateTime.now()
+              .subtract(const Duration(minutes: 1))
+              .toUtc()
+              .toIso8601String(),
+        },
+      ),
+    );
+    expect(calls, isEmpty);
+  });
+
+  test(
+    'foreground notification forwards selected event and severity channel',
+    () async {
+      await AndroidForegroundPush.show(
+        const RemoteMessage(
+          notification: RemoteNotification(title: 'Alert', body: 'Nowy'),
+          data: {'eventId': 'selected-alert', 'channelId': 'bp_threats'},
+        ),
+      );
+      expect(calls.single.arguments['eventId'], 'selected-alert');
+      expect(calls.single.arguments['channelId'], 'bp_threats');
+    },
+  );
 }

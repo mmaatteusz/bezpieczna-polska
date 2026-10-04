@@ -32,16 +32,12 @@ String apiFailureMessage(Object error) {
     return switch (error.kind) {
       ApiFailureKind.notConfigured =>
         'Aplikacja nie ma skonfigurowanego połączenia z backendem.',
-      ApiFailureKind.timeout =>
-        'Serwer nie odpowiedział na czas. Zachowano ostatnią poprawną kopię danych.',
-      ApiFailureKind.network =>
-        'Brak połączenia z serwerem. Sprawdź internet; zapisane dane pozostają dostępne.',
+      ApiFailureKind.timeout => 'Serwer nie odpowiedział na czas. Zachowano ostatnią poprawną kopię danych.',
+      ApiFailureKind.network => 'Brak połączenia z serwerem. Sprawdź internet; zapisane dane pozostają dostępne.',
       ApiFailureKind.rateLimited =>
         'Serwer chwilowo ogranicza liczbę zapytań. Spróbuj ponownie za moment.',
-      ApiFailureKind.server =>
-        'Usługa jest chwilowo niedostępna. Zachowano ostatnią poprawną kopię danych.',
-      ApiFailureKind.invalidResponse =>
-        'Serwer zwrócił niepoprawne dane. Nie zastąpiono ostatniej poprawnej kopii.',
+      ApiFailureKind.server => 'Usługa jest chwilowo niedostępna. Zachowano ostatnią poprawną kopię danych.',
+      ApiFailureKind.invalidResponse => 'Serwer zwrócił niepoprawne dane. Nie zastąpiono ostatniej poprawnej kopii.',
     };
   }
   if (error is ShelterVersionChanged) {
@@ -92,9 +88,8 @@ class SafetyEvent {
     final items = data['_reports'] == null
         ? (data['sources'] as List).cast<Map>()
         : reports.expand((e) => (e.data['sources'] as List).cast<Map>());
-    return {
-      for (final s in items) s['id']: Map<String, dynamic>.from(s),
-    }.values.toList();
+    return {for (final s in items) s['id']: Map<String, dynamic>.from(s)}.values
+        .toList();
   }
 
   bool get isRcb => sources.any((s) => s['id'] == 'RCB');
@@ -284,9 +279,8 @@ class Snapshot {
           data[national ? 'nationalStatus' : 'status']['validUntil'] as String,
         ),
       ) &&
-      !DateTime.parse(
-        data['serverTime'] as String,
-      ).isAfter(now.add(const Duration(seconds: 30)));
+      !DateTime.parse(data['serverTime'] as String)
+          .isAfter(now.add(const Duration(seconds: 30)));
   String statusText(
     DateTime now, {
     required bool online,
@@ -940,6 +934,48 @@ class DataRepository {
     } catch (_) {
       throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
+  }
+
+  Future<SafetyEvent?> pushEvent(String id) async {
+    if (id.isEmpty || id.length > 150)
+      throw const FormatException('Błędny identyfikator');
+    final u = _apiUri();
+    final response = await _get(
+      u.replace(path: '${u.path}/v1/events/${Uri.encodeComponent(id)}'),
+    );
+    if (response.statusCode == 404) {
+      await prefs.remove('push_event:$api:$id');
+      return null;
+    }
+    if (response.statusCode != 200) _responseFailure(response);
+    if (response.bodyBytes.length > 2 * 1024 * 1024) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+    final event = SafetyEvent.parse(
+      jsonDecode(utf8.decode(response.bodyBytes)),
+    );
+    if (event.id != id) throw const ApiFailure(ApiFailureKind.invalidResponse);
+    await prefs.setString('push_event:$api:$id', jsonEncode(event.data));
+    return event;
+  }
+
+  SafetyEvent? cachedPushEvent(String id) {
+    final raw = prefs.getString('push_event:$api:$id');
+    if (raw != null) {
+      try {
+        return SafetyEvent.parse(jsonDecode(raw));
+      } catch (_) {}
+    }
+    for (final region in regions.keys) {
+      final snapshot = cached(region);
+      for (final event in snapshot?.events ?? <SafetyEvent>[]) {
+        if (event.id == id) return event;
+        for (final report in event.reports) {
+          if (report.id == id) return report;
+        }
+      }
+    }
+    return null;
   }
 
   Future<List<Map<String, dynamic>>> eventTimeline(

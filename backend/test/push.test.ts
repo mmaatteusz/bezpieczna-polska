@@ -11,9 +11,8 @@ import {openDb,Store,type Db} from '../src/store.js';
 
 const key=Buffer.alloc(32,7);
 const secret='bp_push_'+ 'A'.repeat(43);
-// Keep the dispatch clock safely after wall-clock queue insertion times. The
-// production outbox is queued with its actual current timestamp.
-const now=new Date('2030-01-01T12:00:00Z');
+// Store queues against wall time; keep fixtures and dispatch in the same validity window.
+const now=new Date(Date.now()+1000);
 
 class FakeProvider implements PushProvider{
  sent:{platform:PushPlatform;token:string;title:string}[]=[];
@@ -40,7 +39,7 @@ function event(id:string,patch:Partial<Event>={}):Event{
   id:'push-fixture-'+id,title:'Oficjalne ostrzeżenie testowe',description:'Syntetyczny komunikat używany wyłącznie w testach push.',
   eventType:'WEATHER',severity:'CRITICAL',verification:'CONFIRMED',lifecycle:'ACTIVE',messageContext:'ACTUAL',
   regions:['04'],geographicScope:'REGIONAL',publishedAt:'2026-09-22T11:55:00Z',publicationDate:'2026-09-22',
-  retrievedAt:'2026-09-22T11:56:00Z',validFrom:'2026-09-22T11:50:00Z',validTo:'2026-09-22T14:00:00Z',
+  retrievedAt:'2026-09-22T11:56:00Z',validFrom:new Date(+now-60000).toISOString(),validTo:new Date(+now+12*3600000).toISOString(),
   sources:[{id:'RCB',name:'RCB',url:'https://www.gov.pl/web/rcb/',tier:1}],instructions:['Zachowaj ostrożność.'],
   officialWarning:true,reviewed:false,revision:1,correction:null,latitude:null,longitude:null,geometry:null,
   locationText:'województwo kujawsko-pomorskie',areaPrecision:'PROVINCE',adapterVersion:'fixture',
@@ -102,7 +101,7 @@ test('retry is persisted and eventually delivers exactly once',async()=>{
   await push.register(registerBody(deviceA),secret,now);await store.put(event('retry'));
   provider.results.push({kind:'RETRY',code:'TEMPORARY'},{kind:'SUCCESS',code:'OK'});
   assert.equal(await push.dispatchDue(now),1);let row=(await outbox(db))[0];assert.equal(row.state,'RETRY');assert.equal(Number(row.attempt_count),1);
-  assert.equal(await push.dispatchDue(new Date(+now+31000)),1);row=(await outbox(db))[0];assert.equal(row.state,'DELIVERED');assert.equal(Number(row.attempt_count),2);assert.equal(provider.sent.length,2);
+  assert.equal(await push.dispatchDue(new Date(+now+31000)),1);row=(await outbox(db))[0];assert.equal(row.state,'ACCEPTED');assert.equal(Number(row.attempt_count),2);assert.equal(provider.sent.length,2);
   assert.equal(await push.dispatchDue(new Date(+now+62000)),0);
  }finally{await db.close();}
 });
@@ -110,7 +109,7 @@ test('retry is persisted and eventually delivers exactly once',async()=>{
 test('provider configuration outage does not consume retry budget',async()=>{
  const {db,store,push,provider}=await setup();
  try{
-  await push.register(registerBody(deviceA),secret,now);await store.put(event('provider-not-ready'));provider.isReady=false;
+  await push.register(registerBody(deviceA),secret,now);await store.put(event('provider-not-ready',{severity:'HIGH'}));provider.isReady=false;
   for(let i=0;i<8;i++)await push.dispatchDue(new Date(+now+i*5*60000));
   const row=(await outbox(db))[0];assert.equal(row.state,'RETRY');assert.equal(Number(row.attempt_count),0);assert.equal(row.last_error_code,'PROVIDER_NOT_READY');assert.equal(provider.sent.length,0);
  }finally{await db.close();}
@@ -133,7 +132,7 @@ test('material correction, escalation and end create revision-specific notificat
   await store.put(e);
   await store.put({...e,description:e.description+' Korekta treści.',correction:'Doprecyzowano obszar.'});
   await store.put({...e,severity:'CRITICAL',description:e.description+' Korekta treści.',correction:'Doprecyzowano obszar.'});
-  await store.put({...e,severity:'CRITICAL',lifecycle:'ENDED',validTo:'2026-09-22T12:10:00Z',description:e.description+' Korekta treści.',correction:'Alert zakończono.'});
+  await store.put({...e,severity:'CRITICAL',lifecycle:'ENDED',validTo:new Date(+now).toISOString(),description:e.description+' Korekta treści.',correction:'Alert zakończono.'});
   const rows=await outbox(db);assert.deepEqual(rows.map(r=>r.notification_kind),['NEW','CORRECTED','ESCALATED','ENDED']);assert.equal(new Set(rows.map(r=>r.dedupe_key)).size,4);
  }finally{await db.close();}
 });
@@ -276,7 +275,7 @@ test('SQLite restart preserves device and pending outbox without plaintext token
  try{
   await push.register(registerBody(deviceA,token),secret,now);await store.put(event('restart'));await db.close();
   db=openDb(undefined,file);store=new Store(db);await store.init();provider=new FakeProvider();push=new PushService(db,key,provider);
-  assert.equal((await outbox(db))[0].state,'PENDING');await push.dispatchDue(now);assert.equal((await outbox(db))[0].state,'DELIVERED');assert.equal(provider.sent[0].token,token);
+  assert.equal((await outbox(db))[0].state,'PENDING');await push.dispatchDue(now);assert.equal((await outbox(db))[0].state,'ACCEPTED');assert.equal(provider.sent[0].token,token);
  }finally{await db.close();await rm(dir,{recursive:true,force:true});}
 });
 
@@ -293,4 +292,83 @@ test('PostGIS restart preserves push outbox and encrypted device token',{skip:!p
   await db.run('DELETE FROM push_outbox WHERE device_id=?',[dbId]);await db.run('DELETE FROM push_devices WHERE device_id=?',[dbId]);
   await db.run('DELETE FROM event_revisions WHERE event_id=?',['push-fixture-'+eventId]);await db.run("DELETE FROM incident_revisions WHERE payload LIKE ?",['%push-fixture-'+eventId+'%']);await db.close();
  }
+});
+test('expiry uses severity and type and never extends an active warning past validTo',async()=>{
+ const {pushExpiry}=await import('../src/push.js');
+ assert.equal(Date.parse(pushExpiry(event('critical'),'NEW',now)),+now+15*60000);
+ assert.equal(Date.parse(pushExpiry(event('high',{severity:'HIGH'}),'NEW',now)),+now+60*60000);
+ assert.equal(Date.parse(pushExpiry(event('air',{eventType:'AIR'}),'NEW',now)),+now+5*60000);
+ assert.equal(Date.parse(pushExpiry(event('cyber',{eventType:'CYBER'}),'NEW',now)),+now+360*60000);
+ assert.equal(Date.parse(pushExpiry(event('short',{validTo:new Date(+now+10000).toISOString()}),'NEW',now)),+now+10000);
+ assert.equal(Date.parse(pushExpiry(event('ended',{validTo:now.toISOString()}),'ENDED',now)),+now+30*60000);
+});
+
+test('offline queue discards expired and superseded warnings while preserving the end notification',async()=>{
+ const {db,store,push,provider}=await setup();
+ try{
+  await push.register(registerBody(deviceA),secret,now);
+  const e=event('ended-offline');await store.put(e);
+  await store.put({...e,lifecycle:'ENDED',validTo:now.toISOString()});
+  await push.dispatchDue(now);
+  const rows=await outbox(db);
+  assert.equal(rows[0].state,'DISCARDED');assert.equal(rows[0].last_error_code,'EVENT_SUPERSEDED');
+  assert.equal(rows[1].state,'ACCEPTED');assert.equal(rows[1].delivered_at,null);assert.ok(rows[1].accepted_at);
+  assert.equal(provider.sent.length,1);assert.match(provider.sent[0].title,/Zakończenie/);
+  await store.put(event('ttl-offline'));
+  await push.dispatchDue(new Date(+now+16*60000));
+  const expired=(await outbox(db)).find(r=>r.event_id==='push-fixture-ttl-offline')!;
+  assert.equal(expired.state,'DISCARDED');assert.equal(expired.last_error_code,'MESSAGE_EXPIRED');
+  assert.equal(provider.sent.length,1);
+ }finally{await db.close();}
+});
+
+test('retry expiry is absolute and does not restart the delivery window',async()=>{
+ const {db,store,push,provider}=await setup();
+ try{
+  await push.register(registerBody(deviceA),secret,now);await store.put(event('retry-expired'));
+  const original=JSON.parse(String((await outbox(db))[0].payload)).expiresAt;
+  provider.results.push({kind:'RETRY',code:'OFFLINE'});await push.dispatchDue(now);
+  await push.dispatchDue(new Date(Date.parse(original)+1000));
+  const row=(await outbox(db))[0];assert.equal(row.state,'DISCARDED');assert.equal(provider.sent.length,1);
+  assert.equal(JSON.parse(String(row.payload)).expiresAt,original);
+ }finally{await db.close();}
+});
+
+test('historical provider acceptance migrates without claiming delivery',async()=>{
+ const {db,store,push}=await setup();
+ try{
+  await push.register(registerBody(deviceA),secret,now);await store.put(event('migrate-delivered'));
+  await db.run("UPDATE push_outbox SET state='DELIVERED',delivered_at=?",[now.toISOString()]);
+  await db.run('ALTER TABLE push_outbox DROP COLUMN accepted_at');
+  await store.init();const row=(await outbox(db))[0];
+  assert.equal(row.state,'ACCEPTED');assert.equal(row.accepted_at,now.toISOString());assert.equal(row.delivered_at,null);
+  await store.init();assert.equal((await outbox(db))[0].accepted_at,now.toISOString());
+ }finally{await db.close();}
+});
+
+test('event link resolves the latest ended revision outside active regional lists',async()=>{
+ const {db,store,push}=await setup();const app=await buildApp(store,undefined,push);
+ try{
+  const e=event('link-ended');await store.put(e);await store.put({...e,lifecycle:'ENDED',validTo:now.toISOString()});
+  const response=await app.inject({method:'GET',url:'/v1/events/'+e.id});
+  assert.equal(response.statusCode,200);assert.equal(response.json().id,e.id);assert.equal(response.json().lifecycle,'ENDED');assert.equal(response.json().revision,2);
+  assert.equal((await app.inject({method:'GET',url:'/v1/events/nonexistent'})).statusCode,404);
+ }finally{await app.close();await db.close();}
+});
+
+test('FCM wire payload bounds offline storage and sets a severity channel',async()=>{
+ const {generateKeyPairSync}=await import('node:crypto');const {FcmProvider}=await import('../src/push.js');
+ const pair=generateKeyPairSync('rsa',{modulusLength:2048});
+ const fcm=new FcmProvider({project_id:'fixture',client_email:'fixture@example.com',private_key:pair.privateKey.export({type:'pkcs8',format:'pem'}).toString()});
+ const original=globalThis.fetch;let payload:any;
+ globalThis.fetch=async(url,options)=>{
+  if(String(url).includes('oauth2'))return new Response(JSON.stringify({access_token:'fixture',expires_in:3600}),{status:200});
+  payload=JSON.parse(String(options?.body));return new Response('{"name":"fixture-message"}',{status:200});
+ };
+ try{
+  const result=await fcm.send('fixture-token',{title:'Alert',body:'Fixture',collapseKey:'event-1',channelId:'bp_threats',expiresAt:new Date(Date.now()+45000).toISOString(),data:{eventId:'event-1'}});
+  assert.equal(result.kind,'SUCCESS');assert.match(payload.message.android.ttl,/^4[0-5]s$/);
+  assert.equal(payload.message.android.notification.channel_id,'bp_threats');assert.equal(payload.message.data.eventId,'event-1');
+  assert.equal((await fcm.send('fixture-token',{title:'Expired',body:'Fixture',collapseKey:'event-1',channelId:'bp_threats',expiresAt:new Date(Date.now()-1000).toISOString(),data:{}})).code,'MESSAGE_EXPIRED');
+ }finally{globalThis.fetch=original;}
 });

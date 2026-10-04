@@ -3,7 +3,9 @@ import {serverConfig} from './config.js';
 import {migration001} from './migrations/001_initial.js';
 import {migration002} from './migrations/002_worker_leases.js';
 
-const migrations=[migration001,migration002] as const;
+import {migration003} from './migrations/003_push_acceptance.js';
+
+const migrations=[migration001,migration002,migration003] as const;
 export const SCHEMA_VERSION=migrations.at(-1)!.version;
 
 async function appliedVersions(db:Db){
@@ -15,6 +17,7 @@ export async function assertSchema(db:ReturnType<typeof openDb>){
  for(const table of ['event_revisions','incident_revisions','source_health','neptun_track_revisions','radiation_measurements','shelters','push_devices','push_outbox','worker_leases']){
   await db.all(`SELECT 1 FROM ${table} LIMIT 0`);
  }
+ await db.all('SELECT accepted_at FROM push_outbox LIMIT 0');
  if(db.kind==='postgres'){
   const extensions=await db.all("SELECT extname FROM pg_extension WHERE extname='postgis'");
   if(extensions.length!==1)throw new Error('PostGIS extension missing');

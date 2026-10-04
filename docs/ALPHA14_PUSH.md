@@ -10,7 +10,7 @@ Przepływ:
 
 Parsery źródeł nie kontaktują się bezpośrednio z dostawcą push. Zapis rewizji, korelacja i utworzenie pozycji outbox odbywają się transakcyjnie. Ponowna synchronizacja identycznego Eventu nie tworzy kolejnego powiadomienia.
 
-Outbox przechowuje stan `PENDING / SENDING / RETRY / DELIVERED / PERMANENT_FAILURE`, liczbę prób, termin kolejnej próby i bezpieczny kod błędu. Stare lease `SENDING` są odzyskiwane po restarcie. Po pięciu nieudanych próbach wpis staje się permanent failure.
+Outbox przechowuje stan `PENDING / SENDING / RETRY / ACCEPTED / DISCARDED / PERMANENT_FAILURE`, liczbę prób, termin kolejnej próby i bezpieczny kod błędu. Stare lease `SENDING` są odzyskiwane po restarcie. Po pięciu nieudanych próbach wpis staje się permanent failure.
 
 ## Rejestracja urządzeń
 

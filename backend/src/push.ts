@@ -1,7 +1,7 @@
 import {connect as connectHttp2} from 'node:http2';
 import {createCipheriv,createDecipheriv,createHash,createSign,randomBytes,sign as cryptoSign,timingSafeEqual} from 'node:crypto';
 import {z} from 'zod';
-import {REGIONS,type Event} from './domain.js';
+import {REGIONS,eventSchema,type Event} from './domain.js';
 import type {Incident} from './correlation.js';
 
 type Row=Record<string,unknown>;
@@ -74,6 +74,8 @@ export type PushMessage={
  body:string;
  data:Record<string,string>;
  collapseKey:string;
+ expiresAt:string;
+ channelId:string;
 };
 
 export type PushSendResult={
@@ -155,6 +157,10 @@ export async function initPushStore(db:PushDb){
   created_at TEXT NOT NULL,
   delivered_at TEXT
  )`);
+ if(db.kind==='postgres')await db.run('ALTER TABLE push_outbox ADD COLUMN IF NOT EXISTS accepted_at TEXT');
+ else if(!(await db.all('PRAGMA table_info(push_outbox)')).some(r=>r.name==='accepted_at'))await db.run('ALTER TABLE push_outbox ADD COLUMN accepted_at TEXT');
+ // Historical DELIVERED only meant provider acceptance; preserve that timestamp honestly.
+ await db.run("UPDATE push_outbox SET state='ACCEPTED',accepted_at=delivered_at,delivered_at=NULL WHERE state='DELIVERED'");
  await db.run('CREATE INDEX IF NOT EXISTS push_outbox_due_idx ON push_outbox(state,next_attempt_at,created_at)');
 }
 
@@ -253,14 +259,24 @@ function selectCategory(e:Event,p:PushPreferences,isUa:boolean):PushCategory|nul
  if(p.watchedLocations&&locationMatches(e,p))return 'WATCHED_LOCATIONS';
  return null;
 }
-function messageFor(e:Event,kind:string,category:PushCategory,entityId:string):PushMessage{
+export function pushExpiry(e:Event,kind:string,now:Date):string{
+ // Bounds are delivery relevance windows, not the duration of the underlying warning.
+ const minutes=kind==='ENDED'?30:e.ukraine?.alertType==='AIR'||e.eventType==='AIR'?5:
+  e.eventType==='CYBER'||e.eventType==='BORDER'?360:e.severity==='CRITICAL'?15:e.severity==='HIGH'?60:180;
+ const cap=now.getTime()+minutes*60000;
+ const end=e.validTo===null?NaN:Date.parse(e.validTo);
+ return new Date(kind==='ENDED'||!Number.isFinite(end)?cap:Math.min(cap,end)).toISOString();
+}
+function messageFor(e:Event,kind:string,category:PushCategory,entityId:string,now:Date):PushMessage{
  const prefix=kind==='ENDED'?'Zakończenie':kind==='CORRECTED'?'Korekta':kind==='ESCALATED'?'Eskalacja':kind==='ACTIVATED'?'Aktywny alert':'Nowy alert';
  const body=(e.correction?.trim()||e.description.trim()||e.title).replace(/\s+/g,' ').slice(0,300);
  return {
   title:(prefix+': '+e.title).slice(0,160),
   body,
   collapseKey:entityId.slice(0,80),
-  data:{schemaVersion:'1',eventId:e.id,category,kind},
+  expiresAt:pushExpiry(e,kind,now),
+  channelId:kind==='ENDED'?'bp_information':e.severity==='CRITICAL'?'bp_threats':e.severity==='HIGH'?'bp_warnings':'bp_information',
+  data:{schemaVersion:'1',channelId:kind==='ENDED'?'bp_information':e.severity==='CRITICAL'?'bp_threats':e.severity==='HIGH'?'bp_warnings':'bp_information',eventId:e.id,revision:String(e.revision),category,kind,expiresAt:pushExpiry(e,kind,now)},
  };
 }
 
@@ -281,7 +297,8 @@ export async function queuePushChanges(db:PushDb,changes:PushEventChange[],event
    const category=selectCategory(current,device.preferences,decision.isUa);if(!category)continue;
    const key=sha([device.deviceId,entityId,current.revision,decision.kind,category].join('|'));
    if(dedupe.has(key))continue;dedupe.add(key);
-   const payload=messageFor(current,decision.kind,category,entityId),id='PUSH-'+key.slice(0,40);
+   const payload=messageFor(current,decision.kind,category,entityId,now),id='PUSH-'+key.slice(0,40);
+   if(Date.parse(payload.expiresAt)<=now.getTime())continue;
    try{
     await db.run('INSERT INTO push_outbox(id,dedupe_key,device_id,entity_id,event_id,event_revision,category,notification_kind,payload,state,attempt_count,next_attempt_at,last_attempt_at,last_error_code,created_at,delivered_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[
      id,key,device.deviceId,entityId,current.id,current.revision,category,decision.kind,JSON.stringify(payload),'PENDING',0,now.toISOString(),null,null,now.toISOString(),null
@@ -369,7 +386,8 @@ export class PushService{
    title:'Bezpieczna Polska — test powiadomień',
    body:'Jeśli widzisz tę wiadomość, powiadomienia push działają na tym urządzeniu.',
    collapseKey:'bezpieczna-polska-test',
-   data:{schemaVersion:'1',kind:'TEST',test:'true'},
+   expiresAt:new Date(now.getTime()+5*60000).toISOString(),channelId:'bp_information',
+   data:{schemaVersion:'1',kind:'TEST',test:'true',channelId:'bp_information',expiresAt:new Date(now.getTime()+5*60000).toISOString()},
   });
   if(result.kind==='SUCCESS'){
    await this.db.run('UPDATE push_devices SET last_seen_at=? WHERE device_id=?',[now.toISOString(),id]);
@@ -409,6 +427,22 @@ export class PushService{
    if(Number(row.enabled)!==1||!platform.success){
     await this.db.run("UPDATE push_outbox SET state='PERMANENT_FAILURE',last_error_code=?,next_attempt_at=? WHERE id=?",['DEVICE_DISABLED',now.toISOString(),id]);processed++;continue;
    }
+   // A database outage must leave the lease recoverable, not discard a valid alert.
+   const latest=(await this.db.all('SELECT payload FROM event_revisions WHERE event_id=? ORDER BY revision DESC LIMIT 1',[String(row.event_id)]))[0];
+   let message:PushMessage;
+   let obsolete:string|null=null;
+   try{
+    message=JSON.parse(String(row.payload)) as PushMessage;
+    if(!Number.isFinite(Date.parse(message.expiresAt))||Date.parse(message.expiresAt)<=now.getTime())obsolete='MESSAGE_EXPIRED';
+    const event=latest?eventSchema.parse(JSON.parse(String(latest.payload))):null;
+    if(!event)obsolete='EVENT_MISSING';
+    else if(event.revision!==Number(row.event_revision))obsolete='EVENT_SUPERSEDED';
+    else if(event.isDemo||event.messageContext!=='ACTUAL'||event.verification!=='CONFIRMED')obsolete='EVENT_INELIGIBLE';
+    else if(row.notification_kind!=='ENDED'&&(['ENDED','CANCELLED','EXPIRED'].includes(event.lifecycle)||(event.validTo!==null&&Date.parse(event.validTo)<=now.getTime())))obsolete='EVENT_ENDED';
+   }catch{obsolete='PAYLOAD_INVALID';message=null as unknown as PushMessage;}
+   if(obsolete){
+    await this.db.run("UPDATE push_outbox SET state='DISCARDED',last_error_code=? WHERE id=?",[obsolete,id]);processed++;continue;
+   }
    if(!this.provider.ready(platform.data)){
     const next=new Date(now.getTime()+5*60000).toISOString();
     await this.db.run("UPDATE push_outbox SET state='RETRY',attempt_count=CASE WHEN attempt_count>0 THEN attempt_count-1 ELSE 0 END,next_attempt_at=?,last_error_code='PROVIDER_NOT_READY' WHERE id=?",[next,id]);
@@ -420,17 +454,12 @@ export class PushService{
     await this.db.run("UPDATE push_outbox SET state='PERMANENT_FAILURE',last_error_code='TOKEN_DECRYPT_FAILED' WHERE id=?",[id]);
     await this.scrubDevice(this.db,deviceId,'TOKEN_DECRYPT_FAILED',now);processed++;continue;
    }
-   let message:PushMessage;
-   try{message=JSON.parse(String(row.payload)) as PushMessage;}
-   catch{
-    await this.db.run("UPDATE push_outbox SET state='PERMANENT_FAILURE',last_error_code='PAYLOAD_INVALID' WHERE id=?",[id]);processed++;continue;
-   }
    let result:PushSendResult;
    try{result=await this.provider.send(platform.data,token,message);}
    catch{result={kind:'RETRY',code:'PROVIDER_EXCEPTION'};}
    const code=safeError(result.code);
    if(result.kind==='SUCCESS'){
-    await this.db.run("UPDATE push_outbox SET state='DELIVERED',delivered_at=?,last_error_code=NULL WHERE id=?",[now.toISOString(),id]);
+    await this.db.run("UPDATE push_outbox SET state='ACCEPTED',accepted_at=?,last_error_code=NULL WHERE id=?",[now.toISOString(),id]);
    }else if(result.kind==='PERMANENT_FAILURE'){
     await this.db.run("UPDATE push_outbox SET state='PERMANENT_FAILURE',last_error_code=? WHERE id=?",[code,id]);
     if(result.invalidToken)await this.scrubDevice(this.db,deviceId,'TOKEN_INVALID',now);
@@ -464,9 +493,12 @@ export class FcmProvider{
  async send(token:string,message:PushMessage):Promise<PushSendResult>{
   const c=this.credentials;if(!c)return {kind:'RETRY',code:'FCM_NOT_CONFIGURED'};
   try{
-   const access=await this.accessToken(),response=await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(c.project_id)}/messages:send`,{
+   const access=await this.accessToken();
+   const ttl=Math.floor((Date.parse(message.expiresAt)-Date.now())/1000);
+   if(!Number.isFinite(ttl)||ttl<=0)return {kind:'PERMANENT_FAILURE',code:'MESSAGE_EXPIRED'};
+   const response=await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(c.project_id)}/messages:send`,{
     method:'POST',headers:{authorization:'Bearer '+access,'content-type':'application/json'},
-    body:JSON.stringify({message:{token,notification:{title:message.title,body:message.body},data:message.data,android:{priority:'high',collapse_key:message.collapseKey}}})
+    body:JSON.stringify({message:{token,notification:{title:message.title,body:message.body},data:message.data,android:{priority:message.channelId==='bp_information'?'normal':'high',ttl:Math.min(ttl,2419200)+'s',collapse_key:message.collapseKey,notification:{channel_id:message.channelId,tag:message.collapseKey}}}})
    }),text=await response.text();
    if(response.ok)return {kind:'SUCCESS',code:'FCM_OK'};
    if(response.status===400||response.status===404){
@@ -497,6 +529,7 @@ export class ApnsProvider{
     const client=connectHttp2(origin),req=client.request({
      ':method':'POST',':path':'/3/device/'+token,
      authorization:'bearer '+this.jwt(),'apns-topic':c.bundleId,'apns-push-type':'alert','apns-priority':'10','apns-collapse-id':message.collapseKey.slice(0,64),
+     'apns-expiration':String(Math.floor(Date.parse(message.expiresAt)/1000)),
      'content-type':'application/json',
     });
     let status=0,body='';
