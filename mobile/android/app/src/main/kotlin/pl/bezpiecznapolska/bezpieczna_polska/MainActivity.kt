@@ -167,18 +167,20 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun consumeNotificationTap(source: Intent?): Map<String, String>? {
-        val eventId = source?.getStringExtra("bp_event_id")?.takeIf { it.isNotBlank() }
+        val launchIntent = source ?: return null
+        val eventId = launchIntent.getStringExtra("bp_event_id")
+            ?.takeIf { it.isNotBlank() }
             ?: return null
         val payload = mutableMapOf("eventId" to eventId)
-        source.getStringExtra("bp_kind")?.takeIf { it.isNotBlank() }?.let {
+        launchIntent.getStringExtra("bp_kind")?.takeIf { it.isNotBlank() }?.let {
             payload["kind"] = it
         }
-        source.getStringExtra("bp_category")?.takeIf { it.isNotBlank() }?.let {
+        launchIntent.getStringExtra("bp_category")?.takeIf { it.isNotBlank() }?.let {
             payload["category"] = it
         }
-        source.removeExtra("bp_event_id")
-        source.removeExtra("bp_kind")
-        source.removeExtra("bp_category")
+        launchIntent.removeExtra("bp_event_id")
+        launchIntent.removeExtra("bp_kind")
+        launchIntent.removeExtra("bp_category")
         return payload
     }
 }
