@@ -117,10 +117,7 @@ void main() {
       isNull,
     );
     expect(
-      PushOpenRequest.tryParse(const {
-        'schemaVersion': '1',
-        'eventId': '',
-      }),
+      PushOpenRequest.tryParse(const {'schemaVersion': '1', 'eventId': ''}),
       isNull,
     );
   });
