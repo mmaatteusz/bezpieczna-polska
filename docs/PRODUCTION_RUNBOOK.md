@@ -4,7 +4,7 @@ Aktualny kod: **0.1.0-alpha.67**.
 
 Schemat wersji: `0.1.0-alpha.N` oznacza etap funkcjonalny, `+build` w `pubspec.yaml` jest monotonicznym numerem produkcyjnym, a preview APK używa dodatkowo własnego rosnącego `versionCode` z CI. W interfejsie aplikacja pokazuje zarówno alphę, jak i konkretny numer buildu.
 
-Ten dokument opisuje docelowy sposób wdrożenia. Stan faktycznego Railway z 2026-09-26 jest opisany w [AUDIT_2026-09-26.md](AUDIT_2026-09-26.md).
+Ten dokument opisuje konfigurację i kontrolę wydań. Dla Oracle korzystaj równocześnie z [ORACLE_CUTOVER_RUNBOOK.md](ORACLE_CUTOVER_RUNBOOK.md) i [ORACLE_OFF_VM_BACKUP.md](ORACLE_OFF_VM_BACKUP.md). Sekcje Railway z datą 26.09.2026 są historyczne oraz pomocne dla starszych klientów; nie potwierdzają bieżącej produkcji. Aktualne priorytety: [ROADMAP.md](ROADMAP.md).
 
 ## Wymagane zmienne backendu
 
@@ -30,7 +30,7 @@ Opcjonalne moduły:
 
 `ENABLE_INGESTION=false` wyłącza cykliczną synchronizację, ale nie usuwa ostatnich danych.
 
-## Railway — zasada wdrożenia
+## Railway — reguły starszego wdrożenia
 
 Produkcja powinna korzystać z jednego źródła prawdy:
 

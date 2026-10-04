@@ -1,0 +1,38 @@
+name: Błąd aplikacji
+description: Zgłoś problem z Androidem, mapą, danymi lub powiadomieniami.
+title: "[Błąd] "
+body:
+  - type: markdown
+    attributes:
+      value: "Nie wpisuj dokładnej lokalizacji, tokenów, sekretów ani danych dostępowych. Zgłoszenie na GitHubie jest publiczne. W nagłym zagrożeniu korzystaj z numeru 112."
+  - type: input
+    id: version
+    attributes:
+      label: Wersja i build aplikacji
+      placeholder: "Wersja z ustawień oraz kanał preview/production"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Model telefonu i wersja Androida
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Kroki odtworzenia
+      description: "Opisz po kolei, co robisz i przy jakim połączeniu."
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Oczekiwany i rzeczywisty wynik
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Dodatkowe informacje
+      description: "Opcjonalnie źródło/województwo/czas komunikatu, zrzut ekranu bez prywatnych danych."

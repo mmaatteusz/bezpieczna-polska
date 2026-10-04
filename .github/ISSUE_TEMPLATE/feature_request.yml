@@ -1,0 +1,22 @@
+name: Propozycja ulepszenia
+description: Zaproponuj zmianę, która pomoże użytkownikowi.
+title: "[Pomysł] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Jaki problem użytkownika chcesz rozwiązać?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proponowane działanie
+      description: "Podaj przykład zadania, które będzie łatwiejsze."
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Ograniczenia i alternatywy
+      description: "Opcjonalnie: offline, prywatność, dostępność, źródła danych."

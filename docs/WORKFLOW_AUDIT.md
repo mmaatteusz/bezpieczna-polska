@@ -1,19 +1,38 @@
-# Przegląd workflowów — alpha.16.1
+# Workflowy GitHub Actions
 
-Stan z dostępnej kopii alpha.16. Potwierdzić zdalne wyzwalacze i checks na `main` przed usuwaniem czegokolwiek.
+Przegląd plików na main: **4.10.2026**. Lista poniżej zastępuje historyczny
+spis alpha.16.1; wyzwalacze pochodzą z YAML, nie z nazw dawnych etapów.
+Filtry ścieżek, uprawnienia, wymagane zmienne i warunki jobów są w podlinkowanych
+plikach. Nie jest to deklaracja, że wszystkie aktualne runy są zielone.
 
-| Plik | Automatycznie na `main` / PR do `main` | Powód zachowania |
-|---|---|---|
-| `production-release.yml` | Tak / tak | Pełna regresja z PostGIS, migracje/restore, kontrakty, release gate i podpis Androida (release tylko tag/manual + prawdziwe dane). |
-| `alpha15-preview.yml` | Tak / tak | Buduje osobny arm64 preview APK; pełna regresja offline, NEPTUN i push. Nazwa pliku historyczna, nazwa jobu już alpha.16. |
-| `rcb-stage.yml` | Tak dla zmian backend/mobile; PR także | Niezależna regresja RCB. |
-| `shelters-stage.yml` | Tak dla zmian backend/mobile; PR także | Niezależna regresja PSP; live PSP jest opcjonalne z powodu 403. |
-| `build.yml` | Nie, tylko manualnie | Build preview po sprawdzeniu faktycznie wdrożonego backendu i zsynchronizowanych RCB/PSP. |
-| `alpha11-preview.yml` | Nie; PR tylko do historycznego `stage/police-psp-incidents` | Historyczny preview obserwowanych miejsc. |
-| `preview-apk.yml` | Nie; PR tylko do historycznego `stage/sg-border` | Historyczny preview Policja/PSP. |
-| `levels-stage.yml` | Nie; push do historycznego `stage/security-levels` i pliku importu | Historyczna weryfikacja stopni alarmowych. |
-| `probe-shelters.yml` | Nie; push do historycznego `stage/quality-pass` | Historyczna diagnostyka serwera PSP. |
+| Workflow | Wyzwalacze | Rola i ograniczenia |
+| --- | --- | --- |
+| [android-update-compat.yml](../.github/workflows/android-update-compat.yml) | push (`main`); PR (`main`); ręcznie | Dwa warianty tego samego preview na x86_64; to nie pełny test migracji publicznego APK. |
+| [audit-production-runtime.yml](../.github/workflows/audit-production-runtime.yml) | push (`main`); status wdrożenia; harmonogram; ręcznie | Zdrowie produkcji i opcjonalnie tożsamość wdrożonego SHA. |
+| [auto-bump-alpha.yml](../.github/workflows/auto-bump-alpha.yml) | push (`main`) | Monotoniczna alpha na main; uruchamia kolejne buildy/kontrole, nie publikuje automatycznie w Play. |
+| [build.yml](../.github/workflows/build.yml) | ręcznie | Ręczny build powiązany z kontrolą backendu. |
+| [deploy-approved-oracle.yml](../.github/workflows/deploy-approved-oracle.yml) | zakończenie workflow (`main`) | Wdrażanie po udanej zmianie zawierającej znacznik [deploy-oracle]; zwykły merge dokumentacji nie jest takim żądaniem. |
+| [ios-ci.yml](../.github/workflows/ios-ci.yml) | PR (`main`); push (`main`); ręcznie | Osobna walidacja natywnego iOS; poza priorytetem Androida. |
+| [oracle-deploy.yml](../.github/workflows/oracle-deploy.yml) | ręcznie | Wdrożenie określonego SHA; wymaga dostępu i kontroli endpointu. |
+| [oracle-host-audit.yml](../.github/workflows/oracle-host-audit.yml) | ręcznie | Ręczny audyt hosta Oracle. |
+| [oracle-infra-validate.yml](../.github/workflows/oracle-infra-validate.yml) | PR (`main`); push (`main`) | Kontrola skryptów infrastruktury Oracle. |
+| [oracle-ssh-preflight.yml](../.github/workflows/oracle-ssh-preflight.yml) | ręcznie | Ręczna weryfikacja dostępu SSH. |
+| [preview-apk.yml](../.github/workflows/preview-apk.yml) | PR (`main`); push (`stage/**`); ręcznie | Preview ARM64 i kontrola źródeł dla wybranych zmian; status źródła zależy od runtime. |
+| [production-release.yml](../.github/workflows/production-release.yml) | PR (`main`); push (`main`); ręcznie | Pełna regresja; artefakty produkcyjne tylko na tag/manual i po spełnieniu warunków. |
+| [rcb-stage.yml](../.github/workflows/rcb-stage.yml) | push (`main`, `stage/rcb-live`); PR; ręcznie | Regresja RCB. |
+| [regression-preview.yml](../.github/workflows/regression-preview.yml) | PR (`main`); push (`main`); ręcznie | Regresja offline i budowa preview. |
+| [repository-branch-hygiene.yml](../.github/workflows/repository-branch-hygiene.yml) | push (`main`); PR (`main`); ręcznie | Testy reguł; usuwanie zakończonych gałęzi poza PR. Zachowuje aktywną pracę. |
+| [shelters-stage.yml](../.github/workflows/shelters-stage.yml) | push (`main`, `stage/shelters-psp`); PR; ręcznie | Regresja schronień PSP. |
+| [test-apk.yml](../.github/workflows/test-apk.yml) | PR (`main`); ręcznie | Instalowalny testowy APK. |
 
-Usunięto `alpha14-preview.yml`: był tylko ręczny, oczekiwał `versionName=0.1.0-alpha.14` i `versionCode=2014`, więc uruchomienie na `main` alpha.16 kończyłoby się błędem. Jego unikalne testy NEPTUN/push oraz budowę preview obejmuje `alpha15-preview.yml` (obecnie alpha.16), a pełny gate obejmuje `production-release.yml`.
+## Co sprawdzać przed wydaniem
 
-Pozostałe workflowy zachowano: główna ścieżka alpha.16 i niezależne regresje nadal mają uzasadnienie, a ręczne/historyczne nie wpływają na checks `main`. Ewentualne dalsze archiwizowanie wymaga potwierdzenia rzeczywistego stanu zdalnego repozytorium.
+Pełny gate w production-release obejmuje backend z realnym PostGIS i klienta
+Flutter. Udany build preview nie oznacza publikacji produkcyjnej, a udana
+instalacja testowa nie zastępuje prób na fizycznym Androidzie. Nie usuwamy
+workflowów tylko dlatego, że mają w nazwie słowo stage: RCB i schronienia
+nadal dostarczają własne kontrole.
+
+Warunki prywatności i testy oryginalnych wydań są przygotowane w PR #144/#143,
+a nie w obecnym workflow wydania na main. Aktualną kolejność prac opisuje
+[ROADMAP.md](ROADMAP.md).
