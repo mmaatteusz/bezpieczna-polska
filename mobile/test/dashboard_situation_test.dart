@@ -95,6 +95,7 @@ void main() {
     );
   });
   testWidgets('periodic Start refresh fetches locality again', (tester) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     SharedPreferences.setMockInitialValues({});
     var localRequests = 0;
     final repo = DataRepository(
