@@ -124,8 +124,10 @@ class _FirstLaunchPermissionOnboardingState
                   _PermissionPage(
                     icon: Icons.location_on_rounded,
                     title: 'Lokalizacja dla Twojego bezpieczeństwa',
-                    description: 'Potrzebujemy dostępu do lokalizacji, aby pokazywać ostrzeżenia i zagrożenia dla Twojej okolicy oraz najbliższe miejsca schronienia.',
-                    privacy: 'Zapytania o okolicę i najbliższe schronienia wysyłają współrzędne do naszego API. Możesz pominąć GPS i wybrać miejscowość ręcznie.',
+                    description:
+                        'Potrzebujemy dostępu do lokalizacji, aby pokazywać ostrzeżenia i zagrożenia dla Twojej okolicy oraz najbliższe miejsca schronienia.',
+                    privacy:
+                        'Zapytania o okolicę i najbliższe schronienia wysyłają współrzędne do naszego API. Możesz pominąć GPS i wybrać miejscowość ręcznie.',
                     buttonLabel: 'Zezwól na lokalizację',
                     buttonIcon: Icons.my_location_rounded,
                     busy: _busy && _step == 0,

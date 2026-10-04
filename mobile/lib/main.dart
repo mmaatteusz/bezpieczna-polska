@@ -318,11 +318,12 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     try {
       seen = Map<String, int>.from(
         jsonDecode(
-          widget.repository.prefs.getString(
-                'seen:${widget.repository.api}:$region',
-              ) ??
-              '{}',
-        ) as Map,
+              widget.repository.prefs.getString(
+                    'seen:${widget.repository.api}:$region',
+                  ) ??
+                  '{}',
+            )
+            as Map,
       );
     } catch (_) {
       seen = {};
@@ -682,7 +683,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                           } catch (_) {
                             update(() {
                               searching = false;
-                              validation = 'Nie znaleziono miejscowości. Dopisz powiat lub województwo.';
+                              validation =
+                                  'Nie znaleziono miejscowości. Dopisz powiat lub województwo.';
                             });
                           }
                         },

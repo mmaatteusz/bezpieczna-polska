@@ -602,13 +602,17 @@ class PushManager extends ChangeNotifier {
     try {
       final result = Map<String, dynamic>.from(
         await _jsonRequest(
-          update ? 'PUT' : 'POST',
-          _uri(update ? '/v1/push/devices/${identity.id}' : '/v1/push/devices'),
-          identity.secret,
-          body: update
-              ? (Map<String, dynamic>.from(payload)..remove('installationId'))
-              : payload,
-        ) as Map,
+              update ? 'PUT' : 'POST',
+              _uri(
+                update ? '/v1/push/devices/${identity.id}' : '/v1/push/devices',
+              ),
+              identity.secret,
+              body: update
+                  ? (Map<String, dynamic>.from(payload)
+                      ..remove('installationId'))
+                  : payload,
+            )
+            as Map,
       );
       await repository.prefs.setBool(_registeredKey, true);
       _setState(
@@ -641,10 +645,11 @@ class PushManager extends ChangeNotifier {
     try {
       final result = Map<String, dynamic>.from(
         await _jsonRequest(
-          'GET',
-          _uri('/v1/push/devices/${identity.id}'),
-          identity.secret,
-        ) as Map,
+              'GET',
+              _uri('/v1/push/devices/${identity.id}'),
+              identity.secret,
+            )
+            as Map,
       );
       final registered = result['registered'] == true;
       await repository.prefs.setBool(_registeredKey, registered);
@@ -848,8 +853,9 @@ class _NotificationSettingsScreenState
       final message = error is StateError
           ? 'Najpierw włącz powiadomienia na tym urządzeniu.'
           : 'Nie udało się wysłać testu. ${apiFailureMessage(error)}';
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => busy = false);
     }

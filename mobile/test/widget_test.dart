@@ -99,7 +99,8 @@ void main() {
     expect(
       find.byKey(const ValueKey('map-legend')),
       findsNothing,
-      reason: 'Legenda ma się pojawiać tylko wtedy, gdy bieżący kadr faktycznie zawiera oznaczenia.',
+      reason:
+          'Legenda ma się pojawiać tylko wtedy, gdy bieżący kadr faktycznie zawiera oznaczenia.',
     );
 
     await tester.tap(find.byTooltip('Warstwy mapy'));

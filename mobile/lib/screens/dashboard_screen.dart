@@ -260,8 +260,10 @@ class DashboardScreen extends StatelessWidget {
               const SizedBox(height: 7),
               Text(
                 _statusDetail(status, fresh),
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: foreground, height: 1.35),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: foreground,
+                  height: 1.35,
+                ),
               ),
               if (footer != null) ...[
                 const SizedBox(height: 13),
@@ -356,8 +358,9 @@ class DashboardScreen extends StatelessWidget {
             child: Text(
               _freshnessLabel(),
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium
-                  ?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
           ),
         ],
@@ -401,8 +404,9 @@ class DashboardScreen extends StatelessWidget {
                   children: [
                     Text(
                       'Twoja okolica',
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w900),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     const Text(
@@ -462,8 +466,9 @@ class DashboardScreen extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 subtitle,
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
           ),
@@ -605,7 +610,8 @@ class DashboardScreen extends StatelessWidget {
             const SizedBox(height: 10),
             const _InfoBanner(
               icon: Icons.offline_pin_outlined,
-              text: 'Tryb offline: pokazujemy ostatnie zapisane dane. Mogły pojawić się nowsze ostrzeżenia.',
+              text:
+                  'Tryb offline: pokazujemy ostatnie zapisane dane. Mogły pojawić się nowsze ostrzeżenia.',
             ),
           ],
           if (error != null) ...[
@@ -643,7 +649,8 @@ class DashboardScreen extends StatelessWidget {
             const _EmptyState(
               icon: Icons.location_searching,
               title: 'Brak oceny lokalnej',
-              text: 'Nie udało się pobrać danych okolicy. Odśwież ekran; status województwa nie zastępuje danych lokalnych.',
+              text:
+                  'Nie udało się pobrać danych okolicy. Odśwież ekran; status województwa nie zastępuje danych lokalnych.',
             )
           else if (snapshot == null && offlinePackage == null)
             const _EmptyState(
@@ -655,7 +662,8 @@ class DashboardScreen extends StatelessWidget {
             const _EmptyState(
               icon: Icons.notifications_none_outlined,
               title: 'Brak istotnych aktywnych komunikatów',
-              text: 'Aplikacja nadal sprawdza źródła. Brak komunikatu nie jest gwarancją bezpieczeństwa.',
+              text:
+                  'Aplikacja nadal sprawdza źródła. Brak komunikatu nie jest gwarancją bezpieczeństwa.',
             )
           else
             ...active
@@ -675,7 +683,8 @@ class DashboardScreen extends StatelessWidget {
             const SizedBox(height: 8),
             const _InfoBanner(
               icon: Icons.directions_outlined,
-              text: 'Co zrobić: przeczytaj zalecenia źródła przy komunikacie. Jeśli ich nie podano, otwórz szczegóły i sprawdź oficjalny komunikat.',
+              text:
+                  'Co zrobić: przeczytaj zalecenia źródła przy komunikacie. Jeśli ich nie podano, otwórz szczegóły i sprawdź oficjalny komunikat.',
             ),
           ],
           const SizedBox(height: 12),
@@ -731,8 +740,9 @@ class _InfoBanner extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: scheme.onSurfaceVariant),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ),
         ],
@@ -780,14 +790,17 @@ class _EmptyState extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w900),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 5),
                 Text(
                   text,
-                  style: Theme.of(context).textTheme.bodyMedium
-                      ?.copyWith(color: scheme.onSurfaceVariant, height: 1.35),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
                 ),
               ],
             ),
