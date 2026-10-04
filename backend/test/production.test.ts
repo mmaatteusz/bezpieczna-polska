@@ -31,7 +31,7 @@ test('migration is idempotent and required before serving',async()=>{
  try{
   await assert.rejects(assertSchema(db));
   await migrate(db);await migrate(db);await assertSchema(db);
-  assert.deepEqual((await db.all('SELECT version FROM schema_migrations ORDER BY version')).map(r=>r.version),[1,2]);
+  assert.deepEqual((await db.all('SELECT version FROM schema_migrations ORDER BY version')).map(r=>r.version),[1,2,3]);
   await db.run('DROP TABLE push_outbox');
   await assert.rejects(assertSchema(db));
  }finally{await db.close();}

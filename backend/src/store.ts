@@ -1,11 +1,12 @@
 import {radiationMeasurementSchema,type RadiationMeasurement} from './radiation.js';
 import {correlate,type Incident} from './correlation.js';
 import {DatabaseSync} from 'node:sqlite';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import pg from 'pg';
 import {eventSchema,type Event,type Health} from './domain.js';
 import {shelterSchema,searchText,type Shelter,type ShelterFilter} from './shelter.js';
 import {neptunTrackSchema,type NeptunTrack} from './neptun.js';
+import {initWorkerMetrics} from './operations.js';
 import {initPushStore,queuePushChanges,type PushEventChange} from './push.js';
 type Row=Record<string,unknown>;
 export interface Db {
@@ -49,6 +50,7 @@ export class Store{
   await this.db.run('CREATE TABLE IF NOT EXISTS shelters(id TEXT PRIMARY KEY,region_id TEXT NOT NULL,search_text TEXT NOT NULL,payload TEXT NOT NULL)');
   await this.db.run('CREATE INDEX IF NOT EXISTS shelter_region_idx ON shelters(region_id,id)');
   await initPushStore(this.db);
+  await initWorkerMetrics(this.db);
   if(this.db.kind==='postgres'){
    // An indexed generated column keeps geometry and the audited event payload
    // in the same atomic write, including existing events during migration.
@@ -95,7 +97,7 @@ export class Store{
   if(new Set(rows.map(s=>s.id)).size!==rows.length)throw new Error('SHELTER_DUPLICATE_ID');
 
   if(this.db.kind==='postgres'){
-   const stage=`shelters_stage_${process.pid}_${Date.now()}`;
+   const stage=`shelters_stage_${randomUUID().replaceAll('-','')}`;
    try{
     // Stage outside the final transaction so a large national catalog does not
     // hold locks or one long-running transaction while thousands of rows load.
@@ -113,13 +115,15 @@ export class Store{
      if(previous?.sourceContentHash===health.sourceContentHash&&previous?.sourceUpdatedAt===health.sourceUpdatedAt&&previous?.dataDate===health.dataDate){
       await scoped.setHealth(health);return;
      }
-     // The only user-visible lock is the short atomic replacement. A failure
-     // rolls back DELETE + INSERT + health together and preserves the old package.
+     // Serialize catalog writers without blocking SELECT. MVCC readers retain
+     // the old catalog until the delta and source health commit together.
      await db.run("SET LOCAL statement_timeout='120s'");
      await db.run("SET LOCAL lock_timeout='30s'");
-     await db.run('LOCK TABLE shelters IN ACCESS EXCLUSIVE MODE');
-     await db.run('DELETE FROM shelters');
-     await db.run(`INSERT INTO shelters(id,region_id,search_text,payload) SELECT id,region_id,search_text,payload FROM ${stage} ORDER BY id`);
+     await db.run('LOCK TABLE shelters IN SHARE ROW EXCLUSIVE MODE');
+     await db.run(`DELETE FROM shelters s WHERE NOT EXISTS (SELECT 1 FROM ${stage} t WHERE t.id=s.id)`);
+     await db.run(`INSERT INTO shelters(id,region_id,search_text,payload) SELECT id,region_id,search_text,payload FROM ${stage} ORDER BY id
+      ON CONFLICT(id) DO UPDATE SET region_id=excluded.region_id,search_text=excluded.search_text,payload=excluded.payload
+      WHERE shelters.region_id IS DISTINCT FROM excluded.region_id OR shelters.search_text IS DISTINCT FROM excluded.search_text OR shelters.payload::jsonb IS DISTINCT FROM excluded.payload::jsonb`);
      await scoped.setHealth(health);
     });
    }finally{

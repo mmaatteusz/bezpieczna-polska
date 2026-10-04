@@ -40,8 +40,10 @@ SHELTER_COUNT="$(psql "${DATABASE_URL}" -Atqc 'SELECT COUNT(*) FROM shelters')"
 
 jq -n   --arg createdAt "$(date -u +%FT%TZ)"   --arg serverVersion "${SERVER_VERSION}"   --arg postgisVersion "${POSTGIS_VERSION}"   --arg schemaVersion "${SCHEMA_VERSION}"   --arg sourceCount "${SOURCE_COUNT}"   --arg shelterCount "${SHELTER_COUNT}"   '{createdAt:$createdAt,serverVersion:$serverVersion,postgisVersion:$postgisVersion,schemaVersion:$schemaVersion,sourceCount:$sourceCount,shelterCount:$shelterCount}'   > "${META}"
 
+OFF_VM=false
 if [[ -x "${UPLOAD_HOOK}" ]]; then
   "${UPLOAD_HOOK}" "${DUMP}" "${DUMP}.sha256" "${META}"
+  OFF_VM=true
 else
   if [[ ${BP_REQUIRE_OFF_VM_BACKUP:-NO} == YES ]]; then
     echo "Required off-VM upload hook missing; backup job failed." >&2
@@ -54,5 +56,14 @@ find "${BACKUP_DIR}" -type f -name 'bezpieczna-polska-*.dump' -mtime "+${RETENTI
   while IFS= read -r -d '' old; do
     rm -f "${old}" "${old}.sha256" "${old}.json"
   done
+
+# Publish only after dump validation and any required off-VM upload succeed.
+# This file contains no credentials or backup paths and may be mounted read-only.
+STATUS_DIR=/var/lib/bezpieczna-polska/monitoring
+install -d -m 0755 "${STATUS_DIR}"
+jq -n --arg completedAt "$(date -u +%FT%TZ)" --argjson offVm "${OFF_VM}" \
+  '{completedAt:$completedAt,offVm:$offVm,restoreVerifiedAt:null}' > "${STATUS_DIR}/backup-status.json.tmp"
+chmod 0644 "${STATUS_DIR}/backup-status.json.tmp"
+mv "${STATUS_DIR}/backup-status.json.tmp" "${STATUS_DIR}/backup-status.json"
 
 echo "Backup complete: ${DUMP}"
