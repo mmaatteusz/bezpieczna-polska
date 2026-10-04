@@ -997,6 +997,15 @@ class _NotificationSettingsScreenState
                   : (value) => _update(prefs.copyWith(watchedLocations: value)),
             ),
           ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Włączenie tej kategorii wysyła na serwer nazwy, współrzędne '
+              'i promienie zapisanych miejsc, aby dobierać powiadomienia. '
+              'Zmiana wymaga połączenia z internetem; przy błędzie serwer '
+              'może nadal korzystać z poprzednich ustawień.',
+            ),
+          ),
           SwitchListTile(
             title: const Text('Cyberbezpieczeństwo'),
             value: prefs.cyber,

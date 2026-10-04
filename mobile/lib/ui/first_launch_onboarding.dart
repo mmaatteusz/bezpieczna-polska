@@ -127,7 +127,7 @@ class _FirstLaunchPermissionOnboardingState
                     description:
                         'Potrzebujemy dostępu do lokalizacji, aby pokazywać ostrzeżenia i zagrożenia dla Twojej okolicy oraz najbliższe miejsca schronienia.',
                     privacy:
-                        'Lokalizacja służy funkcjom aplikacji. Nie zapisujemy historii Twojego przemieszczania.',
+                        'Zapytania o okolicę i najbliższe schronienia wysyłają współrzędne do naszego API. Możesz pominąć GPS i wybrać miejscowość ręcznie.',
                     buttonLabel: 'Zezwól na lokalizację',
                     buttonIcon: Icons.my_location_rounded,
                     busy: _busy && _step == 0,
@@ -140,7 +140,7 @@ class _FirstLaunchPermissionOnboardingState
                         ? 'Włącz powiadomienia, aby otrzymywać ważne ostrzeżenia także wtedy, gdy aplikacja nie jest otwarta.'
                         : 'Powiadomienia nie są dostępne w tym buildzie aplikacji. Możesz dokończyć konfigurację i wrócić do nich później.',
                     privacy: widget.notificationsAvailable
-                        ? 'Rodzaje powiadomień możesz później zmienić w Ustawieniach.'
+                        ? 'Google Firebase dostarcza powiadomienia. Nasze API zapisuje identyfikator instalacji, token i kategorie. Osobne włączenie alertów obserwowanych miejsc wysyła ich nazwy, współrzędne i promienie. Szczegóły: Ustawienia → Polityka prywatności.'
                         : 'Pozostałe funkcje aplikacji będą działać normalnie.',
                     buttonLabel: widget.notificationsAvailable
                         ? 'Włącz powiadomienia'

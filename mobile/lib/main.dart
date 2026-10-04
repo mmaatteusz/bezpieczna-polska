@@ -16,6 +16,7 @@ import 'offline_packages.dart';
 import 'offline_repository.dart';
 import 'offline_data_screen.dart';
 import 'build_config.dart';
+import 'privacy_screen.dart';
 import 'app_version.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/alerts_screen.dart';
@@ -1046,6 +1047,19 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                         );
                       },
                     ),
+                  ListTile(
+                    title: const Text('Polityka prywatności'),
+                    subtitle: const Text('Lokalizacja, powiadomienia i dane'),
+                    leading: const Icon(Icons.privacy_tip_outlined),
+                    onTap: () {
+                      Navigator.pop(sheet);
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => PrivacyScreen(openLink: openLink),
+                        ),
+                      );
+                    },
+                  ),
                   ListTile(
                     title: const Text('Diagnostyka źródeł'),
                     subtitle: const Text(
