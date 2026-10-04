@@ -20,6 +20,8 @@ dependencies:
   firebase_messaging: ^16.7.0
   flutter_secure_storage: ^10.3.4
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0

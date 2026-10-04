@@ -33,9 +33,29 @@ MapRequest shelterViewportRequest(
   String availability = 'ALL',
 ]) => MapRequest(bbox, zoom, 'PL', availability);
 
-const double shelterDetailZoom = 8.0;
+const double shelterDetailZoom = 4.0;
 
 bool mapShowsShelters(double zoom) => zoom >= shelterDetailZoom;
+
+String? shelterClusterTier(double zoom) {
+  if (zoom < 9) return 'REGION';
+  if (zoom < 12) return 'LOCAL';
+  if (zoom < 14) return 'NEAR';
+  return null;
+}
+
+int shelterClusterGridCells(double zoom) {
+  if (zoom < 12) return 6;
+  if (zoom < 14) return 12;
+  return 18;
+}
+
+double shelterClusterExpansionZoom(double zoom) {
+  if (zoom < 9) return 9;
+  if (zoom < 12) return 12;
+  if (zoom < 14) return 14;
+  return (zoom.floor() + 1).clamp(15, 22).toDouble();
+}
 
 bool mapDatasetChanged(MapRequest? rendered, MapRequest next) =>
     rendered != null &&
@@ -519,7 +539,12 @@ class ShelterMapProvider implements MapLayerProvider {
         .toList(growable: false);
 
     final features = <Map<String, dynamic>>[];
-    if (visible.length <= 500) {
+    final requestedTier = shelterClusterTier(q.zoom);
+    final detailOverflow = requestedTier == null && visible.length > 1089;
+    final clusterTier =
+        requestedTier ?? (detailOverflow ? 'DETAIL_OVERFLOW' : null);
+
+    if (clusterTier == null) {
       for (final item in visible) {
         features.add({
           'type': 'Feature',
@@ -531,17 +556,54 @@ class ShelterMapProvider implements MapLayerProvider {
           'properties': {...item, 'cluster': false},
         });
       }
+    } else if (clusterTier == 'REGION') {
+      final regions = <String, List<Map<String, dynamic>>>{};
+      for (final item in visible) {
+        final regionId = item['regionId']?.toString() ?? 'PL';
+        regions.putIfAbsent(regionId, () => []).add(item);
+      }
+      for (final entry in regions.entries) {
+        final rows = entry.value;
+        final lon =
+            rows.fold<double>(
+              0,
+              (sum, item) => sum + (item['longitude'] as num).toDouble(),
+            ) /
+            rows.length;
+        final lat =
+            rows.fold<double>(
+              0,
+              (sum, item) => sum + (item['latitude'] as num).toDouble(),
+            ) /
+            rows.length;
+        features.add({
+          'type': 'Feature',
+          'id': 'offline-cluster-region-${entry.key}',
+          'geometry': {
+            'type': 'Point',
+            'coordinates': [lon, lat],
+          },
+          'properties': {
+            'cluster': true,
+            'clusterTier': clusterTier,
+            'regionId': entry.key,
+            'point_count': rows.length,
+            'expansionZoom': shelterClusterExpansionZoom(q.zoom),
+          },
+        });
+      }
     } else {
-      final width = (q.bbox[2] - q.bbox[0]) / 32;
-      final height = (q.bbox[3] - q.bbox[1]) / 32;
+      final gridSize = shelterClusterGridCells(q.zoom);
+      final width = (q.bbox[2] - q.bbox[0]) / gridSize;
+      final height = (q.bbox[3] - q.bbox[1]) / gridSize;
       final cells = <String, List<Map<String, dynamic>>>{};
       for (final item in visible) {
         final gx = (((item['longitude'] as num) - q.bbox[0]) / width)
             .floor()
-            .clamp(0, 31);
+            .clamp(0, gridSize - 1);
         final gy = (((item['latitude'] as num) - q.bbox[1]) / height)
             .floor()
-            .clamp(0, 31);
+            .clamp(0, gridSize - 1);
         cells.putIfAbsent('$gx:$gy', () => []).add(item);
       }
       for (final entry in cells.entries) {
@@ -560,15 +622,16 @@ class ShelterMapProvider implements MapLayerProvider {
             rows.length;
         features.add({
           'type': 'Feature',
-          'id': 'offline-cluster-${entry.key}',
+          'id': 'offline-cluster-$clusterTier-${entry.key}',
           'geometry': {
             'type': 'Point',
             'coordinates': [lon, lat],
           },
           'properties': {
             'cluster': true,
+            'clusterTier': clusterTier,
             'point_count': rows.length,
-            'expansionZoom': (q.zoom.floor() + 2).clamp(0, 22),
+            'expansionZoom': shelterClusterExpansionZoom(q.zoom),
           },
         });
       }
@@ -600,7 +663,8 @@ class ShelterMapProvider implements MapLayerProvider {
         'availability': q.availability,
         'total': visible.length,
         'returned': features.length,
-        'clustered': visible.length > 500,
+        'clustered': clusterTier != null,
+        'clusterTier': clusterTier,
         'version': package.shelterVersion,
         'dataDate': visible.isEmpty ? null : visible.first['dataDate'],
         'health': health,

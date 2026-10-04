@@ -1,0 +1,28 @@
+name: Roll out approved Oracle release
+on:
+  workflow_run:
+    workflows: [Auto bump alpha on main]
+    branches: [main]
+    types: [completed]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success' && contains(github.event.workflow_run.head_commit.message, '[deploy-oracle]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      API_BASE_URL: ${{ vars.PREVIEW_API_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Request exact approved main deployment after version bump
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$API_BASE_URL"
+          TARGET_SHA="$(git rev-parse HEAD)"
+          gh workflow run oracle-deploy.yml --ref main -f "target_sha=$TARGET_SHA" -f "api_base_url=$API_BASE_URL"

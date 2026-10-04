@@ -92,11 +92,24 @@ void main() {
       );
     },
   );
-  test('shelters are hidden on national overview zoom levels', () {
-    expect(mapShowsShelters(10.5), isTrue);
-    expect(mapShowsShelters(8.0), isTrue);
-    expect(mapShowsShelters(7.9), isFalse);
-    expect(mapShowsShelters(5.2), isFalse);
+  test('shelter visibility and clustering follow zoom tiers', () {
+    expect(mapShowsShelters(14.0), isTrue);
+    expect(mapShowsShelters(9.0), isTrue);
+    expect(mapShowsShelters(5.2), isTrue);
+    expect(mapShowsShelters(4.0), isTrue);
+    expect(mapShowsShelters(3.9), isFalse);
+
+    expect(shelterClusterTier(8.9), 'REGION');
+    expect(shelterClusterTier(9.0), 'LOCAL');
+    expect(shelterClusterTier(11.9), 'LOCAL');
+    expect(shelterClusterTier(12.0), 'NEAR');
+    expect(shelterClusterTier(13.9), 'NEAR');
+    expect(shelterClusterTier(14.0), isNull);
+    expect(shelterClusterGridCells(10), 6);
+    expect(shelterClusterGridCells(13), 12);
+    expect(shelterClusterExpansionZoom(8.5), 9);
+    expect(shelterClusterExpansionZoom(10.5), 12);
+    expect(shelterClusterExpansionZoom(13), 14);
   });
 
   test('shelter viewport is not limited by the selected status region', () {

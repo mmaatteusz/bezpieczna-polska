@@ -54,7 +54,8 @@ test('loaded shelter snapshot ahead of catalog counter is not marked mismatched'
  }],now)[0];
  assert.equal(health.catalogMismatch,false);
 });
-test('authenticated admin can atomically import a validated official shelter CSV',async()=>{
+test('authenticated admin can atomically import a validated official shelter CSV',async t=>{
+ t.mock.timers.enable({apis:['Date'],now});
  const db=openDb(undefined,':memory:'),store=new Store(db),token='t'.repeat(32),original=globalThis.fetch;await store.init();
  globalThis.fetch=async input=>{
   const url=typeof input==='string'?input:input instanceof URL?input.href:input.url;
@@ -142,7 +143,8 @@ test('shelter failure re-reads latest health and cannot overwrite a newer import
   assert.equal(after.state,'DEGRADED');assert.equal(after.complete,true);assert.equal(after.itemCount,86388);assert.equal(after.sourceContentHash,'b'.repeat(64));assert.equal(after.errorCode,'SHELTER_FALLBACK_OLDER_THAN_LAST_GOOD');
  }finally{await db.close();}
 });
-test('older official archive never replaces a newer last-known-good shelter catalog',async()=>{
+test('older official archive never replaces a newer last-known-good shelter catalog',async t=>{
+ t.mock.timers.enable({apis:['Date'],now});
  const db=openDb(undefined,':memory:'),store=new Store(db);await store.init();
  try{
   const current=await batch();await ingest(store,[{...shelterAdapter,minSyncIntervalSeconds:0,sync:async()=>current}]);
