@@ -9,8 +9,9 @@ Future<void> main() async {
       Process.run('adb', ['-s', device, ...args]);
   final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 18443);
   final reverse = await adb(['reverse', 'tcp:18443', 'tcp:18443']);
-  if (reverse.exitCode != 0)
+  if (reverse.exitCode != 0) {
     throw StateError('Could not connect native tap driver: ${reverse.stderr}');
+  }
   var taps = 0;
   server.listen((socket) async {
     try {
@@ -20,8 +21,9 @@ Future<void> main() async {
           .first;
       final request = jsonDecode(line) as Map<String, dynamic>;
       final x = request['x'] as int, y = request['y'] as int;
-      if (x < 0 || y < 0 || x >= request['width'] || y >= request['height'])
+      if (x < 0 || y < 0 || x >= request['width'] || y >= request['height']) {
         throw StateError('Tap outside Flutter view');
+      }
       var top = 0;
       if ((request['paddingTop'] as num) == 0) {
         final display = await adb(['shell', 'dumpsys', 'window', 'displays']);
@@ -29,8 +31,9 @@ Future<void> main() async {
         final stable =
             RegExp(r'(?:mStable|stable)=\[(\d+),(\d+)\]').firstMatch(dump) ??
             RegExp(r'(?:mStable|stable)=Rect\((\d+),\s*(\d+)').firstMatch(dump);
-        if (stable == null)
+        if (stable == null) {
           throw StateError('Cannot resolve Android content origin: $dump');
+        }
         top = int.parse(stable.group(2)!);
       }
       final capture = await Process.run('adb', [
