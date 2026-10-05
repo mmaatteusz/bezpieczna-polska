@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:bezpieczna_polska/model.dart';
 import 'package:bezpieczna_polska/neptun.dart';
@@ -433,6 +434,7 @@ void main() {
     final socket = await Socket.connect('127.0.0.1', 18443);
     socket.writeln(
       jsonEncode({
+        'verifySymbols': true,
         'x': (target.dx * dpr).round(),
         'y': (target.dy * dpr).round(),
         'paddingTop': tester.view.padding.top,
@@ -446,7 +448,52 @@ void main() {
         .transform(const LineSplitter())
         .first;
     socket.destroy();
-    expect(jsonDecode(reply)['ok'], isTrue);
+    final response = jsonDecode(reply) as Map<String, dynamic>;
+    expect(response['ok'], isTrue);
+    final codec = await ui.instantiateImageCodec(
+      base64Decode(response['screenshot'] as String),
+    );
+    final screenshot = (await codec.getNextFrame()).image;
+    final pixels = (await screenshot.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    ))!.buffer.asUint8List();
+    final top = (response['screenY'] as int) - (target.dy * dpr).round();
+    // Native feature queries also find invisible symbol buckets. Assert pixels
+    // from Android's actual screen, excluding each badge's white border.
+    for (final location in [
+      const LatLng(49, 31),
+      for (final coordinate in locations.skip(3))
+        LatLng(coordinate[1], coordinate[0]),
+    ]) {
+      final screen = await neptunController.toScreenLocation(location);
+      final x = (origin.dx * dpr + screen.x).round();
+      final y = (origin.dy * dpr + screen.y + top).round();
+      final radius = (10 * dpr).round();
+      var whitePixels = 0;
+      for (var dy = -radius; dy <= radius; dy++) {
+        for (var dx = -radius; dx <= radius; dx++) {
+          if (dx * dx + dy * dy > radius * radius) continue;
+          final px = x + dx, py = y + dy;
+          if (px < 0 ||
+              py < 0 ||
+              px >= screenshot.width ||
+              py >= screenshot.height)
+            continue;
+          final offset = (py * screenshot.width + px) * 4;
+          if (pixels[offset] > 220 &&
+              pixels[offset + 1] > 220 &&
+              pixels[offset + 2] > 220)
+            whitePixels++;
+        }
+      }
+      expect(
+        whitePixels,
+        greaterThan(5 * dpr * dpr),
+        reason: 'Native count or icon is blank at $location',
+      );
+    }
+    screenshot.dispose();
+    codec.dispose();
     for (
       var i = 0;
       i < 150 && find.text('3 wpisów w tym obszarze').evaluate().isEmpty;

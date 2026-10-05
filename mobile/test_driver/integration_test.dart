@@ -55,6 +55,8 @@ Future<void> main() async {
           'screenX': x,
           'screenY': y + top,
           'error': result.stderr,
+          if (request['verifySymbols'] == true && capture.exitCode == 0)
+            'screenshot': base64Encode(capture.stdout as List<int>),
         }),
       );
       await socket.flush();

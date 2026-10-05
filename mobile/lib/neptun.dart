@@ -1077,7 +1077,8 @@ class _NeptunMapState extends State<NeptunMap> {
       await c.addSource(
         'neptun-live',
         GeojsonSourceProperties(
-          data: widget.data.live['map'],
+          // Populate only after images and symbol layers have been registered.
+          data: {'type': 'FeatureCollection', 'features': []},
           cluster: true,
           clusterRadius: 48,
           clusterMaxZoom: 16,
@@ -1158,6 +1159,7 @@ class _NeptunMapState extends State<NeptunMap> {
         filter: ['has', 'point_count'],
       );
       ready = true;
+      await syncSources();
     } catch (_) {
       if (mounted) {
         setState(() {
