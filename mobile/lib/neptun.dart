@@ -560,43 +560,6 @@ Future<Uint8List> neptunIconPng(String type, {double pixelRatio = 1}) async {
   return bytes.buffer.asUint8List();
 }
 
-/// Rasterised counts keep native markers readable without downloading glyphs.
-/// Counts above 99 use 99+; the selection sheet retains the exact total.
-Future<Uint8List> neptunGroupCountPng(
-  int count, {
-  double pixelRatio = 1,
-}) async {
-  const size = 40.0;
-  final painter = TextPainter(
-    text: TextSpan(
-      text: count >= 100 ? '99+' : '$count',
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w700,
-        color: Colors.white,
-      ),
-    ),
-    textDirection: TextDirection.ltr,
-  )..layout();
-  final recorder = ui.PictureRecorder();
-  final canvas = Canvas(recorder)..scale(pixelRatio);
-  painter.paint(
-    canvas,
-    Offset((size - painter.width) / 2, (size - painter.height) / 2),
-  );
-  final picture = recorder.endRecording();
-  final image = await picture.toImage(
-    (size * pixelRatio).ceil(),
-    (size * pixelRatio).ceil(),
-  );
-  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-  image.dispose();
-  picture.dispose();
-  painter.dispose();
-  if (bytes == null) throw StateError('Brak obrazu licznika NEPTUN');
-  return bytes.buffer.asUint8List();
-}
-
 Future<void> _registerNeptunMapIcons(
   MapLibreMapController controller,
   double pixelRatio,
@@ -915,23 +878,6 @@ class _NeptunMapState extends State<NeptunMap> {
     }
   }
 
-  final groupIconCounts = <int>{};
-
-  Future<void> registerGroupCounts(
-    MapLibreMapController c,
-    double pixelRatio,
-  ) async {
-    final maximum = widget.data.liveThreats.length.clamp(0, 100);
-    for (var count = 2; count <= maximum; count++) {
-      if (groupIconCounts.contains(count)) continue;
-      await c.addImage(
-        'neptun-group-$count',
-        await neptunGroupCountPng(count, pixelRatio: pixelRatio),
-      );
-      groupIconCounts.add(count);
-    }
-  }
-
   Future<void> syncSources() async {
     final c = controller;
     if (!ready || c == null) return;
@@ -942,7 +888,6 @@ class _NeptunMapState extends State<NeptunMap> {
     syncInProgress = true;
     final data = widget.data;
     try {
-      await registerGroupCounts(c, MediaQuery.devicePixelRatioOf(context));
       lastSymbolSignature = null;
       await c.setGeoJsonSource('neptun-live', data.live['map']);
       await c.setGeoJsonSource('neptun-history', data.data['map']);
@@ -980,14 +925,14 @@ class _NeptunMapState extends State<NeptunMap> {
       final width = MediaQuery.sizeOf(context).width;
       final rendered = await c.queryRenderedFeaturesInRect(
         Rect.fromLTWH(0, 0, width * dpr, 380 * dpr),
-        ['neptun-live-groups', 'neptun-live-hit-points'],
+        ['neptun-live-hit-points'],
         null,
       );
       if (!mounted || controller != c || cameraMoving) return;
       final unique = <String, Map>{};
       for (final feature in rendered.whereType<Map>()) {
         final properties = feature['properties'] as Map;
-        final id = properties['cluster_id'] ?? properties['threatId'];
+        final id = properties['threatId'];
         if (id != null) unique['$id'] = feature;
       }
       final keys = unique.keys.toList()..sort();
@@ -998,16 +943,13 @@ class _NeptunMapState extends State<NeptunMap> {
         final feature = unique[key]!;
         final coordinates = feature['geometry']['coordinates'] as List;
         final properties = feature['properties'] as Map;
-        final count = (properties['point_count'] as num?)?.toInt();
         options.add(
           SymbolOptions(
             geometry: LatLng(
               (coordinates[1] as num).toDouble(),
               (coordinates[0] as num).toDouble(),
             ),
-            iconImage: count == null
-                ? neptunMapIconId(properties['type'] as String)
-                : 'neptun-group-${count.clamp(2, 100)}',
+            iconImage: neptunMapIconId(properties['type'] as String),
             iconSize: 1,
             iconAnchor: 'center',
           ),
@@ -1038,24 +980,13 @@ class _NeptunMapState extends State<NeptunMap> {
     try {
       debugPrint('NEPTUN native tap: $point');
       final features = await c.queryRenderedFeatures(point, const [
-        'neptun-live-groups',
         'neptun-live-hit-points',
       ], null);
       if (!mounted || features.isEmpty) return;
       final candidates = <String, Map<String, dynamic>>{};
       for (final feature in features.whereType<Map>()) {
-        final properties = feature['properties'];
-        final leaves = properties is Map && properties['cluster'] == true
-            ? await c.getClusterLeaves(
-                'neptun-live',
-                (properties['cluster_id'] as num).toInt(),
-                limit: (properties['point_count'] as num).toInt(),
-              )
-            : [feature];
-        for (final leaf in leaves) {
-          final item = neptunThreatForFeature(widget.data, leaf);
-          if (item != null) candidates[item['id'] as String] = item;
-        }
+        final item = neptunThreatForFeature(widget.data, feature);
+        if (item != null) candidates[item['id'] as String] = item;
       }
       if (!mounted || candidates.isEmpty) return;
       debugPrint('NEPTUN selected entries: ${candidates.length}');
@@ -1195,14 +1126,12 @@ class _NeptunMapState extends State<NeptunMap> {
         GeojsonSourceProperties(
           // Populate only after images and symbol layers have been registered.
           data: {'type': 'FeatureCollection', 'features': []},
-          cluster: true,
-          clusterRadius: 48,
-          clusterMaxZoom: 16,
+          // Keep the type of each live entry visible even at country scale.
+          // Nearby entries may overlap; tapping them opens the entry picker.
+          cluster: false,
         ),
       );
-      groupIconCounts.clear();
       await _registerNeptunMapIcons(c, pixelRatio);
-      await registerGroupCounts(c, pixelRatio);
       await c.addCircleLayer(
         'neptun-live',
         'neptun-live-hit-points',
@@ -1211,24 +1140,9 @@ class _NeptunMapState extends State<NeptunMap> {
           circleRadius: 22,
           circleOpacity: 0.001,
         ),
-        filter: [
-          '!',
-          ['has', 'point_count'],
-        ],
       );
-      await c.addCircleLayer(
-        'neptun-live',
-        'neptun-live-groups',
-        const CircleLayerProperties(
-          circleColor: '#263238',
-          circleRadius: 19,
-          circleStrokeColor: '#ffffff',
-          circleStrokeWidth: 2,
-        ),
-        filter: ['has', 'point_count'],
-      );
-      // Rebuild the annotation layer above cluster backgrounds. This is the
-      // same bitmap path used by shelter markers, with no glyph dependency.
+      // Bitmap annotations retain a fixed screen size at every zoom and do not
+      // disappear through collision placement. No remote glyphs are required.
       await c.setSymbolIconAllowOverlap(true);
       await c.setSymbolIconIgnorePlacement(true);
       ready = true;
@@ -1275,7 +1189,7 @@ class _NeptunMapState extends State<NeptunMap> {
       ),
       const SizedBox(height: 6),
       const Text(
-        'Liczba na znaczniku oznacza grupę wpisów — dotknij, aby wybrać wpis. ',
+        'Ikony wpisów są widoczne także po oddaleniu mapy. Dotknij nakładających się ikon, aby wybrać wpis.',
       ),
       const Text(
         'Kolor obwódki i kształt oznaczają typ: pomarańczowy — dron/FPV, niebieski — rozpoznanie, czerwony — rakieta, różowy — balistyka, ceglasty — KAB, fioletowy — MiG-31K. Ikony są zawsze ustawione pionowo i nie pokazują kierunku lotu. Pozycje pozostają celowo zgrubne. Fioletowe linie: wyłącznie historia.',
