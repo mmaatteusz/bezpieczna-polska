@@ -242,6 +242,7 @@ class _ShelterMapState extends State<ShelterMap> {
   ) async {
     final c = controller;
     if (c == null || !ready || widget.ukraine) return;
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
 
     await c.clearCircles();
     if (!isCurrent()) return;
@@ -260,7 +261,6 @@ class _ShelterMapState extends State<ShelterMap> {
     final labelData = <Map<String, dynamic>>[];
     final labelImages = <String, String>{};
 
-    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
     for (final feature in shelterDisplayFeatures(rawFeatures, zoom)) {
       final coordinates = feature['geometry']['coordinates'] as List;
       final p = Map<String, dynamic>.from(feature['properties'] as Map);

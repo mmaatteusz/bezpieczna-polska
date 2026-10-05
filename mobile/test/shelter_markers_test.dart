@@ -107,8 +107,9 @@ void main() {
             final offset = (y * image.width + x) * 4;
             if (pixels.getUint8(offset) > 220 &&
                 pixels.getUint8(offset + 1) > 220 &&
-                pixels.getUint8(offset + 2) > 220)
+                pixels.getUint8(offset + 2) > 220) {
               white++;
+            }
           }
         }
         expect(
