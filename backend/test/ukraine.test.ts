@@ -79,6 +79,48 @@ test('UA live snapshot fails closed when an active child cannot be resolved to a
  const payload=[{regionId:'fixture-a',regionName:'Область А',regionType:'State',lastUpdate:start,activeAlerts:[{regionId:'missing-child',regionType:'Community',type:'AIR',lastUpdate:start}]}];
  assert.throws(()=>parseUaLiveSnapshot(payload,[],now),/UA_ACTIVE_REGION_UNRESOLVED/);
 });
+test('UA inherited state alert repeated in two districts keeps its exact state scope',()=>{
+ const alarm={regionId:'fixture-a',regionType:'State',type:'AIR',lastUpdate:start};
+ const payload=[
+  {regionId:'fixture-a',regionName:'Область А',regionType:'State',lastUpdate:start,activeAlerts:[alarm]},
+  ...['district-one','district-two'].map(regionId=>({regionId,regionName:regionId,regionType:'District',lastUpdate:start,activeAlerts:[alarm]}))
+ ];
+ for(const rows of [payload,[...payload].reverse()]){
+  const batch=parseUaLiveSnapshot(rows,[],now);
+  assert.equal(batch.events.length,1);
+  assert.equal(batch.events[0].ukraine?.regionId,'fixture-a');
+  assert.equal(batch.events[0].ukraine?.regionType,'State');
+  assert.equal(batch.events[0].ukraine?.parentRegionId,null);
+  assert.ok(batch.regions.every(r=>r.parentId===null));
+  assert.deepEqual(batch.activeEventIds,[batch.events[0].id]);
+ }
+});
+test('UA child alert repeated in state and district rows does not invent a parent or expand scope',()=>{
+ const alarm={regionId:'fixture-city',regionType:'Community',type:'AIR',lastUpdate:start};
+ const payload=[
+  {regionId:'fixture-a',regionName:'Область А',regionType:'State',lastUpdate:start,activeAlerts:[alarm]},
+  {regionId:'fixture-district',regionName:'Район А',regionType:'District',lastUpdate:start,activeAlerts:[alarm]},
+  {regionId:'fixture-city',regionName:'Місто А',regionType:'Community',lastUpdate:start,activeAlerts:[alarm]}
+ ];
+ for(const rows of [payload,[...payload].reverse()]){
+  const first=parseUaLiveSnapshot(rows,[],now);
+  assert.equal(first.events.length,1);
+  const event=first.events[0];
+  assert.equal(event.ukraine?.regionId,'fixture-city');
+  assert.equal(event.ukraine?.parentRegionId,null);
+  assert.equal(event.ukraine?.regionType,'Community');
+  assert.equal(event.areaPrecision,'PROVINCE_SUBSET');
+  assert.equal(event.geometry,null);
+  const next=parseUaLiveSnapshot(rows,[event],new Date(+now+90000));
+  assert.equal(next.events[0].id,event.id);
+  assert.equal(next.events[0].lifecycle,'ACTIVE');
+ }
+});
+test('UA repeated alert still rejects conflicting owner metadata',()=>{
+ const payload=[...active(),{regionId:'fixture-district',regionName:'Район А',regionType:'District',lastUpdate:start,activeAlerts:[{regionId:'fixture-a',regionType:'Community',type:'AIR',lastUpdate:start}]}];
+ assert.throws(()=>parseUaLiveSnapshot(payload,[],now),/UA_REGION_TYPE_CONFLICT/);
+ assert.throws(()=>parseUaLiveSnapshot([...active(),{...active()[0],regionName:'Different region'}],[],now),/UA_ACTIVE_REGION_CONFLICT/);
+});
 test('UA live transport errors identify alerts endpoint without exposing credentials',async()=>{
  const fetchText=async(url:string)=>{if(url===UA_API+'/alerts')throw new Error('UA_HTTP_401');return JSON.stringify({type:'FeatureCollection',features:[]});};
  await assert.rejects(ukraineAdapter.sync({now,fetchText}),/UA_ALERTS_HTTP_401/);

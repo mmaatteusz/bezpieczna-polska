@@ -7,7 +7,7 @@ import type {SourceAdapter,SourceContext} from './source-adapter.js';
 // Published contract: UkraineAlarm/UkraineAlarm-javascript, API v3.
 export const UA_API='https://api.ukrainealarm.com/api/v3';
 export const UA_MAP='https://map.ukrainealarm.com/';
-export const UA_VERSION='ukrainealarm-v3/1.2.0';
+export const UA_VERSION='ukrainealarm-v3/1.3.0';
 export const uaRegionSchema=z.object({id:z.string().min(1).max(80),name:z.string().min(1).max(200),type:z.enum(['State','District','Community']),parentId:z.string().nullable()});
 export type UaRegion=z.infer<typeof uaRegionSchema>;
 const id=z.string().regex(/^[A-Za-z0-9_-]{1,80}$/);
@@ -110,11 +110,9 @@ export function parseUaLiveSnapshot(activeInput:unknown,previous:Event[],now:Dat
    const row=byId.get(a.regionId);
    if(!row)throw new Error('UA_ACTIVE_REGION_UNRESOLVED');
    if(a.regionType&&a.regionType!=='Null'&&row.type!==a.regionType)throw new Error('UA_REGION_TYPE_CONFLICT');
-   if(a.regionId!==group.regionId&&byId.has(group.regionId)){
-    const parent=byId.get(group.regionId)!;
-    if(row.parentId&&row.parentId!==parent.id)throw new Error('UA_REGION_RELATION_CONFLICT');
-    row.parentId=parent.id;
-   }
+   // activeAlerts lists applicable alarms, not administrative children. A
+   // repeated or inherited alert retains the scope of its own regionId.
+   // This endpoint has no parent relation; only /regions establishes that tree.
   }
  }
  const uaPrevious=[...previous]
