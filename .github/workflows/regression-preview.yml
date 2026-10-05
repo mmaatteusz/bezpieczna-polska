@@ -157,6 +157,13 @@ jobs:
           VERSION="$(sed -nE 's/^version: ([^+]+)\+[0-9]+$/\1/p' mobile/pubspec.yaml)"
           test -n "$VERSION"
           echo "APP_RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+          if [[ "$VERSION" =~ -beta\.[0-9]+$ ]]; then
+            echo "APP_RELEASE_CHANNEL=beta" >> "$GITHUB_ENV"
+            echo "APK_DEVELOPER_SETTINGS=false" >> "$GITHUB_ENV"
+          else
+            echo "APP_RELEASE_CHANNEL=preview" >> "$GITHUB_ENV"
+            echo "APK_DEVELOPER_SETTINGS=true" >> "$GITHUB_ENV"
+          fi
       - name: Build Android preview
         working-directory: mobile
         run: >-
@@ -164,9 +171,9 @@ jobs:
           --dart-define=APP_ENV=preview
           --dart-define="APP_VERSION=$APP_RELEASE_VERSION"
           --dart-define="APP_BUILD_NUMBER=$PREVIEW_DISPLAY_BUILD"
-          --dart-define=APP_CHANNEL=preview
+          --dart-define="APP_CHANNEL=$APP_RELEASE_CHANNEL"
           --dart-define="API_BASE_URL=$PREVIEW_API_BASE_URL"
-          --dart-define=ENABLE_DEVELOPER_SETTINGS=true
+          --dart-define="ENABLE_DEVELOPER_SETTINGS=$APK_DEVELOPER_SETTINGS"
           --dart-define="FIREBASE_API_KEY=$FIREBASE_API_KEY"
           --dart-define="FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"
           --dart-define="FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID"

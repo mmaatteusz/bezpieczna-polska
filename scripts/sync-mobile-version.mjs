@@ -36,6 +36,9 @@ const generatedMobile =
   `  if (appChannel == 'preview') {\n` +
   `    return '\$appVersion • preview build \$appBuildNumber';\n` +
   `  }\n` +
+  `  if (appChannel == 'beta') {\n` +
+  `    return '\$appVersion • beta build \$appBuildNumber';\n` +
+  `  }\n` +
   `  if (appChannel == 'production') {\n` +
   `    return '\$appVersion • build \$appBuildNumber';\n` +
   `  }\n` +

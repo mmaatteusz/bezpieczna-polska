@@ -187,10 +187,11 @@ void main() {
       expect(find.text('Odległy komunikat'), findsNothing);
       expect(find.textContaining('Lokalny komunikat'), findsNWidgets(3));
       expect(find.text('SPOKOJNIE'), findsNothing);
-      expect(
-        tester.getTopLeft(find.text('Twoja okolica')).dy,
-        lessThan(tester.getTopLeft(find.text('Polska')).dy),
-      );
+      expect(find.text('Polska'), findsNothing);
+      expect(find.text('Sytuacja w kraju'), findsOneWidget);
+      await tester.tap(find.text('Sytuacja w kraju'));
+      await tester.pumpAndSettle();
+      expect(find.text('Polska'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

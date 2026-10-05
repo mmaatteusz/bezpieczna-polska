@@ -211,6 +211,53 @@ test('Ukraine is an opt-in category and never becomes Polish push',async()=>{
  }finally{await db.close();}
 });
 
+test('Ukraine feed disappearance records history without sending an all-clear push',async()=>{
+ const {db,store,push,provider}=await setup();
+ try{
+  await push.register(registerBody(deviceA,undefined,{preferences:basePreferences({ukraine:true})}),secret,now);
+  const active={...uaEvent('inferred-end'),validTo:null};
+  await store.put(active);await push.dispatchDue(now);
+  await store.put({...active,lifecycle:'ENDED',correction:'Bieżący feed nie zawiera już alarmu.'});
+  assert.equal((await store.get(active.id))?.lifecycle,'ENDED');
+  assert.equal((await outbox(db)).length,1);
+  assert.equal(provider.sent.length,1);
+  // A future adapter can still send an end with an official timestamp.
+  const official={...uaEvent('official-end'),validTo:null};await store.put(official);
+  await store.put({...official,lifecycle:'ENDED',validTo:iso(0)});
+  assert.equal((await outbox(db)).filter(r=>r.notification_kind==='ENDED').length,1);
+ }finally{await db.close();}
+});
+
+test('legacy pending Ukraine inferred endings are suppressed at dispatch',async()=>{
+ const {db,store,push,provider}=await setup();
+ try{
+  await push.register(registerBody(deviceA,undefined,{preferences:basePreferences({ukraine:true})}),secret,now);
+  const active={...uaEvent('legacy-end'),validTo:null};await store.put(active);
+  await store.put({...active,lifecycle:'ENDED'});
+  const latest=await store.get(active.id);
+  await db.run("UPDATE push_outbox SET notification_kind='ENDED',event_revision=?",[latest!.revision]);
+  await push.dispatchDue(now);
+  assert.equal((await outbox(db))[0].last_error_code,'UA_CLEARANCE_UNCONFIRMED');
+  assert.equal((await outbox(db))[0].state,'SUPERSEDED');
+  assert.equal(provider.sent.length,0);
+ }finally{await db.close();}
+});
+
+test('turning a category off cancels pending and retry notifications before provider send',async()=>{
+ const {db,store,push,provider}=await setup();
+ try{
+  await push.register(registerBody(deviceA,undefined,{preferences:basePreferences({ukraine:true})}),secret,now);
+  await store.put({...uaEvent('preferences'),validTo:null});
+  provider.results.push({kind:'RETRY',code:'TEMPORARY'});
+  await push.dispatchDue(now);
+  await push.preferences(deviceA,basePreferences({ukraine:false}),secret,now);
+  await push.dispatchDue(new Date(+now+31000));
+  assert.equal(provider.sent.length,1);
+  assert.equal((await outbox(db))[0].last_error_code,'PREFERENCES_CHANGED');
+  assert.equal((await outbox(db))[0].state,'SUPERSEDED');
+ }finally{await db.close();}
+});
+
 test('cyber and border remain separate opt-in push categories',async()=>{
  const {db,store,push}=await setup();
  try{

@@ -65,25 +65,26 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Sytuacja teraz'), findsOneWidget);
-    expect(find.text('Polska'), findsOneWidget);
+    expect(find.text('Polska'), findsNothing);
     expect(find.text('Twoja okolica'), findsOneWidget);
     expect(find.text('Ustaw lokalizację'), findsOneWidget);
     expect(find.text('Bezpieczna Polska'), findsOneWidget);
-    expect(find.text('Istotne zagrożenia'), findsOneWidget);
+    expect(find.text('Istotne zagrożenia'), findsNothing);
     expect(find.text('Źródła i aktualność'), findsNothing);
     expect(find.text('Diagnostyka źródeł'), findsNothing);
     expect(find.byType(NavigationDestination), findsNWidgets(4));
 
-    expect(
-      find.textContaining('Najpierw spróbujemy ustalić miejscowość z GPS'),
-      findsOneWidget,
-    );
+    expect(find.text('Otwórz mapę'), findsOneWidget);
+    expect(find.text('Wszystkie alerty'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('Polska'),
+      find.text('Sytuacja w kraju'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.tap(find.text('Sytuacja w kraju'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Polska'));
     await tester.tap(find.text('Polska'));
     await tester.pumpAndSettle();
     expect(find.text('Alerty'), findsWidgets);
@@ -262,10 +263,11 @@ void main() {
       expect(requests, greaterThanOrEqualTo(2));
       expect(find.text('Ustaw lokalizację'), findsOneWidget);
       await tester.scrollUntilVisible(
-        find.text('Polska'),
+        find.text('Sytuacja w kraju'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.tap(find.text('Sytuacja w kraju'));
       await tester.pumpAndSettle();
       expect(
         find.text('Brak wystarczających aktualnych danych'),

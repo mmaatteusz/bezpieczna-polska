@@ -1,7 +1,7 @@
 name: Roll out approved Oracle release
 on:
   workflow_run:
-    workflows: [Auto bump alpha on main]
+    workflows: [Auto bump prerelease on main]
     branches: [main]
     types: [completed]
 permissions:

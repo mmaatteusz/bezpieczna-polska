@@ -1,8 +1,8 @@
 # Production runbook — Bezpieczna Polska
 
-Aktualny kod: **0.1.0-alpha.76**.
+Aktualny kod: **0.1.0-beta.1**.
 
-Schemat wersji: `0.1.0-alpha.N` oznacza etap funkcjonalny, `+build` w `pubspec.yaml` jest monotonicznym numerem produkcyjnym, a preview APK używa dodatkowo własnego rosnącego `versionCode` z CI. W interfejsie aplikacja pokazuje zarówno alphę, jak i konkretny numer buildu.
+Schemat wersji: `0.1.0-beta.N` oznacza etap testów beta; wcześniejsze `0.1.0-alpha.N` oznaczały etap funkcjonalny, `+build` w `pubspec.yaml` jest monotonicznym numerem produkcyjnym, a preview APK używa dodatkowo własnego rosnącego `versionCode` z CI. W interfejsie aplikacja pokazuje zarówno wersję, jak i konkretny numer buildu.
 
 Ten dokument opisuje konfigurację i kontrolę wydań. Dla Oracle korzystaj równocześnie z [ORACLE_CUTOVER_RUNBOOK.md](ORACLE_CUTOVER_RUNBOOK.md) i [ORACLE_OFF_VM_BACKUP.md](ORACLE_OFF_VM_BACKUP.md). Sekcje Railway z datą 26.09.2026 są historyczne oraz pomocne dla starszych klientów; nie potwierdzają bieżącej produkcji. Aktualne priorytety: [ROADMAP.md](ROADMAP.md).
 

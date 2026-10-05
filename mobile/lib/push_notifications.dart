@@ -1098,7 +1098,7 @@ class _NotificationSettingsScreenState
           SwitchListTile(
             title: const Text('Alarmy Ukrainy'),
             subtitle: const Text(
-              'Osobna kategoria; nie wpływa na Status Polski. Domyślnie wyłączona.',
+              'Alarmy z całej Ukrainy. Domyślnie wyłączone. Zniknięcie alarmu z feedu nie wysyła powiadomienia o zakończeniu. Nie wpływają na Status Polski.',
             ),
             value: prefs.ukraine,
             onChanged: busy
