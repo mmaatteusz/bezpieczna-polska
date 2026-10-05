@@ -340,11 +340,11 @@ ui.Color _neptunAccentColor(String type) => switch (type) {
   _ => const ui.Color(0xff90a4ae),
 };
 
-Future<Uint8List> _neptunIconPng(String type) async {
+Future<Uint8List> neptunIconPng(String type, {double pixelRatio = 1}) async {
   // Compact type badges are intentionally fixed upright. The marker shape and
   // colour describe the threat class only and must never imply heading/course.
   const logicalSize = 72.0;
-  const outputSize = 96.0;
+  final outputSize = 40 * pixelRatio;
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder)..scale(outputSize / logicalSize);
   final accent = _neptunAccentColor(type);
@@ -550,21 +550,23 @@ Future<Uint8List> _neptunIconPng(String type) async {
       canvas.drawCircle(const ui.Offset(36, 51), 3.4, white);
   }
 
-  final image = await recorder.endRecording().toImage(
-    outputSize.toInt(),
-    outputSize.toInt(),
-  );
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(outputSize.ceil(), outputSize.ceil());
   final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
   image.dispose();
+  picture.dispose();
   if (bytes == null) throw StateError('Nie udało się utworzyć ikony NEPTUN');
   return bytes.buffer.asUint8List();
 }
 
-Future<void> _registerNeptunMapIcons(MapLibreMapController controller) async {
+Future<void> _registerNeptunMapIcons(
+  MapLibreMapController controller,
+  double pixelRatio,
+) async {
   for (final type in _neptunIconTypes) {
     await controller.addImage(
       neptunMapIconId(type),
-      await _neptunIconPng(type),
+      await neptunIconPng(type, pixelRatio: pixelRatio),
     );
   }
 }
@@ -917,12 +919,66 @@ class _NeptunMapState extends State<NeptunMap> {
     if (!ready || c == null || !mounted) return;
     try {
       final features = await c.queryRenderedFeatures(point, const [
+        'neptun-live-groups',
+        'neptun-live-group-counts',
         'neptun-live-symbols',
         'neptun-live-hit-points',
       ], null);
       if (!mounted || features.isEmpty) return;
-      final threat = neptunThreatForFeature(widget.data, features.first);
+      final candidates = <String, Map<String, dynamic>>{};
+      for (final feature in features.whereType<Map>()) {
+        final properties = feature['properties'];
+        final leaves = properties is Map && properties['cluster'] == true
+            ? await c.getClusterLeaves(
+                'neptun-live',
+                (properties['cluster_id'] as num).toInt(),
+                limit: (properties['point_count'] as num).toInt(),
+              )
+            : [feature];
+        for (final leaf in leaves) {
+          final item = neptunThreatForFeature(widget.data, leaf);
+          if (item != null) candidates[item['id'] as String] = item;
+        }
+      }
+      if (!mounted || candidates.isEmpty) return;
+      Map<String, dynamic>? threat;
+      if (candidates.length == 1) {
+        threat = candidates.values.single;
+      } else {
+        threat = await showModalBottomSheet<Map<String, dynamic>>(
+          context: context,
+          showDragHandle: true,
+          isScrollControlled: true,
+          builder: (sheetContext) => SafeArea(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.65,
+              ),
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      '${candidates.length} wpisów w tym obszarze',
+                      style: Theme.of(sheetContext).textTheme.titleLarge,
+                    ),
+                  ),
+                  for (final item in candidates.values)
+                    ListTile(
+                      title: Text(item['title'] as String),
+                      subtitle: Text(neptunTypeLabel(item['type'] as String)),
+                      onTap: () => Navigator.pop(sheetContext, item),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+      if (!mounted) return;
       if (threat == null) return;
+      final selectedThreat = threat;
       final location = (threat['region'] as String?)?.trim() ?? '';
       final precision = threat['precisionKm'];
       final sourceCount = threat['sourceCount'];
@@ -939,7 +995,10 @@ class _NeptunMapState extends State<NeptunMap> {
                 Row(
                   children: [
                     FutureBuilder<Uint8List>(
-                      future: _neptunIconPng(threat['type'] as String),
+                      future: neptunIconPng(
+                        selectedThreat['type'] as String,
+                        pixelRatio: MediaQuery.devicePixelRatioOf(sheetContext),
+                      ),
                       builder: (context, snapshot) => snapshot.hasData
                           ? Image.memory(
                               snapshot.data!,
@@ -993,12 +1052,31 @@ class _NeptunMapState extends State<NeptunMap> {
     if (!mounted) return;
     final c = controller;
     if (c == null) return;
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
     try {
       await c.addSource(
-        'neptun-live',
-        GeojsonSourceProperties(data: widget.data.live['map']),
+        'neptun-history',
+        GeojsonSourceProperties(data: widget.data.data['map']),
       );
-      await _registerNeptunMapIcons(c);
+      await c.addLineLayer(
+        'neptun-history',
+        'neptun-history-lines',
+        const LineLayerProperties(
+          lineColor: '#7062c8',
+          lineWidth: 3,
+          lineOpacity: 0.55,
+        ),
+      );
+      await c.addSource(
+        'neptun-live',
+        GeojsonSourceProperties(
+          data: widget.data.live['map'],
+          cluster: true,
+          clusterRadius: 48,
+          clusterMaxZoom: 16,
+        ),
+      );
+      await _registerNeptunMapIcons(c, pixelRatio);
       await c.addCircleLayer(
         'neptun-live',
         'neptun-live-hit-points',
@@ -1007,6 +1085,10 @@ class _NeptunMapState extends State<NeptunMap> {
           circleRadius: 22,
           circleOpacity: 0.001,
         ),
+        filter: [
+          '!',
+          ['has', 'point_count'],
+        ],
       );
       await c.addSymbolLayer(
         'neptun-live',
@@ -1031,24 +1113,42 @@ class _NeptunMapState extends State<NeptunMap> {
             'neptun-icon-mig31k',
             'neptun-icon-unknown',
           ],
-          iconSize: 0.40,
+          iconSize: 1,
           iconAllowOverlap: true,
           iconIgnorePlacement: true,
           iconAnchor: 'center',
         ),
+        filter: [
+          '!',
+          ['has', 'point_count'],
+        ],
       );
-      await c.addSource(
-        'neptun-history',
-        GeojsonSourceProperties(data: widget.data.data['map']),
-      );
-      await c.addLineLayer(
-        'neptun-history',
-        'neptun-history-lines',
-        const LineLayerProperties(
-          lineColor: '#7062c8',
-          lineWidth: 3,
-          lineOpacity: 0.55,
+      await c.addCircleLayer(
+        'neptun-live',
+        'neptun-live-groups',
+        const CircleLayerProperties(
+          circleColor: '#263238',
+          circleRadius: 19,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: 2,
         ),
+        filter: ['has', 'point_count'],
+      );
+      await c.addSymbolLayer(
+        'neptun-live',
+        'neptun-live-group-counts',
+        const SymbolLayerProperties(
+          textField: [
+            'to-string',
+            ['get', 'point_count'],
+          ],
+          textFont: ['Noto Sans Regular'],
+          textSize: 16,
+          textColor: '#ffffff',
+          textAllowOverlap: true,
+          textIgnorePlacement: true,
+        ),
+        filter: ['has', 'point_count'],
       );
       ready = true;
     } catch (_) {
@@ -1091,6 +1191,9 @@ class _NeptunMapState extends State<NeptunMap> {
         ),
       ),
       const SizedBox(height: 6),
+      const Text(
+        'Liczba na znaczniku oznacza grupę wpisów — dotknij, aby wybrać wpis. ',
+      ),
       const Text(
         'Kolor obwódki i kształt oznaczają typ: pomarańczowy — dron/FPV, niebieski — rozpoznanie, czerwony — rakieta, różowy — balistyka, ceglasty — KAB, fioletowy — MiG-31K. Ikony są zawsze ustawione pionowo i nie pokazują kierunku lotu. Pozycje pozostają celowo zgrubne. Fioletowe linie: wyłącznie historia.',
       ),

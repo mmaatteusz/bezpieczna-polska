@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:bezpieczna_polska/model.dart';
 import 'package:bezpieczna_polska/neptun.dart';
@@ -162,6 +163,43 @@ http.Response jsonResponse(Object value, int status) => http.Response.bytes(
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  test('NEPTUN symbols retain readable pixels at phone densities', () async {
+    for (final type in [
+      'uav',
+      'fpv',
+      'recon',
+      'missile',
+      'ballistic',
+      'kab',
+      'mig31k',
+      'unknown',
+    ]) {
+      for (final ratio in [1.0, 2.0, 3.0, 3.5]) {
+        final codec = await ui.instantiateImageCodec(
+          await neptunIconPng(type, pixelRatio: ratio),
+        );
+        final frame = await codec.getNextFrame();
+        expect(frame.image.width, (40 * ratio).ceil());
+        expect(frame.image.height, (40 * ratio).ceil());
+        final pixels = (await frame.image.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        ))!;
+        var white = 0;
+        for (var i = 0; i < pixels.lengthInBytes; i += 4) {
+          if (pixels.getUint8(i) > 230 &&
+              pixels.getUint8(i + 1) > 230 &&
+              pixels.getUint8(i + 2) > 230 &&
+              pixels.getUint8(i + 3) > 230) {
+            white++;
+          }
+        }
+        expect(white, greaterThan(20 * ratio * ratio), reason: type);
+        frame.image.dispose();
+        codec.dispose();
+      }
+    }
+  });
   test(
     'status entry point wording advertises live data without precise-motion claims',
     () {
