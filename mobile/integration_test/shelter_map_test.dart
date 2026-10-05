@@ -227,7 +227,7 @@ void main() {
       expect(controller.symbols.single.data!['properties']['point_count'], 3);
       expect(controller.symbols.single.options.iconImage, 'shelter-cluster-0');
       expect(
-        (controller.circles.single.options.geometry!.longitude -
+        (controller.symbols.single.options.geometry!.longitude -
                 target.longitude)
             .abs(),
         lessThan(0.03),
