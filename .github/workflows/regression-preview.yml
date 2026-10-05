@@ -104,6 +104,9 @@ jobs:
           git diff --exit-code -- lib test pubspec.lock
           flutter analyze --no-pub
           flutter test --no-pub
+      - name: Capture and verify simplified Start
+        working-directory: mobile
+        run: flutter test --no-pub --dart-define=CAPTURE_START=true test/dashboard_visual_test.dart
       - name: Assert offline package contract
         working-directory: mobile
         run: flutter test --no-pub test/offline_packages_test.dart

@@ -91,7 +91,7 @@ void main() {
     await tester.tap(find.text('Start').last);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Mapa').last);
+    await tester.tap(find.text('Otwórz mapę'));
     await tester.pumpAndSettle();
     expect(find.byType(MapLibreMap), findsOneWidget);
     expect(find.byKey(const ValueKey('native-map-surface')), findsOneWidget);
@@ -150,7 +150,7 @@ void main() {
   testWidgets(
     'configured locality card scrolls to warnings instead of reopening picker',
     (tester) async {
-      tester.view.physicalSize = const Size(390, 844);
+      tester.view.physicalSize = const Size(390, 640);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
