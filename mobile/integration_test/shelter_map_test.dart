@@ -398,6 +398,9 @@ void main() {
     await neptunController.moveCamera(
       CameraUpdate.newLatLngZoom(const LatLng(49, 31), 7),
     );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 3)),
+    );
     await tester.pump(const Duration(seconds: 3));
     final position = await neptunController.toScreenLocation(
       const LatLng(49, 31),
@@ -411,6 +414,12 @@ void main() {
     ], null);
     expect(groups, isNotEmpty);
     expect(groups.first['properties']['point_count'], 3);
+    final leaves = await neptunController.getClusterLeaves(
+      'neptun-live',
+      (groups.first['properties']['cluster_id'] as num).toInt(),
+      limit: 3,
+    );
+    expect(leaves, hasLength(3));
     expect(
       await neptunController.queryRenderedFeatures(point, [
         'neptun-live-group-counts',
@@ -438,6 +447,13 @@ void main() {
         .first;
     socket.destroy();
     expect(jsonDecode(reply)['ok'], isTrue);
+    for (
+      var i = 0;
+      i < 150 && find.text('3 wpisów w tym obszarze').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
     await tester.pumpAndSettle();
     expect(find.text('3 wpisów w tym obszarze'), findsOneWidget);
     for (final title in ['BSP / dron', 'FPV / dron', 'Rakieta']) {

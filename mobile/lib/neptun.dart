@@ -918,6 +918,7 @@ class _NeptunMapState extends State<NeptunMap> {
     final c = controller;
     if (!ready || c == null || !mounted) return;
     try {
+      debugPrint('NEPTUN native tap: $point');
       final features = await c.queryRenderedFeatures(point, const [
         'neptun-live-groups',
         'neptun-live-group-counts',
@@ -941,6 +942,7 @@ class _NeptunMapState extends State<NeptunMap> {
         }
       }
       if (!mounted || candidates.isEmpty) return;
+      debugPrint('NEPTUN selected entries: ${candidates.length}');
       Map<String, dynamic>? threat;
       if (candidates.length == 1) {
         threat = candidates.values.single;
@@ -1047,7 +1049,8 @@ class _NeptunMapState extends State<NeptunMap> {
           ),
         ),
       );
-    } catch (_) {
+    } catch (error) {
+      debugPrint('NEPTUN map tap failed: $error');
       // A tap must never break map interaction if the style is reloading.
     }
   }
