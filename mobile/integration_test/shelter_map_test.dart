@@ -477,13 +477,15 @@ void main() {
           if (px < 0 ||
               py < 0 ||
               px >= screenshot.width ||
-              py >= screenshot.height)
+              py >= screenshot.height) {
             continue;
+          }
           final offset = (py * screenshot.width + px) * 4;
-          if (pixels[offset] > 220 &&
-              pixels[offset + 1] > 220 &&
-              pixels[offset + 2] > 220)
+          if (pixels[offset] > 245 &&
+              pixels[offset + 1] > 245 &&
+              pixels[offset + 2] > 245) {
             whitePixels++;
+          }
         }
       }
       expect(
