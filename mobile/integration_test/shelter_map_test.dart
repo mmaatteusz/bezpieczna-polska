@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:bezpieczna_polska/model.dart';
+import 'package:bezpieczna_polska/neptun.dart';
 import 'package:bezpieczna_polska/shelter_map.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +13,8 @@ import 'package:http/testing.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../test/neptun_test.dart' as neptun_fixture;
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -318,6 +322,198 @@ void main() {
     await waitFor(
       () => controller.circles.isEmpty && controller.symbols.isEmpty,
     );
+    await tester.pumpWidget(const SizedBox.shrink());
+    // Verify real Android symbols and grouped selection at phone density.
+    final neptunInput = neptun_fixture.fixture(DateTime.now().toUtc());
+    final live = neptunInput['live'] as Map;
+    final template = Map<String, dynamic>.from(live['threats'][0]);
+    final titles = {
+      'uav': 'BSP / dron',
+      'fpv': 'FPV / dron',
+      'missile': 'Rakieta',
+      'recon': 'Obiekt rozpoznawczy',
+      'ballistic': 'Zagrożenie balistyczne',
+      'kab': 'Kierowana bomba lotnicza',
+      'mig31k': 'MiG-31K',
+      'unknown': 'Nieokreślone zagrożenie',
+    };
+    final locations = [
+      [31.0, 49.0],
+      [31.0, 49.0],
+      [31.0, 49.0],
+      [30.5, 49.3],
+      [31.5, 49.3],
+      [30.5, 48.7],
+      [31.5, 48.7],
+      [31.0, 48.7],
+    ];
+    final threats = <Map<String, dynamic>>[];
+    final features = <Map<String, dynamic>>[];
+    var index = 0;
+    for (final entry in titles.entries) {
+      final coordinates = locations[index++];
+      final id = 'neptun-${entry.key}';
+      threats.add({
+        ...template,
+        'id': id,
+        'type': entry.key,
+        'title': entry.value,
+        'longitude': coordinates[0],
+        'latitude': coordinates[1],
+      });
+      features.add({
+        'type': 'Feature',
+        'id': id,
+        'geometry': {'type': 'Point', 'coordinates': coordinates},
+        'properties': {
+          'threatId': id,
+          'type': entry.key,
+          'live': true,
+          'coarse': true,
+        },
+      });
+    }
+    live['threats'] = threats;
+    live['map']['features'] = features;
+    neptunInput['tracks'] = [];
+    neptunInput['map']['features'] = [];
+    final neptunKey = GlobalKey();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: NeptunMap(
+              key: neptunKey,
+              data: NeptunData.parse(neptunInput),
+            ),
+          ),
+        ),
+      ),
+    );
+    final dynamic neptunState = neptunKey.currentState;
+    for (var i = 0; i < 150 && neptunState.ready != true; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    expect(neptunState.ready, isTrue, reason: '${neptunState.error}');
+    final neptunController = neptunState.controller as MapLibreMapController;
+    await neptunController.moveCamera(
+      CameraUpdate.newLatLngZoom(const LatLng(49, 31), 7),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 3)),
+    );
+    await tester.pump(const Duration(seconds: 3));
+    final position = await neptunController.toScreenLocation(
+      const LatLng(49, 31),
+    );
+    final point = math.Point<double>(
+      position.x.toDouble(),
+      position.y.toDouble(),
+    );
+    final groups = await neptunController.queryRenderedFeatures(point, [
+      'neptun-live-groups',
+    ], null);
+    expect(groups, isNotEmpty);
+    expect(groups.first['properties']['point_count'], 3);
+    final leaves = await neptunController.getClusterLeaves(
+      'neptun-live',
+      (groups.first['properties']['cluster_id'] as num).toInt(),
+      limit: 3,
+    );
+    expect(leaves, hasLength(3));
+    for (var i = 0; i < 150 && neptunController.symbols.length != 6; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    expect(neptunController.symbols, hasLength(6));
+    expect(
+      neptunController.symbols.where(
+        (symbol) => symbol.options.iconImage == 'neptun-group-3',
+      ),
+      hasLength(1),
+    );
+    final dpr = tester.view.devicePixelRatio;
+    final origin = tester.getTopLeft(find.byType(MapLibreMap));
+    final target = origin + Offset(point.x / dpr, point.y / dpr);
+    final socket = await Socket.connect('127.0.0.1', 18443);
+    socket.writeln(
+      jsonEncode({
+        'verifySymbols': true,
+        'x': (target.dx * dpr).round(),
+        'y': (target.dy * dpr).round(),
+        'paddingTop': tester.view.padding.top,
+        'width': tester.view.physicalSize.width,
+        'height': tester.view.physicalSize.height,
+      }),
+    );
+    await socket.flush();
+    final reply = await utf8.decoder
+        .bind(socket)
+        .transform(const LineSplitter())
+        .first;
+    socket.destroy();
+    final response = jsonDecode(reply) as Map<String, dynamic>;
+    expect(response['ok'], isTrue);
+    final codec = await ui.instantiateImageCodec(
+      base64Decode(response['screenshot'] as String),
+    );
+    final screenshot = (await codec.getNextFrame()).image;
+    final pixels = (await screenshot.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    ))!.buffer.asUint8List();
+    final top = (response['screenY'] as int) - (target.dy * dpr).round();
+    // Native feature queries also find invisible symbol buckets. Assert pixels
+    // from Android's actual screen, excluding each badge's white border.
+    for (final location in [
+      const LatLng(49, 31),
+      for (final coordinate in locations.skip(3))
+        LatLng(coordinate[1], coordinate[0]),
+    ]) {
+      final screen = await neptunController.toScreenLocation(location);
+      final x = (origin.dx * dpr + screen.x).round();
+      final y = (origin.dy * dpr + screen.y + top).round();
+      final radius = (10 * dpr).round();
+      var whitePixels = 0;
+      for (var dy = -radius; dy <= radius; dy++) {
+        for (var dx = -radius; dx <= radius; dx++) {
+          if (dx * dx + dy * dy > radius * radius) continue;
+          final px = x + dx, py = y + dy;
+          if (px < 0 ||
+              py < 0 ||
+              px >= screenshot.width ||
+              py >= screenshot.height) {
+            continue;
+          }
+          final offset = (py * screenshot.width + px) * 4;
+          if (pixels[offset] > 245 &&
+              pixels[offset + 1] > 245 &&
+              pixels[offset + 2] > 245) {
+            whitePixels++;
+          }
+        }
+      }
+      expect(
+        whitePixels,
+        greaterThan(5 * dpr * dpr),
+        reason: 'Native count or icon is blank at $location',
+      );
+    }
+    screenshot.dispose();
+    codec.dispose();
+    for (
+      var i = 0;
+      i < 150 && find.text('3 wpisów w tym obszarze').evaluate().isEmpty;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('3 wpisów w tym obszarze'), findsOneWidget);
+    for (final title in ['BSP / dron', 'FPV / dron', 'Rakieta']) {
+      expect(find.text(title), findsWidgets);
+    }
+    await tester.tap(find.text('Rakieta').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Typ: Rakieta'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

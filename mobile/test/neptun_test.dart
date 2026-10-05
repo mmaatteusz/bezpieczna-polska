@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:bezpieczna_polska/model.dart';
 import 'package:bezpieczna_polska/neptun.dart';
@@ -162,6 +163,72 @@ http.Response jsonResponse(Object value, int status) => http.Response.bytes(
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'NEPTUN count bitmaps contain visible white digits at phone density',
+    () async {
+      for (final count in [3, 17, 99, 100]) {
+        for (final dpr in [1.0, 3.0]) {
+          final codec = await ui.instantiateImageCodec(
+            await neptunGroupCountPng(count, pixelRatio: dpr),
+          );
+          final image = (await codec.getNextFrame()).image;
+          expect(image.width, (40 * dpr).ceil());
+          final pixels = (await image.toByteData(
+            format: ui.ImageByteFormat.rawRgba,
+          ))!.buffer.asUint8List();
+          var white = 0;
+          for (var offset = 0; offset < pixels.length; offset += 4) {
+            if (pixels[offset] > 245 &&
+                pixels[offset + 1] > 245 &&
+                pixels[offset + 2] > 245 &&
+                pixels[offset + 3] > 230) {
+              white++;
+            }
+          }
+          expect(white, greaterThan(10 * dpr * dpr));
+          image.dispose();
+          codec.dispose();
+        }
+      }
+    },
+  );
+  test('NEPTUN symbols retain readable pixels at phone densities', () async {
+    for (final type in [
+      'uav',
+      'fpv',
+      'recon',
+      'missile',
+      'ballistic',
+      'kab',
+      'mig31k',
+      'unknown',
+    ]) {
+      for (final ratio in [1.0, 2.0, 3.0, 3.5]) {
+        final codec = await ui.instantiateImageCodec(
+          await neptunIconPng(type, pixelRatio: ratio),
+        );
+        final frame = await codec.getNextFrame();
+        expect(frame.image.width, (40 * ratio).ceil());
+        expect(frame.image.height, (40 * ratio).ceil());
+        final pixels = (await frame.image.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        ))!;
+        var white = 0;
+        for (var i = 0; i < pixels.lengthInBytes; i += 4) {
+          if (pixels.getUint8(i) > 230 &&
+              pixels.getUint8(i + 1) > 230 &&
+              pixels.getUint8(i + 2) > 230 &&
+              pixels.getUint8(i + 3) > 230) {
+            white++;
+          }
+        }
+        expect(white, greaterThan(20 * ratio * ratio), reason: type);
+        frame.image.dispose();
+        codec.dispose();
+      }
+    }
+  });
   test(
     'status entry point wording advertises live data without precise-motion claims',
     () {
@@ -221,19 +288,6 @@ void main() {
     final source = File('lib/neptun.dart').readAsStringSync();
     expect(source, contains('featureTapsTriggersMapClick: true'));
   });
-
-  test(
-    'NEPTUN live map uses typed threat symbols instead of visible red dots',
-    () {
-      final source = File('lib/neptun.dart').readAsStringSync();
-      expect(source, contains("'neptun-live-symbols'"));
-      expect(source, contains("'neptun-icon-fpv'"));
-      expect(source, contains("'neptun-icon-missile'"));
-      expect(source, contains('const ui.Color(0xffffffff)'));
-      expect(source, isNot(contains('0xff7f1d1d')));
-      expect(source, isNot(contains("circleColor: '#c62828'")));
-    },
-  );
 
   test('NEPTUN map tap resolves the live threat behind a threat symbol', () {
     final data = NeptunData.parse(fixture(now));

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' show Point;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -340,11 +341,11 @@ ui.Color _neptunAccentColor(String type) => switch (type) {
   _ => const ui.Color(0xff90a4ae),
 };
 
-Future<Uint8List> _neptunIconPng(String type) async {
+Future<Uint8List> neptunIconPng(String type, {double pixelRatio = 1}) async {
   // Compact type badges are intentionally fixed upright. The marker shape and
   // colour describe the threat class only and must never imply heading/course.
   const logicalSize = 72.0;
-  const outputSize = 96.0;
+  final outputSize = 40 * pixelRatio;
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder)..scale(outputSize / logicalSize);
   final accent = _neptunAccentColor(type);
@@ -550,21 +551,60 @@ Future<Uint8List> _neptunIconPng(String type) async {
       canvas.drawCircle(const ui.Offset(36, 51), 3.4, white);
   }
 
-  final image = await recorder.endRecording().toImage(
-    outputSize.toInt(),
-    outputSize.toInt(),
-  );
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(outputSize.ceil(), outputSize.ceil());
   final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
   image.dispose();
+  picture.dispose();
   if (bytes == null) throw StateError('Nie udało się utworzyć ikony NEPTUN');
   return bytes.buffer.asUint8List();
 }
 
-Future<void> _registerNeptunMapIcons(MapLibreMapController controller) async {
+/// Rasterised counts keep native markers readable without downloading glyphs.
+/// Counts above 99 use 99+; the selection sheet retains the exact total.
+Future<Uint8List> neptunGroupCountPng(
+  int count, {
+  double pixelRatio = 1,
+}) async {
+  const size = 40.0;
+  final painter = TextPainter(
+    text: TextSpan(
+      text: count >= 100 ? '99+' : '$count',
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        color: Colors.white,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder)..scale(pixelRatio);
+  painter.paint(
+    canvas,
+    Offset((size - painter.width) / 2, (size - painter.height) / 2),
+  );
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(
+    (size * pixelRatio).ceil(),
+    (size * pixelRatio).ceil(),
+  );
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  picture.dispose();
+  painter.dispose();
+  if (bytes == null) throw StateError('Brak obrazu licznika NEPTUN');
+  return bytes.buffer.asUint8List();
+}
+
+Future<void> _registerNeptunMapIcons(
+  MapLibreMapController controller,
+  double pixelRatio,
+) async {
   for (final type in _neptunIconTypes) {
     await controller.addImage(
       neptunMapIconId(type),
-      await _neptunIconPng(type),
+      await neptunIconPng(type, pixelRatio: pixelRatio),
     );
   }
 }
@@ -870,6 +910,25 @@ class _NeptunMapState extends State<NeptunMap> {
     if (syncPending) {
       syncPending = false;
       unawaited(syncSources());
+    } else {
+      unawaited(refreshSymbols());
+    }
+  }
+
+  final groupIconCounts = <int>{};
+
+  Future<void> registerGroupCounts(
+    MapLibreMapController c,
+    double pixelRatio,
+  ) async {
+    final maximum = widget.data.liveThreats.length.clamp(0, 100);
+    for (var count = 2; count <= maximum; count++) {
+      if (groupIconCounts.contains(count)) continue;
+      await c.addImage(
+        'neptun-group-$count',
+        await neptunGroupCountPng(count, pixelRatio: pixelRatio),
+      );
+      groupIconCounts.add(count);
     }
   }
 
@@ -883,6 +942,8 @@ class _NeptunMapState extends State<NeptunMap> {
     syncInProgress = true;
     final data = widget.data;
     try {
+      await registerGroupCounts(c, MediaQuery.devicePixelRatioOf(context));
+      lastSymbolSignature = null;
       await c.setGeoJsonSource('neptun-live', data.live['map']);
       await c.setGeoJsonSource('neptun-history', data.data['map']);
       if (mounted) {
@@ -905,6 +966,65 @@ class _NeptunMapState extends State<NeptunMap> {
     }
   }
 
+  bool renderingSymbols = false;
+  String? lastSymbolSignature;
+
+  Future<void> refreshSymbols() async {
+    final c = controller;
+    if (!ready || c == null || !mounted || cameraMoving || renderingSymbols) {
+      return;
+    }
+    renderingSymbols = true;
+    try {
+      final dpr = MediaQuery.devicePixelRatioOf(context);
+      final width = MediaQuery.sizeOf(context).width;
+      final rendered = await c.queryRenderedFeaturesInRect(
+        Rect.fromLTWH(0, 0, width * dpr, 380 * dpr),
+        ['neptun-live-groups', 'neptun-live-hit-points'],
+        null,
+      );
+      if (!mounted || controller != c || cameraMoving) return;
+      final unique = <String, Map>{};
+      for (final feature in rendered.whereType<Map>()) {
+        final properties = feature['properties'] as Map;
+        final id = properties['cluster_id'] ?? properties['threatId'];
+        if (id != null) unique['$id'] = feature;
+      }
+      final keys = unique.keys.toList()..sort();
+      final signature = jsonEncode([for (final key in keys) unique[key]]);
+      if (lastSymbolSignature == signature) return;
+      final options = <SymbolOptions>[];
+      for (final key in keys) {
+        final feature = unique[key]!;
+        final coordinates = feature['geometry']['coordinates'] as List;
+        final properties = feature['properties'] as Map;
+        final count = (properties['point_count'] as num?)?.toInt();
+        options.add(
+          SymbolOptions(
+            geometry: LatLng(
+              (coordinates[1] as num).toDouble(),
+              (coordinates[0] as num).toDouble(),
+            ),
+            iconImage: count == null
+                ? neptunMapIconId(properties['type'] as String)
+                : 'neptun-group-${count.clamp(2, 100)}',
+            iconSize: 1,
+            iconAnchor: 'center',
+          ),
+        );
+      }
+      lastSymbolSignature = signature;
+      await c.clearSymbols();
+      if (!mounted || controller != c) return;
+      if (options.isNotEmpty) await c.addSymbols(options);
+    } catch (error) {
+      lastSymbolSignature = null;
+      debugPrint('NEPTUN bitmap rendering failed: $error');
+    } finally {
+      renderingSymbols = false;
+    }
+  }
+
   String confidenceLabel(dynamic value) => switch (value) {
     'high' => 'wysoka',
     'medium' => 'średnia',
@@ -916,16 +1036,70 @@ class _NeptunMapState extends State<NeptunMap> {
     final c = controller;
     if (!ready || c == null || !mounted) return;
     try {
+      debugPrint('NEPTUN native tap: $point');
       final features = await c.queryRenderedFeatures(point, const [
-        'neptun-live-symbols',
+        'neptun-live-groups',
         'neptun-live-hit-points',
       ], null);
       if (!mounted || features.isEmpty) return;
-      final threat = neptunThreatForFeature(widget.data, features.first);
+      final candidates = <String, Map<String, dynamic>>{};
+      for (final feature in features.whereType<Map>()) {
+        final properties = feature['properties'];
+        final leaves = properties is Map && properties['cluster'] == true
+            ? await c.getClusterLeaves(
+                'neptun-live',
+                (properties['cluster_id'] as num).toInt(),
+                limit: (properties['point_count'] as num).toInt(),
+              )
+            : [feature];
+        for (final leaf in leaves) {
+          final item = neptunThreatForFeature(widget.data, leaf);
+          if (item != null) candidates[item['id'] as String] = item;
+        }
+      }
+      if (!mounted || candidates.isEmpty) return;
+      debugPrint('NEPTUN selected entries: ${candidates.length}');
+      Map<String, dynamic>? threat;
+      if (candidates.length == 1) {
+        threat = candidates.values.single;
+      } else {
+        threat = await showModalBottomSheet<Map<String, dynamic>>(
+          context: context,
+          showDragHandle: true,
+          isScrollControlled: true,
+          builder: (sheetContext) => SafeArea(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.65,
+              ),
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      '${candidates.length} wpisów w tym obszarze',
+                      style: Theme.of(sheetContext).textTheme.titleLarge,
+                    ),
+                  ),
+                  for (final item in candidates.values)
+                    ListTile(
+                      title: Text(item['title'] as String),
+                      subtitle: Text(neptunTypeLabel(item['type'] as String)),
+                      onTap: () => Navigator.pop(sheetContext, item),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+      if (!mounted) return;
       if (threat == null) return;
-      final location = (threat['region'] as String?)?.trim() ?? '';
-      final precision = threat['precisionKm'];
-      final sourceCount = threat['sourceCount'];
+      final selectedThreat = threat;
+      final location = (selectedThreat['region'] as String?)?.trim() ?? '';
+      final precision = selectedThreat['precisionKm'];
+      final sourceCount = selectedThreat['sourceCount'];
       await showModalBottomSheet<void>(
         context: context,
         showDragHandle: true,
@@ -939,7 +1113,10 @@ class _NeptunMapState extends State<NeptunMap> {
                 Row(
                   children: [
                     FutureBuilder<Uint8List>(
-                      future: _neptunIconPng(threat['type'] as String),
+                      future: neptunIconPng(
+                        selectedThreat['type'] as String,
+                        pixelRatio: MediaQuery.devicePixelRatioOf(sheetContext),
+                      ),
                       builder: (context, snapshot) => snapshot.hasData
                           ? Image.memory(
                               snapshot.data!,
@@ -956,21 +1133,25 @@ class _NeptunMapState extends State<NeptunMap> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        threat['title'] as String,
+                        selectedThreat['title'] as String,
                         style: Theme.of(sheetContext).textTheme.titleLarge,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
-                Text('Typ: ${neptunTypeLabel(threat['type'] as String)}'),
+                Text(
+                  'Typ: ${neptunTypeLabel(selectedThreat['type'] as String)}',
+                ),
                 if (location.isNotEmpty) Text('Obszar: $location'),
                 Text(
-                  'Status: ${threat['status'] == 'active' ? 'aktywny' : 'nieaktualny / STALE'}',
+                  'Status: ${selectedThreat['status'] == 'active' ? 'aktywny' : 'nieaktualny / STALE'}',
                 ),
-                Text('Aktualizacja: ${stamp(threat['updatedAt'] as String)}'),
                 Text(
-                  'Pewność: ${confidenceLabel(threat['confidenceLevel'])}'
+                  'Aktualizacja: ${stamp(selectedThreat['updatedAt'] as String)}',
+                ),
+                Text(
+                  'Pewność: ${confidenceLabel(selectedThreat['confidenceLevel'])}'
                   '${sourceCount is num ? ' • źródła: $sourceCount' : ''}',
                 ),
                 if (precision is num)
@@ -984,7 +1165,8 @@ class _NeptunMapState extends State<NeptunMap> {
           ),
         ),
       );
-    } catch (_) {
+    } catch (error) {
+      debugPrint('NEPTUN map tap failed: $error');
       // A tap must never break map interaction if the style is reloading.
     }
   }
@@ -993,50 +1175,8 @@ class _NeptunMapState extends State<NeptunMap> {
     if (!mounted) return;
     final c = controller;
     if (c == null) return;
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
     try {
-      await c.addSource(
-        'neptun-live',
-        GeojsonSourceProperties(data: widget.data.live['map']),
-      );
-      await _registerNeptunMapIcons(c);
-      await c.addCircleLayer(
-        'neptun-live',
-        'neptun-live-hit-points',
-        const CircleLayerProperties(
-          circleColor: '#000000',
-          circleRadius: 22,
-          circleOpacity: 0.001,
-        ),
-      );
-      await c.addSymbolLayer(
-        'neptun-live',
-        'neptun-live-symbols',
-        const SymbolLayerProperties(
-          iconImage: [
-            'match',
-            ['get', 'type'],
-            'uav',
-            'neptun-icon-uav',
-            'fpv',
-            'neptun-icon-fpv',
-            'recon',
-            'neptun-icon-recon',
-            'missile',
-            'neptun-icon-missile',
-            'ballistic',
-            'neptun-icon-ballistic',
-            'kab',
-            'neptun-icon-kab',
-            'mig31k',
-            'neptun-icon-mig31k',
-            'neptun-icon-unknown',
-          ],
-          iconSize: 0.40,
-          iconAllowOverlap: true,
-          iconIgnorePlacement: true,
-          iconAnchor: 'center',
-        ),
-      );
       await c.addSource(
         'neptun-history',
         GeojsonSourceProperties(data: widget.data.data['map']),
@@ -1050,7 +1190,49 @@ class _NeptunMapState extends State<NeptunMap> {
           lineOpacity: 0.55,
         ),
       );
+      await c.addSource(
+        'neptun-live',
+        GeojsonSourceProperties(
+          // Populate only after images and symbol layers have been registered.
+          data: {'type': 'FeatureCollection', 'features': []},
+          cluster: true,
+          clusterRadius: 48,
+          clusterMaxZoom: 16,
+        ),
+      );
+      groupIconCounts.clear();
+      await _registerNeptunMapIcons(c, pixelRatio);
+      await registerGroupCounts(c, pixelRatio);
+      await c.addCircleLayer(
+        'neptun-live',
+        'neptun-live-hit-points',
+        const CircleLayerProperties(
+          circleColor: '#000000',
+          circleRadius: 22,
+          circleOpacity: 0.001,
+        ),
+        filter: [
+          '!',
+          ['has', 'point_count'],
+        ],
+      );
+      await c.addCircleLayer(
+        'neptun-live',
+        'neptun-live-groups',
+        const CircleLayerProperties(
+          circleColor: '#263238',
+          circleRadius: 19,
+          circleStrokeColor: '#ffffff',
+          circleStrokeWidth: 2,
+        ),
+        filter: ['has', 'point_count'],
+      );
+      // Rebuild the annotation layer above cluster backgrounds. This is the
+      // same bitmap path used by shelter markers, with no glyph dependency.
+      await c.setSymbolIconAllowOverlap(true);
+      await c.setSymbolIconIgnorePlacement(true);
       ready = true;
+      await syncSources();
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -1084,6 +1266,7 @@ class _NeptunMapState extends State<NeptunMap> {
             onStyleLoadedCallback: styled,
             onCameraMove: cameraMove,
             onCameraIdle: cameraIdle,
+            onMapIdle: () => unawaited(refreshSymbols()),
             onMapClick: (point, coordinates) =>
                 unawaited(handleMapTap(point, coordinates)),
             featureTapsTriggersMapClick: true,
@@ -1091,6 +1274,9 @@ class _NeptunMapState extends State<NeptunMap> {
         ),
       ),
       const SizedBox(height: 6),
+      const Text(
+        'Liczba na znaczniku oznacza grupę wpisów — dotknij, aby wybrać wpis. ',
+      ),
       const Text(
         'Kolor obwódki i kształt oznaczają typ: pomarańczowy — dron/FPV, niebieski — rozpoznanie, czerwony — rakieta, różowy — balistyka, ceglasty — KAB, fioletowy — MiG-31K. Ikony są zawsze ustawione pionowo i nie pokazują kierunku lotu. Pozycje pozostają celowo zgrubne. Fioletowe linie: wyłącznie historia.',
       ),
