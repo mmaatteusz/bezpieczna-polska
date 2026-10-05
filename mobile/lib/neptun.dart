@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' show Point;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -909,6 +910,8 @@ class _NeptunMapState extends State<NeptunMap> {
     if (syncPending) {
       syncPending = false;
       unawaited(syncSources());
+    } else {
+      unawaited(refreshSymbols());
     }
   }
 
@@ -940,6 +943,7 @@ class _NeptunMapState extends State<NeptunMap> {
     final data = widget.data;
     try {
       await registerGroupCounts(c, MediaQuery.devicePixelRatioOf(context));
+      lastSymbolSignature = null;
       await c.setGeoJsonSource('neptun-live', data.live['map']);
       await c.setGeoJsonSource('neptun-history', data.data['map']);
       if (mounted) {
@@ -962,6 +966,65 @@ class _NeptunMapState extends State<NeptunMap> {
     }
   }
 
+  bool renderingSymbols = false;
+  String? lastSymbolSignature;
+
+  Future<void> refreshSymbols() async {
+    final c = controller;
+    if (!ready || c == null || !mounted || cameraMoving || renderingSymbols) {
+      return;
+    }
+    renderingSymbols = true;
+    try {
+      final dpr = MediaQuery.devicePixelRatioOf(context);
+      final width = MediaQuery.sizeOf(context).width;
+      final rendered = await c.queryRenderedFeaturesInRect(
+        Rect.fromLTWH(0, 0, width * dpr, 380 * dpr),
+        ['neptun-live-groups', 'neptun-live-hit-points'],
+        null,
+      );
+      if (!mounted || controller != c || cameraMoving) return;
+      final unique = <String, Map>{};
+      for (final feature in rendered.whereType<Map>()) {
+        final properties = feature['properties'] as Map;
+        final id = properties['cluster_id'] ?? properties['threatId'];
+        if (id != null) unique['$id'] = feature;
+      }
+      final keys = unique.keys.toList()..sort();
+      final signature = jsonEncode([for (final key in keys) unique[key]]);
+      if (lastSymbolSignature == signature) return;
+      final options = <SymbolOptions>[];
+      for (final key in keys) {
+        final feature = unique[key]!;
+        final coordinates = feature['geometry']['coordinates'] as List;
+        final properties = feature['properties'] as Map;
+        final count = (properties['point_count'] as num?)?.toInt();
+        options.add(
+          SymbolOptions(
+            geometry: LatLng(
+              (coordinates[1] as num).toDouble(),
+              (coordinates[0] as num).toDouble(),
+            ),
+            iconImage: count == null
+                ? neptunMapIconId(properties['type'] as String)
+                : 'neptun-group-${count.clamp(2, 100)}',
+            iconSize: 1,
+            iconAnchor: 'center',
+          ),
+        );
+      }
+      lastSymbolSignature = signature;
+      await c.clearSymbols();
+      if (!mounted || controller != c) return;
+      if (options.isNotEmpty) await c.addSymbols(options);
+    } catch (error) {
+      lastSymbolSignature = null;
+      debugPrint('NEPTUN bitmap rendering failed: $error');
+    } finally {
+      renderingSymbols = false;
+    }
+  }
+
   String confidenceLabel(dynamic value) => switch (value) {
     'high' => 'wysoka',
     'medium' => 'średnia',
@@ -976,8 +1039,6 @@ class _NeptunMapState extends State<NeptunMap> {
       debugPrint('NEPTUN native tap: $point');
       final features = await c.queryRenderedFeatures(point, const [
         'neptun-live-groups',
-        'neptun-live-group-counts',
-        'neptun-live-symbols',
         'neptun-live-hit-points',
       ], null);
       if (!mounted || features.isEmpty) return;
@@ -1155,39 +1216,6 @@ class _NeptunMapState extends State<NeptunMap> {
           ['has', 'point_count'],
         ],
       );
-      await c.addSymbolLayer(
-        'neptun-live',
-        'neptun-live-symbols',
-        const SymbolLayerProperties(
-          iconImage: [
-            'match',
-            ['get', 'type'],
-            'uav',
-            'neptun-icon-uav',
-            'fpv',
-            'neptun-icon-fpv',
-            'recon',
-            'neptun-icon-recon',
-            'missile',
-            'neptun-icon-missile',
-            'ballistic',
-            'neptun-icon-ballistic',
-            'kab',
-            'neptun-icon-kab',
-            'mig31k',
-            'neptun-icon-mig31k',
-            'neptun-icon-unknown',
-          ],
-          iconSize: 1,
-          iconAllowOverlap: true,
-          iconIgnorePlacement: true,
-          iconAnchor: 'center',
-        ),
-        filter: [
-          '!',
-          ['has', 'point_count'],
-        ],
-      );
       await c.addCircleLayer(
         'neptun-live',
         'neptun-live-groups',
@@ -1199,34 +1227,10 @@ class _NeptunMapState extends State<NeptunMap> {
         ),
         filter: ['has', 'point_count'],
       );
-      await c.addSymbolLayer(
-        'neptun-live',
-        'neptun-live-group-counts',
-        const SymbolLayerProperties(
-          iconImage: [
-            'case',
-            [
-              '>=',
-              ['get', 'point_count'],
-              100,
-            ],
-            'neptun-group-100',
-            [
-              'concat',
-              'neptun-group-',
-              [
-                'to-string',
-                ['get', 'point_count'],
-              ],
-            ],
-          ],
-          iconSize: 1,
-          iconAllowOverlap: true,
-          iconIgnorePlacement: true,
-          iconAnchor: 'center',
-        ),
-        filter: ['has', 'point_count'],
-      );
+      // Rebuild the annotation layer above cluster backgrounds. This is the
+      // same bitmap path used by shelter markers, with no glyph dependency.
+      await c.setSymbolIconAllowOverlap(true);
+      await c.setSymbolIconIgnorePlacement(true);
       ready = true;
       await syncSources();
     } catch (_) {
@@ -1262,6 +1266,7 @@ class _NeptunMapState extends State<NeptunMap> {
             onStyleLoadedCallback: styled,
             onCameraMove: cameraMove,
             onCameraIdle: cameraIdle,
+            onMapIdle: () => unawaited(refreshSymbols()),
             onMapClick: (point, coordinates) =>
                 unawaited(handleMapTap(point, coordinates)),
             featureTapsTriggersMapClick: true,

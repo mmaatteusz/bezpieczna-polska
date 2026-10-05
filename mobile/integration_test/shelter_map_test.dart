@@ -421,12 +421,15 @@ void main() {
       limit: 3,
     );
     expect(leaves, hasLength(3));
+    for (var i = 0; i < 150 && neptunController.symbols.length != 6; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    expect(neptunController.symbols, hasLength(6));
     expect(
-      await neptunController.queryRenderedFeatures(point, [
-        'neptun-live-group-counts',
-      ], null),
-      isNotEmpty,
-      reason: 'The grouped count must have a native bitmap bucket',
+      neptunController.symbols.where(
+        (symbol) => symbol.options.iconImage == 'neptun-group-3',
+      ),
+      hasLength(1),
     );
     final dpr = tester.view.devicePixelRatio;
     final origin = tester.getTopLeft(find.byType(MapLibreMap));
