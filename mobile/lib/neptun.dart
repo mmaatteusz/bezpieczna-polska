@@ -559,6 +559,43 @@ Future<Uint8List> neptunIconPng(String type, {double pixelRatio = 1}) async {
   return bytes.buffer.asUint8List();
 }
 
+/// Rasterised counts keep native markers readable without downloading glyphs.
+/// Counts above 99 use 99+; the selection sheet retains the exact total.
+Future<Uint8List> neptunGroupCountPng(
+  int count, {
+  double pixelRatio = 1,
+}) async {
+  const size = 40.0;
+  final painter = TextPainter(
+    text: TextSpan(
+      text: count >= 100 ? '99+' : '$count',
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        color: Colors.white,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder)..scale(pixelRatio);
+  painter.paint(
+    canvas,
+    Offset((size - painter.width) / 2, (size - painter.height) / 2),
+  );
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(
+    (size * pixelRatio).ceil(),
+    (size * pixelRatio).ceil(),
+  );
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+  picture.dispose();
+  painter.dispose();
+  if (bytes == null) throw StateError('Brak obrazu licznika NEPTUN');
+  return bytes.buffer.asUint8List();
+}
+
 Future<void> _registerNeptunMapIcons(
   MapLibreMapController controller,
   double pixelRatio,
@@ -875,6 +912,23 @@ class _NeptunMapState extends State<NeptunMap> {
     }
   }
 
+  final groupIconCounts = <int>{};
+
+  Future<void> registerGroupCounts(
+    MapLibreMapController c,
+    double pixelRatio,
+  ) async {
+    final maximum = widget.data.liveThreats.length.clamp(0, 100);
+    for (var count = 2; count <= maximum; count++) {
+      if (groupIconCounts.contains(count)) continue;
+      await c.addImage(
+        'neptun-group-$count',
+        await neptunGroupCountPng(count, pixelRatio: pixelRatio),
+      );
+      groupIconCounts.add(count);
+    }
+  }
+
   Future<void> syncSources() async {
     final c = controller;
     if (!ready || c == null) return;
@@ -885,6 +939,7 @@ class _NeptunMapState extends State<NeptunMap> {
     syncInProgress = true;
     final data = widget.data;
     try {
+      await registerGroupCounts(c, MediaQuery.devicePixelRatioOf(context));
       await c.setGeoJsonSource('neptun-live', data.live['map']);
       await c.setGeoJsonSource('neptun-history', data.data['map']);
       if (mounted) {
@@ -1084,7 +1139,9 @@ class _NeptunMapState extends State<NeptunMap> {
           clusterMaxZoom: 16,
         ),
       );
+      groupIconCounts.clear();
       await _registerNeptunMapIcons(c, pixelRatio);
+      await registerGroupCounts(c, pixelRatio);
       await c.addCircleLayer(
         'neptun-live',
         'neptun-live-hit-points',
@@ -1146,15 +1203,27 @@ class _NeptunMapState extends State<NeptunMap> {
         'neptun-live',
         'neptun-live-group-counts',
         const SymbolLayerProperties(
-          textField: [
-            'to-string',
-            ['get', 'point_count'],
+          iconImage: [
+            'case',
+            [
+              '>=',
+              ['get', 'point_count'],
+              100,
+            ],
+            'neptun-group-100',
+            [
+              'concat',
+              'neptun-group-',
+              [
+                'to-string',
+                ['get', 'point_count'],
+              ],
+            ],
           ],
-          textFont: ['Noto Sans Regular'],
-          textSize: 16,
-          textColor: '#ffffff',
-          textAllowOverlap: true,
-          textIgnorePlacement: true,
+          iconSize: 1,
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
+          iconAnchor: 'center',
         ),
         filter: ['has', 'point_count'],
       );

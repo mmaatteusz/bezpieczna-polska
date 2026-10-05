@@ -426,7 +426,7 @@ void main() {
         'neptun-live-group-counts',
       ], null),
       isNotEmpty,
-      reason: 'The grouped count must be drawn, including native glyphs',
+      reason: 'The grouped count must have a native bitmap bucket',
     );
     final dpr = tester.view.devicePixelRatio;
     final origin = tester.getTopLeft(find.byType(MapLibreMap));
