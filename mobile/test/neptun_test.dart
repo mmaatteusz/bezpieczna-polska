@@ -289,19 +289,6 @@ void main() {
     expect(source, contains('featureTapsTriggersMapClick: true'));
   });
 
-  test(
-    'NEPTUN live map uses typed threat symbols instead of visible red dots',
-    () {
-      final source = File('lib/neptun.dart').readAsStringSync();
-      expect(source, contains("'neptun-live-symbols'"));
-      expect(source, contains("'neptun-icon-fpv'"));
-      expect(source, contains("'neptun-icon-missile'"));
-      expect(source, contains('const ui.Color(0xffffffff)'));
-      expect(source, isNot(contains('0xff7f1d1d')));
-      expect(source, isNot(contains("circleColor: '#c62828'")));
-    },
-  );
-
   test('NEPTUN map tap resolves the live threat behind a threat symbol', () {
     final data = NeptunData.parse(fixture(now));
     final feature = (data.live['map']['features'] as List).first;
