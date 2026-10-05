@@ -21,6 +21,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final openedLinks = <String>[];
     final key = GlobalKey();
+    var dense = false;
     final repo = DataRepository(
       await SharedPreferences.getInstance(),
       buildApi: 'https://map-test.invalid',
@@ -69,6 +70,28 @@ void main() {
                   },
           },
         ];
+        if (dense && cluster) {
+          features.clear();
+          for (final item in [
+            [0.0, 10],
+            [0.012, 4],
+            [-0.07, 26],
+            [0.08, 114],
+          ]) {
+            features.add({
+              'type': 'Feature',
+              'geometry': {
+                'type': 'Point',
+                'coordinates': [lon + item[0], lat],
+              },
+              'properties': {
+                'cluster': true,
+                'point_count': item[1].toInt(),
+                'expansionZoom': 12,
+              },
+            });
+          }
+        }
         return http.Response(
           jsonEncode({
             'type': 'FeatureCollection',
@@ -80,8 +103,12 @@ void main() {
               'zoom': zoom,
               'regionId': q['regionId'],
               'availability': q['availability'],
-              'total': cluster ? 3 : 1,
-              'returned': 1,
+              'total': dense && cluster
+                  ? 154
+                  : cluster
+                  ? 3
+                  : 1,
+              'returned': features.length,
               'serverTime': DateTime.now().toIso8601String(),
             },
             'features': features,
@@ -134,22 +161,28 @@ void main() {
       await waitFor(
         () =>
             state.loading == false &&
-            controller.circles.length == (zoom >= 4 ? 1 : 0),
+            (zoom < 4
+                ? controller.circles.isEmpty && controller.symbols.isEmpty
+                : zoom < 14
+                ? controller.symbols.isNotEmpty && controller.circles.isEmpty
+                : controller.circles.length == 1 && controller.symbols.isEmpty),
       );
     }
 
     Future<void> tapMarker({bool rim = false}) async {
       // Native GeoJSON parsing and drawing can finish after the channel reply.
       await tester.pump(const Duration(seconds: 1));
-      final marker = controller.circles.single;
-      final point = await controller.toScreenLocation(marker.options.geometry!);
+      final geometry = controller.symbols.isNotEmpty
+          ? controller.symbols.first.options.geometry!
+          : controller.circles.single.options.geometry!;
+      final point = await controller.toScreenLocation(geometry);
       final dpr = tester.view.devicePixelRatio;
       final origin = tester.getTopLeft(find.byType(MapLibreMap));
       final hits = await controller.queryRenderedFeatures(
         math.Point<double>(point.x.toDouble(), point.y.toDouble()),
         [
-          ...controller.circleManager!.layerIds,
-          ...controller.symbolManager!.layerIds,
+          ...?controller.circleManager?.layerIds,
+          ...?controller.symbolManager?.layerIds,
         ],
         null,
       );
@@ -159,7 +192,7 @@ void main() {
         reason: 'Native marker must be drawn before tapping',
       );
       final target =
-          origin + Offset(point.x / dpr + (rim ? 16 : 0), point.y / dpr);
+          origin + Offset(point.x / dpr + (rim ? 12 : 0), point.y / dpr);
       debugPrint(
         'Tap target=$target native=$point dpr=$dpr hits=${hits.length} zoom=${controller.cameraPosition?.zoom}',
       );
@@ -192,7 +225,7 @@ void main() {
     ]) {
       await move(target, 10);
       expect(controller.symbols.single.data!['properties']['point_count'], 3);
-      expect(controller.symbols.single.options.iconImage, 'shelter-count-0');
+      expect(controller.symbols.single.options.iconImage, 'shelter-cluster-0');
       expect(
         (controller.circles.single.options.geometry!.longitude -
                 target.longitude)
@@ -200,13 +233,25 @@ void main() {
         lessThan(0.03),
       );
     }
+    dense = true;
+    await move(const LatLng(53.12, 18.01), 10);
+    expect(controller.symbols, hasLength(3));
+    expect(
+      controller.symbols
+          .map((s) => s.data!['properties']['point_count'])
+          .toSet(),
+      {14, 26, 114},
+    );
+    // The driver captures this dense, high-density native map before the tap.
+    await tapMarker();
+    dense = false;
     await move(const LatLng(51.1, 16.98), 8);
-    await tapMarker(); // Native tap on the count label.
+    await tapMarker(); // Native tap on the combined count marker.
     await waitFor(() => (controller.cameraPosition?.zoom ?? 0) >= 9);
     await move(const LatLng(51.1, 16.98), 10);
     await tapMarker(
       rim: true,
-    ); // Native tap on the green circle outside the label.
+    ); // Native tap on the marker rim outside the digits.
     await waitFor(() => (controller.cameraPosition?.zoom ?? 0) >= 12);
     await move(const LatLng(51.1, 16.98), 15);
     expect(controller.symbols, isEmpty);
