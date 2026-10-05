@@ -318,6 +318,52 @@ class DashboardScreen extends StatelessWidget {
     }
   }
 
+  Widget _alertSummary(BuildContext context, SafetyEventDisplayGroup group) {
+    final scheme = Theme.of(context).colorScheme;
+    final critical = group.primary.data['severity'] == 'CRITICAL';
+    final foreground = critical ? scheme.onErrorContainer : scheme.onSurface;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      color: critical ? scheme.errorContainer : scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: critical ? scheme.error : scheme.outlineVariant,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        leading: Icon(
+          critical ? Icons.report_rounded : Icons.warning_amber_rounded,
+          color: critical ? scheme.error : scheme.tertiary,
+        ),
+        title: Text(
+          group.primary.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: foreground,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(
+          '${critical ? 'Pilne • ' : ''}${safetySourceLabel(group.primary)}'
+          '${group.count > 1 ? ' • ${group.count} wpisów' : ''}',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: foreground),
+        ),
+        trailing: Icon(Icons.chevron_right, color: foreground),
+        onTap: group.count > 1
+            ? onOpenAlerts
+            : () => onOpenEvent(group.primary),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
@@ -354,7 +400,7 @@ class DashboardScreen extends StatelessWidget {
           : 'CAUTION',
       'displayText': activeEvents.isEmpty
           ? 'Nie znaleziono aktywnych komunikatów. To nie gwarantuje bezpieczeństwa.'
-          : 'Komunikaty dla miejscowości i jej regionu: ${active.length}.',
+          : 'Aktywne komunikaty: ${active.length}.',
     };
     final snapshotTime = _snapshotTime();
     final urgentNational =
@@ -508,19 +554,7 @@ class DashboardScreen extends StatelessWidget {
                 ),
               )
             else
-              ...active
-                  .take(3)
-                  .map(
-                    (group) => SafetyEventCard(
-                      event: group.primary,
-                      compact: true,
-                      groupedCount: group.count,
-                      areaOverride: group.areas,
-                      onTap: group.count > 1
-                          ? onOpenAlerts
-                          : () => onOpenEvent(group.primary),
-                    ),
-                  ),
+              ...active.take(3).map((group) => _alertSummary(context, group)),
             if (active.length > 3)
               TextButton(
                 onPressed: onOpenAlerts,

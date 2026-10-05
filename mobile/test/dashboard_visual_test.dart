@@ -39,6 +39,7 @@ void main() {
     final country = snapshot(now);
     var mapOpens = 0;
     var localityChanges = 0;
+    var eventOpens = 0;
     final boundaryKey = GlobalKey();
     final alerts = [
       warning(
@@ -74,7 +75,7 @@ void main() {
               onOpenMap: () => mapOpens++,
               onOpenAlerts: () {},
               onOpenSecurityLevels: () {},
-              onOpenEvent: (_) {},
+              onOpenEvent: (_) => eventOpens++,
             ),
             bottomNavigationBar: NavigationBar(
               destinations: const [
@@ -108,6 +109,7 @@ void main() {
     expect(mapOpens, 1);
     expect(localityChanges, 1);
     expect(tester.takeException(), isNull);
+    expect(find.text('POTWIERDZONE'), findsNothing);
     await tester.pumpAndSettle();
     if (const bool.fromEnvironment('CAPTURE_START')) {
       await tester.runAsync(() async {
@@ -122,6 +124,8 @@ void main() {
         rendered.dispose();
       });
     }
+    await tester.tap(find.text('Intensywne opady deszczu'));
+    expect(eventOpens, 1);
     country.data['nationalStatus']['hazardLevel'] = 'ACTIVE_DANGER';
     country.data['nationalStatus']['displayText'] =
         'Krytyczne zagrożenie krajowe';
