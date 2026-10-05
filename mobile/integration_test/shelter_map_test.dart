@@ -403,6 +403,29 @@ void main() {
       () => Future<void>.delayed(const Duration(seconds: 3)),
     );
     await tester.pump(const Duration(seconds: 3));
+    // Country-scale zoom must retain every threat type, including nearby ones.
+    await neptunController.moveCamera(
+      CameraUpdate.newLatLngZoom(const LatLng(49, 31), 5),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 3)),
+    );
+    await tester.pump(const Duration(seconds: 3));
+    await neptunState.refreshSymbols();
+    expect(neptunController.symbols, hasLength(8));
+    expect(
+      neptunController.symbols
+          .map((symbol) => symbol.options.iconImage)
+          .toSet(),
+      {for (final type in titles.keys) neptunMapIconId(type)},
+    );
+    await neptunController.moveCamera(
+      CameraUpdate.newLatLngZoom(const LatLng(49, 31), 7),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 3)),
+    );
+    await tester.pump(const Duration(seconds: 3));
     final position = await neptunController.toScreenLocation(
       const LatLng(49, 31),
     );
@@ -410,26 +433,23 @@ void main() {
       position.x.toDouble(),
       position.y.toDouble(),
     );
-    final groups = await neptunController.queryRenderedFeatures(point, [
-      'neptun-live-groups',
+    final entries = await neptunController.queryRenderedFeatures(point, [
+      'neptun-live-hit-points',
     ], null);
-    expect(groups, isNotEmpty);
-    expect(groups.first['properties']['point_count'], 3);
-    final leaves = await neptunController.getClusterLeaves(
-      'neptun-live',
-      (groups.first['properties']['cluster_id'] as num).toInt(),
-      limit: 3,
+    expect(entries, hasLength(3));
+    expect(
+      entries.map((entry) => entry['properties']['type']).toSet(),
+      {'uav', 'fpv', 'missile'},
     );
-    expect(leaves, hasLength(3));
-    for (var i = 0; i < 150 && neptunController.symbols.length != 6; i++) {
+    for (var i = 0; i < 150 && neptunController.symbols.length != 8; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }
-    expect(neptunController.symbols, hasLength(6));
+    expect(neptunController.symbols, hasLength(8));
     expect(
-      neptunController.symbols.where(
-        (symbol) => symbol.options.iconImage == 'neptun-group-3',
-      ),
-      hasLength(1),
+      neptunController.symbols
+          .map((symbol) => symbol.options.iconImage)
+          .toSet(),
+      {for (final type in titles.keys) neptunMapIconId(type)},
     );
     final dpr = tester.view.devicePixelRatio;
     final origin = tester.getTopLeft(find.byType(MapLibreMap));
@@ -494,7 +514,7 @@ void main() {
       expect(
         whitePixels,
         greaterThan(5 * dpr * dpr),
-        reason: 'Native count or icon is blank at $location',
+        reason: 'Native threat icon is blank at $location',
       );
     }
     screenshot.dispose();
