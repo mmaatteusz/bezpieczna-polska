@@ -979,9 +979,9 @@ class _NeptunMapState extends State<NeptunMap> {
       if (!mounted) return;
       if (threat == null) return;
       final selectedThreat = threat;
-      final location = (threat['region'] as String?)?.trim() ?? '';
-      final precision = threat['precisionKm'];
-      final sourceCount = threat['sourceCount'];
+      final location = (selectedThreat['region'] as String?)?.trim() ?? '';
+      final precision = selectedThreat['precisionKm'];
+      final sourceCount = selectedThreat['sourceCount'];
       await showModalBottomSheet<void>(
         context: context,
         showDragHandle: true,
@@ -1015,21 +1015,25 @@ class _NeptunMapState extends State<NeptunMap> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        threat['title'] as String,
+                        selectedThreat['title'] as String,
                         style: Theme.of(sheetContext).textTheme.titleLarge,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
-                Text('Typ: ${neptunTypeLabel(threat['type'] as String)}'),
+                Text(
+                  'Typ: ${neptunTypeLabel(selectedThreat['type'] as String)}',
+                ),
                 if (location.isNotEmpty) Text('Obszar: $location'),
                 Text(
-                  'Status: ${threat['status'] == 'active' ? 'aktywny' : 'nieaktualny / STALE'}',
+                  'Status: ${selectedThreat['status'] == 'active' ? 'aktywny' : 'nieaktualny / STALE'}',
                 ),
-                Text('Aktualizacja: ${stamp(threat['updatedAt'] as String)}'),
                 Text(
-                  'Pewność: ${confidenceLabel(threat['confidenceLevel'])}'
+                  'Aktualizacja: ${stamp(selectedThreat['updatedAt'] as String)}',
+                ),
+                Text(
+                  'Pewność: ${confidenceLabel(selectedThreat['confidenceLevel'])}'
                   '${sourceCount is num ? ' • źródła: $sourceCount' : ''}',
                 ),
                 if (precision is num)
