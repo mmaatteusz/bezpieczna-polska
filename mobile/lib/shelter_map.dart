@@ -3,7 +3,6 @@ import 'radiation.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +14,7 @@ import 'map_layers.dart';
 import 'map_render_queue.dart';
 import 'model.dart';
 import 'shelters.dart';
+import 'shelter_markers.dart';
 
 class _MapLegend extends StatelessWidget {
   final bool showAlerts;
@@ -95,7 +95,9 @@ class _MapLegendItem extends StatelessWidget {
         decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
       const SizedBox(width: 5),
-      Text(label, style: Theme.of(context).textTheme.labelSmall),
+      Flexible(
+        child: Text(label, style: Theme.of(context).textTheme.labelSmall),
+      ),
     ],
   );
 }
@@ -240,6 +242,7 @@ class _ShelterMapState extends State<ShelterMap> {
   ) async {
     final c = controller;
     if (c == null || !ready || widget.ukraine) return;
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
 
     await c.clearCircles();
     if (!isCurrent()) return;
@@ -258,83 +261,25 @@ class _ShelterMapState extends State<ShelterMap> {
     final labelData = <Map<String, dynamic>>[];
     final labelImages = <String, String>{};
 
-    for (final rawFeature in rawFeatures) {
-      if (rawFeature is! Map) continue;
-      final feature = Map<String, dynamic>.from(rawFeature);
-      final geometry = feature['geometry'];
-      final properties = feature['properties'];
-      if (geometry is! Map || properties is! Map) continue;
-      final coordinates = geometry['coordinates'];
-      if (geometry['type'] != 'Point' ||
-          coordinates is! List ||
-          coordinates.length != 2 ||
-          coordinates[0] is! num ||
-          coordinates[1] is! num) {
-        continue;
-      }
-      final p = Map<String, dynamic>.from(properties);
+    for (final feature in shelterDisplayFeatures(rawFeatures, zoom)) {
+      final coordinates = feature['geometry']['coordinates'] as List;
+      final p = Map<String, dynamic>.from(feature['properties'] as Map);
       final lon = (coordinates[0] as num).toDouble();
       final lat = (coordinates[1] as num).toDouble();
-      final cluster = p['cluster'] == true;
-      final radius = cluster
-          ? zoom < 9
-                ? 22.0
-                : zoom < 12
-                ? 18.0
-                : 14.0
-          : 8.0;
       final annotationData = <String, dynamic>{
         'kind': 'shelter-annotation',
         'properties': p,
         'coordinates': [lon, lat],
       };
-
-      options.add(
-        CircleOptions(
-          geometry: LatLng(lat, lon),
-          circleColor: cluster ? '#1b5e20' : '#2e7d32',
-          circleRadius: radius,
-          circleOpacity: cluster ? 0.94 : 0.92,
-          circleStrokeColor: '#ffffff',
-          circleStrokeWidth: cluster ? 2.0 : 1.5,
-        ),
-      );
-      data.add(annotationData);
-
-      if (cluster) {
-        final count = '${p['point_count']}';
-        final fontSize = zoom < 9 ? 13.0 : 12.0;
-        final imageKey = '$count:$fontSize';
+      if (p['cluster'] == true) {
+        final count = p['point_count'] as int;
+        final imageKey = '$count:$pixelRatio';
         var imageName = labelImages[imageKey];
         if (imageName == null) {
-          // Fixed slots bound the native image cache to the current cluster cap.
-          imageName = 'shelter-count-${labelImages.length}';
-          final painter = TextPainter(
-            text: TextSpan(
-              text: count,
-              style: TextStyle(
-                fontSize: fontSize,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
-            textDirection: TextDirection.ltr,
-          )..layout();
-          final recorder = ui.PictureRecorder();
-          final canvas = Canvas(recorder)..scale(2);
-          painter.paint(canvas, const Offset(2, 1));
-          final picture = recorder.endRecording();
-          final image = await picture.toImage(
-            ((painter.width + 4) * 2).ceil(),
-            ((painter.height + 2) * 2).ceil(),
-          );
-          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          image.dispose();
-          picture.dispose();
-          painter.dispose();
+          imageName = 'shelter-cluster-${labelImages.length}';
+          final bytes = await shelterClusterImage(count, pixelRatio);
           if (!isCurrent()) return;
-          if (bytes == null) throw StateError('Brak obrazu liczby klastra');
-          await c.addImage(imageName, bytes.buffer.asUint8List());
+          await c.addImage(imageName, bytes);
           if (!isCurrent()) return;
           labelImages[imageKey] = imageName;
         }
@@ -342,12 +287,24 @@ class _ShelterMapState extends State<ShelterMap> {
           SymbolOptions(
             geometry: LatLng(lat, lon),
             iconImage: imageName,
-            iconSize: 0.5,
+            iconSize: 1,
             iconAnchor: 'center',
             zIndex: 2,
           ),
         );
         labelData.add(annotationData);
+      } else {
+        options.add(
+          CircleOptions(
+            geometry: LatLng(lat, lon),
+            circleColor: '#2e7d32',
+            circleRadius: 6,
+            circleOpacity: 0.92,
+            circleStrokeColor: '#ffffff',
+            circleStrokeWidth: 1.5,
+          ),
+        );
+        data.add(annotationData);
       }
     }
     if (options.isNotEmpty) {
@@ -1226,9 +1183,7 @@ class _ShelterMapState extends State<ShelterMap> {
         viewport = result;
         renderedRequest = request;
         online = true;
-        message = result.freshAt(DateTime.now())
-            ? ''
-            : 'Dane o schronieniach mogą być nieaktualne.';
+        message = ''; // Freshness is shown once, below the map.
       });
     } catch (failure) {
       if (!mounted || current != ticket) return;
@@ -1966,52 +1921,6 @@ class _ShelterMapState extends State<ShelterMap> {
                       ],
                     ),
                   ),
-                if (!widget.ukraine)
-                  Positioned(
-                    left: 8,
-                    right: 8,
-                    bottom: 8,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Material(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerHigh,
-                          borderRadius: BorderRadius.circular(10),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            child: Text(
-                              overviewMode
-                                  ? 'ZDARZENIA • POLSKA'
-                                  : online && viewport != null
-                                  ? fresh
-                                        ? 'LIVE'
-                                        : 'ONLINE / źródło STALE'
-                                  : viewport != null
-                                  ? 'OFFLINE / zapisane'
-                                  : 'Ładowanie danych',
-                              style: Theme.of(context).textTheme.labelMedium,
-                            ),
-                          ),
-                        ),
-                        if (showMapLegend) ...[
-                          const SizedBox(height: 6),
-                          _MapLegend(
-                            showAlerts: legendAlertsVisible,
-                            showImgw: legendImgwVisible,
-                            showShelters: legendSheltersVisible,
-                            showWatched: legendWatchedVisible,
-                            showRadiation: legendRadiationVisible,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
                 if (loading)
                   const Align(
                     alignment: Alignment.topCenter,
@@ -2022,96 +1931,132 @@ class _ShelterMapState extends State<ShelterMap> {
           ),
         ),
         if (!widget.ukraine) ...[
+          const SizedBox(height: 8),
+          if (showMapLegend)
+            _MapLegend(
+              showAlerts: legendAlertsVisible,
+              showImgw: legendImgwVisible,
+              showShelters: legendSheltersVisible,
+              showWatched: legendWatchedVisible,
+              showRadiation: legendRadiationVisible,
+            ),
+          const SizedBox(height: 6),
+          Text(
+            overviewMode
+                ? 'Zdarzenia dla całej Polski'
+                : viewport == null
+                ? 'Ładowanie danych schronień…'
+                : !online
+                ? 'Schronienia: zapisana kopia offline'
+                : fresh
+                ? 'Schronienia: dane źródła aktualne'
+                : 'Schronienia: aktualność danych niepotwierdzona',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        if (!widget.ukraine) ...[
           const SizedBox(height: 10),
-          Card(
-            elevation: 0,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilterChip(
-                          avatar: const Icon(Icons.satellite_alt_outlined),
-                          label: Text(
-                            showGpsInterference
-                                ? 'Zakłócenia GPS/GNSS — włączone'
-                                : 'Zakłócenia GPS/GNSS',
-                          ),
-                          selected: showGpsInterference,
-                          onSelected: (value) {
-                            unawaited(setGpsInterferenceVisible(value));
-                          },
-                        ),
-                      ),
-                      if (gpsInterferenceLoading)
-                        const Padding(
-                          padding: EdgeInsets.only(left: 10),
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                    ],
-                  ),
-                  if (showGpsInterference) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      gpsInterference == null
-                          ? 'Ładowanie dobowej mapy zakłóceń…'
-                          : 'Dane dobowe: ${gpsInterference!.dataDate} UTC',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Wrap(
-                      spacing: 14,
-                      runSpacing: 6,
-                      children: [
-                        gpsLegend(const Color(0xff43a047), 'Niskie 0–2%'),
-                        gpsLegend(const Color(0xfffdd835), 'Średnie >2–10%'),
-                        gpsLegend(const Color(0xffe53935), 'Wysokie >10%'),
-                      ],
-                    ),
-                    const SizedBox(height: 7),
-                    const Text(
-                      'Kolorowe heksy pokazują obszary, w których samoloty raportowały obniżoną dokładność nawigacji. Dane są agregowane dobowo i nie dowodzą celowego zagłuszania.',
-                    ),
-                    if (gpsInterferenceError != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          'Warstwa chwilowo niedostępna: $gpsInterferenceError',
-                        ),
-                      ),
+          if (!showGpsInterference)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilterChip(
+                avatar: const Icon(Icons.satellite_alt_outlined),
+                label: const Text('Zakłócenia GPS/GNSS'),
+                selected: false,
+                onSelected: (value) =>
+                    unawaited(setGpsInterferenceVisible(value)),
+              ),
+            )
+          else
+            Card(
+              elevation: 0,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
                       children: [
-                        TextButton.icon(
-                          onPressed: gpsInterferenceLoading
-                              ? null
-                              : () => unawaited(
-                                  refreshGpsInterferenceForCurrentViewport(),
-                                ),
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Odśwież'),
+                        Expanded(
+                          child: FilterChip(
+                            avatar: const Icon(Icons.satellite_alt_outlined),
+                            label: Text(
+                              showGpsInterference
+                                  ? 'Zakłócenia GPS/GNSS — włączone'
+                                  : 'Zakłócenia GPS/GNSS',
+                            ),
+                            selected: showGpsInterference,
+                            onSelected: (value) {
+                              unawaited(setGpsInterferenceVisible(value));
+                            },
+                          ),
                         ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: () =>
-                              widget.openLink('https://gpsjam.org/faq'),
-                          child: const Text('GPSJAM'),
-                        ),
+                        if (gpsInterferenceLoading)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 10),
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
                       ],
                     ),
+                    if (showGpsInterference) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        gpsInterference == null
+                            ? 'Ładowanie dobowej mapy zakłóceń…'
+                            : 'Dane dobowe: ${gpsInterference!.dataDate} UTC',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Wrap(
+                        spacing: 14,
+                        runSpacing: 6,
+                        children: [
+                          gpsLegend(const Color(0xff43a047), 'Niskie 0–2%'),
+                          gpsLegend(const Color(0xfffdd835), 'Średnie >2–10%'),
+                          gpsLegend(const Color(0xffe53935), 'Wysokie >10%'),
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+                      const Text(
+                        'Kolorowe heksy pokazują obszary, w których samoloty raportowały obniżoną dokładność nawigacji. Dane są agregowane dobowo i nie dowodzą celowego zagłuszania.',
+                      ),
+                      if (gpsInterferenceError != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            'Warstwa chwilowo niedostępna: $gpsInterferenceError',
+                          ),
+                        ),
+                      Row(
+                        children: [
+                          TextButton.icon(
+                            onPressed: gpsInterferenceLoading
+                                ? null
+                                : () => unawaited(
+                                    refreshGpsInterferenceForCurrentViewport(),
+                                  ),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Odśwież'),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () =>
+                                widget.openLink('https://gpsjam.org/faq'),
+                            child: const Text('GPSJAM'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
-          ),
         ],
         if (!widget.ukraine && showRadiation) ...[
           Text(
@@ -2156,19 +2101,6 @@ class _ShelterMapState extends State<ShelterMap> {
                   },
                   icon: const Icon(Icons.refresh),
                   label: const Text('Odśwież'),
-                ),
-                const Spacer(),
-                Text(
-                  overviewMode
-                      ? 'Aktywne zdarzenia'
-                      : viewport == null
-                      ? ''
-                      : online
-                      ? fresh
-                            ? 'Dane bieżące'
-                            : 'Połączono • źródło STALE'
-                      : 'Ostatnia zapisana kopia',
-                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
             ),
