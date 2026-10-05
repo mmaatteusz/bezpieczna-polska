@@ -9,10 +9,10 @@ const readmeUrl = new URL('../README.md', import.meta.url);
 const backendPackageRaw = readFileSync(backendPackageUrl, 'utf8');
 const backendPackage = JSON.parse(backendPackageRaw);
 const currentVersion = String(backendPackage.version ?? '');
-const alphaMatch = currentVersion.match(/^(\d+\.\d+\.\d+)-alpha\.(\d+)$/);
-if (!alphaMatch) {
+const prereleaseMatch = currentVersion.match(/^(\d+\.\d+\.\d+)-(alpha|beta)\.(\d+)$/);
+if (!prereleaseMatch) {
   throw new Error(
-    `Expected backend version like 0.1.0-alpha.23, got ${currentVersion}`,
+    `Expected backend version like 0.1.0-alpha.23 or 0.1.0-beta.1, got ${currentVersion}`,
   );
 }
 
@@ -27,7 +27,7 @@ if (pubspecMatch[1] !== currentVersion) {
   );
 }
 
-const nextVersion = `${alphaMatch[1]}-alpha.${Number(alphaMatch[2]) + 1}`;
+const nextVersion = `${prereleaseMatch[1]}-${prereleaseMatch[2]}.${Number(prereleaseMatch[3]) + 1}`;
 const nextBuild = Number(pubspecMatch[2]) + 1;
 if (!Number.isSafeInteger(nextBuild) || nextBuild < 1) {
   throw new Error('Cannot allocate the next production build number');

@@ -626,10 +626,12 @@ void main() {
     }
     expect(find.textContaining('Tryb offline:'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Polska'),
+      find.text('Sytuacja w kraju'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sytuacja w kraju'));
     await tester.pumpAndSettle();
     expect(find.text('BRAK ŚWIEŻEJ OCENY'), findsWidgets);
     expect(find.text('SPOKOJNIE'), findsNothing);

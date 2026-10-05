@@ -817,6 +817,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             error: error,
             onRefresh: startupSync,
             onChooseLocality: chooseLocality,
+            onOpenMap: () => _selectPage(1),
             onOpenAlerts: () => _selectPage(2),
             onOpenSecurityLevels: openSecurityLevels,
             onOpenEvent: details,

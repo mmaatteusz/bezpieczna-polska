@@ -1,6 +1,23 @@
 name: Deploy Oracle candidate
 
 on:
+  workflow_call:
+    inputs:
+      target_sha:
+        required: true
+        type: string
+      api_base_url:
+        required: true
+        type: string
+    secrets:
+      ORACLE_SSH_HOST:
+        required: true
+      ORACLE_SSH_USER:
+        required: true
+      ORACLE_SSH_PRIVATE_KEY:
+        required: true
+      ORACLE_SSH_KNOWN_HOSTS:
+        required: true
   workflow_dispatch:
     inputs:
       target_sha:

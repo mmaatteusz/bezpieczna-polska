@@ -1,4 +1,4 @@
-name: Auto bump alpha on main
+name: Auto bump prerelease on main
 
 on:
   push:
@@ -51,7 +51,7 @@ jobs:
             echo "Version already changed in this push: $BEFORE_VERSION -> $CURRENT" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "needs_bump=true" >> "$GITHUB_OUTPUT"
-            echo "Code changed without an alpha bump; preparing the next alpha." >> "$GITHUB_STEP_SUMMARY"
+            echo "Code changed without a version bump; preparing the next prerelease in the current channel." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Ensure this run still represents the latest main
@@ -68,7 +68,7 @@ jobs:
             echo "stale=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Bump alpha and validate synchronized version files
+      - name: Bump prerelease and validate synchronized version files
         if: steps.version.outputs.needs_bump == 'true' && steps.latest.outputs.stale != 'true'
         shell: bash
         run: |
@@ -76,7 +76,7 @@ jobs:
           node scripts/bump-alpha.mjs
           node scripts/sync-mobile-version.mjs --check
 
-      - name: Commit synchronized alpha version
+      - name: Commit synchronized prerelease version
         if: steps.version.outputs.needs_bump == 'true' && steps.latest.outputs.stale != 'true'
         id: commit
         shell: bash
@@ -104,7 +104,7 @@ jobs:
           git push origin HEAD:main
           echo "pushed=true" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Alpha version bumped to $VERSION." >> "$GITHUB_STEP_SUMMARY"
+          echo "Prerelease version bumped to $VERSION." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build installable APK from canonical main
         if: steps.latest.outputs.stale != 'true'

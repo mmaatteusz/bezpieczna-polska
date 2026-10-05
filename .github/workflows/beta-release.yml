@@ -1,0 +1,123 @@
+name: Publish Android beta
+
+on:
+  workflow_run:
+    workflows: [Build preview APK and offline regression]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: android-beta-release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      contains(github.event.workflow_run.head_commit.message, '[release-beta]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      sha: ${{ steps.identity.outputs.sha }}
+      version: ${{ steps.identity.outputs.version }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Validate beta identity and notes
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$RELEASE_SHA"
+          VERSION="$(node -p "require('./backend/package.json').version")"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]
+          test -s "docs/releases/${VERSION}.md"
+          node scripts/sync-mobile-version.mjs --check
+          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Require successful infrastructure gate for the same main SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 75); do
+            result="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/production-release.yml/runs?head_sha=${RELEASE_SHA}&event=push&per_page=20")"
+            if jq -e '.workflow_runs | any(.conclusion == "success")' <<<"$result" > /dev/null; then
+              exit 0
+            fi
+            if jq -e '.workflow_runs | length > 0 and all(.status == "completed")' <<<"$result" > /dev/null; then
+              echo 'Infrastructure gate failed; beta will not be deployed or published.' >&2
+              exit 1
+            fi
+            sleep 20
+          done
+          echo 'Timed out waiting for the infrastructure gate.' >&2
+          exit 1
+
+  deploy:
+    needs: verify
+    uses: ./.github/workflows/oracle-deploy.yml
+    with:
+      target_sha: ${{ needs.verify.outputs.sha }}
+      api_base_url: https://bezpieczna-polska-api.duckdns.org
+    secrets: inherit
+
+  publish:
+    needs: [verify, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_SHA: ${{ needs.verify.outputs.sha }}
+      VERSION: ${{ needs.verify.outputs.version }}
+      VERIFIED_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+      - name: Download the exact APK tested by the successful regression run
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$VERIFIED_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name Bezpieczna_Polska_preview_offline_regression --dir verified
+          test -s "verified/Bezpieczna_Polska_${VERSION}-preview-arm64.apk"
+          (cd verified && sed 's@  output/@  @' SHA256SUMS.txt | sha256sum --check)
+          grep -F "versionName='${VERSION}'" verified/package-info.txt
+          grep -F "name='pl.bezpiecznapolska.preview'" verified/package-info.txt
+          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" verified/signature-check.txt
+          mkdir release
+          cp "verified/Bezpieczna_Polska_${VERSION}-preview-arm64.apk" "release/Bezpieczna_Polska_${VERSION}_arm64.apk"
+          cp verified/package-info.txt verified/signature-check.txt release/
+          (cd release && sha256sum *.apk > SHA256SUMS.txt)
+      - name: Publish tested Android beta after verified Oracle deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          health="$(curl -fsS --max-time 15 https://bezpieczna-polska-api.duckdns.org/health)"
+          jq -e --arg sha "$RELEASE_SHA" --arg version "$VERSION" \
+            '.buildSha == $sha and .version == $version and .environment == "production"' <<<"$health"
+          cp "docs/releases/${VERSION}.md" release-notes.md
+          printf '\nCommit: `%s`\n\nRegresja APK: https://github.com/%s/actions/runs/%s\n' \
+            "$RELEASE_SHA" "$GITHUB_REPOSITORY" "$VERIFIED_RUN_ID" >> release-notes.md
+          if gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo 'This beta already exists; refusing to overwrite its artifacts.' >&2
+            exit 1
+          fi
+          gh release create "v${VERSION}" release/* --repo "$GITHUB_REPOSITORY" \
+            --target "$RELEASE_SHA" --prerelease --title "Bezpieczna Polska ${VERSION}" \
+            --notes-file release-notes.md

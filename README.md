@@ -13,11 +13,11 @@ Bezpieczna Polska zbiera komunikaty z oficjalnych źródeł, pokazuje ich zasię
 [![Regresja i kontrola wydania](https://github.com/mmaatteusz/bezpieczna-polska/actions/workflows/production-release.yml/badge.svg?branch=main)](https://github.com/mmaatteusz/bezpieczna-polska/actions/workflows/production-release.yml)
 [![Aktualizacja APK](https://github.com/mmaatteusz/bezpieczna-polska/actions/workflows/android-update-compat.yml/badge.svg?branch=main)](https://github.com/mmaatteusz/bezpieczna-polska/actions/workflows/android-update-compat.yml)
 
-> Aplikacja jest niezależnym projektem w fazie alpha. Nie jest państwowym systemem alarmowym i nie zastępuje Alertu RCB, numeru 112 ani komunikatów służb. Brak komunikatów nie oznacza braku zagrożenia.
+> Aplikacja jest niezależnym projektem w fazie beta. Nie jest państwowym systemem alarmowym i nie zastępuje Alertu RCB, numeru 112 ani komunikatów służb. Brak komunikatów nie oznacza braku zagrożenia.
 
 ## Stan projektu i pobieranie
 
-Aktualny kod rozwojowy: **0.1.0-alpha.76** (`build 77`).
+Aktualny kod rozwojowy: **0.1.0-beta.1** (`build 78`).
 
 **Android jest priorytetem.** Publikacja w Google Play pozostaje w przygotowaniu. Kod i konfiguracja iOS znajdują się w repozytorium, lecz iOS nie jest obecnie celem wydania.
 
@@ -30,13 +30,17 @@ APK pobieraj z [GitHub Releases](https://github.com/mmaatteusz/bezpieczna-polska
 | Produkcyjny AAB | Przesłanie do Google Play; nie jest plikiem do zwykłej instalacji na telefonie |
 | `SHA256SUMS.txt` | Sprawdzenie integralności artefaktów konkretnego wydania |
 
-Workflow `Auto bump alpha on main` synchronizuje wersję backendu, klienta i dokumentacji oraz uruchamia build testowego APK. Samo podbicie alphy nie oznacza publikacji w sklepie ani wdrożenia backendu. Więcej: [kanały Android, podpisy i wydania](docs/PRODUCTION_RUNBOOK.md).
+Workflow `Auto bump prerelease on main` synchronizuje wersję backendu, klienta i dokumentacji oraz uruchamia build testowego APK. Samo podbicie wersji nie oznacza publikacji w sklepie ani wdrożenia backendu. Więcej: [kanały Android, podpisy i wydania](docs/PRODUCTION_RUNBOOK.md).
+
+Pierwsze wydanie beta: [0.1.0-beta.1](https://github.com/mmaatteusz/bezpieczna-polska/releases/tag/v0.1.0-beta.1). To beta do testów na Androidzie, dystrybuowana jako podpisany pakiet `pl.bezpiecznapolska.preview`, z tym samym kluczem co dotychczasowe preview. Nie jest jeszcze wydaniem w Google Play. Zmiany: [release notes](docs/releases/0.1.0-beta.1.md).
+
+Workflow [Publish Android beta](.github/workflows/beta-release.yml) dla commita oznaczonego `[release-beta]` czeka na pełną regresję i kontrolę infrastruktury, wdraża jego dokładny SHA na Oracle, a następnie publikuje prerelease z przetestowanym APK ARM64 i sumą SHA-256. APK zawiera konfigurację Firebase. Backend przed wysyłką ponownie sprawdza preferencje urządzenia; zakończenie alarmu UkraineAlarm wywnioskowane tylko ze zniknięcia z feedu nie powoduje push (pozostaje w historii).
 
 ## Funkcje obecne na `main`
 
 | Obszar | Możliwości i granice |
 | --- | --- |
-| Start i alerty | Status Polski/wybranego województwa, stopnie alarmowe, filtrowanie i grupowanie komunikatów, szczegóły oraz historia. Lokalna sytuacja ma jawny zakres, najwyżej trzy komunikaty i ocenę świeżości źródeł. |
+| Start i alerty | Lokalna sytuacja, najwyżej trzy najważniejsze komunikaty i szybkie przejście do mapy lub alertów. Status kraju, stopnie alarmowe i zakres danych są rozwijane. Krytyczne zagrożenie krajowe pozostaje widoczne bez rozwijania. |
 | Mapa | Warstwy komunikatów, IMGW, schronień i PAA; granice województw, szczegóły obiektów i legenda zależna od widoku. |
 | Schronienia | Lista, wyszukiwanie, najbliższe punkty i przejście do zewnętrznej nawigacji. Wpis w katalogu nie gwarantuje otwarcia ani dostępności obiektu. |
 | PAA | Komunikaty i pomiary promieniowania z datą oraz źródłem. |
@@ -198,7 +202,7 @@ Ręczny test sprawdza transport. Nie zastępuje próby dopasowania rzeczywistego
 | [Build preview APK and source live checks](.github/workflows/preview-apk.yml) | Przekazuje cztery wartości klienta; właściwy preview do testu push |
 | [Build preview APK and offline regression](.github/workflows/regression-preview.yml) | Przekazuje cztery wartości klienta i wykonuje regresję |
 | [Production infrastructure and release gate](.github/workflows/production-release.yml) | Build produkcyjny wymaga konfiguracji Firebase, podpisu, publicznej polityki prywatności i gotowego backendu |
-| [Build installable test APK](.github/workflows/test-apk.yml) | Obecnie nie przekazuje wartości Firebase; nadaje się do szybkich prób interfejsu, nie do potwierdzania działania FCM |
+| [Build installable test APK](.github/workflows/test-apk.yml) | Przekazuje cztery wartości Firebase; szybki instalowalny build z obsługą FCM |
 
 Szczegóły wcześniejszego kontraktu: [ALPHA14_PUSH.md](docs/ALPHA14_PUSH.md). Aktualne zachowanie określają kod i workflow wybranego wydania.
 

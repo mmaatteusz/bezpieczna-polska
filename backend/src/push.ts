@@ -1,7 +1,7 @@
 import {connect as connectHttp2} from 'node:http2';
 import {createCipheriv,createDecipheriv,createHash,createSign,randomBytes,sign as cryptoSign,timingSafeEqual} from 'node:crypto';
 import {z} from 'zod';
-import {REGIONS,type Event} from './domain.js';
+import {REGIONS,eventSchema,type Event} from './domain.js';
 import type {Incident} from './correlation.js';
 
 type Row=Record<string,unknown>;
@@ -188,6 +188,9 @@ function relevantChange(previous:Event|null,current:Event){
  const standaloneCategory=isCyber||isBorder;
  if(isUa){
   if(current.ukraine?.kind!=='OFFICIAL_ALERT'||!current.sources.some(s=>s.tier===1))return null;
+  // /alerts only reports currently active alarms. Disappearance has no
+  // official clearance timestamp and must not generate an all-clear push.
+  if(['ENDED','CANCELLED','EXPIRED'].includes(current.lifecycle)&&!current.validTo)return null;
  }else{
   if(!current.sources.some(s=>s.tier===1))return null;
   if(sourceIds.has('POLICE')||sourceIds.has('PSP_INCIDENTS'))return null;
@@ -429,7 +432,7 @@ export class PushService{
   return this.db.transaction(async db=>{
    await db.run("UPDATE push_outbox SET state='RETRY',next_attempt_at=?,last_error_code='LEASE_RECOVERED' WHERE state='SENDING' AND last_attempt_at IS NOT NULL AND last_attempt_at<?",[now.toISOString(),stale]);
    const suffix=db.kind==='postgres'?' FOR UPDATE OF o SKIP LOCKED':'';
-   const rows=await db.all(`SELECT o.*,d.platform,d.token_ciphertext,d.enabled FROM push_outbox o LEFT JOIN push_devices d ON d.device_id=o.device_id WHERE o.state IN ('PENDING','RETRY') AND o.next_attempt_at<=? ORDER BY o.created_at,o.id LIMIT ?${suffix}`,[now.toISOString(),limit]);
+   const rows=await db.all(`SELECT o.*,d.platform,d.token_ciphertext,d.enabled,d.preferences FROM push_outbox o LEFT JOIN push_devices d ON d.device_id=o.device_id WHERE o.state IN ('PENDING','RETRY') AND o.next_attempt_at<=? ORDER BY o.created_at,o.id LIMIT ?${suffix}`,[now.toISOString(),limit]);
    for(const r of rows)await db.run("UPDATE push_outbox SET state='SENDING',attempt_count=attempt_count+1,last_attempt_at=? WHERE id=? AND state IN ('PENDING','RETRY')",[now.toISOString(),String(r.id)]);
    return rows;
   });
@@ -451,12 +454,20 @@ export class PushService{
    if(!Number.isFinite(expiresAt)||expiresAt<=now.getTime()){
     await this.db.run("UPDATE push_outbox SET state='EXPIRED',next_attempt_at=?,last_error_code='MESSAGE_EXPIRED' WHERE id=?",[now.toISOString(),id]);processed++;continue;
    }
-   const latest=(await this.db.all('SELECT revision FROM event_revisions WHERE event_id=? ORDER BY revision DESC LIMIT 1',[String(row.event_id)]))[0];
+   const latest=(await this.db.all('SELECT revision,payload FROM event_revisions WHERE event_id=? ORDER BY revision DESC LIMIT 1',[String(row.event_id)]))[0];
    if(!latest){
     await this.db.run("UPDATE push_outbox SET state='EXPIRED',next_attempt_at=?,last_error_code='EVENT_MISSING' WHERE id=?",[now.toISOString(),id]);processed++;continue;
    }
    if(Number(latest.revision)!==Number(row.event_revision)){
     await this.db.run("UPDATE push_outbox SET state='SUPERSEDED',next_attempt_at=?,last_error_code='EVENT_REVISION_SUPERSEDED' WHERE id=?",[now.toISOString(),id]);processed++;continue;
+   }
+   const event=eventSchema.parse(JSON.parse(String(latest.payload)));
+   const preferences=pushPreferencesSchema.parse(JSON.parse(String(row.preferences)));
+   const isUa=event.countryCode==='UA'||!!event.ukraine||event.sources.some(s=>s.id==='UA');
+   const category=selectCategory(event,preferences,isUa);
+   const inferredUaEnd=isUa&&String(row.notification_kind)==='ENDED'&&!event.validTo;
+   if(!category||category!==String(row.category)||inferredUaEnd){
+    await this.db.run("UPDATE push_outbox SET state='SUPERSEDED',next_attempt_at=?,last_error_code=? WHERE id=?",[now.toISOString(),inferredUaEnd?'UA_CLEARANCE_UNCONFIRMED':'PREFERENCES_CHANGED',id]);processed++;continue;
    }
    message={
     ...message,
