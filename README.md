@@ -17,7 +17,7 @@ Bezpieczna Polska zbiera komunikaty z oficjalnych źródeł, pokazuje ich zasię
 
 ## Stan projektu i pobieranie
 
-Aktualny kod rozwojowy: **0.1.0-alpha.72** (`build 73`).
+Aktualny kod rozwojowy: **0.1.0-alpha.73** (`build 74`).
 
 **Android jest priorytetem.** Publikacja w Google Play pozostaje w przygotowaniu. Kod i konfiguracja iOS znajdują się w repozytorium, lecz iOS nie jest obecnie celem wydania.
 
