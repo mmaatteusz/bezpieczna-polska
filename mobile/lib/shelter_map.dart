@@ -312,10 +312,6 @@ class _ShelterMapState extends State<ShelterMap> {
     }
     if (!isCurrent()) return;
     if (labels.isNotEmpty) {
-      await c.setSymbolIconAllowOverlap(true);
-      if (!isCurrent()) return;
-      await c.setSymbolIconIgnorePlacement(true);
-      if (!isCurrent()) return;
       await c.addSymbols(labels, labelData);
     }
   }
@@ -629,6 +625,11 @@ class _ShelterMapState extends State<ShelterMap> {
     if (c == null) return;
     styleFallback?.cancel();
     try {
+      // Changing annotation placement rebuilds its native layer at the top.
+      // Configure it before adding context layers so later shelter refreshes
+      // never cover watched places or the user's position.
+      await c.setSymbolIconAllowOverlap(true);
+      await c.setSymbolIconIgnorePlacement(true);
       if (!widget.ukraine) {
         final voivodeships =
             jsonDecode(
@@ -903,11 +904,13 @@ class _ShelterMapState extends State<ShelterMap> {
         'user-location',
         'user-location-point',
         const CircleLayerProperties(
-          circleColor: '#37474f',
-          circleRadius: 8,
+          circleColor: '#1976d2',
+          circleRadius: 9,
           circleStrokeColor: '#ffffff',
           circleStrokeWidth: 3,
         ),
+        // The location must stay visible without consuming shelter taps.
+        enableInteraction: false,
       );
       if (!mounted) return;
       ready = true;

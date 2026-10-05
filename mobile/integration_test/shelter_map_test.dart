@@ -232,6 +232,12 @@ void main() {
             .abs(),
         lessThan(0.03),
       );
+      final layers = await controller.getLayerIds();
+      expect(
+        layers.last,
+        'user-location-point',
+        reason: 'Refreshing shelters must not raise them above GPS',
+      );
     }
     dense = true;
     await move(const LatLng(53.12, 18.01), 10);
@@ -243,7 +249,49 @@ void main() {
       {14, 26, 114},
     );
     // The driver captures this dense, high-density native map before the tap.
+    final location = controller.symbols.first.options.geometry!;
+    await controller.setGeoJsonSource('user-location', {
+      'type': 'FeatureCollection',
+      'features': [
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'Point',
+            'coordinates': [location.longitude, location.latitude],
+          },
+          'properties': {'kind': 'user-location'},
+        },
+      ],
+    });
+    await state.refresh();
+    await waitFor(() => state.loading == false);
+    Future<void> expectLocationAboveShelters() async {
+      expect((await controller.getLayerIds()).last, 'user-location-point');
+      final screenLocation = await controller.toScreenLocation(location);
+      await tester.pump(const Duration(seconds: 1));
+      expect(
+        await controller.queryRenderedFeatures(
+          math.Point<double>(
+            screenLocation.x.toDouble(),
+            screenLocation.y.toDouble(),
+          ),
+          ['user-location-point'],
+          null,
+        ),
+        isNotEmpty,
+        reason: 'GPS must still render over an overlapping shelter group',
+      );
+    }
+
+    await expectLocationAboveShelters();
     await tapMarker();
+    await move(const LatLng(53.12, 18.01), 8);
+    await expectLocationAboveShelters();
+    await tapMarker();
+    await controller.setGeoJsonSource('user-location', {
+      'type': 'FeatureCollection',
+      'features': [],
+    });
     dense = false;
     await move(const LatLng(51.1, 16.98), 8);
     await tapMarker(); // Native tap on the combined count marker.
