@@ -29,6 +29,8 @@ jobs:
       - name: Detect whether this push already changed the app version
         id: version
         shell: bash
+        env:
+          RELEASE_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
           BEFORE="${{ github.event.before }}"
@@ -45,6 +47,15 @@ jobs:
 
           echo "before_version=$BEFORE_VERSION" >> "$GITHUB_OUTPUT"
           echo "current_version=$CURRENT" >> "$GITHUB_OUTPUT"
+
+          if [[ "$RELEASE_MESSAGE" == *'[release-beta]'* || "$RELEASE_MESSAGE" == *'[release-beta-test]'* ]]; then
+            [[ "$CURRENT" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]
+            test -s "docs/releases/${CURRENT}.md"
+            node scripts/sync-mobile-version.mjs --check
+            echo "needs_bump=false" >> "$GITHUB_OUTPUT"
+            echo "Explicit beta release keeps its prepared version: $CURRENT" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
 
           if [[ -n "$BEFORE_VERSION" && "$BEFORE_VERSION" != "$CURRENT" ]]; then
             echo "needs_bump=false" >> "$GITHUB_OUTPUT"
