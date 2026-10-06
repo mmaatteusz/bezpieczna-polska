@@ -184,7 +184,7 @@ jobs:
       API_BASE_URL: https://bezpieczna-polska-api.duckdns.org
       BACKEND_SHA: ${{ needs.runtime.outputs.backend_sha }}
       BACKEND_VERSION: ${{ needs.runtime.outputs.backend_version }}
-      PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
+      PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL || 'https://github.com/mmaatteusz/bezpieczna-polska/blob/main/docs/PRIVACY_POLICY.md' }}
       ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}

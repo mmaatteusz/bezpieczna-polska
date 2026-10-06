@@ -30,13 +30,20 @@ retencję pozostałych rekordów i kopii przed deklaracją możliwości usuwania
 
 ## Publikacja polityki
 
-Uzupełnić `PRIVACY_POLICY_DRAFT.md`, potwierdzić tożsamość/kontakt administratora,
-podstawy przetwarzania, hosting, transfery i realną retencję. Opublikować jako
-publiczną stronę HTML bez logowania i ograniczenia regionów — nie jako PDF.
-Ustawić repozytoryjne `vars.PRIVACY_POLICY_URL`; workflow sprawdza odpowiedź
-HTTPS/HTML i przekazuje URL do AAB i APK. Klient production wymaga poprawnego
-URL przy starcie. Ten check nie dowodzi poprawności prawnej ani treści strony.
-Wpisać ten sam URL w Play Console; w aplikacji: Ustawienia → Polityka prywatności.
+Publiczna [polityka prywatności](PRIVACY_POLICY.md) obowiązuje od 6.10.2026.
+Administrator: Mateusz Kawczyński; kontakt: mati66628@gmail.com. Opisuje
+Oracle Frankfurt, Firebase, geokodowanie i ograniczenia usuwania danych beta.
+Draft zachowano jako wcześniejszy materiał audytowy, nie obowiązującą politykę.
+
+Domyślny URL buildów: https://github.com/mmaatteusz/bezpieczna-polska/blob/main/docs/PRIVACY_POLICY.md
+Można go nadpisać repozytoryjnym `vars.PRIVACY_POLICY_URL`. Workflow sprawdza
+HTTPS/HTML i przekazuje URL do klienta production. Ten check nie dowodzi
+poprawności prawnej ani zgodności deklaracji Data safety. Dla konkretnego AAB
+użyj adresu z `play-build-info.txt` — beta.3 przypina wersję polityki do commitu.
+Ten sam adres wpisz w Play Console. W aplikacji: Ustawienia → Polityka prywatności.
+Brak automatycznej retencji historii push oraz pełnego usunięcia przez samo
+wyrejestrowanie pozostaje ograniczeniem beta; nie deklaruj takiego mechanizmu
+w formularzu Google Play.
 
 Źródła sprawdzone 4.10.2026:
 - https://support.google.com/googleplay/android-developer/answer/10144311

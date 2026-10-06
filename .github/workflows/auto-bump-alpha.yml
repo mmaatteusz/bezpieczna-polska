@@ -57,6 +57,13 @@ jobs:
             exit 0
           fi
 
+          # Documentation and CI configuration do not change the installed app.
+          if [[ ! "$BEFORE" =~ ^0+$ ]] && ! git diff --name-only "$BEFORE" HEAD | grep -Ev '^(docs/|README\.md$|\.github/)' > /dev/null; then
+            echo "needs_bump=false" >> "$GITHUB_OUTPUT"
+            echo "Documentation/CI-only push keeps the installed app version: $CURRENT" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           if [[ -n "$BEFORE_VERSION" && "$BEFORE_VERSION" != "$CURRENT" ]]; then
             echo "needs_bump=false" >> "$GITHUB_OUTPUT"
             echo "Version already changed in this push: $BEFORE_VERSION -> $CURRENT" >> "$GITHUB_STEP_SUMMARY"

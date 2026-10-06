@@ -125,7 +125,7 @@ jobs:
     timeout-minutes: 40
     env:
       API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL }}
-      PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
+      PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL || 'https://github.com/mmaatteusz/bezpieczna-polska/blob/main/docs/PRIVACY_POLICY.md' }}
       APP_ENV: production
       BP_ENV: production
       ENABLE_DEVELOPER_SETTINGS: 'false'
