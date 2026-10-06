@@ -78,7 +78,7 @@ Wyniki wcześniejszych audytów są zapisami z konkretnego dnia. [Stan infrastru
 | --- | --- | --- |
 | P0 | Precyzyjna sytuacja lokalna na Start, świeżość wszystkich istotnych źródeł | Kod zintegrowany; pozostaje próba na rzeczywistym Androidzie |
 | P0 | Wygaśnięcie push, odrzucanie starych komunikatów i otwieranie właściwego alertu | Kod zintegrowany: TTL, ponowna kontrola aktualności i otwieranie alertu; pozostaje test urządzenia |
-| P0 | Pełna polityka prywatności, publiczny kontakt, retencja i Data safety | Ekran jest w aplikacji; [projekt polityki](docs/PRIVACY_POLICY_DRAFT.md) i [Data safety](docs/PLAY_DATA_SAFETY.md) wymagają uzupełnienia |
+| P0 | Pełna polityka prywatności, publiczny kontakt, retencja i Data safety | [Polityka prywatności](docs/PRIVACY_POLICY.md) zawiera administratora i publiczny kontakt; pozostają ograniczenia retencji beta oraz weryfikacja formularza [Data safety](docs/PLAY_DATA_SAFETY.md) |
 | P0 | TalkBack, duży tekst, odmowa GPS/push, słaba sieć i dłuższe działanie mapy | Próby z rzeczywistymi użytkownikami pozostają do wykonania |
 | P1 | Poprzedni publiczny APK → nowy APK z zachowaniem danych i push | [Kontrola artefaktów i procedura](docs/ANDROID_RELEASE_MIGRATION.md) są w repozytorium; pełny test migracji pozostaje do wykonania |
 | P1 | Wydajność backendu i monitoring przed większym ruchem | Aktualizacja różnic, metryki i opcjonalne role procesów są w kodzie; [pomiary i wdrożenie](docs/BACKEND_CAPACITY.md) wymagają weryfikacji na hoście |
@@ -89,7 +89,7 @@ Pozostałe zadania i kolejność wdrożeń: [ROADMAP.md](docs/ROADMAP.md). [Inte
 
 Aplikacja zapisuje ustawienia i miejsca na telefonie. Zapytania o okolicę i najbliższe schronienia wysyłają współrzędne do API. Po włączeniu push dla obserwowanych miejsc backend przechowuje ich nazwy, współrzędne i promienie wraz z preferencjami oraz identyfikatorem instalacji. Android używa **Firebase Cloud Messaging**. Podkład mapowy pobierany jest od zewnętrznego dostawcy.
 
-Wyrejestrowanie push usuwa aktywny token i lokalizacje z rekordu urządzenia, lecz nie usuwa całej historii technicznej ani wszystkich kopii zapasowych. Ekran „Polityka prywatności” w aplikacji opisuje te przepływy. Pełna polityka i Data safety nadal wymagają danych administratora, kontaktu i rzeczywistej retencji. Produkcyjne wydanie wymaga publicznego adresu HTTPS polityki HTML (`PRIVACY_POLICY_URL`).
+Wyrejestrowanie push usuwa aktywny token i lokalizacje z rekordu urządzenia, lecz nie usuwa całej historii technicznej ani wszystkich kopii zapasowych. Ekran „Polityka prywatności” w aplikacji opisuje te przepływy. [Polityka prywatności](docs/PRIVACY_POLICY.md) wskazuje administratora: Mateusz Kawczyński, kontakt: mati66628@gmail.com, Oracle we Frankfurcie i globalne przetwarzanie Firebase. Opisuje także brak automatycznego kasowania historii push w obecnej becie; Data safety wymaga osobnej weryfikacji przed wysłaniem do Google Play. Produkcyjne wydanie wymaga publicznego adresu HTTPS polityki HTML (`PRIVACY_POLICY_URL`).
 
 Test wysłany przez backend nie dowodzi wyświetlenia na telefonie. Odbiór należy potwierdzić na urządzeniu, również w tle, po ponownym uruchomieniu i przy ograniczeniach baterii.
 
