@@ -940,7 +940,8 @@ class _ShelterMapState extends State<ShelterMap> {
     setState(() {
       loading = false;
       legendSheltersVisible = false;
-      message = 'Przybliż mapę do miasta lub okolicy, aby zobaczyć schronienia.';
+      message =
+          'Przybliż mapę do miasta lub okolicy, aby zobaczyć schronienia.';
     });
   }
 
