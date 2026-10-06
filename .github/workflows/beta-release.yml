@@ -157,7 +157,7 @@ jobs:
           SMOKE_BASE_URL: https://bezpieczna-polska-api.duckdns.org
           EXPECTED_BUILD_SHA: ${{ steps.health.outputs.backend_sha }}
           EXPECTED_VERSION: ${{ steps.health.outputs.backend_version }}
-          AUDIT_MODE: identity
+          AUDIT_MODE: health
           DEPLOY_WAIT_SECONDS: '60'
           SOURCE_WAIT_SECONDS: '60'
         run: node scripts/production-runtime-smoke.mjs
