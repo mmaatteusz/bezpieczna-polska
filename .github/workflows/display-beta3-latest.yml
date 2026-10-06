@@ -1,0 +1,33 @@
+name: Mark verified beta.3 as latest
+on:
+  push:
+    branches: [stage/display-beta3-latest]
+    paths: [.github/workflows/display-beta3-latest.yml]
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Verify the published beta and update display metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api repos/mmaatteusz/bezpieczna-polska/releases/tags/v0.1.0-beta.3 > before.json
+          jq -e '.tag_name == "v0.1.0-beta.3" and .draft == false and
+            .target_commitish == "ea026d5a64a3cea8da98952a5637d252f1b42fe8" and
+            (.name | contains("testy Androida")) and
+            (.assets | any(.name == "Bezpieczna_Polska_0.1.0-beta.3_arm64.apk" and
+              .digest == "sha256:65bfe168734f240dc6d3306883f2fb41e09c80d0b331648d0cef1ec7c3536c03"))' before.json
+          release_id="$(jq -r .id before.json)"
+          printf '%s' '{"prerelease":false,"make_latest":"true"}' > display.json
+          gh api --method PATCH "repos/mmaatteusz/bezpieczna-polska/releases/$release_id" --input display.json > after.json
+          jq -e '.tag_name == "v0.1.0-beta.3" and .prerelease == false and .draft == false' after.json
+          diff <(jq -S '{name,body,tag_name,target_commitish,assets: [.assets[] | {name,digest,size}]}' before.json) \\
+               <(jq -S '{name,body,tag_name,target_commitish,assets: [.assets[] | {name,digest,size}]}' after.json)
+          gh api repos/mmaatteusz/bezpieczna-polska/releases/latest > latest.json
+          jq -e '.tag_name == "v0.1.0-beta.3"' latest.json
+          echo 'Beta.3 now displayed as Latest; beta test name, notes, tag and APK unchanged.' >> "$GITHUB_STEP_SUMMARY"
