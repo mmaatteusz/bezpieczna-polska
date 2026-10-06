@@ -44,7 +44,7 @@ class SafetyMapScreen extends StatelessWidget {
       const Padding(
         padding: EdgeInsets.symmetric(horizontal: 4),
         child: Text(
-          'Warstwy mapy obejmują zdarzenia, punkty schronienia i dane PAA. '
+          'Wybierz widoczne warstwy na pasku nad mapą. '
           'Pod mapą możesz osobno włączyć dobową mapę zakłóceń GPS/GNSS. '
           'Lokalizacja telefonu jest używana tylko po Twojej akcji.',
         ),

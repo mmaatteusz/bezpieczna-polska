@@ -133,6 +133,7 @@ class _ShelterMapState extends State<ShelterMap> {
   Timer? debounce, clock, styleFallback, onlineRetry;
   bool showRadiation = false, locating = false;
   bool showEvents = true, showImgw = true, showWatched = true;
+  bool showShelters = true;
   bool showGpsInterference = false, gpsInterferenceLoading = false;
   bool legendAlertsVisible = false, legendImgwVisible = false;
   bool legendSheltersVisible = false, legendWatchedVisible = false;
@@ -256,7 +257,7 @@ class _ShelterMapState extends State<ShelterMap> {
     final zoom =
         c.cameraPosition?.zoom ??
         (metadataZoom is num ? metadataZoom.toDouble() : 10.0);
-    if (!mapShowsShelters(zoom)) return;
+    if (!showShelters || !mapShowsShelters(zoom)) return;
     final options = <CircleOptions>[];
     final data = <Map<String, dynamic>>[];
     final labels = <SymbolOptions>[];
@@ -447,7 +448,8 @@ class _ShelterMapState extends State<ShelterMap> {
         );
     final nextAlerts = showEvents && categoryVisible('ALERT');
     final nextImgw = showImgw && categoryVisible('IMGW');
-    final nextShelters = sheltersVisible ?? legendSheltersVisible;
+    final nextShelters =
+        showShelters && (sheltersVisible ?? legendSheltersVisible);
     final nextRadiation = showRadiation
         ? (radiationVisible ?? legendRadiationVisible)
         : false;
@@ -1159,9 +1161,11 @@ class _ShelterMapState extends State<ShelterMap> {
       updateMapLegend(
         bbox,
         sheltersVisible:
-            mapShowsShelters(zoom) && viewportHasSheltersInBbox(viewport, bbox),
+            showShelters &&
+            mapShowsShelters(zoom) &&
+            viewportHasSheltersInBbox(viewport, bbox),
       );
-      if (!mapShowsShelters(zoom)) {
+      if (!showShelters || !mapShowsShelters(zoom)) {
         onlineRetry?.cancel();
         await c.setGeoJsonSource('shelters', empty);
         await syncShelterAnnotations(null, current);
@@ -1172,8 +1176,9 @@ class _ShelterMapState extends State<ShelterMap> {
         updateMapLegend(bbox, sheltersVisible: false);
         if (!mounted || current != ticket) return;
         setState(() {
-          message =
-              'Przybliż mapę do miasta lub okolicy, aby zobaczyć schronienia.';
+          message = showShelters
+              ? 'Przybliż mapę do miasta lub okolicy, aby zobaczyć schronienia.'
+              : 'Warstwa schronień jest wyłączona.';
         });
         return;
       }
@@ -1695,6 +1700,95 @@ class _ShelterMapState extends State<ShelterMap> {
     await c.animateCamera(CameraUpdate.newLatLngZoom(homeTarget, homeZoom));
   }
 
+  void setRadiationVisible(bool value) {
+    setState(() {
+      showRadiation = value;
+      if (!value) legendRadiationVisible = false;
+    });
+    if (value) {
+      unawaited(refreshRadiationSnapshot(force: true));
+    } else {
+      unawaited(refresh());
+    }
+  }
+
+  Future<void> setSheltersVisible(bool value) async {
+    final current = ++ticket;
+    onlineRetry?.cancel();
+    setState(() {
+      showShelters = value;
+      if (!value) {
+        loading = false;
+        legendSheltersVisible = false;
+        viewport = null;
+        renderedRequest = null;
+      }
+    });
+    if (!value) await syncShelterAnnotations(null, current);
+    if (!mounted || current != ticket) return;
+    await refresh();
+  }
+
+  Widget layerBar() {
+    Widget chip(
+      String label,
+      Color color,
+      bool selected,
+      ValueChanged<bool> onSelected,
+    ) => FilterChip(
+      label: Text(label),
+      selected: selected,
+      showCheckmark: true,
+      selectedColor: color.withValues(alpha: 0.22),
+      checkmarkColor: Theme.of(context).colorScheme.onSurface,
+      side: BorderSide(
+        color: selected ? color : Theme.of(context).colorScheme.outlineVariant,
+      ),
+      onSelected: onSelected,
+    );
+    return Row(
+      key: const ValueKey('map-layer-bar'),
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              spacing: 8,
+              children: [
+                chip('Alerty', const Color(0xffb3261e), showEvents, (value) {
+                  setState(() => showEvents = value);
+                  unawaited(syncContextLayers());
+                }),
+                chip('IMGW', const Color(0xff1565c0), showImgw, (value) {
+                  setState(() => showImgw = value);
+                  unawaited(syncContextLayers());
+                }),
+                chip(
+                  'Schronienia',
+                  const Color(0xff2e7d32),
+                  showShelters,
+                  setSheltersVisible,
+                ),
+                chip(
+                  'PAA',
+                  const Color(0xff7563b8),
+                  showRadiation,
+                  setRadiationVisible,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton.filledTonal(
+          tooltip: 'Opcje mapy',
+          icon: const Icon(Icons.tune),
+          onPressed: showLayers,
+        ),
+      ],
+    );
+  }
+
   Future<void> showLayers() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -1709,34 +1803,8 @@ class _ShelterMapState extends State<ShelterMap> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Warstwy mapy',
+                  'Opcje mapy',
                   style: Theme.of(context).textTheme.titleLarge,
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Alerty i komunikaty'),
-                  subtitle: const Text(
-                    'Alerty bezpieczeństwa i komunikaty widoczne na mapie',
-                  ),
-                  value: showEvents,
-                  onChanged: (value) {
-                    setState(() => showEvents = value);
-                    update(() {});
-                    unawaited(syncContextLayers());
-                  },
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Ostrzeżenia IMGW'),
-                  subtitle: const Text(
-                    'Ostrzeżenia meteorologiczne i hydrologiczne',
-                  ),
-                  value: showImgw,
-                  onChanged: (value) {
-                    setState(() => showImgw = value);
-                    update(() {});
-                    unawaited(syncContextLayers());
-                  },
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -1746,40 +1814,6 @@ class _ShelterMapState extends State<ShelterMap> {
                     setState(() => showWatched = value);
                     update(() {});
                     unawaited(syncContextLayers());
-                  },
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Pomiary promieniowania PAA'),
-                  subtitle: const Text(
-                    'Punkty pomiarowe Państwowej Agencji Atomistyki',
-                  ),
-                  value: showRadiation,
-                  onChanged: (value) {
-                    setState(() {
-                      showRadiation = value;
-                      if (!value) legendRadiationVisible = false;
-                    });
-                    update(() {});
-                    if (value) {
-                      unawaited(refreshRadiationSnapshot(force: true));
-                    } else {
-                      unawaited(refresh());
-                    }
-                  },
-                ),
-                const Divider(height: 20),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.satellite_alt_outlined),
-                  title: const Text('Monitoring GNSS / GPS RTGMS'),
-                  subtitle: const Text(
-                    'Otwiera zewnętrzną mapę monitoringu GNSS',
-                  ),
-                  trailing: const Icon(Icons.open_in_new_rounded),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    widget.openLink('https://www.rtgms.pl/map');
                   },
                 ),
                 DropdownButtonFormField<String>(
@@ -1813,6 +1847,24 @@ class _ShelterMapState extends State<ShelterMap> {
                     setState(() => availability = value);
                     update(() {});
                     unawaited(refresh());
+                  },
+                ),
+                const Divider(height: 20),
+                Text(
+                  'Mapy zewnętrzne',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.satellite_alt_outlined),
+                  title: const Text('Monitoring GNSS / GPS RTGMS'),
+                  subtitle: const Text(
+                    'Otwiera zewnętrzną mapę monitoringu GNSS',
+                  ),
+                  trailing: const Icon(Icons.open_in_new_rounded),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    widget.openLink('https://www.rtgms.pl/map');
                   },
                 ),
                 const SizedBox(height: 12),
@@ -1851,6 +1903,7 @@ class _ShelterMapState extends State<ShelterMap> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (!widget.ukraine) ...[layerBar(), const SizedBox(height: 8)],
         SizedBox(
           height: (MediaQuery.sizeOf(context).height * 0.62)
               .clamp(430.0, 620.0)
@@ -1935,11 +1988,6 @@ class _ShelterMapState extends State<ShelterMap> {
                     child: Column(
                       children: [
                         IconButton.filledTonal(
-                          tooltip: 'Warstwy mapy',
-                          onPressed: showLayers,
-                          icon: const Icon(Icons.layers_outlined),
-                        ),
-                        IconButton.filledTonal(
                           tooltip: 'Wróć do wybranej miejscowości',
                           onPressed: goHome,
                           icon: const Icon(Icons.home_outlined),
@@ -1968,7 +2016,9 @@ class _ShelterMapState extends State<ShelterMap> {
             ),
           const SizedBox(height: 6),
           Text(
-            overviewMode
+            !showShelters
+                ? 'Schronienia: warstwa wyłączona'
+                : overviewMode
                 ? 'Zdarzenia dla całej Polski'
                 : viewport == null
                 ? 'Ładowanie danych schronień…'

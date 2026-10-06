@@ -95,7 +95,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(MapLibreMap), findsOneWidget);
     expect(find.byKey(const ValueKey('native-map-surface')), findsOneWidget);
-    expect(find.byTooltip('Warstwy mapy'), findsOneWidget);
+    final layerBar = find.byKey(const ValueKey('map-layer-bar'));
+    expect(layerBar, findsOneWidget);
+    final layerChips = find.descendant(
+      of: layerBar,
+      matching: find.byType(FilterChip),
+    );
+    expect(layerChips, findsNWidgets(4));
+    expect(
+      tester.getTopLeft(layerBar).dy,
+      lessThan(tester.getTopLeft(find.byType(MapLibreMap)).dy),
+    );
+    final imgwChip = find.descendant(
+      of: layerBar,
+      matching: find.widgetWithText(FilterChip, 'IMGW'),
+    );
+    await tester.tap(imgwChip);
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilterChip>(imgwChip).selected, isFalse);
+    final alertsChip = find.descendant(
+      of: layerBar,
+      matching: find.widgetWithText(FilterChip, 'Alerty'),
+    );
+    expect(tester.widget<FilterChip>(alertsChip).selected, isTrue);
+    await tester.tap(imgwChip);
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilterChip>(imgwChip).selected, isTrue);
+    expect(find.byTooltip('Opcje mapy'), findsOneWidget);
     expect(find.byTooltip('Wróć do wybranej miejscowości'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('map-legend')),
@@ -104,8 +130,9 @@ void main() {
           'Legenda ma się pojawiać tylko wtedy, gdy bieżący kadr faktycznie zawiera oznaczenia.',
     );
 
-    await tester.tap(find.byTooltip('Warstwy mapy'));
+    await tester.tap(find.byTooltip('Opcje mapy'));
     await tester.pumpAndSettle();
+    expect(find.text('Mapy zewnętrzne'), findsOneWidget);
     expect(find.text('Monitoring GNSS / GPS RTGMS'), findsOneWidget);
     expect(find.textContaining('zewnętrzną mapę'), findsOneWidget);
     await tester.binding.handlePopRoute();
