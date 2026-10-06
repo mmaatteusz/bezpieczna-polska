@@ -56,6 +56,12 @@ Po uruchomieniu kandydata Oracle użyj także manualnego workflow `Compare basel
    ```
 7. Wyeksportuj źródłową bazę przez `export-source-database.sh`, przenieś dump na Oracle i wykonaj kontrolowany restore przez `restore-source-database.sh`.
 8. Wdróż konkretny commit przez `deploy-release.sh` lub manualny workflow Oracle.
+
+### Wdrożenie z terminala VM przy ograniczonym SSH
+
+Jeśli SSH jest dostępne wyłącznie z adresu administracyjnego, runner GitHub może nie mieć dostępu. Na istniejącej VM uruchom `bash infra/oracle/deploy-from-github.sh <dokładny SHA z main>` z lokalnej kopii repozytorium. Skrypt pobiera kod wskazanego commita, używa zainstalowanego `bp-deploy-release` i sprawdza zewnętrzne `/health` oraz `/ready`. Nie zmienia reguł sieci ani sekretów. Wynik `ORACLE_DEPLOY_PASS` potwierdza zgodność commita, wersji i gotowość bazy.
+
+Do wznowienia publikacji bety po takim wdrożeniu wybierz `Publish Android beta` → `Run workflow`, gałąź `main`, SHA wdrożonego commita, ID jego udanego main/push builda `Build preview APK and offline regression` i `verified-backend`. Weryfikacja nie korzysta z SSH; bada działający backend oraz jego pełny kontrakt API. Opcja `testing-apk` publikuje wyłącznie testowy APK z jawnie podanym stanem backendu. Istniejące wydania nie są nadpisywane.
 9. Wykonaj testy `/health`, `/ready`, źródeł oraz restore drill.
 10. Dopiero po stabilnym teście równoległym zmieniamy URL-e aplikacji.
 
