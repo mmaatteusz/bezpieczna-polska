@@ -33,7 +33,9 @@ MapRequest shelterViewportRequest(
   String availability = 'ALL',
 ]) => MapRequest(bbox, zoom, 'PL', availability);
 
-const double shelterDetailZoom = 4.0;
+// Keep the national and regional overview focused on warnings. Shelters are
+// useful once the map shows a city and its surroundings.
+const double shelterDetailZoom = 10.0;
 
 bool mapShowsShelters(double zoom) => zoom >= shelterDetailZoom;
 
