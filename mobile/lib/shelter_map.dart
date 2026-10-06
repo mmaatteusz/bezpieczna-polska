@@ -592,13 +592,15 @@ class _ShelterMapState extends State<ShelterMap> {
         await c.setStyle(offlineStyle);
         if (mounted) {
           setState(
-            () => message = 'OFFLINE MAPA • podkład sieciowy nie odpowiedział. Uruchomiono lokalne płótno dla zapisanych overlayów.',
+            () => message =
+                'OFFLINE MAPA • podkład sieciowy nie odpowiedział. Uruchomiono lokalne płótno dla zapisanych overlayów.',
           );
         }
       } catch (_) {
         if (mounted) {
           setState(
-            () => message = 'Nie udało się uruchomić ani podkładu online, ani lokalnego płótna mapy.',
+            () => message =
+                'Nie udało się uruchomić ani podkładu online, ani lokalnego płótna mapy.',
           );
         }
       }
@@ -633,13 +635,21 @@ class _ShelterMapState extends State<ShelterMap> {
       await c.setSymbolIconAllowOverlap(true);
       await c.setSymbolIconIgnorePlacement(true);
       if (!widget.ukraine) {
-        final voivodeships = jsonDecode(
-          await rootBundle.loadString('assets/poland_voivodeships_min.geojson'),
-        ) as Map<String, dynamic>;
+        final voivodeships =
+            jsonDecode(
+                  await rootBundle.loadString(
+                    'assets/poland_voivodeships_min.geojson',
+                  ),
+                )
+                as Map<String, dynamic>;
         try {
-          final rawAnchors = jsonDecode(
-            await rootBundle.loadString('assets/poland_powiat_centroids.json'),
-          ) as Map<String, dynamic>;
+          final rawAnchors =
+              jsonDecode(
+                    await rootBundle.loadString(
+                      'assets/poland_powiat_centroids.json',
+                    ),
+                  )
+                  as Map<String, dynamic>;
           final rawPowiaty = rawAnchors['powiaty'];
           if (rawAnchors['schemaVersion'] != 2 || rawPowiaty is! Map) {
             throw const FormatException('Niepoprawne centroidy TERYT');
@@ -2074,8 +2084,9 @@ class _ShelterMapState extends State<ShelterMap> {
                         gpsInterference == null
                             ? 'Ładowanie dobowej mapy zakłóceń…'
                             : 'Dane dobowe: ${gpsInterference!.dataDate} UTC',
-                        style: Theme.of(context).textTheme.labelLarge
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       const SizedBox(height: 7),
                       Wrap(
@@ -2127,8 +2138,9 @@ class _ShelterMapState extends State<ShelterMap> {
           Text(
             currentRadiation == null
                 ? message
-                : RadiationData.parse(currentRadiation)
-                      .measurementText(DateTime.now(), currentRadiationOnline),
+                : RadiationData.parse(
+                    currentRadiation,
+                  ).measurementText(DateTime.now(), currentRadiationOnline),
           ),
           const Text(
             'Komunikaty PAA są dostępne w Statusie i Alert Center. Brak punktów na mapie nie oznacza braku zagrożenia.',
