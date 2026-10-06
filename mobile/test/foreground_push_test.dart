@@ -70,10 +70,9 @@ void main() {
         );
       }
       expect(calls, hasLength(3));
-      expect(
-        calls.map((call) => call.arguments['notificationTag']).toSet(),
-        {'bp-alert:fixture-alert'},
-      );
+      expect(calls.map((call) => call.arguments['notificationTag']).toSet(), {
+        'bp-alert:fixture-alert',
+      });
       expect(calls.last.arguments['kind'], 'ENDED');
       expect(calls.last.arguments['eventId'], 'fixture-alert');
     },
