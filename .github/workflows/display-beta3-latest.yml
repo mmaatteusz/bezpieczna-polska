@@ -26,8 +26,7 @@ jobs:
           printf '%s' '{"prerelease":false,"make_latest":"true"}' > display.json
           gh api --method PATCH "repos/mmaatteusz/bezpieczna-polska/releases/$release_id" --input display.json > after.json
           jq -e '.tag_name == "v0.1.0-beta.3" and .prerelease == false and .draft == false' after.json
-          diff <(jq -S '{name,body,tag_name,target_commitish,assets: [.assets[] | {name,digest,size}]}' before.json) \\
-               <(jq -S '{name,body,tag_name,target_commitish,assets: [.assets[] | {name,digest,size}]}' after.json)
+          diff <(jq -S '{name,body,tag_name,target_commitish,assets: [.assets[] | {name,digest,size}]}' before.json) <(jq -S '{name,body,tag_name,target_commitish,assets: [.assets[] | {name,digest,size}]}' after.json)
           gh api repos/mmaatteusz/bezpieczna-polska/releases/latest > latest.json
           jq -e '.tag_name == "v0.1.0-beta.3"' latest.json
           echo 'Beta.3 now displayed as Latest; beta test name, notes, tag and APK unchanged.' >> "$GITHUB_STEP_SUMMARY"
