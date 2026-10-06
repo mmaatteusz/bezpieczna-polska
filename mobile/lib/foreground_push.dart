@@ -62,6 +62,7 @@ class AndroidForegroundPush {
       'eventId': message.data['eventId'],
       'kind': message.data['kind'],
       'category': message.data['category'],
+      'notificationTag': message.data['notificationTag'],
       'channelId': message.data['channelId'] ?? 'bp_alerts_warning',
     });
   }

@@ -79,11 +79,17 @@ class MainActivity : FlutterActivity() {
                     try {
                         val title = call.argument<String>("title") ?: "Bezpieczna Polska"
                         val body = call.argument<String>("body") ?: ""
-                        val id = call.argument<String>("messageId")?.hashCode()
-                            ?: System.nanoTime().toInt()
                         val eventId = call.argument<String>("eventId")
                         val kind = call.argument<String>("kind")
                         val category = call.argument<String>("category")
+                        val notificationTag = call.argument<String>("notificationTag")
+                            ?.takeIf { it.isNotBlank() }
+                            ?: if (!eventId.isNullOrBlank()) {
+                                "bp-alert:$eventId"
+                            } else {
+                                "message:${call.argument<String>("messageId") ?: System.nanoTime()}"
+                            }
+                        val id = notificationTag.hashCode()
                         val selectedChannelId = safeChannelId(
                             call.argument<String>("channelId")
                         )
@@ -94,7 +100,7 @@ class MainActivity : FlutterActivity() {
                             )
                         if (!eventId.isNullOrBlank()) {
                             launchIntent.action =
-                                "pl.bezpiecznapolska.OPEN_ALERT.$id"
+                                "pl.bezpiecznapolska.OPEN_ALERT.$notificationTag"
                             launchIntent.putExtra("bp_event_id", eventId)
                             if (!kind.isNullOrBlank()) {
                                 launchIntent.putExtra("bp_kind", kind)
@@ -127,7 +133,8 @@ class MainActivity : FlutterActivity() {
                             }
                         }
                         manager.notify(
-                            id,
+                            notificationTag,
+                            0,
                             builder
                                 .setSmallIcon(R.drawable.ic_notification)
                                 .setContentTitle(title)

@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {generateKeyPairSync} from 'node:crypto';
 import {buildApp} from '../src/app.js';
 import {eventSchema,computeStatus,type Event} from '../src/domain.js';
 import {neptunTrackSchema} from '../src/neptun.js';
-import {PushService,type PushMessage,type PushProvider,type PushSendResult,type PushPlatform} from '../src/push.js';
+import {FcmProvider,PushService,type PushMessage,type PushProvider,type PushSendResult,type PushPlatform} from '../src/push.js';
 import {openDb,Store,type Db} from '../src/store.js';
 
 const key=Buffer.alloc(32,7);
@@ -95,6 +96,41 @@ test('event resync is idempotent and creates one outbox item',async()=>{
   assert.equal(await store.put(e),true);assert.equal(await store.put(e),false);
   const rows=await outbox(db);assert.equal(rows.length,1);assert.equal(rows[0].state,'PENDING');assert.equal(rows[0].category,'CRITICAL_PL');
  }finally{await db.close();}
+});
+
+test('revisions replace the same Android alert while unrelated events keep distinct tags',async()=>{
+ const {db,store,push,provider}=await setup();
+ try{
+  await push.register(registerBody(deviceA),secret,now);
+  const first=event('notification-tag',{severity:'HIGH'});
+  await store.put(first);await push.dispatchDue(now);
+  await store.put({...first,severity:'CRITICAL'});await push.dispatchDue(now);
+  await store.put(event('other-notification-tag',{title:'Niezależne zagrożenie',regions:['02'],eventType:'FIRE'}));await push.dispatchDue(now);
+  assert.equal(provider.sent.length,3);
+  const tags=provider.sent.map(sent=>sent.message.data.notificationTag);
+  assert.equal(tags[0],tags[1]);assert.notEqual(tags[0],tags[2]);
+  assert.ok(tags.every(tag=>typeof tag==='string'&&tag.length>0));
+  assert.equal(provider.sent[1].message.data.kind,'ESCALATED');
+ }finally{await db.close();}
+});
+
+test('FCM sends the stable replacement tag to Android without a live provider',async()=>{
+ const original=globalThis.fetch,requests:Record<string,any>[]=[];
+ const {privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
+ const provider=new FcmProvider({project_id:'fixture',client_email:'fixture@example.test',private_key:privateKey.export({type:'pkcs8',format:'pem'}).toString()});
+ globalThis.fetch=async(input,init)=>{
+  if(String(input).includes('oauth2.googleapis.com'))return new Response(JSON.stringify({access_token:'synthetic-test-token',expires_in:3600}));
+  requests.push(JSON.parse(String(init?.body)));
+  return new Response(JSON.stringify({name:'projects/fixture/messages/test'}));
+ };
+ try{
+  const message:PushMessage={title:'Alert',body:'Aktualizacja',collapseKey:'fixture-alert',data:{notificationTag:'REGION_ALERTS:fixture-alert'},androidChannelId:'bp_alerts_critical',ttlSeconds:120};
+  assert.equal((await provider.send('synthetic-device-token',message)).kind,'SUCCESS');
+  assert.equal(requests[0].message.android.notification.tag,'REGION_ALERTS:fixture-alert');
+  assert.equal(requests[0].message.data.notificationTag,requests[0].message.android.notification.tag);
+  assert.equal(requests[0].message.android.ttl,'120s');
+  assert.equal(requests[0].message.android.notification.channel_id,'bp_alerts_critical');
+ }finally{globalThis.fetch=original;}
 });
 
 test('retry is persisted and eventually delivers exactly once',async()=>{

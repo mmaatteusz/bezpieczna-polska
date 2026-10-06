@@ -17,7 +17,7 @@ Bezpieczna Polska zbiera komunikaty z oficjalnych źródeł, pokazuje ich zasię
 
 ## Stan projektu i pobieranie
 
-Aktualny kod rozwojowy: **0.1.0-beta.1** (`build 78`).
+Aktualny kod rozwojowy: **0.1.0-beta.2** (`build 79`).
 
 **Android jest priorytetem.** Publikacja w Google Play pozostaje w przygotowaniu. Kod i konfiguracja iOS znajdują się w repozytorium, lecz iOS nie jest obecnie celem wydania.
 
@@ -32,9 +32,13 @@ APK pobieraj z [GitHub Releases](https://github.com/mmaatteusz/bezpieczna-polska
 
 Workflow `Auto bump prerelease on main` synchronizuje wersję backendu, klienta i dokumentacji oraz uruchamia build testowego APK. Samo podbicie wersji nie oznacza publikacji w sklepie ani wdrożenia backendu. Więcej: [kanały Android, podpisy i wydania](docs/PRODUCTION_RUNBOOK.md).
 
-Pierwsze wydanie beta: [0.1.0-beta.1](https://github.com/mmaatteusz/bezpieczna-polska/releases/tag/v0.1.0-beta.1). To beta do testów na Androidzie, dystrybuowana jako podpisany pakiet `pl.bezpiecznapolska.preview`, z tym samym kluczem co dotychczasowe preview. Nie jest jeszcze wydaniem w Google Play. Zmiany: [release notes](docs/releases/0.1.0-beta.1.md).
+Wydanie przygotowywane do testów Androida: **0.1.0-beta.2**, podpisany pakiet `pl.bezpiecznapolska.preview`, z tym samym kluczem co dotychczasowe preview. Pobierz je z listy wydań dopiero po zakończeniu publikacji. Nie jest to wydanie w Google Play. Zmiany i ograniczenia: [release notes](docs/releases/0.1.0-beta.2.md). Wcześniejsze beta.1 nie zostało opublikowane z powodu niedostępnego połączenia SSH do Oracle.
 
 Workflow [Publish Android beta](.github/workflows/beta-release.yml) dla commita oznaczonego `[release-beta]` czeka na pełną regresję i kontrolę infrastruktury, wdraża jego dokładny SHA na Oracle, a następnie publikuje prerelease z przetestowanym APK ARM64 i sumą SHA-256. APK zawiera konfigurację Firebase. Backend przed wysyłką ponownie sprawdza preferencje urządzenia; zakończenie alarmu UkraineAlarm wywnioskowane tylko ze zniknięcia z feedu nie powoduje push (pozostaje w historii).
+
+Marker `[release-beta-test]` publikuje **wydanie testowe Androida** po tych samych testach kodu i kontroli działającego API, bez wdrażania backendu. Opis automatycznie zawiera faktyczną wersję i commit Oracle. Poprawki serwerowe pozostają nieaktywne do wdrożenia. Nie łączymy tych dwóch markerów w jednym commicie. Publikacja nigdy nie nadpisuje istniejącego wydania.
+
+Po ręcznym wdrożeniu na VM można wznowić publikację przez `workflow_dispatch` w `Publish Android beta`: dokładny `target_sha`, ID udanej regresji z pusha na `main` oraz tryb `verified-backend`. Workflow wymaga zgodnej wersji i SHA działającego backendu, gotowego PostgreSQL/PostGIS oraz pełnego audytu API. Nie potrzebuje wtedy ponownego połączenia SSH. Procedura: [Oracle](infra/oracle/README.md).
 
 ## Funkcje obecne na `main`
 

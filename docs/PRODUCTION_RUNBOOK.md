@@ -1,6 +1,6 @@
 # Production runbook — Bezpieczna Polska
 
-Aktualny kod: **0.1.0-beta.1**.
+Aktualny kod: **0.1.0-beta.2**.
 
 Schemat wersji: `0.1.0-beta.N` oznacza etap testów beta; wcześniejsze `0.1.0-alpha.N` oznaczały etap funkcjonalny, `+build` w `pubspec.yaml` jest monotonicznym numerem produkcyjnym, a preview APK używa dodatkowo własnego rosnącego `versionCode` z CI. W interfejsie aplikacja pokazuje zarówno wersję, jak i konkretny numer buildu.
 

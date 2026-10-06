@@ -286,7 +286,7 @@ function messageFor(e:Event,kind:string,category:PushCategory,entityId:string,no
   title:(prefix+': '+e.title).slice(0,160),
   body,
   collapseKey:entityId.slice(0,80),
-  data:{schemaVersion:'1',eventId:e.id,category,kind,severity:e.severity,channelId},
+  data:{schemaVersion:'1',eventId:e.id,category,kind,severity:e.severity,channelId,notificationTag:'bp-alert:'+entityId},
   expiresAt:new Date(now.getTime()+ttlSeconds*1000).toISOString(),
   ttlSeconds,
   androidChannelId:channelId,
@@ -528,7 +528,7 @@ export class FcmProvider{
   try{
    const access=await this.accessToken(),response=await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(c.project_id)}/messages:send`,{
     method:'POST',headers:{authorization:'Bearer '+access,'content-type':'application/json'},
-    body:JSON.stringify({message:{token,notification:{title:message.title,body:message.body},data:message.data,android:{priority:message.priority??'high',collapse_key:message.collapseKey,ttl:(Math.max(0,Math.min(2419200,Math.floor(message.ttlSeconds??900))))+'s',notification:{channel_id:message.androidChannelId??'bp_alerts_warning'}}}})
+    body:JSON.stringify({message:{token,notification:{title:message.title,body:message.body},data:message.data,android:{priority:message.priority??'high',collapse_key:message.collapseKey,ttl:(Math.max(0,Math.min(2419200,Math.floor(message.ttlSeconds??900))))+'s',notification:{channel_id:message.androidChannelId??'bp_alerts_warning',tag:message.data.notificationTag}}}})
    }),text=await response.text();
    if(response.ok)return {kind:'SUCCESS',code:'FCM_OK'};
    if(response.status===400||response.status===404){
