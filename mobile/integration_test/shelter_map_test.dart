@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:bezpieczna_polska/map_layers.dart';
 import 'package:bezpieczna_polska/model.dart';
 import 'package:bezpieczna_polska/neptun.dart';
 import 'package:bezpieczna_polska/shelter_map.dart';
@@ -165,7 +166,7 @@ void main() {
       await waitFor(
         () =>
             state.loading == false &&
-            (zoom < 4
+            (zoom < shelterDetailZoom
                 ? controller.circles.isEmpty && controller.symbols.isEmpty
                 : zoom < 14
                 ? controller.symbols.isNotEmpty && controller.circles.isEmpty
@@ -291,15 +292,19 @@ void main() {
     await tapMarker();
     await move(const LatLng(53.12, 18.01), 8);
     await expectLocationAboveShelters();
+    expect(controller.symbols, isEmpty);
+    expect(controller.circles, isEmpty);
+    await move(const LatLng(53.12, 18.01), shelterDetailZoom);
+    await expectLocationAboveShelters();
     await tapMarker();
     await controller.setGeoJsonSource('user-location', {
       'type': 'FeatureCollection',
       'features': [],
     });
     dense = false;
-    await move(const LatLng(51.1, 16.98), 8);
+    await move(const LatLng(51.1, 16.98), shelterDetailZoom);
     await tapMarker(); // Native tap on the combined count marker.
-    await waitFor(() => (controller.cameraPosition?.zoom ?? 0) >= 9);
+    await waitFor(() => (controller.cameraPosition?.zoom ?? 0) >= 12);
     await move(const LatLng(51.1, 16.98), 10);
     await tapMarker(
       rim: true,
