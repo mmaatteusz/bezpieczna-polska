@@ -94,10 +94,11 @@ void main() {
   );
   test('shelter visibility and clustering follow zoom tiers', () {
     expect(mapShowsShelters(14.0), isTrue);
-    expect(mapShowsShelters(9.0), isTrue);
-    expect(mapShowsShelters(5.2), isTrue);
-    expect(mapShowsShelters(4.0), isTrue);
-    expect(mapShowsShelters(3.9), isFalse);
+    expect(mapShowsShelters(10.0), isTrue);
+    expect(mapShowsShelters(9.9), isFalse);
+    expect(mapShowsShelters(9.0), isFalse);
+    expect(mapShowsShelters(5.2), isFalse);
+    expect(mapShowsShelters(4.0), isFalse);
 
     expect(shelterClusterTier(8.9), 'REGION');
     expect(shelterClusterTier(9.0), 'LOCAL');

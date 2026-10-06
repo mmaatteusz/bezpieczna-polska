@@ -143,6 +143,7 @@ class _ShelterMapState extends State<ShelterMap> {
   int ticket = 0, gpsInterferenceTicket = 0;
   final shelterRenderQueue = MapRenderQueue();
   bool openingShelter = false;
+  bool shelterZoomVisible = true;
   String availability = 'ALL', message = 'Przygotowywanie mapy…';
   String? gpsInterferenceError;
   MapViewport? viewport;
@@ -255,6 +256,7 @@ class _ShelterMapState extends State<ShelterMap> {
     final zoom =
         c.cameraPosition?.zoom ??
         (metadataZoom is num ? metadataZoom.toDouble() : 10.0);
+    if (!mapShowsShelters(zoom)) return;
     final options = <CircleOptions>[];
     final data = <Map<String, dynamic>>[];
     final labels = <SymbolOptions>[];
@@ -923,6 +925,26 @@ class _ShelterMapState extends State<ShelterMap> {
     }
   }
 
+  void cameraMove(CameraPosition position) {
+    final visible = mapShowsShelters(position.zoom);
+    final hide = shelterZoomVisible && !visible;
+    shelterZoomVisible = visible;
+    if (!hide || !mounted || !ready || widget.ukraine) return;
+    // Invalidate a pending close-up request before it can restore markers on
+    // the overview. Clear annotations without waiting for network refreshes.
+    final current = ++ticket;
+    onlineRetry?.cancel();
+    viewport = null;
+    renderedRequest = null;
+    unawaited(syncShelterAnnotations(null, current));
+    setState(() {
+      loading = false;
+      legendSheltersVisible = false;
+      message =
+          'Przybliż mapę do miasta lub okolicy, aby zobaczyć schronienia.';
+    });
+  }
+
   void idle() {
     debounce?.cancel();
     debounce = Timer(const Duration(milliseconds: 350), refresh);
@@ -1151,7 +1173,7 @@ class _ShelterMapState extends State<ShelterMap> {
         if (!mounted || current != ticket) return;
         setState(() {
           message =
-              'Punkty schronienia są ukryte tylko przy bardzo dużym oddaleniu mapy. Przybliż mapę, aby zobaczyć klastry.';
+              'Przybliż mapę do miasta lub okolicy, aby zobaczyć schronienia.';
         });
         return;
       }
@@ -1867,6 +1889,7 @@ class _ShelterMapState extends State<ShelterMap> {
                     armStyleFallback(c);
                   },
                   onStyleLoadedCallback: styled,
+                  onCameraMove: cameraMove,
                   onCameraIdle: idle,
                   onMapClick: tapped,
                   featureTapsTriggersMapClick: true,
