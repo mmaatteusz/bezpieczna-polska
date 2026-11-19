@@ -620,11 +620,12 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 50)),
       );
       await tester.pump();
-      if (find.textContaining('Tryb offline:').evaluate().isNotEmpty) {
+      if (find.text('Tryb offline').evaluate().isNotEmpty) {
         break;
       }
     }
-    expect(find.textContaining('Tryb offline:'), findsOneWidget);
+    expect(find.text('Tryb offline'), findsOneWidget);
+    expect(find.textContaining('ostatnie zapisane dane'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Sytuacja w kraju'),
       300,

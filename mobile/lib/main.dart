@@ -22,8 +22,8 @@ import 'screens/dashboard_screen.dart';
 import 'screens/alerts_screen.dart';
 import 'screens/map_screen.dart';
 import 'screens/more_screen.dart';
+import 'ui/app_chrome.dart';
 import 'ui/app_theme.dart';
-import 'ui/brand.dart';
 import 'ui/brand_splash.dart';
 import 'ui/first_launch_onboarding.dart';
 
@@ -778,28 +778,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: page == 0
-          ? const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                BrandMark(size: 36),
-                SizedBox(width: 10),
-                Text('Bezpieczna Polska'),
-              ],
-            )
-          : Text(['Bezpieczna Polska', 'Mapa', 'Alerty', 'Więcej'][page]),
-      actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: IconButton.filledTonal(
-            tooltip: 'Ustawienia',
-            onPressed: settings,
-            icon: const Icon(Icons.settings_outlined),
-          ),
-        ),
-      ],
-    ),
+    appBar: SafetyAppBar(page: page, onSettings: settings),
     body: SafeArea(
       child: IndexedStack(
         index: page,
@@ -855,31 +834,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ],
       ),
     ),
-    bottomNavigationBar: NavigationBar(
+    bottomNavigationBar: SafetyTabBar(
       selectedIndex: page,
       onDestinationSelected: _selectPage,
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.shield_outlined),
-          selectedIcon: Icon(Icons.shield),
-          label: 'Start',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.map_outlined),
-          selectedIcon: Icon(Icons.map),
-          label: 'Mapa',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.campaign_outlined),
-          selectedIcon: Icon(Icons.campaign),
-          label: 'Alerty',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.more_horiz),
-          selectedIcon: Icon(Icons.more),
-          label: 'Więcej',
-        ),
-      ],
     ),
   );
 

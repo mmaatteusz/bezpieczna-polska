@@ -76,6 +76,16 @@ class SafetyEvent {
   String get id => data['id'] as String;
   String get title => data['title'] as String;
   String get description => data['description'] as String;
+  List<String> get instructions {
+    final raw = data['instructions'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<String>()
+        .map((instruction) => instruction.trim())
+        .where((instruction) => instruction.isNotEmpty)
+        .toList();
+  }
+
   int get revision =>
       (data['_incident'] as Map?)?['revision'] as int? ??
       data['revision'] as int;

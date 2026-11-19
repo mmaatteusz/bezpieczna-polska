@@ -26,7 +26,7 @@ class SafetyMapScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListView(
     key: const PageStorageKey('map'),
-    padding: const EdgeInsets.fromLTRB(12, 8, 12, 18),
+    padding: const EdgeInsets.fromLTRB(12, 10, 12, 18),
     children: [
       ShelterMap(
         radiation: snapshot?.data['radiation'],
@@ -39,15 +39,6 @@ class SafetyMapScreen extends StatelessWidget {
         region: region,
         ukraine: false,
         openLink: openLink,
-      ),
-      const SizedBox(height: 10),
-      const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 4),
-        child: Text(
-          'Wybierz widoczne warstwy na pasku nad mapą. '
-          'Pod mapą możesz osobno włączyć dobową mapę zakłóceń GPS/GNSS. '
-          'Lokalizacja telefonu jest używana tylko po Twojej akcji.',
-        ),
       ),
     ],
   );

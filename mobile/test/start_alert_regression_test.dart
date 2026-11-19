@@ -230,6 +230,59 @@ void main() {
     );
   });
 
+  test('fractional seconds in validity time keep the real end date', () {
+    final event = warning(
+      id: 'fractional-end',
+      validTo: '2026-09-26T18:00:00.456789Z',
+    );
+
+    expect(safetyEventHasOpenEndedValidity(event), isFalse);
+    expect(
+      safetyEventTimeLabel(event, DateTime.utc(2026, 9, 25)),
+      startsWith('Ważne do '),
+    );
+  });
+
+  testWidgets('search stays applied when alert filters are collapsed', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AlertsScreen(
+            events: [
+              warning(id: 'storm', validTo: '2099-09-26T18:00:00Z'),
+              warning(
+                id: 'heat',
+                title: 'Upał',
+                validTo: '2099-09-26T18:00:00Z',
+              ),
+            ],
+            onOpenEvent: (_) {},
+            onRefresh: () async {},
+          ),
+        ),
+      ),
+    );
+    final filters = find.text('Filtry i wyszukiwanie');
+    await tester.tap(filters);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'silne burze');
+    await tester.tap(filters);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Silne burze'), findsOneWidget);
+    expect(find.text('Upał'), findsNothing);
+
+    await tester.tap(filters);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Wyczyść wyszukiwanie'));
+    await tester.tap(filters);
+    await tester.pumpAndSettle();
+    expect(find.text('Upał'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('warning card never exposes technical year 99999', (
     tester,
   ) async {

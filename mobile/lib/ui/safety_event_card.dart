@@ -205,11 +205,6 @@ bool safetyEventHasOpenEndedValidity(SafetyEvent event) {
   final raw = event.data['validTo'];
   if (raw is! String || raw.trim().isEmpty) return false;
 
-  for (final match in RegExp(r'\d{4,}').allMatches(raw)) {
-    final value = int.tryParse(match.group(0)!);
-    if (value != null && value >= 9000) return true;
-  }
-
   final parsed = DateTime.tryParse(raw);
   return parsed != null && parsed.year >= 9000;
 }
@@ -226,28 +221,46 @@ String safetyEventTimeLabel(SafetyEvent event, [DateTime? at]) {
   return published == null ? 'Czas nieustalony' : stamp(published);
 }
 
-class _CardVisual {
-  final String label;
-  final String hint;
-  final IconData icon;
-  final Color background;
-  final Color foreground;
-  final Color accent;
-  final double borderWidth;
-  final double elevation;
-  final double iconSize;
-
-  const _CardVisual({
-    required this.label,
-    required this.hint,
-    required this.icon,
-    required this.background,
-    required this.foreground,
-    required this.accent,
-    required this.borderWidth,
-    required this.elevation,
-    required this.iconSize,
-  });
+({String label, IconData icon, Color accent, Color fill}) safetyEventAppearance(
+  BuildContext context,
+  SafetyEvent event,
+) {
+  final scheme = Theme.of(context).colorScheme;
+  return switch (safetyVisualLevel(event)) {
+    SafetyVisualLevel.critical => (
+      label: 'Krytyczne',
+      icon: Icons.report_rounded,
+      accent: scheme.error,
+      fill: scheme.errorContainer,
+    ),
+    SafetyVisualLevel.high => (
+      label: 'Wysokie',
+      icon: Icons.warning_amber_rounded,
+      accent: scheme.tertiary,
+      fill: Color.alphaBlend(
+        scheme.tertiary.withValues(alpha: 0.07),
+        scheme.surfaceContainerLowest,
+      ),
+    ),
+    SafetyVisualLevel.warning => (
+      label: 'Ostrzeżenie',
+      icon: Icons.notification_important_outlined,
+      accent: scheme.secondary,
+      fill: scheme.surfaceContainerLowest,
+    ),
+    SafetyVisualLevel.information => (
+      label: 'Informacyjne',
+      icon: Icons.info_outline_rounded,
+      accent: scheme.onSurfaceVariant,
+      fill: scheme.surfaceContainerLowest,
+    ),
+    SafetyVisualLevel.historical => (
+      label: 'Zakończone',
+      icon: Icons.history_rounded,
+      accent: scheme.onSurfaceVariant,
+      fill: scheme.surfaceContainerLow,
+    ),
+  };
 }
 
 class SafetyEventCard extends StatelessWidget {
@@ -279,67 +292,6 @@ class SafetyEventCard extends StatelessWidget {
   String get originLabel =>
       event.provenance == 'ŹRÓDŁO OFICJALNE' ? 'OFICJALNE' : event.provenance;
 
-  _CardVisual _visual(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return switch (safetyVisualLevel(event)) {
-      SafetyVisualLevel.critical => _CardVisual(
-        label: 'KRYTYCZNE',
-        hint: 'BEZPOŚREDNIE ZAGROŻENIE',
-        icon: Icons.report_rounded,
-        background: scheme.errorContainer,
-        foreground: scheme.onErrorContainer,
-        accent: scheme.error,
-        borderWidth: 3,
-        elevation: 3,
-        iconSize: 34,
-      ),
-      SafetyVisualLevel.high => _CardVisual(
-        label: 'WYSOKIE',
-        hint: 'WAŻNE OSTRZEŻENIE',
-        icon: Icons.warning_amber_rounded,
-        background: scheme.tertiaryContainer,
-        foreground: scheme.onTertiaryContainer,
-        accent: scheme.tertiary,
-        borderWidth: 2,
-        elevation: 2,
-        iconSize: 30,
-      ),
-      SafetyVisualLevel.warning => _CardVisual(
-        label: 'OSTRZEŻENIE',
-        hint: 'ZACHOWAJ UWAGĘ',
-        icon: Icons.notification_important_outlined,
-        background: scheme.secondaryContainer,
-        foreground: scheme.onSecondaryContainer,
-        accent: scheme.secondary,
-        borderWidth: 1.5,
-        elevation: 1,
-        iconSize: 27,
-      ),
-      SafetyVisualLevel.information => _CardVisual(
-        label: 'INFORMACYJNE',
-        hint: 'INFORMACJA',
-        icon: Icons.info_outline_rounded,
-        background: scheme.surfaceContainerLow,
-        foreground: scheme.onSurface,
-        accent: scheme.outline,
-        borderWidth: 1,
-        elevation: 0,
-        iconSize: 23,
-      ),
-      SafetyVisualLevel.historical => _CardVisual(
-        label: 'ZAKOŃCZONE',
-        hint: 'HISTORYCZNE',
-        icon: Icons.history_rounded,
-        background: scheme.surfaceContainerLowest,
-        foreground: scheme.onSurfaceVariant,
-        accent: scheme.outlineVariant,
-        borderWidth: 1,
-        elevation: 0,
-        iconSize: 21,
-      ),
-    };
-  }
-
   String _areaLabel() {
     final areas = areaOverride ?? event.areas;
     return areas.isEmpty
@@ -347,211 +299,106 @@ class SafetyEventCard extends StatelessWidget {
         : areas.map((r) => regions[r] ?? r).join(', ');
   }
 
-  String _timeLabel() => safetyEventTimeLabel(event);
-
-  String? _firstInstruction() {
-    final raw = event.data['instructions'];
-    if (raw is! List) return null;
-    for (final item in raw) {
-      if (item is String && item.trim().isNotEmpty) return item.trim();
-    }
-    return null;
-  }
-
-  String _groupedBadgeLabel(int count) {
-    final lastTwo = count % 100;
-    final last = count % 10;
-    final noun = last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)
-        ? 'KOMUNIKATY'
-        : 'KOMUNIKATÓW';
-    return 'SCALONO $count $noun → 1 ZAGROŻENIE';
-  }
-
-  Widget _secondaryBadge(BuildContext context, String text) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surface.withAlpha(185),
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-    ),
-    child: Text(
-      text,
-      style: Theme.of(
-        context,
-      ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
-    ),
-  );
-
-  Widget _meta(
-    BuildContext context,
-    IconData icon,
-    String text, {
-    int maxLines = 2,
-  }) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Icon(icon, size: 17),
-      const SizedBox(width: 7),
-      Expanded(
-        child: Text(
-          text,
-          maxLines: maxLines,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall,
+  Widget _metadata(BuildContext context, IconData icon, String value) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.onSurfaceVariant;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            value,
+            style: theme.textTheme.bodySmall?.copyWith(color: color),
+          ),
         ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 
   Widget _buildCard(BuildContext context) {
-    final visual = _visual(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final text = theme.textTheme;
+    final visual = safetyEventAppearance(context, event);
     final sourceCount = independentSourceCount(event);
-    final level = safetyVisualLevel(event);
-    final prominent =
-        level == SafetyVisualLevel.critical || level == SafetyVisualLevel.high;
-    final instruction = _firstInstruction();
+    final instruction = safetyEventIsSignificant(event)
+        ? event.instructions.firstOrNull
+        : null;
+    final labels = [
+      originLabel,
+      verificationLabel,
+      event.badge,
+      if (groupedCount > 1) 'Komunikaty w grupie: $groupedCount',
+      if (sourceCount > 1) 'Niezależne źródła: $sourceCount',
+      if (event.hasConflictingReports) 'Różnice w komunikatach',
+    ];
 
     return Card(
-      margin: EdgeInsets.only(bottom: compact ? 10 : 12),
-      color: visual.background,
-      elevation: visual.elevation,
+      margin: const EdgeInsets.only(bottom: 10),
+      color: visual.fill,
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(prominent ? 20 : 16),
-        side: BorderSide(color: visual.accent, width: visual.borderWidth),
-      ),
       child: InkWell(
         onTap: onTap,
-        child: Container(
+        child: Ink(
           decoration: BoxDecoration(
-            border: Border(left: BorderSide(color: visual.accent, width: 6)),
+            border: Border(left: BorderSide(color: visual.accent, width: 3)),
           ),
-          padding: EdgeInsets.fromLTRB(
-            prominent ? 17 : 14,
-            compact ? 13 : 15,
-            13,
-            compact ? 13 : 15,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Icon(
-                    visual.icon,
-                    size: visual.iconSize,
-                    color: visual.foreground,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          visual.label,
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(
-                                color: visual.foreground,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5,
-                              ),
-                        ),
-                        if (prominent)
-                          Text(
-                            visual.hint,
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: visual.foreground,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.chevron_right_rounded, color: visual.foreground),
-                ],
-              ),
-              SizedBox(height: prominent ? 12 : 9),
-              Text(
-                event.title,
-                style:
-                    (prominent
-                            ? Theme.of(context).textTheme.titleLarge
-                            : Theme.of(context).textTheme.titleMedium)
-                        ?.copyWith(
-                          color: visual.foreground,
-                          fontWeight: prominent
-                              ? FontWeight.w900
-                              : FontWeight.w700,
-                        ),
-              ),
-              const SizedBox(height: 7),
-              Text(
-                event.description,
-                maxLines: compact ? 2 : (prominent ? 5 : 4),
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: visual.foreground),
-              ),
-              const SizedBox(height: 11),
-              _meta(context, Icons.location_on_outlined, _areaLabel()),
-              const SizedBox(height: 5),
-              _meta(context, Icons.schedule_outlined, _timeLabel()),
-              const SizedBox(height: 5),
-              _meta(
-                context,
-                Icons.verified_outlined,
-                safetySourceLabel(event),
-                maxLines: 1,
-              ),
-              if (instruction != null &&
-                  level != SafetyVisualLevel.information &&
-                  level != SafetyVisualLevel.historical) ...[
-                const SizedBox(height: 11),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(11),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface.withAlpha(180),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.directions_outlined, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          instruction,
-                          maxLines: compact ? 2 : 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(15, 13, 13, 13),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(visual.icon, size: 19, color: visual.accent),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        visual.label,
+                        style: text.labelLarge?.copyWith(color: visual.accent),
                       ),
-                    ],
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(event.title, style: text.titleLarge),
+                const SizedBox(height: 5),
+                Text(
+                  event.description,
+                  maxLines: compact ? 2 : 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.bodyMedium,
+                ),
+                if (instruction != null) ...[
+                  const SizedBox(height: 10),
+                  _metadata(context, Icons.arrow_forward_rounded, instruction),
+                ],
+                const SizedBox(height: 12),
+                _metadata(context, Icons.place_outlined, _areaLabel()),
+                const SizedBox(height: 4),
+                _metadata(context, Icons.schedule, safetyEventTimeLabel(event)),
+                const SizedBox(height: 4),
+                _metadata(
+                  context,
+                  Icons.feed_outlined,
+                  safetySourceLabel(event),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  labels.join(' · '),
+                  style: text.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.35,
                   ),
                 ),
               ],
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  _secondaryBadge(context, originLabel),
-                  _secondaryBadge(context, verificationLabel),
-                  _secondaryBadge(context, event.badge),
-                  if (groupedCount > 1)
-                    _secondaryBadge(context, _groupedBadgeLabel(groupedCount)),
-                  if (sourceCount > 1)
-                    _secondaryBadge(context, 'NIEZALEŻNE ŹRÓDŁA: $sourceCount'),
-                  if (event.hasConflictingReports)
-                    _secondaryBadge(context, 'RÓŻNICE W KOMUNIKATACH'),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),

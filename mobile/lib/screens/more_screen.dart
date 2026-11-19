@@ -67,118 +67,180 @@ class MoreScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => ListView(
-    key: const PageStorageKey('more'),
-    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-    children: [
-      _ActionCard(
-        icon: Icons.security_outlined,
-        title: 'Stopnie alarmowe',
-        subtitle: 'BRAVO, CHARLIE i CRP — zakres, termin i oficjalne źródło',
-        onTap: () => _openSecurityLevels(context),
-      ),
-      _ActionCard(
-        icon: Icons.home_work_outlined,
-        title: 'Schronienia',
-        subtitle: 'Najbliższe punkty i zapisane dane offline',
-        onTap: () => _openShelters(context),
-      ),
-      _ActionCard(
-        icon: Icons.timeline_outlined,
-        title: 'NEPTUN',
-        subtitle: 'Bieżące zgrubne zagrożenia i historia',
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) =>
-                NeptunScreen(repository: repository, openSource: openLink),
-          ),
-        ),
-      ),
-      _ActionCard(
-        icon: Icons.radar_outlined,
-        title: 'Obserwowane miejsca',
-        subtitle: 'Miejsca ważne dla Ciebie, bez śledzenia w tle',
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => WatchedLocationsScreen(
-              repository: repository,
-              onPreferencesChanged: onWatchedLocationsChanged,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: ListView(
+          key: const PageStorageKey('more'),
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+          children: [
+            _MenuGroup(
+              children: [
+                _MenuRow(
+                  icon: Icons.security_outlined,
+                  title: 'Stopnie alarmowe',
+                  subtitle: 'Zakres i ważność stopni ALFA–DELTA oraz CRP',
+                  onTap: () => _openSecurityLevels(context),
+                ),
+                _MenuRow(
+                  icon: Icons.home_work_outlined,
+                  title: 'Schronienia',
+                  subtitle: 'Najbliższe punkty i dane dostępne offline',
+                  onTap: () => _openShelters(context),
+                ),
+                _MenuRow(
+                  icon: Icons.timeline_outlined,
+                  title: 'NEPTUN',
+                  subtitle: 'Bieżące zgrubne zagrożenia i historia',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => NeptunScreen(
+                        repository: repository,
+                        openSource: openLink,
+                      ),
+                    ),
+                  ),
+                ),
+                _MenuRow(
+                  icon: Icons.radar_outlined,
+                  title: 'Obserwowane miejsca',
+                  subtitle: 'Zapisane miejscowości i powiadomienia',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => WatchedLocationsScreen(
+                        repository: repository,
+                        onPreferencesChanged: onWatchedLocationsChanged,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
+            const SizedBox(height: 20),
+            Text('Pomoc', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 8),
+            _MenuGroup(
+              children: [
+                _MenuRow(
+                  icon: Icons.phone_outlined,
+                  title: '112 • Numer alarmowy',
+                  color: theme.colorScheme.error,
+                  onTap: call112,
+                ),
+                _MenuRow(
+                  icon: Icons.share_outlined,
+                  title: 'Udostępnij „Jestem bezpieczny”',
+                  onTap: () async {
+                    await SharePlus.instance.share(
+                      ShareParams(text: 'Jestem bezpieczny.'),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text('Oficjalne informacje', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 8),
+            _MenuGroup(
+              children: [
+                for (final link in const [
+                  (
+                    'Rządowe Centrum Bezpieczeństwa',
+                    'https://www.gov.pl/web/rcb',
+                  ),
+                  (
+                    'Regionalny System Ostrzegania',
+                    'https://komunikaty.tvp.pl/',
+                  ),
+                  (
+                    'Państwowa Agencja Atomistyki',
+                    'https://www.gov.pl/web/paa',
+                  ),
+                  ('CERT Polska', 'https://moje.cert.pl/komunikaty/'),
+                ])
+                  _MenuRow(
+                    title: link.$1,
+                    external: true,
+                    onTap: () => openLink(link.$2),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Aplikacja działa bez konta. Używa GPS na żądanie i nie zapisuje historii ruchu.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
       ),
-      const SizedBox(height: 10),
-      Text(
-        'Pomoc',
-        style: Theme.of(
-          context,
-        ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-      ),
-      const SizedBox(height: 8),
-      FilledButton.icon(
-        onPressed: call112,
-        icon: const Icon(Icons.phone_outlined),
-        label: const Text('112 • Numer alarmowy'),
-      ),
-      const SizedBox(height: 8),
-      OutlinedButton.icon(
-        onPressed: () async {
-          await SharePlus.instance.share(
-            ShareParams(text: 'Jestem bezpieczny.'),
-          );
-        },
-        icon: const Icon(Icons.share_outlined),
-        label: const Text('Udostępnij „Jestem bezpieczny”'),
-      ),
-      const SizedBox(height: 18),
-      Text(
-        'Oficjalne informacje',
-        style: Theme.of(
-          context,
-        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-      ),
-      for (final link in const [
-        ('Rządowe Centrum Bezpieczeństwa', 'https://www.gov.pl/web/rcb'),
-        ('Regionalny System Ostrzegania', 'https://komunikaty.tvp.pl/'),
-        ('Państwowa Agencja Atomistyki', 'https://www.gov.pl/web/paa'),
-        ('CERT Polska', 'https://moje.cert.pl/komunikaty/'),
-      ])
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(link.$1),
-          trailing: const Icon(Icons.open_in_new),
-          onTap: () => openLink(link.$2),
-        ),
-      const SizedBox(height: 8),
-      Text(
-        'Konto nie jest wymagane. GPS działa wyłącznie na żądanie i aplikacja nie zapisuje historii ruchu.',
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-    ],
+    );
+  }
+}
+
+class _MenuGroup extends StatelessWidget {
+  final List<Widget> children;
+
+  const _MenuGroup({required this.children});
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: EdgeInsets.zero,
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      children: [
+        for (var i = 0; i < children.length; i++) ...[
+          if (i > 0) const Divider(),
+          children[i],
+        ],
+      ],
+    ),
   );
 }
 
-class _ActionCard extends StatelessWidget {
-  final IconData icon;
+class _MenuRow extends StatelessWidget {
+  final IconData? icon;
   final String title;
-  final String subtitle;
+  final String? subtitle;
+  final Color? color;
+  final bool external;
   final VoidCallback onTap;
 
-  const _ActionCard({
-    required this.icon,
+  const _MenuRow({
+    this.icon,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
+    this.color,
+    this.external = false,
     required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      trailing: const Icon(Icons.chevron_right),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      leading: icon == null ? null : Icon(icon, color: color ?? muted),
+      title: Text(
+        title,
+        style: theme.textTheme.titleMedium?.copyWith(color: color),
+      ),
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle!,
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+      trailing: Icon(
+        external ? Icons.open_in_new_rounded : Icons.chevron_right_rounded,
+        color: muted,
+        size: external ? 17 : 22,
+      ),
       onTap: onTap,
-    ),
-  );
+    );
+  }
 }
