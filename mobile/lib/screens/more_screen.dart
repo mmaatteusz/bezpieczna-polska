@@ -74,7 +74,7 @@ class MoreScreen extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 720),
         child: ListView(
           key: const PageStorageKey('more'),
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
           children: [
             _MenuGroup(
               children: [
@@ -187,17 +187,10 @@ class _MenuGroup extends StatelessWidget {
   const _MenuGroup({required this.children});
 
   @override
-  Widget build(BuildContext context) => Card(
-    margin: EdgeInsets.zero,
-    clipBehavior: Clip.antiAlias,
-    child: Column(
-      children: [
-        for (var i = 0; i < children.length; i++) ...[
-          if (i > 0) const Divider(),
-          children[i],
-        ],
-      ],
-    ),
+  Widget build(BuildContext context) => Column(
+    children: [
+      for (final row in children) ...[row, const Divider()],
+    ],
   );
 }
 
@@ -223,7 +216,7 @@ class _MenuRow extends StatelessWidget {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      contentPadding: const EdgeInsets.symmetric(vertical: 4),
       leading: icon == null ? null : Icon(icon, color: color ?? muted),
       title: Text(
         title,

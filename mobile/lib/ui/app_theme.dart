@@ -4,91 +4,90 @@ ThemeData buildSafetyTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
   final scheme =
       ColorScheme.fromSeed(
-        seedColor: const Color(0xFF26435B),
+        seedColor: const Color(0xFF464950),
         brightness: brightness,
       ).copyWith(
-        primary: dark ? const Color(0xFFC0D9EB) : const Color(0xFF24465F),
-        onPrimary: dark ? const Color(0xFF142D40) : Colors.white,
+        primary: dark ? const Color(0xFFEFEFF1) : const Color(0xFF23252A),
+        onPrimary: dark ? const Color(0xFF202227) : Colors.white,
         primaryContainer: dark
-            ? const Color(0xFF2B4355)
-            : const Color(0xFFE2EBF1),
+            ? const Color(0xFF34363B)
+            : const Color(0xFFEBECEE),
         onPrimaryContainer: dark
-            ? const Color(0xFFD9EAF6)
-            : const Color(0xFF183C55),
-        secondary: dark ? const Color(0xFFB3C8DB) : const Color(0xFF486279),
+            ? const Color(0xFFF2F2F4)
+            : const Color(0xFF26292F),
+        secondary: dark ? const Color(0xFFC0C3CB) : const Color(0xFF515761),
         secondaryContainer: dark
-            ? const Color(0xFF263C4B)
-            : const Color(0xFFE9EFF3),
+            ? const Color(0xFF2E3137)
+            : const Color(0xFFF2F1EE),
         onSecondaryContainer: dark
-            ? const Color(0xFFD8E5EE)
-            : const Color(0xFF2C465A),
-        tertiary: dark ? const Color(0xFFFFC573) : const Color(0xFF875100),
-        onTertiary: dark ? const Color(0xFF3B2608) : Colors.white,
+            ? const Color(0xFFE1E3E9)
+            : const Color(0xFF363B44),
+        tertiary: dark ? const Color(0xFFF4BD70) : const Color(0xFF865200),
+        onTertiary: dark ? const Color(0xFF382507) : Colors.white,
         tertiaryContainer: dark
-            ? const Color(0xFF352C22)
-            : const Color(0xFFF9EBD5),
+            ? const Color(0xFF352D23)
+            : const Color(0xFFFAF0DD),
         onTertiaryContainer: dark
-            ? const Color(0xFFFFDFAC)
-            : const Color(0xFF513300),
-        error: dark ? const Color(0xFFFFAEB8) : const Color(0xFFA12A40),
-        onError: dark ? const Color(0xFF551B27) : Colors.white,
+            ? const Color(0xFFFFDFAD)
+            : const Color(0xFF5A3600),
+        error: dark ? const Color(0xFFFFA5B4) : const Color(0xFFA21A37),
+        onError: dark ? const Color(0xFF521222) : Colors.white,
         errorContainer: dark
-            ? const Color(0xFF40262D)
-            : const Color(0xFFF8E1E4),
+            ? const Color(0xFF40282F)
+            : const Color(0xFFFBE8EC),
         onErrorContainer: dark
-            ? const Color(0xFFFFD7DC)
-            : const Color(0xFF65172A),
-        surface: dark ? const Color(0xFF111B24) : const Color(0xFFF6F4EF),
+            ? const Color(0xFFFFDCE2)
+            : const Color(0xFF761127),
+        surface: dark ? const Color(0xFF17181A) : const Color(0xFFFBFAF8),
         surfaceContainerLowest: dark
-            ? const Color(0xFF192630)
-            : const Color(0xFFFFFDF9),
+            ? const Color(0xFF1D1E21)
+            : const Color(0xFFFFFFFF),
         surfaceContainerLow: dark
-            ? const Color(0xFF1C2A35)
-            : const Color(0xFFF2F0EA),
+            ? const Color(0xFF222327)
+            : const Color(0xFFF6F5F2),
         surfaceContainer: dark
-            ? const Color(0xFF202F3A)
-            : const Color(0xFFEFECE5),
+            ? const Color(0xFF27282D)
+            : const Color(0xFFF0EFEC),
         surfaceContainerHigh: dark
-            ? const Color(0xFF293844)
-            : const Color(0xFFE8E6DF),
+            ? const Color(0xFF303237)
+            : const Color(0xFFE9E8E5),
         surfaceContainerHighest: dark
-            ? const Color(0xFF354653)
-            : const Color(0xFFE3E1D9),
-        onSurface: dark ? const Color(0xFFE9EFF3) : const Color(0xFF192A36),
+            ? const Color(0xFF3B3D43)
+            : const Color(0xFFE3E2DF),
+        onSurface: dark ? const Color(0xFFF2F1EE) : const Color(0xFF202227),
         onSurfaceVariant: dark
-            ? const Color(0xFFB1C0CA)
-            : const Color(0xFF53636D),
-        outline: dark ? const Color(0xFF8295A2) : const Color(0xFF71818A),
+            ? const Color(0xFFB5B7BE)
+            : const Color(0xFF565B65),
+        outline: dark ? const Color(0xFF8D919A) : const Color(0xFF737780),
         outlineVariant: dark
-            ? const Color(0xFF344450)
-            : const Color(0xFFD9DDD9),
+            ? const Color(0xFF36373B)
+            : const Color(0xFFDFDEDB),
         surfaceTint: Colors.transparent,
       );
 
   final base = ThemeData(useMaterial3: true, colorScheme: scheme);
   final text = base.textTheme.copyWith(
     headlineLarge: base.textTheme.headlineLarge?.copyWith(
-      fontFamily: 'Source Serif 4',
-      fontSize: 35,
+      fontSize: 32,
       fontWeight: FontWeight.w600,
-      letterSpacing: -0.7,
-      height: 1.03,
+      letterSpacing: -0.9,
+      height: 1.12,
     ),
     titleLarge: base.textTheme.titleLarge?.copyWith(
       fontSize: 20,
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w600,
       letterSpacing: -0.25,
       height: 1.2,
     ),
     titleMedium: base.textTheme.titleMedium?.copyWith(
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w600,
       letterSpacing: 0,
       height: 1.25,
     ),
     bodyMedium: base.textTheme.bodyMedium?.copyWith(height: 1.35),
     bodySmall: base.textTheme.bodySmall?.copyWith(height: 1.35),
     labelLarge: base.textTheme.labelLarge?.copyWith(
-      fontWeight: FontWeight.w700,
+      fontWeight: FontWeight.w600,
     ),
     labelMedium: base.textTheme.labelMedium?.copyWith(
       fontWeight: FontWeight.w600,
@@ -105,31 +104,33 @@ ThemeData buildSafetyTheme(Brightness brightness) {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      backgroundColor: scheme.surfaceContainerLowest,
+      backgroundColor: scheme.surface,
       surfaceTintColor: Colors.transparent,
       foregroundColor: scheme.onSurface,
       titleSpacing: 20,
-      titleTextStyle: text.titleLarge?.copyWith(color: scheme.onSurface),
+      titleTextStyle: text.titleMedium?.copyWith(
+        color: scheme.onSurface,
+        fontSize: 17,
+      ),
     ),
     cardTheme: CardThemeData(
       elevation: 0,
       color: scheme.surfaceContainerLowest,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(8),
         side: BorderSide(color: scheme.outlineVariant),
       ),
     ),
     navigationBarTheme: NavigationBarThemeData(
       elevation: 0,
-      height: 68,
-      backgroundColor: scheme.surfaceContainerLowest,
-      indicatorColor: scheme.primaryContainer,
-      indicatorShape: controlShape,
+      height: 62,
+      backgroundColor: scheme.surface,
+      indicatorColor: Colors.transparent,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
         return text.labelMedium?.copyWith(
-          color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+          color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
           letterSpacing: 0,
         );
@@ -137,8 +138,8 @@ ThemeData buildSafetyTheme(Brightness brightness) {
       iconTheme: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
         return IconThemeData(
-          color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
-          size: 23,
+          color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+          size: 22,
         );
       }),
     ),

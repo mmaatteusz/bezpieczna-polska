@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../model.dart';
 import '../offline_packages.dart';
 import '../security_levels.dart';
-import '../ui/province_outline.dart';
 import '../ui/safety_event_card.dart';
 
 // A successful HTTP response does not establish freshness of upstream feeds.
@@ -55,7 +54,6 @@ class DashboardScreen extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final VoidCallback onChooseLocality;
   final VoidCallback onOpenAlerts;
-  final VoidCallback? onOpenMap;
   final VoidCallback onOpenSecurityLevels;
   final void Function(SafetyEvent) onOpenEvent;
 
@@ -74,7 +72,6 @@ class DashboardScreen extends StatelessWidget {
     required this.onRefresh,
     required this.onChooseLocality,
     required this.onOpenAlerts,
-    this.onOpenMap,
     required this.onOpenSecurityLevels,
     required this.onOpenEvent,
   });
@@ -92,72 +89,160 @@ class DashboardScreen extends StatelessWidget {
     return 'Źródła ostrzeżeń aktualne';
   }
 
-  Widget _alertSummary(BuildContext context, SafetyEventDisplayGroup group) {
-    final event = group.primary;
-    final scheme = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    final visual = safetyEventAppearance(context, event);
-    final instruction = event.instructions.firstOrNull;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      color: visual.fill,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: group.count > 1 ? onOpenAlerts : () => onOpenEvent(event),
-        child: Ink(
-          decoration: BoxDecoration(
-            border: Border(left: BorderSide(color: visual.accent, width: 3)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 11, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${visual.label} · ${safetySourceLabel(event)}',
-                        style: text.labelMedium?.copyWith(color: visual.accent),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(event.title, style: text.titleMedium),
-                      const SizedBox(height: 4),
-                      Text(
-                        safetyEventTimeLabel(event),
-                        style: text.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                      if (instruction != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          instruction,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
+  Widget _locationHeader(BuildContext context, DateTime now) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final text = theme.textTheme;
+    final locality = localityLabel;
+    final province = region == 'PL' ? null : regions[region]?.toLowerCase();
+    final serverTime = snapshot?.data['serverTime'];
+    final readAt = DateTime.tryParse(serverTime?.toString() ?? '')?.toLocal();
+    final syncTime = readAt == null
+        ? null
+        : DateUtils.isSameDay(readAt, now.toLocal())
+        ? MaterialLocalizations.of(context).formatTimeOfDay(
+            TimeOfDay.fromDateTime(readAt),
+            alwaysUse24HourFormat: true,
+          )
+        : stamp(serverTime);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Tooltip(
+                  message: locality == null
+                      ? 'Ustaw lokalizację'
+                      : 'Zmień miejscowość',
+                  excludeFromSemantics: locality == null,
+                  child: InkWell(
+                    onTap: onChooseLocality,
+                    borderRadius: BorderRadius.circular(4),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 48),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              locality ?? 'Ustaw lokalizację',
+                              style: text.headlineLarge,
+                            ),
                           ),
-                        ),
-                      ],
-                      if (group.count > 1)
-                        Text(
-                          'Komunikaty w grupie: ${group.count}',
-                          style: text.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                    ],
+                          const SizedBox(width: 7),
+                          Icon(Icons.expand_more, size: 22, color: muted),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Odśwież dane',
+              onPressed: loading || backgroundSync ? null : onRefresh,
+              icon: const Icon(Icons.refresh_rounded, size: 22),
+            ),
+          ],
+        ),
+        Text(
+          locality == null
+              ? 'Wybierz miejscowość, żeby zobaczyć lokalne ostrzeżenia.'
+              : 'Promień 20 km${province == null ? '' : ' · $province'}',
+          style: text.bodyMedium?.copyWith(color: muted),
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 6,
+          children: [
+            Text(
+              _freshnessLabel(now),
+              style: text.bodySmall?.copyWith(color: muted),
+            ),
+            if (syncTime != null)
+              Text(
+                '· Odczyt $syncTime',
+                style: text.bodySmall?.copyWith(color: muted),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _alertSummary(BuildContext context, SafetyEventDisplayGroup group) {
+    final event = group.primary;
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final text = theme.textTheme;
+    final visual = safetyEventAppearance(context, event);
+    final instruction = event.instructions.firstOrNull;
+    final place = event.data['locationText']?.toString().trim() ?? '';
+
+    return InkWell(
+      onTap: group.count > 1 ? onOpenAlerts : () => onOpenEvent(event),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Icon(visual.icon, size: 19, color: visual.accent),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${safetySourceLabel(event)} · ${visual.label}',
+                    style: text.labelMedium?.copyWith(color: visual.accent),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(event.title, style: text.titleLarge),
+                  const SizedBox(height: 5),
+                  if (place.isNotEmpty)
+                    Text(
+                      place,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodySmall?.copyWith(color: muted),
+                    ),
+                  Text(
+                    safetyEventTimeLabel(event),
+                    style: text.bodySmall?.copyWith(color: muted),
+                  ),
+                  if (instruction != null) ...[
+                    const SizedBox(height: 9),
+                    Text(
+                      instruction,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodyMedium,
+                    ),
+                  ],
+                  if (group.count > 1) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      'Komunikaty w grupie: ${group.count}',
+                      style: text.bodySmall?.copyWith(color: muted),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 9),
+            Padding(
+              padding: const EdgeInsets.only(top: 25),
+              child: Icon(Icons.chevron_right, color: muted, size: 21),
+            ),
+          ],
         ),
       ),
     );
@@ -166,19 +251,19 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final scheme = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final text = theme.textTheme;
+    final muted = theme.colorScheme.onSurfaceVariant;
     final national = snapshot?.data['nationalStatus'];
     final nationalFresh =
         online && (snapshot?.freshAt(now, national: true) ?? false);
     final localFresh = online && dashboardAroundFresh(localityAround, now);
-    final hasLocality = localityLabel != null;
-    final selectedEvents = hasLocality
-        ? [
+    final selectedEvents = localityLabel == null
+        ? events
+        : [
             ...?localityAround?.nearbyEvents.map((item) => item.event),
             ...?localityAround?.regionalEvents,
-          ]
-        : events;
+          ];
     final activeEvents =
         deduplicateSafetyEventsForDisplay(
           selectedEvents.where((event) => safetyEventIsSignificant(event, now)),
@@ -191,45 +276,16 @@ class DashboardScreen extends StatelessWidget {
           return safetyEventTime(b).compareTo(safetyEventTime(a));
         });
     final active = groupSafetyEventsForDashboard(activeEvents);
-    final local = {
-      'hazardLevel': activeEvents.isEmpty
-          ? 'NO_LOCAL_REPORTS'
-          : activeEvents.any((e) => e.data['severity'] == 'CRITICAL')
-          ? 'ACTIVE_DANGER'
-          : 'CAUTION',
-      'displayText': activeEvents.isEmpty
-          ? 'W dostępnych danych nie ma istotnych zdarzeń w tym zakresie.'
-          : 'Aktywne komunikaty: ${active.length}',
-    };
-    final snapshotTime = stamp(snapshot?.data['serverTime']);
     final urgentNational =
         nationalFresh &&
         national is Map &&
         national['hazardLevel'] == 'ACTIVE_DANGER';
 
-    BuildContext? threatsSectionContext;
-    void scrollToThreats() {
-      final target = threatsSectionContext;
-      if (target == null) return;
-      Scrollable.ensureVisible(
-        target,
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 300),
-        alignment: 0.06,
-      );
-    }
-
-    Widget nationalStatus() => Card(
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      child: _StatusBand(
-        scope: 'Polska',
-        status: national,
-        fresh: nationalFresh,
-        saved: !online && offlinePackage != null,
-        onTap: onOpenAlerts,
-      ),
+    Widget nationalStatus() => _StatusBand(
+      status: national,
+      fresh: nationalFresh,
+      saved: !online && offlinePackage != null,
+      onTap: onOpenAlerts,
     );
 
     return Center(
@@ -240,153 +296,81 @@ class DashboardScreen extends StatelessWidget {
           child: ListView(
             key: const PageStorageKey('dashboard'),
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
+            padding: const EdgeInsets.fromLTRB(20, 15, 20, 24),
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text('Sytuacja teraz', style: text.titleLarge),
-                  ),
-                  IconButton(
-                    tooltip: 'Odśwież dane',
-                    onPressed: loading || backgroundSync ? null : onRefresh,
-                    icon: const Icon(Icons.refresh_rounded),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Card(
-                margin: EdgeInsets.zero,
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _LocalityHeader(
-                      locality: localityLabel,
-                      region: region,
-                      onChoose: onChooseLocality,
-                      onStatus: hasLocality ? scrollToThreats : null,
-                    ),
-                    if (hasLocality)
-                      _StatusBand(
-                        status: local,
-                        fresh: localFresh,
-                        saved: false,
-                        onTap: scrollToThreats,
-                      ),
-                    const Divider(),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(15, 10, 15, 11),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            online ? Icons.schedule : Icons.cloud_off_outlined,
-                            size: 18,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 9),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _freshnessLabel(now),
-                                  style: text.labelLarge,
-                                ),
-                                if (snapshotTime != 'Nie podano')
-                                  Text(
-                                    'Ostatni odczyt · $snapshotTime',
-                                    style: text.bodySmall?.copyWith(
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _locationHeader(context, now),
               if (!online && offlinePackage != null) ...[
-                const SizedBox(height: 10),
-                const _InfoBanner(
-                  icon: Icons.offline_pin_outlined,
-                  text:
-                      'Wyświetlamy ostatnie zapisane dane. Mogły pojawić się nowsze ostrzeżenia.',
+                const SizedBox(height: 8),
+                const Text(
+                  'Wyświetlamy ostatnie zapisane dane. Mogły pojawić się nowsze ostrzeżenia.',
                 ),
               ] else if (error != null) ...[
-                const SizedBox(height: 10),
-                const _InfoBanner(
-                  icon: Icons.cloud_off_outlined,
-                  text:
-                      'Nie udało się odświeżyć danych. Użyj przycisku odświeżania lub przeciągnij ekran w dół.',
-                ),
+                const SizedBox(height: 8),
+                const Text('Nie udało się odświeżyć danych.'),
               ],
               if (urgentNational) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 nationalStatus(),
               ],
-              if (hasLocality) ...[
-                const SizedBox(height: 20),
-                Builder(
-                  builder: (sectionContext) {
-                    threatsSectionContext = sectionContext;
-                    return Text('Istotne zagrożenia', style: text.titleLarge);
-                  },
+              if (localityLabel != null) ...[
+                const SizedBox(height: 26),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Semantics(
+                        header: true,
+                        child: Text(
+                          'Ostrzeżenia w okolicy',
+                          style: text.titleLarge,
+                        ),
+                      ),
+                    ),
+                    if (active.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        '${active.length}',
+                        semanticsLabel: 'Liczba ostrzeżeń: ${active.length}',
+                        style: text.labelLarge?.copyWith(color: muted),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 10),
-                if (active.isNotEmpty)
-                  ...active
-                      .take(3)
-                      .map((group) => _alertSummary(context, group))
+                const Divider(),
+                if (active.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    child: Text(
+                      localFresh
+                          ? 'W dostępnych danych nie ma aktywnych ostrzeżeń dla okolicy.'
+                          : loading
+                          ? 'Sprawdzamy okolicę.'
+                          : 'Brak bieżącej oceny okolicy.',
+                      style: text.bodyMedium?.copyWith(color: muted),
+                    ),
+                  )
                 else
-                  _InfoBanner(
-                    icon: localFresh
-                        ? Icons.notifications_none_rounded
-                        : Icons.location_searching,
-                    text: localFresh
-                        ? 'Brak istotnych aktywnych komunikatów w tym zakresie.'
-                        : loading
-                        ? 'Sprawdzamy okolicę.'
-                        : 'Brak bieżącej oceny okolicy.',
-                  ),
+                  for (final group in active.take(3)) ...[
+                    _alertSummary(context, group),
+                    const Divider(),
+                  ],
                 if (active.length > 3)
-                  TextButton(
-                    onPressed: onOpenAlerts,
-                    child: Text('Zobacz wszystkie (${active.length})'),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: onOpenAlerts,
+                      icon: const Icon(Icons.arrow_forward, size: 17),
+                      iconAlignment: IconAlignment.end,
+                      label: const Text('Wszystkie alerty'),
+                    ),
                   ),
               ],
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  if (onOpenMap != null)
-                    OutlinedButton.icon(
-                      onPressed: onOpenMap,
-                      icon: const Icon(Icons.map_outlined, size: 19),
-                      label: const Text('Otwórz mapę'),
-                    ),
-                  OutlinedButton.icon(
-                    onPressed: onOpenAlerts,
-                    icon: const Icon(
-                      Icons.notifications_none_rounded,
-                      size: 19,
-                    ),
-                    label: const Text('Wszystkie alerty'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              const Divider(),
+              const SizedBox(height: 18),
               ExpansionTile(
                 key: const PageStorageKey('dashboard-national'),
                 tilePadding: EdgeInsets.zero,
-                leading: const Icon(Icons.public_outlined),
-                title: const Text('Sytuacja w kraju'),
+                dense: true,
+                title: Text('Sytuacja w kraju', style: text.titleMedium),
                 children: [
                   if (!urgentNational) nationalStatus(),
                   const SizedBox(height: 8),
@@ -402,8 +386,12 @@ class DashboardScreen extends StatelessWidget {
               ExpansionTile(
                 key: const PageStorageKey('dashboard-coverage'),
                 tilePadding: EdgeInsets.zero,
-                leading: const Icon(Icons.info_outline),
-                title: const Text('Zakres i aktualność danych'),
+                dense: true,
+                title: Text(
+                  'Zakres i aktualność danych',
+                  style: text.titleMedium,
+                ),
+                expandedCrossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Padding(
                     padding: EdgeInsets.only(bottom: 12),
@@ -412,10 +400,12 @@ class DashboardScreen extends StatelessWidget {
                     ),
                   ),
                   if (localityAround != null)
-                    Text(
-                      'Odczyt okolicy: ${stamp(localityAround!.data['serverTime'])}',
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        'Odczyt okolicy · ${stamp(localityAround!.data['serverTime'])}',
+                      ),
                     ),
-                  const SizedBox(height: 8),
                 ],
               ),
             ],
@@ -426,120 +416,13 @@ class DashboardScreen extends StatelessWidget {
   }
 }
 
-class _LocalityHeader extends StatelessWidget {
-  final String? locality;
-  final String region;
-  final VoidCallback onChoose;
-  final VoidCallback? onStatus;
-
-  const _LocalityHeader({
-    required this.locality,
-    required this.region,
-    required this.onChoose,
-    required this.onStatus,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const ink = Color(0xFF183449);
-    const muted = Color(0xFFC0D7E3);
-    const paper = Color(0xFFFFFAF2);
-    final text = Theme.of(context).textTheme;
-    final province = locality == null || region == 'PL'
-        ? null
-        : regions[region];
-    return Ink(
-      color: ink,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(17, 14, 14, 4),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final showMap =
-                constraints.maxWidth >= 290 &&
-                MediaQuery.textScalerOf(context).scale(14) <= 19;
-            return Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      InkWell(
-                        onTap: onStatus,
-                        borderRadius: BorderRadius.circular(6),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 3),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Twoja okolica',
-                                style: text.labelLarge?.copyWith(color: muted),
-                              ),
-                              const SizedBox(height: 5),
-                              Text(
-                                locality ?? 'Wybierz miejscowość',
-                                style: text.headlineLarge?.copyWith(
-                                  color: paper,
-                                ),
-                              ),
-                              if (locality != null) ...[
-                                const SizedBox(height: 5),
-                                if (province != null)
-                                  Text(
-                                    province.toLowerCase(),
-                                    style: text.bodySmall?.copyWith(
-                                      color: muted,
-                                    ),
-                                  ),
-                                Text(
-                                  'Promień 20 km',
-                                  style: text.bodySmall?.copyWith(color: muted),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: onChoose,
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.only(right: 6),
-                          foregroundColor: paper,
-                          alignment: Alignment.centerLeft,
-                          minimumSize: const Size(0, 48),
-                        ),
-                        icon: const Icon(Icons.place_outlined, size: 18),
-                        label: Text(
-                          locality == null
-                              ? 'Ustaw lokalizację'
-                              : 'Zmień miejscowość',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (showMap) ...[
-                  const SizedBox(width: 8),
-                  ProvinceOutline(region: locality == null ? null : region),
-                ],
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
 class _StatusBand extends StatelessWidget {
-  final String? scope;
   final dynamic status;
   final bool fresh;
   final bool saved;
   final VoidCallback onTap;
 
   const _StatusBand({
-    this.scope,
     required this.status,
     required this.fresh,
     required this.saved,
@@ -610,13 +493,11 @@ class _StatusBand extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (scope != null) ...[
-                      Text(
-                        scope!,
-                        style: text.labelLarge?.copyWith(color: accent),
-                      ),
-                      const SizedBox(height: 3),
-                    ],
+                    Text(
+                      'Polska',
+                      style: text.labelMedium?.copyWith(color: accent),
+                    ),
+                    const SizedBox(height: 3),
                     Text(
                       word,
                       style: text.titleSmall?.copyWith(
@@ -636,38 +517,6 @@ class _StatusBand extends StatelessWidget {
               Icon(Icons.chevron_right_rounded, color: accent),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoBanner extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _InfoBanner({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 20, color: scheme.onSurfaceVariant),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                text,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
