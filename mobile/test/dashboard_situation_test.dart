@@ -183,7 +183,7 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Ostrzeżenia w okolicy'), findsOneWidget);
+      expect(find.text('OSTRZEŻENIA'), findsOneWidget);
       expect(find.text('Odległy komunikat'), findsNothing);
       expect(find.textContaining('Lokalny komunikat'), findsNWidgets(3));
       expect(find.text('SPOKOJNIE'), findsNothing);

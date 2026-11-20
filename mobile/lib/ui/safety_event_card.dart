@@ -335,12 +335,18 @@ class SafetyEventCard extends StatelessWidget {
       if (event.hasConflictingReports) 'Różnice w komunikatach',
     ];
 
-    return Column(
-      children: [
-        InkWell(
-          onTap: onTap,
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      color: visual.fill,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Ink(
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: visual.accent, width: 3)),
+          ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14),
+            padding: const EdgeInsets.fromLTRB(15, 13, 13, 13),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -395,8 +401,7 @@ class SafetyEventCard extends StatelessWidget {
             ),
           ),
         ),
-        const Divider(),
-      ],
+      ),
     );
   }
 

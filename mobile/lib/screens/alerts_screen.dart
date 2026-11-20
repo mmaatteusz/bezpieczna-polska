@@ -263,93 +263,91 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   Widget _filters(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      children: [
-        ExpansionTile(
-          key: const PageStorageKey('alert-filters'),
-          tilePadding: EdgeInsets.zero,
-          leading: const Icon(Icons.tune_rounded, size: 20),
-          dense: true,
-          title: const Text('Filtry i wyszukiwanie'),
-          subtitle: Text(
-            [
-              lifecycle,
-              if (category != 'Wszystkie') category,
-              if (query.trim().isNotEmpty) '„${query.trim()}”',
-            ].join(' · '),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          shape: const Border(),
-          collapsedShape: const Border(),
-          childrenPadding: const EdgeInsets.only(bottom: 14),
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  key: const PageStorageKey('alerts-search'),
-                  controller: _search,
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    labelText: 'Szukaj w alertach',
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    suffixIcon: query.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Wyczyść wyszukiwanie',
-                            onPressed: () => setState(_search.clear),
-                            icon: const Icon(Icons.close_rounded),
-                          ),
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 7,
-                  children: [
-                    for (final value in const [
-                      'Aktywne',
-                      'Wszystkie',
-                      'Zakończone',
-                    ])
-                      ChoiceChip(
-                        label: Text(value),
-                        selected: lifecycle == value,
-                        showCheckmark: false,
-                        selectedColor: theme.colorScheme.primaryContainer,
-                        onSelected: (_) => setState(() => lifecycle = value),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Divider(),
-                const SizedBox(height: 8),
-                Text('Kategoria', style: theme.textTheme.labelLarge),
-                Wrap(
-                  spacing: 7,
-                  children: [
-                    for (final value in const [
-                      'Wszystkie',
-                      'Pogoda',
-                      'Bezpieczeństwo',
-                      'Cyber',
-                      'Granica',
-                      'Inne',
-                    ])
-                      FilterChip(
-                        label: Text(value),
-                        selected: category == value,
-                        onSelected: (_) => setState(() => category = value),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ],
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        key: const PageStorageKey('alert-filters'),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+        leading: const Icon(Icons.tune_rounded),
+        title: const Text('Filtry i wyszukiwanie'),
+        subtitle: Text(
+          [
+            lifecycle,
+            if (category != 'Wszystkie') category,
+            if (query.trim().isNotEmpty) '„${query.trim()}”',
+          ].join(' · '),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
         ),
-        const Divider(),
-      ],
+        shape: const Border(),
+        collapsedShape: const Border(),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                key: const PageStorageKey('alerts-search'),
+                controller: _search,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  labelText: 'Szukaj w alertach',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Wyczyść wyszukiwanie',
+                          onPressed: () => setState(_search.clear),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 7,
+                children: [
+                  for (final value in const [
+                    'Aktywne',
+                    'Wszystkie',
+                    'Zakończone',
+                  ])
+                    ChoiceChip(
+                      label: Text(value),
+                      selected: lifecycle == value,
+                      showCheckmark: false,
+                      selectedColor: theme.colorScheme.primaryContainer,
+                      onSelected: (_) => setState(() => lifecycle = value),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Divider(),
+              const SizedBox(height: 8),
+              Text('Kategoria', style: theme.textTheme.labelLarge),
+              Wrap(
+                spacing: 7,
+                children: [
+                  for (final value in const [
+                    'Wszystkie',
+                    'Pogoda',
+                    'Bezpieczeństwo',
+                    'Cyber',
+                    'Granica',
+                    'Inne',
+                  ])
+                    FilterChip(
+                      label: Text(value),
+                      selected: category == value,
+                      onSelected: (_) => setState(() => category = value),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -410,7 +408,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
             key: const PageStorageKey('alerts-by-region'),
             physics: const AlwaysScrollableScrollPhysics(),
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
             itemCount: entries.length,
             itemBuilder: (context, index) => entries[index](context),
           ),

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:bezpieczna_polska/screens/dashboard_screen.dart';
 import 'package:bezpieczna_polska/ui/app_chrome.dart';
 import 'package:bezpieczna_polska/ui/app_theme.dart';
+import 'package:bezpieczna_polska/ui/province_outline.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +18,7 @@ void main() {
     for (final font in {
       'Roboto': 'test/fonts/Roboto-Regular.ttf',
       'MaterialIcons': 'test/fonts/MaterialIcons-Regular.otf',
+      'Source Serif 4': 'assets/fonts/SourceSerif4-Semibold.ttf',
     }.entries) {
       final loader = FontLoader(font.key);
       loader.addFont(
@@ -35,34 +37,19 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final now = DateTime.now();
     final country = snapshot(now);
+    var mapOpens = 0;
     var localityChanges = 0;
     var eventOpens = 0;
-    var refreshes = 0;
     final boundaryKey = GlobalKey();
     final alerts = [
       warning(
-          id: 'rain',
-          title: 'Intensywne opady deszczu',
-          description: 'Zachowaj ostrożność.',
-          validTo: now.add(const Duration(hours: 4)).toUtc().toIso8601String(),
-          sourceId: 'IMGW_METEO',
-          sourceName: 'IMGW',
-        )
-        ..data.addAll({
-          'locationText': 'Bydgoszcz i powiat bydgoski',
-          'instructions': ['Śledź aktualizacje komunikatu IMGW.'],
-        }),
-      warning(
-          id: 'wind',
-          title: 'Silne porywy wiatru',
-          validTo: now.add(const Duration(hours: 6)).toUtc().toIso8601String(),
-          sourceId: 'IMGW_METEO',
-          sourceName: 'IMGW',
-        )
-        ..data.addAll({
-          'locationText': 'Powiat bydgoski',
-          'severity': 'ELEVATED',
-        }),
+        id: 'rain',
+        title: 'Intensywne opady deszczu',
+        description: 'Zachowaj ostrożność.',
+        validTo: now.add(const Duration(hours: 7)).toUtc().toIso8601String(),
+        sourceId: 'IMGW_METEO',
+        sourceName: 'IMGW',
+      ),
     ];
     Future<void> show([Brightness brightness = Brightness.dark]) =>
         tester.pumpWidget(
@@ -83,8 +70,9 @@ void main() {
                   region: '04',
                   localityLabel: 'Bydgoszcz',
                   error: null,
-                  onRefresh: () async => refreshes++,
+                  onRefresh: () async {},
                   onChooseLocality: () => localityChanges++,
+                  onOpenMap: () => mapOpens++,
                   onOpenAlerts: () {},
                   onOpenSecurityLevels: () {},
                   onOpenEvent: (_) => eventOpens++,
@@ -100,18 +88,29 @@ void main() {
     await show();
     await tester.pumpAndSettle();
     expect(find.text('Polska'), findsNothing);
-    expect(
-      tester.getTopLeft(find.text('Intensywne opady deszczu')).dy,
-      lessThan(270),
-    );
-    await tester.tap(find.byTooltip('Odśwież dane'));
-    await tester.tap(find.text('Bydgoszcz'));
-    expect(refreshes, 1);
+    await tester.tap(find.text('Otwórz mapę'));
+    await tester.tap(find.text('Zmień miejscowość'));
+    expect(mapOpens, 1);
     expect(localityChanges, 1);
     expect(tester.takeException(), isNull);
     expect(find.text('POTWIERDZONE'), findsNothing);
     await tester.pumpAndSettle();
     if (const bool.fromEnvironment('CAPTURE_START')) {
+      final outline = find.descendant(
+        of: find.byType(ProvinceOutline),
+        matching: find.byType(CustomPaint),
+      );
+      for (
+        var attempt = 0;
+        tester.widget<CustomPaint>(outline).painter == null && attempt < 20;
+        attempt++
+      ) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pumpAndSettle();
+      }
+      expect(tester.widget<CustomPaint>(outline).painter, isNotNull);
       for (final brightness in Brightness.values) {
         await show(brightness);
         await tester.pumpAndSettle();

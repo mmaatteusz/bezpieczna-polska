@@ -6,7 +6,7 @@ class SafetyAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   const SafetyAppBar({super.key, required this.page, required this.onSettings});
 
-  static const _toolbarHeight = 53.0;
+  static const _toolbarHeight = 60.0;
 
   @override
   Size get preferredSize => const Size.fromHeight(_toolbarHeight + 1);
@@ -35,7 +35,7 @@ class SafetyAppBar extends StatelessWidget implements PreferredSizeWidget {
         child: IconButton(
           tooltip: 'Ustawienia',
           onPressed: onSettings,
-          icon: const Icon(Icons.settings_outlined, size: 21),
+          icon: const Icon(Icons.settings_outlined),
         ),
       ),
     ],
