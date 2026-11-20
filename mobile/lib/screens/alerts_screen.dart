@@ -5,17 +5,20 @@ import '../ui/safety_event_card.dart';
 
 const _multiRegionKey = '__MULTI_REGION__';
 const _otherRegionKey = '__OTHER_REGION__';
+const _recentKey = '__RECENT__';
 
 class AlertsScreen extends StatefulWidget {
   final List<SafetyEvent> events;
   final void Function(SafetyEvent) onOpenEvent;
   final Future<void> Function() onRefresh;
+  final Map<String, int> readRevisions;
 
   const AlertsScreen({
     super.key,
     required this.events,
     required this.onOpenEvent,
     required this.onRefresh,
+    this.readRevisions = const {},
   });
 
   @override
@@ -26,11 +29,13 @@ class _AlertDisplayItem {
   final SafetyEvent event;
   final int groupedCount;
   final List<String> areas;
+  final ({String label, DateTime time})? news;
 
   const _AlertDisplayItem({
     required this.event,
     required this.groupedCount,
     required this.areas,
+    required this.news,
   });
 }
 
@@ -129,25 +134,36 @@ class _AlertsScreenState extends State<AlertsScreen> {
     return text.contains(needle);
   }
 
-  bool _matchesLifecycle(SafetyEvent event) => switch (lifecycle) {
-    'Aktywne' => safetyEventIsActive(event),
-    'Zakończone' => safetyEventIsHistorical(event),
-    _ => true,
-  };
+  bool _matchesLifecycle(SafetyEvent event, DateTime now) =>
+      switch (lifecycle) {
+        'Aktywne' => safetyEventIsActive(event, now),
+        'Zakończone' => safetyEventIsHistorical(event, now),
+        _ => true,
+      };
 
   int _sortItems(_AlertDisplayItem a, _AlertDisplayItem b) {
     final severity = safetyEventPriority(
       a.event,
     ).compareTo(safetyEventPriority(b.event));
     if (severity != 0) return severity;
+    if (a.news != null && b.news != null) {
+      return b.news!.time.compareTo(a.news!.time);
+    }
     return safetyEventTime(b.event).compareTo(safetyEventTime(a.event));
   }
 
   List<_AlertDisplayItem> _displayItems() {
-    final filtered = widget.events
-        .where(_matchesTextAndCategory)
-        .where(_matchesLifecycle)
-        .toList();
+    final now = DateTime.now();
+    final newsByEvent = <SafetyEvent, ({String label, DateTime time})>{};
+    final filtered = <SafetyEvent>[];
+    for (final event in widget.events.where(_matchesTextAndCategory)) {
+      final news = safetyEventNews(event, widget.readRevisions, now);
+      if (_matchesLifecycle(event, now) ||
+          (lifecycle == 'Aktywne' && news != null)) {
+        filtered.add(event);
+        if (news != null) newsByEvent[event] = news;
+      }
+    }
 
     final grouped = groupSafetyEventsForDashboard(filtered);
     return grouped
@@ -156,6 +172,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
             event: group.primary,
             groupedCount: group.count,
             areas: alertRegionCodesForDisplay(group.areas),
+            news: newsByEvent[group.primary],
           ),
         )
         .toList();
@@ -165,7 +182,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
     final buckets = <String, List<_AlertDisplayItem>>{};
 
     for (final item in items) {
-      final key = alertRegionBucketForDisplay(item.areas);
+      final key = item.news == null
+          ? alertRegionBucketForDisplay(item.areas)
+          : _recentKey;
       buckets.putIfAbsent(key, () => <_AlertDisplayItem>[]).add(item);
     }
     for (final bucket in buckets.values) {
@@ -187,6 +206,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
       );
     }
 
+    addSection(_recentKey, 'Nowe komunikaty');
     addSection('PL', 'Cała Polska');
 
     final provinceKeys =
@@ -253,6 +273,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
           event: item.event,
           groupedCount: item.groupedCount,
           areaOverride: item.areas,
+          newsLabel: item.news?.label,
           onTap: () => widget.onOpenEvent(item.event),
         ),
       );

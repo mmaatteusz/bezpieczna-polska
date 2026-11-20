@@ -58,6 +58,7 @@ class DashboardScreen extends StatelessWidget {
   final VoidCallback? onOpenMap;
   final VoidCallback onOpenSecurityLevels;
   final void Function(SafetyEvent) onOpenEvent;
+  final Map<String, int> readRevisions;
 
   const DashboardScreen({
     super.key,
@@ -77,6 +78,7 @@ class DashboardScreen extends StatelessWidget {
     this.onOpenMap,
     required this.onOpenSecurityLevels,
     required this.onOpenEvent,
+    this.readRevisions = const {},
   });
 
   String _freshnessLabel(DateTime now) {
@@ -92,11 +94,16 @@ class DashboardScreen extends StatelessWidget {
     return 'Źródła ostrzeżeń aktualne';
   }
 
-  Widget _alertSummary(BuildContext context, SafetyEventDisplayGroup group) {
+  Widget _alertSummary(
+    BuildContext context,
+    SafetyEventDisplayGroup group,
+    DateTime now,
+  ) {
     final event = group.primary;
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final visual = safetyEventAppearance(context, event);
+    final news = safetyEventNews(event, readRevisions, now);
     final instruction = event.instructions.firstOrNull;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -117,7 +124,11 @@ class DashboardScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${visual.label} · ${safetySourceLabel(event)}',
+                        [
+                          if (news != null) news.label,
+                          visual.label,
+                          safetySourceLabel(event),
+                        ].join(' · '),
                         style: text.labelMedium?.copyWith(color: visual.accent),
                       ),
                       const SizedBox(height: 4),
@@ -341,7 +352,7 @@ class DashboardScreen extends StatelessWidget {
                 if (active.isNotEmpty)
                   ...active
                       .take(3)
-                      .map((group) => _alertSummary(context, group))
+                      .map((group) => _alertSummary(context, group, now))
                 else
                   _InfoBanner(
                     icon: localFresh

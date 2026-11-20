@@ -314,19 +314,27 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     });
   }
 
-  void loadSeen() {
+  String get _seenKey => 'seen:${widget.repository.api}';
+
+  Map<String, int> _readSeen(String key) {
     try {
-      seen = Map<String, int>.from(
-        jsonDecode(
-              widget.repository.prefs.getString(
-                    'seen:${widget.repository.api}:$region',
-                  ) ??
-                  '{}',
-            )
-            as Map,
+      return Map<String, int>.from(
+        jsonDecode(widget.repository.prefs.getString(key) ?? '{}') as Map,
       );
     } catch (_) {
-      seen = {};
+      return {};
+    }
+  }
+
+  void loadSeen() {
+    seen = {..._readSeen('$_seenKey:$region'), ..._readSeen(_seenKey)};
+  }
+
+  Future<void> _saveSeen() async {
+    try {
+      await widget.repository.prefs.setString(_seenKey, jsonEncode(seen));
+    } catch (_) {
+      debugPrint('Nie udało się zapisać przeczytanych alertów.');
     }
   }
 
@@ -800,6 +808,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             onOpenAlerts: () => _selectPage(2),
             onOpenSecurityLevels: openSecurityLevels,
             onOpenEvent: details,
+            readRevisions: seen,
           ),
           visitedPages.contains(1)
               ? SafetyMapScreen(
@@ -817,6 +826,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   events: events,
                   onOpenEvent: details,
                   onRefresh: startupSync,
+                  readRevisions: seen,
                 )
               : const SizedBox.shrink(),
           visitedPages.contains(3)
@@ -1000,6 +1010,15 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   }
 
   void details(SafetyEvent e) {
+    final opened = {
+      for (final report in e.reports)
+        if (report.revision > (seen[report.id] ?? 0))
+          report.id: report.revision,
+    };
+    if (opened.isNotEmpty) {
+      setState(() => seen.addAll(opened));
+      unawaited(_saveSeen());
+    }
     Navigator.push(
       context,
       MaterialPageRoute<void>(

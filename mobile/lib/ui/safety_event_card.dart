@@ -39,6 +39,7 @@ bool safetyEventIsHistorical(SafetyEvent event, [DateTime? at]) {
   final end = DateTime.tryParse(event.data['validTo']?.toString() ?? '');
   return event.data['verification'] == 'REFUTED' ||
       const {'ENDED', 'CANCELLED', 'EXPIRED'}.contains(lifecycle) ||
+      event.isRcbCancellationFromRso ||
       (end != null && !end.isAfter(now));
 }
 
@@ -64,7 +65,12 @@ int safetyEventPriority(SafetyEvent event, [DateTime? at]) =>
     safetyVisualLevel(event, at).index;
 
 DateTime safetyEventTime(SafetyEvent event) {
-  for (final key in ['validFrom', 'publishedAt', 'retrievedAt']) {
+  for (final key in [
+    'validFrom',
+    'publishedAt',
+    'publicationDate',
+    'retrievedAt',
+  ]) {
     final parsed = DateTime.tryParse(event.data[key]?.toString() ?? '');
     if (parsed != null) return parsed;
   }
@@ -74,6 +80,41 @@ DateTime safetyEventTime(SafetyEvent event) {
 bool safetyEventIsSignificant(SafetyEvent event, [DateTime? at]) {
   if (!safetyEventIsActive(event, at)) return false;
   return safetyVisualLevel(event, at) != SafetyVisualLevel.information;
+}
+
+({String label, DateTime time})? safetyEventNews(
+  SafetyEvent event,
+  Map<String, int> readRevisions,
+  DateTime now,
+) {
+  final recentRcbPublication =
+      event.data['lifecycle'] == 'UNKNOWN' &&
+      event.data['messageContext'] == 'ACTUAL' &&
+      event.data['officialWarning'] == true &&
+      event.isRcb &&
+      !safetyEventIsHistorical(event, now);
+  if (!recentRcbPublication && !safetyEventIsSignificant(event, now)) {
+    return null;
+  }
+
+  ({String label, DateTime time})? newest;
+  for (final report in event.reports) {
+    final read = readRevisions[report.id];
+    if (read != null && report.revision <= read) continue;
+    final raw = read == null
+        ? report.data['publishedAt'] ?? report.data['publicationDate']
+        : report.data['retrievedAt'];
+    final time = DateTime.tryParse(raw?.toString() ?? '');
+    if (time == null ||
+        time.isAfter(now.add(const Duration(seconds: 30))) ||
+        now.difference(time) >= const Duration(days: 1)) {
+      continue;
+    }
+    if (newest == null || time.isAfter(newest.time)) {
+      newest = (label: read == null ? 'Nowe' : 'Aktualizacja', time: time);
+    }
+  }
+  return newest;
 }
 
 String _normalizedEventText(Object? value) => (value?.toString() ?? '')
@@ -217,8 +258,16 @@ String safetyEventTimeLabel(SafetyEvent event, [DateTime? at]) {
     }
     return 'Ważne do ${stamp(end)}';
   }
-  final published = event.data['publishedAt'] ?? event.data['retrievedAt'];
-  return published == null ? 'Czas nieustalony' : stamp(published);
+  final published = event.data['publishedAt'];
+  final dateOnly = event.data['publicationDate'];
+  if (published == null &&
+      dateOnly is String &&
+      RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dateOnly)) {
+    final parts = dateOnly.split('-');
+    return 'Publikacja ${parts.reversed.join('.')}';
+  }
+  final time = published ?? event.data['retrievedAt'];
+  return time == null ? 'Czas nieustalony' : stamp(time);
 }
 
 ({String label, IconData icon, Color accent, Color fill}) safetyEventAppearance(
@@ -269,6 +318,7 @@ class SafetyEventCard extends StatelessWidget {
   final bool compact;
   final int groupedCount;
   final List<String>? areaOverride;
+  final String? newsLabel;
 
   const SafetyEventCard({
     super.key,
@@ -277,6 +327,7 @@ class SafetyEventCard extends StatelessWidget {
     this.compact = false,
     this.groupedCount = 1,
     this.areaOverride,
+    this.newsLabel,
   });
 
   String get verificationLabel =>
@@ -322,6 +373,10 @@ class SafetyEventCard extends StatelessWidget {
     final scheme = theme.colorScheme;
     final text = theme.textTheme;
     final visual = safetyEventAppearance(context, event);
+    final statusLabel =
+        newsLabel != null && event.data['lifecycle'] == 'UNKNOWN'
+        ? 'Ważność nieustalona'
+        : visual.label;
     final sourceCount = independentSourceCount(event);
     final instruction = safetyEventIsSignificant(event)
         ? event.instructions.firstOrNull
@@ -356,7 +411,9 @@ class SafetyEventCard extends StatelessWidget {
                     const SizedBox(width: 7),
                     Expanded(
                       child: Text(
-                        visual.label,
+                        newsLabel == null
+                            ? statusLabel
+                            : '$newsLabel · $statusLabel',
                         style: text.labelLarge?.copyWith(color: visual.accent),
                       ),
                     ),
