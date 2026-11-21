@@ -1,14 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' show Point;
-import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import 'map_interaction.dart';
 import 'model.dart';
+import 'neptun_markers.dart';
+
+export 'neptun_markers.dart' show neptunIconPng, neptunMapIconId;
 
 class NeptunData {
   final Map<String, dynamic> data;
@@ -308,263 +309,11 @@ String neptunTypeLabel(String value) => switch (value) {
   _ => 'Nieokreślone',
 };
 
-String neptunMapIconId(String value) => switch (value) {
-  'uav' => 'neptun-icon-uav',
-  'fpv' => 'neptun-icon-fpv',
-  'recon' => 'neptun-icon-recon',
-  'missile' => 'neptun-icon-missile',
-  'ballistic' => 'neptun-icon-ballistic',
-  'kab' => 'neptun-icon-kab',
-  'mig31k' => 'neptun-icon-mig31k',
-  _ => 'neptun-icon-unknown',
-};
-
-const _neptunIconTypes = <String>[
-  'uav',
-  'fpv',
-  'recon',
-  'missile',
-  'ballistic',
-  'kab',
-  'mig31k',
-  'unknown',
-];
-
-ui.Color _neptunAccentColor(String type) => switch (type) {
-  'uav' => const ui.Color(0xffffa726),
-  'fpv' => const ui.Color(0xffffb74d),
-  'recon' => const ui.Color(0xff42a5f5),
-  'missile' => const ui.Color(0xffef5350),
-  'ballistic' => const ui.Color(0xffd81b60),
-  'kab' => const ui.Color(0xffc96a3d),
-  'mig31k' => const ui.Color(0xffab47bc),
-  _ => const ui.Color(0xff90a4ae),
-};
-
-Future<Uint8List> neptunIconPng(String type, {double pixelRatio = 1}) async {
-  // Compact type badges are intentionally fixed upright. The marker shape and
-  // colour describe the threat class only and must never imply heading/course.
-  const logicalSize = 72.0;
-  final outputSize = 40 * pixelRatio;
-  final recorder = ui.PictureRecorder();
-  final canvas = ui.Canvas(recorder)..scale(outputSize / logicalSize);
-  final accent = _neptunAccentColor(type);
-
-  final plate = ui.Paint()
-    ..color = const ui.Color(0xe61a1f24)
-    ..style = ui.PaintingStyle.fill;
-  final ring = ui.Paint()
-    ..color = accent
-    ..style = ui.PaintingStyle.stroke
-    ..strokeWidth = 4;
-  final white = ui.Paint()
-    ..color = const ui.Color(0xffffffff)
-    ..style = ui.PaintingStyle.fill;
-  final whiteStroke = ui.Paint()
-    ..color = const ui.Color(0xffffffff)
-    ..style = ui.PaintingStyle.stroke
-    ..strokeWidth = 4
-    ..strokeJoin = ui.StrokeJoin.round
-    ..strokeCap = ui.StrokeCap.round;
-
-  canvas.drawCircle(const ui.Offset(36, 36), 30, plate);
-  canvas.drawCircle(const ui.Offset(36, 36), 29, ring);
-
-  void fillPath(ui.Path path) => canvas.drawPath(path, white);
-  void strokePath(ui.Path path, {double width = 4}) {
-    final p = ui.Paint()
-      ..color = const ui.Color(0xffffffff)
-      ..style = ui.PaintingStyle.stroke
-      ..strokeWidth = width
-      ..strokeJoin = ui.StrokeJoin.round
-      ..strokeCap = ui.StrokeCap.round;
-    canvas.drawPath(path, p);
-  }
-
-  void line(ui.Offset a, ui.Offset b, {double width = 4}) {
-    final p = ui.Paint()
-      ..color = const ui.Color(0xffffffff)
-      ..style = ui.PaintingStyle.stroke
-      ..strokeWidth = width
-      ..strokeCap = ui.StrokeCap.round;
-    canvas.drawLine(a, b, p);
-  }
-
-  switch (type) {
-    case 'uav':
-      // Broad delta silhouette: deliberately unlike a conventional aircraft.
-      fillPath(
-        ui.Path()
-          ..moveTo(36, 15)
-          ..lineTo(57, 49)
-          ..lineTo(43, 44)
-          ..lineTo(40, 57)
-          ..lineTo(32, 57)
-          ..lineTo(29, 44)
-          ..lineTo(15, 49)
-          ..close(),
-      );
-      break;
-    case 'fpv':
-      // Quadcopter with four visible rotors.
-      for (final pair in const [
-        [ui.Offset(31, 31), ui.Offset(22, 22)],
-        [ui.Offset(41, 31), ui.Offset(50, 22)],
-        [ui.Offset(31, 41), ui.Offset(22, 50)],
-        [ui.Offset(41, 41), ui.Offset(50, 50)],
-      ]) {
-        line(pair[0], pair[1], width: 4);
-      }
-      canvas.drawRRect(
-        ui.RRect.fromRectAndRadius(
-          const ui.Rect.fromLTWH(29, 29, 14, 14),
-          const ui.Radius.circular(4),
-        ),
-        white,
-      );
-      for (final center in const [
-        ui.Offset(20, 20),
-        ui.Offset(52, 20),
-        ui.Offset(20, 52),
-        ui.Offset(52, 52),
-      ]) {
-        canvas.drawCircle(center, 6, whiteStroke);
-        canvas.drawCircle(center, 1.8, white);
-      }
-      break;
-    case 'recon':
-      // Eye/radar pictogram keeps reconnaissance visually separate from aircraft.
-      strokePath(
-        ui.Path()
-          ..moveTo(15, 36)
-          ..quadraticBezierTo(25, 22, 36, 22)
-          ..quadraticBezierTo(47, 22, 57, 36)
-          ..quadraticBezierTo(47, 50, 36, 50)
-          ..quadraticBezierTo(25, 50, 15, 36)
-          ..close(),
-      );
-      canvas.drawCircle(const ui.Offset(36, 36), 7, white);
-      canvas.drawCircle(
-        const ui.Offset(36, 36),
-        3,
-        ui.Paint()..color = const ui.Color(0xff1a1f24),
-      );
-      break;
-    case 'missile':
-      // Winged cruise-missile silhouette.
-      fillPath(
-        ui.Path()
-          ..moveTo(36, 13)
-          ..quadraticBezierTo(41, 18, 40, 28)
-          ..lineTo(40, 31)
-          ..lineTo(56, 39)
-          ..lineTo(40, 40)
-          ..lineTo(40, 53)
-          ..lineTo(47, 59)
-          ..lineTo(38, 57)
-          ..lineTo(36, 62)
-          ..lineTo(34, 57)
-          ..lineTo(25, 59)
-          ..lineTo(32, 53)
-          ..lineTo(32, 40)
-          ..lineTo(16, 39)
-          ..lineTo(32, 31)
-          ..lineTo(32, 28)
-          ..quadraticBezierTo(31, 18, 36, 13)
-          ..close(),
-      );
-      break;
-    case 'ballistic':
-      // Slim rocket with small tail fins; no wings, so it reads differently
-      // from the cruise-missile icon even at small map sizes.
-      fillPath(
-        ui.Path()
-          ..moveTo(36, 12)
-          ..quadraticBezierTo(42, 19, 41, 31)
-          ..lineTo(40, 52)
-          ..lineTo(47, 59)
-          ..lineTo(40, 57)
-          ..lineTo(36, 64)
-          ..lineTo(32, 57)
-          ..lineTo(25, 59)
-          ..lineTo(32, 52)
-          ..lineTo(31, 31)
-          ..quadraticBezierTo(30, 19, 36, 12)
-          ..close(),
-      );
-      line(const ui.Offset(30, 47), const ui.Offset(42, 47), width: 3);
-      break;
-    case 'kab':
-      // Bomb body with a rounded nose and four tail fins.
-      fillPath(
-        ui.Path()
-          ..moveTo(36, 17)
-          ..quadraticBezierTo(45, 24, 44, 38)
-          ..quadraticBezierTo(43, 51, 36, 59)
-          ..quadraticBezierTo(29, 51, 28, 38)
-          ..quadraticBezierTo(27, 24, 36, 17)
-          ..close(),
-      );
-      fillPath(
-        ui.Path()
-          ..moveTo(31, 20)
-          ..lineTo(23, 15)
-          ..lineTo(27, 27)
-          ..lineTo(31, 29)
-          ..close(),
-      );
-      fillPath(
-        ui.Path()
-          ..moveTo(41, 20)
-          ..lineTo(49, 15)
-          ..lineTo(45, 27)
-          ..lineTo(41, 29)
-          ..close(),
-      );
-      line(const ui.Offset(31, 34), const ui.Offset(41, 34), width: 3);
-      break;
-    case 'mig31k':
-      // Only this class uses a conventional jet silhouette.
-      fillPath(
-        ui.Path()
-          ..moveTo(36, 11)
-          ..quadraticBezierTo(40, 17, 40, 28)
-          ..lineTo(59, 40)
-          ..lineTo(42, 39)
-          ..lineTo(41, 51)
-          ..lineTo(50, 58)
-          ..lineTo(40, 55)
-          ..lineTo(36, 62)
-          ..lineTo(32, 55)
-          ..lineTo(22, 58)
-          ..lineTo(31, 51)
-          ..lineTo(30, 39)
-          ..lineTo(13, 40)
-          ..lineTo(32, 28)
-          ..quadraticBezierTo(32, 17, 36, 11)
-          ..close(),
-      );
-      break;
-    default:
-      // Unknown threat: neutral warning mark.
-      line(const ui.Offset(36, 24), const ui.Offset(36, 43), width: 5);
-      canvas.drawCircle(const ui.Offset(36, 51), 3.4, white);
-  }
-
-  final picture = recorder.endRecording();
-  final image = await picture.toImage(outputSize.ceil(), outputSize.ceil());
-  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-  image.dispose();
-  picture.dispose();
-  if (bytes == null) throw StateError('Nie udało się utworzyć ikony NEPTUN');
-  return bytes.buffer.asUint8List();
-}
-
 Future<void> _registerNeptunMapIcons(
   MapLibreMapController controller,
   double pixelRatio,
 ) async {
-  for (final type in _neptunIconTypes) {
+  for (final type in neptunMarkerTypes) {
     await controller.addImage(
       neptunMapIconId(type),
       await neptunIconPng(type, pixelRatio: pixelRatio),
@@ -581,6 +330,59 @@ Map<String, dynamic>? neptunThreatForFeature(NeptunData data, dynamic feature) {
   }
   return null;
 }
+
+List<Map<String, dynamic>> neptunLiveMarkerFeatures(NeptunData data) {
+  final threats = {
+    for (final item in data.liveThreats) item['id'] as String: item,
+  };
+  final markers = <String, Map<String, dynamic>>{};
+  for (final feature in (data.live['map']['features'] as List).cast<Map>()) {
+    final id = feature['properties']['threatId'] as String;
+    final threat = threats[id]!;
+    if (threat['latitude'] == null) continue;
+    markers[id] = {
+      'type': 'Feature',
+      'id': feature['id'],
+      'geometry': {
+        'type': 'Point',
+        'coordinates': [threat['longitude'], threat['latitude']],
+      },
+      'properties': {
+        'threatId': id,
+        'type': threat['type'],
+        'pulse': threat['status'] == 'active' && threat['advisory'] != true,
+      },
+    };
+  }
+  final sortedIds = markers.keys.toList()..sort();
+  return [for (final id in sortedIds) markers[id]!];
+}
+
+({double radius, double opacity}) neptunMarkerPulse(Duration elapsed) {
+  final phase = (elapsed.inMilliseconds % 2800) / 2800;
+  final fadeIn = (phase * 9).clamp(0.0, 1.0);
+  final fadeOut = (1 - phase) * (1 - phase);
+  return (radius: 15 + 10 * (1 - fadeOut), opacity: 0.62 * fadeIn * fadeOut);
+}
+
+final _pulseColors = [
+  'match',
+  ['get', 'type'],
+  for (final type in neptunMarkerTypes.where((type) => type != 'unknown')) ...[
+    type,
+    '#${neptunMarkerAccent(type).toARGB32().toRadixString(16).substring(2)}',
+  ],
+  '#a7b9c8',
+];
+
+CircleLayerProperties _pulseLayer({double radius = 15, double opacity = 0}) =>
+    CircleLayerProperties(
+      circleRadius: radius,
+      circleOpacity: 0,
+      circleStrokeColor: _pulseColors,
+      circleStrokeWidth: 1.4,
+      circleStrokeOpacity: opacity,
+    );
 
 class NeptunScreen extends StatefulWidget {
   final DataRepository repository;
@@ -659,7 +461,9 @@ class _NeptunScreenState extends State<NeptunScreen> {
     final precision = t['precisionKm'];
     return Card(
       child: ListTile(
-        leading: Icon(t['advisory'] == true ? Icons.info_outline : Icons.radar),
+        leading: t['advisory'] == true
+            ? const Icon(Icons.info_outline)
+            : NeptunMarkerGlyph(type: t['type'] as String),
         title: Text(t['title'] as String),
         subtitle: Text(
           '${typeLabel(t['type'] as String)}'
@@ -783,7 +587,8 @@ class _NeptunScreenState extends State<NeptunScreen> {
             ),
             if (loading) const LinearProgressIndicator(),
             if (error != null) Text(error!),
-            if (widget.showMap && snapshot != null) NeptunMap(data: snapshot!),
+            if (widget.showMap && snapshot != null)
+              NeptunMap(data: snapshot!, animateLive: isLive),
             const SizedBox(height: 8),
             TextButton.icon(
               onPressed: () => widget.openSource('https://neptun.in.ua/'),
@@ -831,23 +636,55 @@ class _NeptunScreenState extends State<NeptunScreen> {
 
 class NeptunMap extends StatefulWidget {
   final NeptunData data;
-  const NeptunMap({super.key, required this.data});
+  final bool animateLive;
+
+  const NeptunMap({super.key, required this.data, this.animateLive = true});
 
   @override
   State<NeptunMap> createState() => _NeptunMapState();
 }
 
-class _NeptunMapState extends State<NeptunMap> {
+class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
   MapLibreMapController? controller;
   String? error;
   bool ready = false;
-  bool cameraMoving = false;
+  bool get cameraMoving => controller?.isCameraMoving ?? false;
   bool syncInProgress = false;
   bool syncPending = false;
+  String? _liveLayerSignature, _historyLayerSignature;
+  List<Map<String, dynamic>> _liveMarkers = const [];
+  bool _hasPulseMarkers = false;
+  bool _allowMotion = false;
+  bool _writingPulse = false;
+  bool _pulseVisible = false;
+  Timer? _pulseTimer;
+  final _pulseClock = Stopwatch();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _allowMotion =
+        !MediaQuery.disableAnimationsOf(context) &&
+        TickerMode.valuesOf(context).enabled;
+    _updatePulse();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) => _updatePulse();
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pulseTimer?.cancel();
+    _pulseClock.stop();
     ready = false;
+    controller?.removeListener(_updatePulse);
     controller = null;
     super.dispose();
   }
@@ -862,19 +699,76 @@ class _NeptunMapState extends State<NeptunMap> {
         unawaited(syncSources());
       }
     }
-  }
-
-  void cameraMove(CameraPosition _) {
-    cameraMoving = true;
+    _updatePulse();
   }
 
   void cameraIdle() {
-    cameraMoving = false;
+    _updatePulse();
     if (syncPending) {
       syncPending = false;
       unawaited(syncSources());
     } else {
       unawaited(refreshSymbols());
+    }
+  }
+
+  bool get _canPulse {
+    final state = WidgetsBinding.instance.lifecycleState;
+    return ready &&
+        !cameraMoving &&
+        _allowMotion &&
+        _hasPulseMarkers &&
+        widget.animateLive &&
+        (state == null || state == AppLifecycleState.resumed) &&
+        widget.data.isFreshLive(DateTime.now().toUtc());
+  }
+
+  void _updatePulse() {
+    if (_canPulse) {
+      if (_pulseTimer != null) return;
+      _pulseClock
+        ..reset()
+        ..start();
+      _pulseTimer = Timer.periodic(const Duration(milliseconds: 85), (_) {
+        if (_canPulse) {
+          unawaited(_paintPulse());
+        } else {
+          _updatePulse();
+        }
+      });
+    } else {
+      _pulseTimer?.cancel();
+      _pulseTimer = null;
+      _pulseClock.stop();
+      if (_pulseVisible) unawaited(_paintPulse());
+    }
+  }
+
+  Future<void> _paintPulse() async {
+    final c = controller;
+    if (c == null || !ready || _writingPulse) return;
+    final animated = _pulseTimer != null;
+    final frame = neptunMarkerPulse(_pulseClock.elapsed);
+    _writingPulse = true;
+    try {
+      await c.setLayerProperties(
+        'neptun-live-pulse',
+        _pulseLayer(
+          radius: frame.radius,
+          opacity: animated ? frame.opacity : 0,
+        ),
+      );
+      _pulseVisible = animated;
+    } catch (_) {
+      _pulseTimer?.cancel();
+      _pulseTimer = null;
+      _pulseClock.stop();
+      _pulseVisible = false;
+    } finally {
+      _writingPulse = false;
+      if (ready && _pulseVisible && _pulseTimer == null) {
+        unawaited(_paintPulse());
+      }
     }
   }
 
@@ -888,14 +782,29 @@ class _NeptunMapState extends State<NeptunMap> {
     syncInProgress = true;
     final data = widget.data;
     try {
-      lastSymbolSignature = null;
-      await c.setGeoJsonSource('neptun-live', data.live['map']);
-      await c.setGeoJsonSource('neptun-history', data.data['map']);
-      if (mounted) {
-        setState(() {
-          error = null;
+      final markers = neptunLiveMarkerFeatures(data);
+      final liveSignature = jsonEncode(markers);
+      if (_liveLayerSignature != liveSignature) {
+        await c.setGeoJsonSource('neptun-live', {
+          'type': 'FeatureCollection',
+          'features': markers,
         });
+        if (!mounted || controller != c) return;
+        _liveLayerSignature = liveSignature;
+        _liveMarkers = markers;
+        _hasPulseMarkers = markers.any((m) => m['properties']['pulse'] == true);
+        _updatePulse();
+        await refreshSymbols();
       }
+      final history = data.data['map'] as Map<String, dynamic>;
+      final historySignature = jsonEncode(history);
+      if (_historyLayerSignature != historySignature &&
+          mounted &&
+          controller == c) {
+        await c.setGeoJsonSource('neptun-history', history);
+        _historyLayerSignature = historySignature;
+      }
+      if (mounted && error != null) setState(() => error = null);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -912,58 +821,61 @@ class _NeptunMapState extends State<NeptunMap> {
   }
 
   bool renderingSymbols = false;
+  bool _refreshSymbolsPending = false;
   String? lastSymbolSignature;
 
   Future<void> refreshSymbols() async {
     final c = controller;
-    if (!ready || c == null || !mounted || cameraMoving || renderingSymbols) {
+    if (!ready || c == null || cameraMoving) return;
+    if (renderingSymbols) {
+      _refreshSymbolsPending = true;
       return;
     }
+    _refreshSymbolsPending = false;
     renderingSymbols = true;
     try {
-      final dpr = MediaQuery.devicePixelRatioOf(context);
-      final width = MediaQuery.sizeOf(context).width;
-      final rendered = await c.queryRenderedFeaturesInRect(
-        Rect.fromLTWH(0, 0, width * dpr, 380 * dpr),
-        ['neptun-live-hit-points'],
-        null,
-      );
+      final bounds = await c.getVisibleRegion();
       if (!mounted || controller != c || cameraMoving) return;
-      final unique = <String, Map>{};
-      for (final feature in rendered.whereType<Map>()) {
-        final properties = feature['properties'] as Map;
-        final id = properties['threatId'];
-        if (id != null) unique['$id'] = feature;
-      }
-      final keys = unique.keys.toList()..sort();
-      final signature = jsonEncode([for (final key in keys) unique[key]]);
-      if (lastSymbolSignature == signature) return;
+      final positions = <List<Object>>[];
       final options = <SymbolOptions>[];
-      for (final key in keys) {
-        final feature = unique[key]!;
+      for (final feature in _liveMarkers) {
         final coordinates = feature['geometry']['coordinates'] as List;
-        final properties = feature['properties'] as Map;
+        final position = LatLng(
+          (coordinates[1] as num).toDouble(),
+          (coordinates[0] as num).toDouble(),
+        );
+        if (!bounds.contains(position)) continue;
+        final properties = feature['properties'];
+        final type = properties['type'] as String;
+        positions.add([
+          properties['threatId'] as String,
+          type,
+          ...coordinates.cast<num>(),
+        ]);
         options.add(
           SymbolOptions(
-            geometry: LatLng(
-              (coordinates[1] as num).toDouble(),
-              (coordinates[0] as num).toDouble(),
-            ),
-            iconImage: neptunMapIconId(properties['type'] as String),
+            geometry: position,
+            iconImage: neptunMapIconId(type),
             iconSize: 1,
             iconAnchor: 'center',
           ),
         );
       }
-      lastSymbolSignature = signature;
+      final signature = jsonEncode(positions);
+      if (lastSymbolSignature == signature) return;
       await c.clearSymbols();
       if (!mounted || controller != c) return;
       if (options.isNotEmpty) await c.addSymbols(options);
+      lastSymbolSignature = signature;
     } catch (error) {
       lastSymbolSignature = null;
       debugPrint('NEPTUN bitmap rendering failed: $error');
     } finally {
       renderingSymbols = false;
+      if (_refreshSymbolsPending && !cameraMoving && mounted) {
+        _refreshSymbolsPending = false;
+        unawaited(refreshSymbols());
+      }
     }
   }
 
@@ -1015,6 +927,7 @@ class _NeptunMapState extends State<NeptunMap> {
                   ),
                   for (final item in candidates.values)
                     ListTile(
+                      leading: NeptunMarkerGlyph(type: item['type'] as String),
                       title: Text(item['title'] as String),
                       subtitle: Text(neptunTypeLabel(item['type'] as String)),
                       onTap: () => Navigator.pop(sheetContext, item),
@@ -1043,24 +956,7 @@ class _NeptunMapState extends State<NeptunMap> {
               children: [
                 Row(
                   children: [
-                    FutureBuilder<Uint8List>(
-                      future: neptunIconPng(
-                        selectedThreat['type'] as String,
-                        pixelRatio: MediaQuery.devicePixelRatioOf(sheetContext),
-                      ),
-                      builder: (context, snapshot) => snapshot.hasData
-                          ? Image.memory(
-                              snapshot.data!,
-                              width: 36,
-                              height: 36,
-                              filterQuality: FilterQuality.high,
-                            )
-                          : const SizedBox(
-                              width: 36,
-                              height: 36,
-                              child: Icon(Icons.flight_outlined),
-                            ),
-                    ),
+                    NeptunMarkerGlyph(type: selectedThreat['type'] as String),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -1107,6 +1003,14 @@ class _NeptunMapState extends State<NeptunMap> {
     final c = controller;
     if (c == null) return;
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    ready = false;
+    _pulseVisible = false;
+    _updatePulse();
+    _liveLayerSignature = null;
+    _historyLayerSignature = null;
+    _liveMarkers = const [];
+    _hasPulseMarkers = false;
+    lastSymbolSignature = null;
     try {
       await c.addSource(
         'neptun-history',
@@ -1134,6 +1038,16 @@ class _NeptunMapState extends State<NeptunMap> {
       await _registerNeptunMapIcons(c, pixelRatio);
       await c.addCircleLayer(
         'neptun-live',
+        'neptun-live-pulse',
+        _pulseLayer(),
+        filter: [
+          '==',
+          ['get', 'pulse'],
+          true,
+        ],
+      );
+      await c.addCircleLayer(
+        'neptun-live',
         'neptun-live-hit-points',
         const CircleLayerProperties(
           circleColor: '#000000',
@@ -1145,6 +1059,7 @@ class _NeptunMapState extends State<NeptunMap> {
       // disappear through collision placement. No remote glyphs are required.
       await c.setSymbolIconAllowOverlap(true);
       await c.setSymbolIconIgnorePlacement(true);
+      if (!mounted || controller != c) return;
       ready = true;
       await syncSources();
     } catch (_) {
@@ -1175,24 +1090,49 @@ class _NeptunMapState extends State<NeptunMap> {
               zoom: 5,
             ),
             onMapCreated: (c) {
-              if (mounted) controller = c;
+              if (!mounted) return;
+              controller?.removeListener(_updatePulse);
+              controller = c..addListener(_updatePulse);
             },
             onStyleLoadedCallback: styled,
-            onCameraMove: cameraMove,
             onCameraIdle: cameraIdle,
-            onMapIdle: () => unawaited(refreshSymbols()),
+            onMapIdle: () {
+              if (lastSymbolSignature == null && _liveMarkers.isNotEmpty) {
+                unawaited(refreshSymbols());
+              }
+            },
             onMapClick: (point, coordinates) =>
                 unawaited(handleMapTap(point, coordinates)),
             featureTapsTriggersMapClick: true,
           ),
         ),
       ),
-      const SizedBox(height: 6),
-      const Text(
-        'Ikony wpisów są widoczne także po oddaleniu mapy. Dotknij nakładających się ikon, aby wybrać wpis.',
-      ),
-      const Text(
-        'Kolor obwódki i kształt oznaczają typ: pomarańczowy — dron/FPV, niebieski — rozpoznanie, czerwony — rakieta, różowy — balistyka, ceglasty — KAB, fioletowy — MiG-31K. Ikony są zawsze ustawione pionowo i nie pokazują kierunku lotu. Pozycje pozostają celowo zgrubne. Fioletowe linie: wyłącznie historia.',
+      ExpansionTile(
+        title: const Text('Legenda mapy'),
+        subtitle: const Text('Pozycje przybliżone'),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+        childrenPadding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 14,
+            runSpacing: 4,
+            children: [
+              for (final type in neptunMarkerTypes)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    NeptunMarkerGlyph(type: type, size: 32),
+                    Text(neptunTypeLabel(type)),
+                  ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Puls oznacza bieżący wpis. Fioletowa linia oznacza ślad historyczny.',
+          ),
+        ],
       ),
       if (error != null) Text(error!),
     ],

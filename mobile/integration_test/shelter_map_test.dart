@@ -383,13 +383,21 @@ void main() {
     neptunInput['tracks'] = [];
     neptunInput['map']['features'] = [];
     final neptunKey = GlobalKey();
+    final neptunData = NeptunData.parse(neptunInput);
+    final reduceMotion = ValueNotifier(false);
+    addTearDown(reduceMotion.dispose);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
-            child: NeptunMap(
-              key: neptunKey,
-              data: NeptunData.parse(neptunInput),
+            child: ValueListenableBuilder(
+              valueListenable: reduceMotion,
+              builder: (context, disabled, _) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(disableAnimations: disabled),
+                child: NeptunMap(key: neptunKey, data: neptunData),
+              ),
             ),
           ),
         ),
@@ -424,6 +432,37 @@ void main() {
           .toSet(),
       {for (final type in titles.keys) neptunMapIconId(type)},
     );
+    Future<Map> pulsePaint() async {
+      final layer = await neptunController.getLayerProperties(
+        'neptun-live-pulse',
+      );
+      return layer?['paint'] as Map? ?? const {};
+    }
+
+    var pulse = await pulsePaint();
+    for (
+      var i = 0;
+      i < 25 && (pulse['circle-stroke-opacity'] as num? ?? 0) < 0.18;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 120));
+      pulse = await pulsePaint();
+    }
+    expect(pulse['circle-stroke-opacity'], greaterThanOrEqualTo(0.18));
+    expect(pulse['circle-radius'], greaterThan(15));
+    expect(pulse['circle-opacity'], 0);
+
+    reduceMotion.value = true;
+    await tester.pump();
+    for (
+      var i = 0;
+      i < 15 && (await pulsePaint())['circle-stroke-opacity'] != 0;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 120));
+    }
+    expect((await pulsePaint())['circle-stroke-opacity'], 0);
+
     await neptunController.moveCamera(
       CameraUpdate.newLatLngZoom(const LatLng(49, 31), 7),
     );
@@ -442,10 +481,11 @@ void main() {
       'neptun-live-hit-points',
     ], null);
     expect(entries, hasLength(3));
-    expect(
-      entries.map((entry) => entry['properties']['type']).toSet(),
-      {'uav', 'fpv', 'missile'},
-    );
+    expect(entries.map((entry) => entry['properties']['type']).toSet(), {
+      'uav',
+      'fpv',
+      'missile',
+    });
     for (var i = 0; i < 150 && neptunController.symbols.length != 8; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }
