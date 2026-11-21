@@ -384,7 +384,7 @@ void main() {
     neptunInput['map']['features'] = [];
     final neptunKey = GlobalKey();
     final neptunData = NeptunData.parse(neptunInput);
-    final reduceMotion = ValueNotifier(false);
+    final reduceMotion = ValueNotifier(true);
     addTearDown(reduceMotion.dispose);
     await tester.pumpWidget(
       MaterialApp(
@@ -432,37 +432,6 @@ void main() {
           .toSet(),
       {for (final type in titles.keys) neptunMapIconId(type)},
     );
-    Future<Map> pulsePaint() async {
-      final layer = await neptunController.getLayerProperties(
-        'neptun-live-pulse',
-      );
-      return layer?['paint'] as Map? ?? const {};
-    }
-
-    var pulse = await pulsePaint();
-    for (
-      var i = 0;
-      i < 25 && (pulse['circle-stroke-opacity'] as num? ?? 0) < 0.18;
-      i++
-    ) {
-      await tester.pump(const Duration(milliseconds: 120));
-      pulse = await pulsePaint();
-    }
-    expect(pulse['circle-stroke-opacity'], greaterThanOrEqualTo(0.18));
-    expect(pulse['circle-radius'], greaterThan(15));
-    expect(pulse['circle-opacity'], 0);
-
-    reduceMotion.value = true;
-    await tester.pump();
-    for (
-      var i = 0;
-      i < 15 && (await pulsePaint())['circle-stroke-opacity'] != 0;
-      i++
-    ) {
-      await tester.pump(const Duration(milliseconds: 120));
-    }
-    expect((await pulsePaint())['circle-stroke-opacity'], 0);
-
     await neptunController.moveCamera(
       CameraUpdate.newLatLngZoom(const LatLng(49, 31), 7),
     );
@@ -499,33 +468,100 @@ void main() {
     final dpr = tester.view.devicePixelRatio;
     final origin = tester.getTopLeft(find.byType(MapLibreMap));
     final target = origin + Offset(point.x / dpr, point.y / dpr);
-    final socket = await Socket.connect('127.0.0.1', 18443);
-    socket.writeln(
-      jsonEncode({
-        'verifySymbols': true,
-        'x': (target.dx * dpr).round(),
-        'y': (target.dy * dpr).round(),
-        'paddingTop': tester.view.padding.top,
-        'width': tester.view.physicalSize.width,
-        'height': tester.view.physicalSize.height,
-      }),
+    Future<({ui.Image image, int x, int y})> capture(
+      Offset target, {
+      bool tap = false,
+    }) async {
+      final socket = await Socket.connect('127.0.0.1', 18443);
+      socket.writeln(
+        jsonEncode({
+          'verifySymbols': true,
+          'captureOnly': !tap,
+          'x': (target.dx * dpr).round(),
+          'y': (target.dy * dpr).round(),
+          'paddingTop': tester.view.padding.top,
+          'width': tester.view.physicalSize.width,
+          'height': tester.view.physicalSize.height,
+        }),
+      );
+      await socket.flush();
+      final reply = await utf8.decoder
+          .bind(socket)
+          .transform(const LineSplitter())
+          .first;
+      socket.destroy();
+      final response = jsonDecode(reply) as Map<String, dynamic>;
+      expect(response['ok'], isTrue);
+      final codec = await ui.instantiateImageCodec(
+        base64Decode(response['screenshot'] as String),
+      );
+      final image = (await codec.getNextFrame()).image;
+      codec.dispose();
+      return (
+        image: image,
+        x: response['screenX'] as int,
+        y: response['screenY'] as int,
+      );
+    }
+
+    // Sample the upper arc above a standalone marker. The test style has a
+    // flat background and the camera stays still for all three captures.
+    final recon = await neptunController.toScreenLocation(
+      const LatLng(49.3, 30.5),
     );
-    await socket.flush();
-    final reply = await utf8.decoder
-        .bind(socket)
-        .transform(const LineSplitter())
-        .first;
-    socket.destroy();
-    final response = jsonDecode(reply) as Map<String, dynamic>;
-    expect(response['ok'], isTrue);
-    final codec = await ui.instantiateImageCodec(
-      base64Decode(response['screenshot'] as String),
+    final reconTarget = origin + Offset(recon.x / dpr, recon.y / dpr);
+    final before = await capture(reconTarget);
+    final beforePixels = (await before.image.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    ))!;
+    final screenWidth = before.image.width;
+    before.image.dispose();
+
+    Future<int> changedArcPixels() async {
+      final frame = await capture(reconTarget);
+      final current = (await frame.image.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      ))!;
+      frame.image.dispose();
+      var changed = 0;
+      final halfWidth = (7 * dpr).round();
+      for (var dy = (16 * dpr).round(); dy <= (27 * dpr).round(); dy++) {
+        for (var dx = -halfWidth; dx <= halfWidth; dx++) {
+          final offset = ((frame.y - dy) * screenWidth + frame.x + dx) * 4;
+          if ((beforePixels.getUint8(offset) - current.getUint8(offset)).abs() >
+              12) {
+            changed++;
+          }
+        }
+      }
+      return changed;
+    }
+
+    reduceMotion.value = false;
+    await tester.pump();
+    final minimumPulsePixels = 8 * dpr * dpr;
+    var pulsePixels = 0;
+    for (var i = 0; i < 8 && pulsePixels < minimumPulsePixels; i++) {
+      await tester.pump(const Duration(milliseconds: 280));
+      pulsePixels = await changedArcPixels();
+    }
+    expect(
+      pulsePixels,
+      greaterThanOrEqualTo(minimumPulsePixels),
+      reason: 'No visible ring above the live marker',
     );
-    final screenshot = (await codec.getNextFrame()).image;
+
+    reduceMotion.value = true;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(await changedArcPixels(), lessThan(minimumPulsePixels));
+
+    final tapped = await capture(target, tap: true);
+    final screenshot = tapped.image;
     final pixels = (await screenshot.toByteData(
       format: ui.ImageByteFormat.rawRgba,
     ))!.buffer.asUint8List();
-    final top = (response['screenY'] as int) - (target.dy * dpr).round();
+    final top = tapped.y - (target.dy * dpr).round();
     // Native feature queries also find invisible symbol buckets. Assert pixels
     // from Android's actual screen, excluding each badge's white border.
     for (final location in [
@@ -563,7 +599,6 @@ void main() {
       );
     }
     screenshot.dispose();
-    codec.dispose();
     for (
       var i = 0;
       i < 150 && find.text('3 wpisów w tym obszarze').evaluate().isEmpty;
