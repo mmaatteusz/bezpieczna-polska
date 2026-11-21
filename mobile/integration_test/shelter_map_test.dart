@@ -390,14 +390,17 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SingleChildScrollView(
-            child: ValueListenableBuilder(
-              valueListenable: reduceMotion,
-              builder: (context, disabled, _) => MediaQuery(
-                data: MediaQuery.of(
-                  context,
-                ).copyWith(disableAnimations: disabled),
-                child: NeptunMap(key: neptunKey, data: neptunData),
+          appBar: AppBar(title: const Text('NEPTUN')),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              child: ValueListenableBuilder(
+                valueListenable: reduceMotion,
+                builder: (context, disabled, _) => MediaQuery(
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(disableAnimations: disabled),
+                  child: NeptunMap(key: neptunKey, data: neptunData),
+                ),
               ),
             ),
           ),
@@ -652,12 +655,26 @@ void main() {
       );
       expect(await hits(), isEmpty);
       final chip = find.widgetWithText(FilterChip, layer.label);
+      expect(
+        tester.widget<FilterChip>(chip).onSelected,
+        isNotNull,
+        reason: '${layer.label} is available',
+      );
       await tester.tap(chip);
-      await tester.pump(const Duration(milliseconds: 500));
-      final entries = await hits();
+      var entries = <dynamic>[];
+      for (var attempt = 0; attempt < 15 && entries.isEmpty; attempt++) {
+        await tester.pump(const Duration(milliseconds: 150));
+        entries = await hits();
+      }
+      expect(
+        tester.widget<FilterChip>(chip).selected,
+        isTrue,
+        reason: layer.label,
+      );
       expect(
         entries.map((entry) => entry['properties']['icao']),
         contains('EPLB'),
+        reason: layer.label,
       );
       if (layer == NeptunAviationLayer.traffic) {
         expect(
@@ -667,6 +684,11 @@ void main() {
       }
       await tester.tap(chip);
       await tester.pump(const Duration(milliseconds: 500));
+      expect(
+        tester.widget<FilterChip>(chip).selected,
+        isFalse,
+        reason: layer.label,
+      );
       expect(await hits(), isEmpty);
     }
     await tester.pumpWidget(const SizedBox.shrink());
