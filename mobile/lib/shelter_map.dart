@@ -15,6 +15,7 @@ import 'map_render_queue.dart';
 import 'model.dart';
 import 'shelters.dart';
 import 'shelter_markers.dart';
+import 'ui/safety_event_card.dart';
 
 class _MapLegend extends StatelessWidget {
   final bool showAlerts;
@@ -1336,8 +1337,6 @@ class _ShelterMapState extends State<ShelterMap> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title, style: Theme.of(sheetContext).textTheme.titleLarge),
-              const SizedBox(height: 4),
-              const Text('Wybierz konkretną pozycję do otwarcia.'),
               const SizedBox(height: 12),
               for (final event in events)
                 ListTile(
@@ -1352,11 +1351,18 @@ class _ShelterMapState extends State<ShelterMap> {
                   ),
                   title: Text(event.title),
                   subtitle: Text(
-                    mapEventIsImgw(event)
-                        ? 'Ostrzeżenie IMGW'
-                        : event.isRcb
-                        ? 'Alert RCB'
-                        : 'Alert lub komunikat',
+                    [
+                      safetySourceLabel(event),
+                      if (event.data['locationText'] case final String area
+                          when area.trim().isNotEmpty &&
+                              mapEventTerytCodes(event).isEmpty)
+                        area.trim()
+                      else if (event.areas.isNotEmpty)
+                        event.areas
+                            .map((code) => regions[code] ?? code)
+                            .join(', '),
+                      safetyEventTimeLabel(event),
+                    ].join('\n'),
                   ),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
@@ -1450,7 +1456,7 @@ class _ShelterMapState extends State<ShelterMap> {
         'watched-points',
       ], null);
       if (contextHits.isNotEmpty && mounted) {
-        final hitEventIds = <String>{};
+        final renderedEventIds = <String>{};
         final hitEventPoints = <String>{};
         String? locationId;
         for (final rawHit in contextHits) {
@@ -1460,37 +1466,40 @@ class _ShelterMapState extends State<ShelterMap> {
           );
           final eventId = properties['eventId']?.toString();
           if (eventId != null && eventId.isNotEmpty) {
-            hitEventIds.add(eventId);
+            renderedEventIds.add(eventId);
             final pointKey = featurePointKey(rawHit);
             if (pointKey != null) hitEventPoints.add(pointKey);
           }
           locationId ??= properties['locationId']?.toString();
         }
 
-        // Red and blue collision markers are intentionally shifted on screen,
-        // but still represent the same underlying map coordinate. If the user
-        // taps either one, include every event anchored at that coordinate so
-        // the first choice is always ALERT vs IMGW, never whichever circle
-        // happened to win MapLibre hit-testing.
-        if (hitEventPoints.isNotEmpty) {
-          for (final feature in contextEventFeatures(DateTime.now())) {
-            final pointKey = featurePointKey(feature);
-            if (pointKey == null || !hitEventPoints.contains(pointKey)) {
-              continue;
-            }
-            final properties = feature['properties'];
-            if (properties is! Map) continue;
-            final eventId = properties['eventId']?.toString();
-            if (eventId != null && eventId.isNotEmpty) {
+        final now = DateTime.now();
+        final hitEventIds = <String>{};
+        // Include both color layers at each tapped coordinate and use only
+        // current features, which may have changed since MapLibre drew them.
+        if (renderedEventIds.isNotEmpty) {
+          for (final feature in contextEventFeatures(now)) {
+            final eventId = feature['properties']['eventId'] as String;
+            if (renderedEventIds.contains(eventId) ||
+                hitEventPoints.contains(featurePointKey(feature))) {
               hitEventIds.add(eventId);
             }
           }
         }
 
-        final hitEvents = <SafetyEvent>[
-          for (final event in contextEvents)
-            if (hitEventIds.contains(event.id)) event,
-        ];
+        final hitEvents =
+            [
+              for (final event in contextEvents)
+                if (hitEventIds.remove(event.id)) event,
+            ]..sort((a, b) {
+              final priority = safetyEventPriority(
+                a,
+                now,
+              ).compareTo(safetyEventPriority(b, now));
+              return priority != 0
+                  ? priority
+                  : safetyEventTime(b).compareTo(safetyEventTime(a));
+            });
         if (hitEvents.length == 1) {
           widget.openEvent(hitEvents.single);
           return;

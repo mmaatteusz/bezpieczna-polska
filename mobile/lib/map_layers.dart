@@ -87,12 +87,22 @@ const Map<String, List<double>> mapRegionAnchors = {
 bool mapEventIsLive(SafetyEvent event, DateTime now) {
   if (event.data['lifecycle'] != 'ACTIVE' ||
       event.data['messageContext'] != 'ACTUAL' ||
-      event.data['verification'] == 'REFUTED') {
+      event.data['verification'] == 'REFUTED' ||
+      event.isRcbCancellationFromRso) {
     return false;
   }
+  final validFrom = DateTime.tryParse(
+    event.data['validFrom']?.toString() ?? '',
+  );
   final validTo = DateTime.tryParse(event.data['validTo']?.toString() ?? '');
-  return validTo == null || validTo.isAfter(now);
+  return (validFrom == null || !validFrom.isAfter(now)) &&
+      (validTo == null || validTo.isAfter(now));
 }
+
+final _hydrologicalDroughtTitle = RegExp(
+  r'\bsusza\s+hydrologiczna\b',
+  caseSensitive: false,
+);
 
 bool mapEventIsImgw(SafetyEvent event) => event.sources.any((source) {
   final id = source['id']?.toString();
@@ -175,6 +185,9 @@ List<Map<String, dynamic>> mapEventFeatures(
       },
     ];
   }
+
+  // Without a point from the source, a province pin would misplace the basin.
+  if (_hydrologicalDroughtTitle.hasMatch(event.title)) return const [];
 
   final terytCodes = mapEventTerytCodes(event);
   if (terytCodes.isNotEmpty) {

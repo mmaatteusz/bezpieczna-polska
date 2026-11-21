@@ -88,7 +88,31 @@ export class Store{
   return {previous,current:next} satisfies PushEventChange;
  }
  async applySync(events:Event[],health:Health){
-  await this.db.transaction(async db=>{const s=new Store(db),changes:PushEventChange[]=[];for(const e of events){const change=await s.putRecord(e);if(change)changes.push(change);}const current=await s.events();await s.reconcileIncidents(current);if(changes.length)await queuePushChanges(db,changes,current,await s.incidents());await s.setHealth(health);});
+  await this.db.transaction(async db=>{
+   const s=new Store(db),changes:PushEventChange[]=[];
+   for(const event of events){
+    const change=await s.putRecord(event);
+    if(change)changes.push(change);
+   }
+   const current=await s.events();
+   if(health.state==='HEALTHY'&&health.lastSuccess&&health.enabled!==false&&health.complete&&
+      health.sourceClass==='STATUS'&&health.absenceSemantics==='AUTHORITATIVE_EMPTY_SET'&&health.coverage==='ACTIVE_WARNINGS'){
+    const listed=new Set(events.map(event=>event.id));
+    for(const [index,event] of current.entries()){
+     if(listed.has(event.id)||event.reviewed||event.sources.length!==1||event.sources[0].id!==health.id||
+        (event.lifecycle!=='ACTIVE'&&event.lifecycle!=='SCHEDULED'))continue;
+     const expired=event.validTo!==null&&Date.parse(event.validTo)<=Date.parse(health.lastSuccess);
+     const change=await s.putRecord({
+      ...event,lifecycle:expired?'EXPIRED':'ENDED',validTo:expired?event.validTo:null,retrievedAt:health.lastSuccess,
+     },'adapter','No longer listed by the current official warnings feed');
+     // An omission updates history without issuing an all-clear notification.
+     if(change)current[index]=change.current;
+    }
+   }
+   await s.reconcileIncidents(current);
+   if(changes.length)await queuePushChanges(db,changes,current,await s.incidents());
+   await s.setHealth(health);
+  });
  }
  async applyShelterSync(items:Shelter[],health:Health){
   if(health.id!=='SHELTERS'||health.coverage!=='FACILITY_CATALOG'||!health.complete||!items.length||items.length!==health.itemCount||!health.sourceContentHash)throw new Error('SHELTER_INVALID_BATCH');
