@@ -22,8 +22,8 @@ import 'screens/dashboard_screen.dart';
 import 'screens/alerts_screen.dart';
 import 'screens/map_screen.dart';
 import 'screens/more_screen.dart';
+import 'ui/app_chrome.dart';
 import 'ui/app_theme.dart';
-import 'ui/brand.dart';
 import 'ui/brand_splash.dart';
 import 'ui/first_launch_onboarding.dart';
 
@@ -314,19 +314,27 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     });
   }
 
-  void loadSeen() {
+  String get _seenKey => 'seen:${widget.repository.api}';
+
+  Map<String, int> _readSeen(String key) {
     try {
-      seen = Map<String, int>.from(
-        jsonDecode(
-              widget.repository.prefs.getString(
-                    'seen:${widget.repository.api}:$region',
-                  ) ??
-                  '{}',
-            )
-            as Map,
+      return Map<String, int>.from(
+        jsonDecode(widget.repository.prefs.getString(key) ?? '{}') as Map,
       );
     } catch (_) {
-      seen = {};
+      return {};
+    }
+  }
+
+  void loadSeen() {
+    seen = {..._readSeen('$_seenKey:$region'), ..._readSeen(_seenKey)};
+  }
+
+  Future<void> _saveSeen() async {
+    try {
+      await widget.repository.prefs.setString(_seenKey, jsonEncode(seen));
+    } catch (_) {
+      debugPrint('Nie udało się zapisać przeczytanych alertów.');
     }
   }
 
@@ -778,28 +786,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: page == 0
-          ? const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                BrandMark(size: 36),
-                SizedBox(width: 10),
-                Text('Bezpieczna Polska'),
-              ],
-            )
-          : Text(['Bezpieczna Polska', 'Mapa', 'Alerty', 'Więcej'][page]),
-      actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: IconButton.filledTonal(
-            tooltip: 'Ustawienia',
-            onPressed: settings,
-            icon: const Icon(Icons.settings_outlined),
-          ),
-        ),
-      ],
-    ),
+    appBar: SafetyAppBar(page: page, onSettings: settings),
     body: SafeArea(
       child: IndexedStack(
         index: page,
@@ -821,6 +808,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             onOpenAlerts: () => _selectPage(2),
             onOpenSecurityLevels: openSecurityLevels,
             onOpenEvent: details,
+            readRevisions: seen,
           ),
           visitedPages.contains(1)
               ? SafetyMapScreen(
@@ -838,6 +826,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   events: events,
                   onOpenEvent: details,
                   onRefresh: startupSync,
+                  readRevisions: seen,
                 )
               : const SizedBox.shrink(),
           visitedPages.contains(3)
@@ -855,31 +844,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ],
       ),
     ),
-    bottomNavigationBar: NavigationBar(
+    bottomNavigationBar: SafetyTabBar(
       selectedIndex: page,
       onDestinationSelected: _selectPage,
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.shield_outlined),
-          selectedIcon: Icon(Icons.shield),
-          label: 'Start',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.map_outlined),
-          selectedIcon: Icon(Icons.map),
-          label: 'Mapa',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.campaign_outlined),
-          selectedIcon: Icon(Icons.campaign),
-          label: 'Alerty',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.more_horiz),
-          selectedIcon: Icon(Icons.more),
-          label: 'Więcej',
-        ),
-      ],
     ),
   );
 
@@ -1043,6 +1010,15 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   }
 
   void details(SafetyEvent e) {
+    final opened = {
+      for (final report in e.reports)
+        if (report.revision > (seen[report.id] ?? 0))
+          report.id: report.revision,
+    };
+    if (opened.isNotEmpty) {
+      setState(() => seen.addAll(opened));
+      unawaited(_saveSeen());
+    }
     Navigator.push(
       context,
       MaterialPageRoute<void>(

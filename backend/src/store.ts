@@ -81,14 +81,38 @@ export class Store{
   if(expectedRevision!==undefined&&(previous?.revision??0)!==expectedRevision)throw new Error('REVISION_CONFLICT');
   if(actor==='adapter'&&previous?.reviewed)return null;
   // Formatting changes in upstream HTML must not generate user-facing alerts.
-  const hash=(v:Event)=>{const {retrievedAt,revision,sourceContentHash,...stable}=v;if(stable.securityLevel){stable.securityLevel={...stable.securityLevel,isActive:false};if(stable.lifecycle!=='CANCELLED')stable.lifecycle='SCHEDULED';}return createHash('sha256').update(JSON.stringify(stable)).digest('hex');};
+  const hash=(v:Event)=>{const {retrievedAt,revision,sourceContentHash,adapterVersion,...stable}=v;if(stable.securityLevel){stable.securityLevel={...stable.securityLevel,isActive:false};if(stable.lifecycle!=='CANCELLED')stable.lifecycle='SCHEDULED';}return createHash('sha256').update(JSON.stringify(stable)).digest('hex');};
   if(previous&&hash(previous)===hash(e))return null;
   const next={...e,revision:(previous?.revision??0)+1};
   try{await this.db.run('INSERT INTO event_revisions(event_id,revision,payload,content_hash,actor,reason,recorded_at) VALUES(?,?,?,?,?,?,?)',[next.id,next.revision,JSON.stringify(next),hash(next),actor,reason,new Date().toISOString()]);}catch(err){if(err instanceof Error&&/unique|duplicate/i.test(err.message))throw new Error('REVISION_CONFLICT');throw err;}
   return {previous,current:next} satisfies PushEventChange;
  }
  async applySync(events:Event[],health:Health){
-  await this.db.transaction(async db=>{const s=new Store(db),changes:PushEventChange[]=[];for(const e of events){const change=await s.putRecord(e);if(change)changes.push(change);}const current=await s.events();await s.reconcileIncidents(current);if(changes.length)await queuePushChanges(db,changes,current,await s.incidents());await s.setHealth(health);});
+  await this.db.transaction(async db=>{
+   const s=new Store(db),changes:PushEventChange[]=[];
+   for(const event of events){
+    const change=await s.putRecord(event);
+    if(change)changes.push(change);
+   }
+   const current=await s.events();
+   if(health.state==='HEALTHY'&&health.lastSuccess&&health.enabled!==false&&health.complete&&
+      health.sourceClass==='STATUS'&&health.absenceSemantics==='AUTHORITATIVE_EMPTY_SET'&&health.coverage==='ACTIVE_WARNINGS'){
+    const listed=new Set(events.map(event=>event.id));
+    for(const [index,event] of current.entries()){
+     if(listed.has(event.id)||event.reviewed||event.sources.length!==1||event.sources[0].id!==health.id||
+        (event.lifecycle!=='ACTIVE'&&event.lifecycle!=='SCHEDULED'))continue;
+     const expired=event.validTo!==null&&Date.parse(event.validTo)<=Date.parse(health.lastSuccess);
+     const change=await s.putRecord({
+      ...event,lifecycle:expired?'EXPIRED':'ENDED',validTo:expired?event.validTo:null,retrievedAt:health.lastSuccess,
+     },'adapter','No longer listed by the current official warnings feed');
+     // An omission updates history without issuing an all-clear notification.
+     if(change)current[index]=change.current;
+    }
+   }
+   await s.reconcileIncidents(current);
+   if(changes.length)await queuePushChanges(db,changes,current,await s.incidents());
+   await s.setHealth(health);
+  });
  }
  async applyShelterSync(items:Shelter[],health:Health){
   if(health.id!=='SHELTERS'||health.coverage!=='FACILITY_CATALOG'||!health.complete||!items.length||items.length!==health.itemCount||!health.sourceContentHash)throw new Error('SHELTER_INVALID_BATCH');

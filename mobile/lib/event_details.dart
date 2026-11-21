@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'model.dart';
+import 'ui/safety_event_card.dart';
 
 class EventDetailsPage extends StatefulWidget {
   final SafetyEvent event;
@@ -77,35 +78,85 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
     return text.length > 220 ? '${text.substring(0, 220)}…' : text;
   }
 
-  Widget badge(BuildContext context, String text) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Text(text, style: Theme.of(context).textTheme.labelSmall),
-  );
-
   @override
   Widget build(BuildContext context) {
     final e = widget.event;
+    final instructions = e.instructions;
+    final theme = Theme.of(context);
+    final visual = safetyEventAppearance(context, e);
     return Scaffold(
       appBar: AppBar(title: const Text('Szczegóły komunikatu')),
       body: ListView(
-        padding: const EdgeInsets.all(22),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 26),
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [badge(context, e.badge), badge(context, e.provenance)],
+          Row(
+            children: [
+              Icon(visual.icon, size: 20, color: visual.accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${visual.label} · ${safetySourceLabel(e)}',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: visual.accent,
+                  ),
+                ),
+              ),
+            ],
           ),
-          if (e.sourceSummary != null) Text(e.sourceSummary!),
-          if (e.hasConflictingReports)
-            const Text(
-              'Źródła różnią się stanem lub obszarem. Zakończenie albo sprostowanie w jednym źródle nie unieważnia pozostałych komunikatów.',
+          const SizedBox(height: 8),
+          Text(e.title, style: theme.textTheme.headlineLarge),
+          const SizedBox(height: 8),
+          Text(
+            '${e.badge} · ${e.provenance}',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-          const SizedBox(height: 20),
-          Text(e.title, style: Theme.of(context).textTheme.headlineSmall),
+          ),
+          if (e.sourceSummary case final summary?)
+            Text(summary, style: theme.textTheme.bodySmall),
+          if (e.hasConflictingReports)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Źródła różnią się stanem lub obszarem. Sprawdź każdy komunikat źródłowy.',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+          if (instructions.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Card(
+              color: visual.fill,
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Zalecenia z komunikatu',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    for (final instruction in instructions)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 9),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.arrow_right_rounded,
+                              size: 18,
+                              color: visual.accent,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(child: SelectableText(instruction)),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           SelectableText(e.description),
           const SizedBox(height: 20),

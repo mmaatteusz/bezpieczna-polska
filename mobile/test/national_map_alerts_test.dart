@@ -1,5 +1,6 @@
 import 'package:bezpieczna_polska/map_layers.dart';
 import 'package:bezpieczna_polska/model.dart';
+import 'package:bezpieczna_polska/ui/safety_event_card.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 SafetyEvent eventFixture({
@@ -9,10 +10,11 @@ SafetyEvent eventFixture({
   double? longitude,
   DateTime? validTo,
   String sourceId = 'RCB',
+  String title = 'Alert testowy',
 }) {
   return SafetyEvent({
     'id': id,
-    'title': 'Alert testowy',
+    'title': title,
     'description': 'Test mapy.',
     'revision': 1,
     'regions': regions,
@@ -276,6 +278,63 @@ void main() {
       mapEventVisibleForLayers(imgw, showEvents: false, showImgw: true),
       isTrue,
     );
+  });
+
+  test('drought notices without a point stay active without province pins', () {
+    const titles = {
+      'WCZK-18': 'Ostrzeżenie hydrologiczne:Susza hydrologiczna - stopień 1',
+      'IMGW_HYDRO': 'IMGW: Susza hydrologiczna',
+      'RSO': 'SUSZA HYDROLOGICZNA - Wisła',
+    };
+    for (final entry in titles.entries) {
+      final event = SafetyEvent({
+        ...eventFixture(
+          id: '${entry.key}-drought',
+          regions: ['18', '26'],
+          title: entry.value,
+          sourceId: entry.key,
+          validTo: entry.key == 'WCZK-18' ? null : DateTime.utc(9999, 12, 31),
+        ).data,
+        'locationText': 'Wisła od ujścia Wisłoki do Sanu',
+        'areaPrecision': 'PROVINCE_SUBSET',
+      });
+
+      expect(safetyEventIsActive(event, now), isTrue);
+      expect(mapEventFeatures(event, now), isEmpty);
+    }
+  });
+
+  test('drought notice keeps the point supplied by the source', () {
+    final event = eventFixture(
+      id: 'rso-drought-point',
+      regions: ['04'],
+      latitude: 53.3,
+      longitude: 17.9,
+      title: 'Susza hydrologiczna',
+      sourceId: 'RSO',
+      validTo: now.add(const Duration(days: 1)),
+    );
+    final feature = mapEventFeatures(event, now).single;
+    expect(feature['geometry']['coordinates'], [17.9, 53.3]);
+  });
+
+  test('future event with a cached active status has no marker yet', () {
+    final event = SafetyEvent({
+      ...eventFixture(id: 'future-event', regions: ['04']).data,
+      'validFrom': now.add(const Duration(hours: 1)).toIso8601String(),
+    });
+    expect(mapEventFeatures(event, now), isEmpty);
+  });
+
+  test('RCB cancellation from older RSO snapshots has no marker', () {
+    final event = eventFixture(
+      id: 'rso-cancellation',
+      regions: ['04'],
+      title: 'ALERT RCB: odwołanie zagrożenia',
+      sourceId: 'RSO',
+      validTo: now.add(const Duration(days: 1)),
+    );
+    expect(mapEventFeatures(event, now), isEmpty);
   });
 
   test('expired event is not rendered on overview map', () {

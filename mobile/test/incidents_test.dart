@@ -139,10 +139,10 @@ void main() {
       );
       await tester.pumpWidget(SafetyApp(repository: repo));
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.campaign_outlined).last);
+      await tester.tap(find.widgetWithText(NavigationDestination, 'Alerty'));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-        find.text('NIEZALEŻNE ŹRÓDŁA: 2'),
+        find.textContaining('Niezależne źródła: 2'),
         200,
         scrollable: find
             .descendant(
@@ -151,7 +151,7 @@ void main() {
             )
             .first,
       );
-      expect(find.text('NIEZALEŻNE ŹRÓDŁA: 2'), findsOneWidget);
+      expect(find.textContaining('Niezależne źródła: 2'), findsOneWidget);
       expect(find.text('Powódź — fixture'), findsOneWidget);
       await tester.pumpWidget(
         MaterialApp(

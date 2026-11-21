@@ -71,11 +71,31 @@ const regions = <String, String>{
 };
 
 class SafetyEvent {
+  static final _rcbTitle = RegExp(r'^alert\s+rcb\b', caseSensitive: false);
+  static final _rcbCancellationTitle = RegExp(
+    r'^alert\s+rcb[\s\-–—:/]*(?:zakończenie|odwołanie)(?=[\s.!:]|$)',
+    caseSensitive: false,
+  );
+  static final _rcbCancellationLead = RegExp(
+    r'^[\s„"“]*(?:uwaga[!.]\s*)*(?:odwołano zagrożenie|zakończył się atak powietrzny)\b',
+    caseSensitive: false,
+  );
+
   final Map<String, dynamic> data;
   SafetyEvent(this.data);
   String get id => data['id'] as String;
   String get title => data['title'] as String;
   String get description => data['description'] as String;
+  List<String> get instructions {
+    final raw = data['instructions'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<String>()
+        .map((instruction) => instruction.trim())
+        .where((instruction) => instruction.isNotEmpty)
+        .toList();
+  }
+
   int get revision =>
       (data['_incident'] as Map?)?['revision'] as int? ??
       data['revision'] as int;
@@ -99,6 +119,11 @@ class SafetyEvent {
 
   bool get isRcb => sources.any((s) => s['id'] == 'RCB');
   bool get isRso => sources.any((s) => s['id'] == 'RSO');
+  bool get isRcbCancellationFromRso =>
+      _rcbTitle.hasMatch(title) &&
+      (data['sources'] as List).any((source) => source['id'] == 'RSO') &&
+      (_rcbCancellationTitle.hasMatch(title) ||
+          _rcbCancellationLead.hasMatch(description));
   bool get hasPoint => data['latitude'] is num && data['longitude'] is num;
   String get provenance => sources.any((s) => s['tier'] == 1 || s['tier'] == 2)
       ? 'ŹRÓDŁO OFICJALNE'
@@ -107,6 +132,7 @@ class SafetyEvent {
     if (data['verification'] == 'REFUTED') return 'INFORMACJA ZDEMENTOWANA';
     if (data['messageContext'] == 'EXERCISE') return 'ĆWICZENIA';
     if (data['messageContext'] == 'TEST') return 'TEST';
+    if (isRcbCancellationFromRso) return 'ZAKOŃCZONE';
     final end = DateTime.tryParse(data['validTo']?.toString() ?? '');
     if (data['lifecycle'] == 'EXPIRED' ||
         (data['lifecycle'] == 'ACTIVE' &&

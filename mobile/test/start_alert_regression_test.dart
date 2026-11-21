@@ -56,6 +56,107 @@ void main() {
     expect(first, isNot('PL'));
   });
 
+  test(
+    'RCB highlights publication and content revisions rather than retrieval',
+    () {
+      final now = DateTime(2026, 11, 20, 14);
+      final event = warning(id: 'rcb', sourceId: 'RCB');
+      event.data.addAll({
+        'lifecycle': 'UNKNOWN',
+        'publishedAt': null,
+        'publicationDate': '2026-11-20',
+        'validTo': null,
+        'retrievedAt': now.toIso8601String(),
+      });
+      expect(safetyEventTimeLabel(event, now), 'Publikacja 20.11.2026');
+      expect(safetyEventNews(event, {}, now)?.label, 'Nowe');
+      expect(safetyEventNews(event, {'rcb': 1}, now), isNull);
+
+      event.data['publicationDate'] = '2026-11-17';
+      expect(safetyEventNews(event, {}, now), isNull);
+      event.data['revision'] = 2;
+      expect(safetyEventNews(event, {'rcb': 1}, now)?.label, 'Aktualizacja');
+      expect(safetyEventNews(event, {'rcb': 2}, now), isNull);
+      event.data['lifecycle'] = 'CANCELLED';
+      expect(safetyEventNews(event, {'rcb': 1}, now), isNull);
+    },
+  );
+
+  test(
+    'an RCB cancellation copied by RSO is historical before its display end',
+    () {
+      final event = warning(
+        id: 'rsocancel',
+        title: 'ALERT RCB / SPO-13',
+        description: 'UWAGA! Odwołano zagrożenie atakiem z powietrza.',
+        validTo: '2099-01-01T00:00:00Z',
+      );
+      expect(event.badge, 'ZAKOŃCZONE');
+      expect(safetyEventIsHistorical(event), isTrue);
+      expect(safetyEventIsActive(event), isFalse);
+
+      event.data['description'] =
+          'UWAGA! Oczekuj informacji o odwołaniu zagrożenia.';
+      expect(safetyEventIsActive(event), isTrue);
+    },
+  );
+
+  testWidgets(
+    'new RCB alert across provinces appears once and stays listed after opening',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final current = warning(
+        id: 'new-rcb',
+        title: 'Nowy alert RCB',
+        validTo: '2099-01-01T00:00:00Z',
+        regions: const ['06', '18'],
+        sourceId: 'RCB',
+      );
+      current.data['publishedAt'] = DateTime.now()
+          .subtract(const Duration(minutes: 10))
+          .toIso8601String();
+      final older = warning(
+        id: 'old-rcb',
+        title: 'Starszy alert RCB',
+        validTo: '2099-01-01T00:00:00Z',
+        regions: const ['06', '18'],
+        sourceId: 'RCB',
+      );
+      final read = <String, int>{};
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, state) => AlertsScreen(
+                events: [older, current],
+                readRevisions: read,
+                onOpenEvent: (e) => state(() => read[e.id] = e.revision),
+                onRefresh: () async {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Nowe komunikaty'), findsOneWidget);
+      expect(find.text('Nowy alert RCB'), findsOneWidget);
+      expect(find.textContaining('Nowe ·'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('Nowy alert RCB')).dy,
+        lessThan(tester.getTopLeft(find.text('Starszy alert RCB')).dy),
+      );
+      await tester.tap(find.text('Nowy alert RCB'));
+      await tester.pumpAndSettle();
+      expect(find.text('Nowe komunikaty'), findsNothing);
+      expect(find.text('Nowy alert RCB'), findsOneWidget);
+      expect(find.text('Kilka województw'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'Alerts renders voivodeship sections without duplicating multi-region cards',
     (tester) async {
@@ -228,6 +329,59 @@ void main() {
       safetyEventTimeLabel(event, DateTime.utc(2026, 9, 25)),
       'Obowiązuje do odwołania',
     );
+  });
+
+  test('fractional seconds in validity time keep the real end date', () {
+    final event = warning(
+      id: 'fractional-end',
+      validTo: '2026-09-26T18:00:00.456789Z',
+    );
+
+    expect(safetyEventHasOpenEndedValidity(event), isFalse);
+    expect(
+      safetyEventTimeLabel(event, DateTime.utc(2026, 9, 25)),
+      startsWith('Ważne do '),
+    );
+  });
+
+  testWidgets('search stays applied when alert filters are collapsed', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AlertsScreen(
+            events: [
+              warning(id: 'storm', validTo: '2099-09-26T18:00:00Z'),
+              warning(
+                id: 'heat',
+                title: 'Upał',
+                validTo: '2099-09-26T18:00:00Z',
+              ),
+            ],
+            onOpenEvent: (_) {},
+            onRefresh: () async {},
+          ),
+        ),
+      ),
+    );
+    final filters = find.text('Filtry i wyszukiwanie');
+    await tester.tap(filters);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'silne burze');
+    await tester.tap(filters);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Silne burze'), findsOneWidget);
+    expect(find.text('Upał'), findsNothing);
+
+    await tester.tap(filters);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Wyczyść wyszukiwanie'));
+    await tester.tap(filters);
+    await tester.pumpAndSettle();
+    expect(find.text('Upał'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('warning card never exposes technical year 99999', (

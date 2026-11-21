@@ -214,6 +214,41 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final now = DateTime.utc(2026, 9, 22, 12);
 
+  test('NEPTUN map markers keep stable positions across status refreshes', () {
+    final initial = NeptunData.parse(fixture(now));
+    final refreshed = NeptunData.parse(
+      fixture(now.add(const Duration(seconds: 5))),
+    );
+    final markers = neptunLiveMarkerFeatures(initial);
+    expect(neptunLiveMarkerFeatures(refreshed), markers);
+    expect(markers.single['geometry']['coordinates'], [31.2, 49.1]);
+    expect(markers.single['properties']['pulse'], isTrue);
+
+    for (final override in [
+      {'status': 'stale'},
+      {'advisory': true},
+    ]) {
+      final input = fixture(now);
+      (input['live']['threats'][0] as Map).addAll(override);
+      final feature = neptunLiveMarkerFeatures(NeptunData.parse(input)).single;
+      expect(feature['geometry'], markers.single['geometry']);
+      expect(feature['properties']['pulse'], isFalse);
+    }
+  });
+
+  test('NEPTUN pulse expands and fades within a fixed ring', () {
+    final start = neptunMarkerPulse(Duration.zero);
+    final peak = neptunMarkerPulse(const Duration(milliseconds: 320));
+    final fading = neptunMarkerPulse(const Duration(milliseconds: 1800));
+    final next = neptunMarkerPulse(const Duration(milliseconds: 2800));
+    expect(start.opacity, 0);
+    expect(peak.opacity, greaterThan(0.35));
+    expect(fading.radius, greaterThan(peak.radius));
+    expect(fading.radius, lessThan(25));
+    expect(fading.opacity, lessThan(peak.opacity));
+    expect(next, start);
+  });
+
   test(
     'NEPTUN parser accepts live coarse threats and historical coarse tracks',
     () {

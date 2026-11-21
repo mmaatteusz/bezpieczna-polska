@@ -27,6 +27,26 @@ test('body update explicitly ending danger closes the original RCB warning',()=>
  assert.equal(e.lifecycle,'CANCELLED');assert.equal(e.officialWarning,false);assert.equal(e.severity,'INFORMATIONAL');
  assert.match(e.correction??'',/Brak zagrożenia/);
 });
+test('the newest RCB update can issue a warning again after an older cancellation',()=>{
+ const updated=html.replace(
+  '<div><p>"UWAGA!',
+  '<div><p>Aktualizacja - g. 08:58</p><p>UWAGA! Ogłoszono ponowne ostrzeżenie.</p><p>Aktualizacja - g. 07:30</p><p>UWAGA! Odwołano zagrożenie atakiem z powietrza.</p><p>"UWAGA!'
+ );
+ const e=parseRcbArticle(updated,url,now);
+ assert.equal(e.lifecycle,'UNKNOWN');
+ assert.equal(e.officialWarning,true);
+ assert.equal(e.correction,null);
+});
+test('updating adapter metadata alone does not produce a new alert revision',async()=>{
+ const db=openDb(undefined,':memory:'),store=new Store(db);
+ try{
+  await store.init();
+  const event=item();
+  assert.equal(await store.put(event),true);
+  assert.equal(await store.put({...event,adapterVersion:'updated-parser'}),false);
+  assert.equal((await store.get(event.id))?.revision,1);
+ }finally{await db.close();}
+});
 test('county opolski in Lubelskie must not become province Opolskie',()=>{
  const text=html.replace('woj. podkarpackiego i lubelskiego','powiatów chełmskiego i opolskiego (woj. lubelskie)');
  assert.deepEqual(parseRcbArticle(text,url,now).regions,['06']);

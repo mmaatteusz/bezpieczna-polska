@@ -5,17 +5,20 @@ import '../ui/safety_event_card.dart';
 
 const _multiRegionKey = '__MULTI_REGION__';
 const _otherRegionKey = '__OTHER_REGION__';
+const _recentKey = '__RECENT__';
 
 class AlertsScreen extends StatefulWidget {
   final List<SafetyEvent> events;
   final void Function(SafetyEvent) onOpenEvent;
   final Future<void> Function() onRefresh;
+  final Map<String, int> readRevisions;
 
   const AlertsScreen({
     super.key,
     required this.events,
     required this.onOpenEvent,
     required this.onRefresh,
+    this.readRevisions = const {},
   });
 
   @override
@@ -26,18 +29,20 @@ class _AlertDisplayItem {
   final SafetyEvent event;
   final int groupedCount;
   final List<String> areas;
+  final ({String label, DateTime time})? news;
 
   const _AlertDisplayItem({
     required this.event,
     required this.groupedCount,
     required this.areas,
+    required this.news,
   });
 }
 
 class _AlertRegionSection {
   final String key;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final List<_AlertDisplayItem> items;
 
   const _AlertRegionSection({
@@ -72,7 +77,15 @@ String alertRegionBucketForDisplay(Iterable<String> rawAreas) {
 }
 
 class _AlertsScreenState extends State<AlertsScreen> {
-  String query = '';
+  final _search = TextEditingController();
+  String get query => _search.text;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
   String lifecycle = 'Aktywne';
   String category = 'Wszystkie';
 
@@ -121,25 +134,36 @@ class _AlertsScreenState extends State<AlertsScreen> {
     return text.contains(needle);
   }
 
-  bool _matchesLifecycle(SafetyEvent event) => switch (lifecycle) {
-    'Aktywne' => safetyEventIsActive(event),
-    'Zakończone' => safetyEventIsHistorical(event),
-    _ => true,
-  };
+  bool _matchesLifecycle(SafetyEvent event, DateTime now) =>
+      switch (lifecycle) {
+        'Aktywne' => safetyEventIsActive(event, now),
+        'Zakończone' => safetyEventIsHistorical(event, now),
+        _ => true,
+      };
 
   int _sortItems(_AlertDisplayItem a, _AlertDisplayItem b) {
     final severity = safetyEventPriority(
       a.event,
     ).compareTo(safetyEventPriority(b.event));
     if (severity != 0) return severity;
+    if (a.news != null && b.news != null) {
+      return b.news!.time.compareTo(a.news!.time);
+    }
     return safetyEventTime(b.event).compareTo(safetyEventTime(a.event));
   }
 
   List<_AlertDisplayItem> _displayItems() {
-    final filtered = widget.events
-        .where(_matchesTextAndCategory)
-        .where(_matchesLifecycle)
-        .toList();
+    final now = DateTime.now();
+    final newsByEvent = <SafetyEvent, ({String label, DateTime time})>{};
+    final filtered = <SafetyEvent>[];
+    for (final event in widget.events.where(_matchesTextAndCategory)) {
+      final news = safetyEventNews(event, widget.readRevisions, now);
+      if (_matchesLifecycle(event, now) ||
+          (lifecycle == 'Aktywne' && news != null)) {
+        filtered.add(event);
+        if (news != null) newsByEvent[event] = news;
+      }
+    }
 
     final grouped = groupSafetyEventsForDashboard(filtered);
     return grouped
@@ -148,6 +172,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
             event: group.primary,
             groupedCount: group.count,
             areas: alertRegionCodesForDisplay(group.areas),
+            news: newsByEvent[group.primary],
           ),
         )
         .toList();
@@ -157,7 +182,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
     final buckets = <String, List<_AlertDisplayItem>>{};
 
     for (final item in items) {
-      final key = alertRegionBucketForDisplay(item.areas);
+      final key = item.news == null
+          ? alertRegionBucketForDisplay(item.areas)
+          : _recentKey;
       buckets.putIfAbsent(key, () => <_AlertDisplayItem>[]).add(item);
     }
     for (final bucket in buckets.values) {
@@ -166,7 +193,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
     final sections = <_AlertRegionSection>[];
 
-    void addSection(String key, String title, String subtitle) {
+    void addSection(String key, String title, [String? subtitle]) {
       final bucket = buckets[key];
       if (bucket == null || bucket.isEmpty) return;
       sections.add(
@@ -179,11 +206,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
       );
     }
 
-    addSection(
-      'PL',
-      'Cała Polska',
-      'Komunikaty obowiązujące na poziomie ogólnokrajowym.',
-    );
+    addSection(_recentKey, 'Nowe komunikaty');
+    addSection('PL', 'Cała Polska');
 
     final provinceKeys =
         buckets.keys
@@ -191,14 +215,10 @@ class _AlertsScreenState extends State<AlertsScreen> {
             .toList()
           ..sort((a, b) => (regions[a] ?? a).compareTo(regions[b] ?? b));
     for (final key in provinceKeys) {
-      addSection(key, regions[key]!, 'Alerty przypisane do tego województwa.');
+      addSection(key, regions[key]!);
     }
 
-    addSection(
-      _multiRegionKey,
-      'Kilka województw',
-      'Jeden komunikat obejmuje więcej niż jedno województwo — nie jest powielany na liście.',
-    );
+    addSection(_multiRegionKey, 'Kilka województw');
     addSection(
       _otherRegionKey,
       'Obszar nieustalony',
@@ -212,47 +232,35 @@ class _AlertsScreenState extends State<AlertsScreen> {
     final entries = <WidgetBuilder>[
       (context) => Padding(
         key: ValueKey('alert-region-${section.key}'),
-        padding: const EdgeInsets.only(top: 18, bottom: 8),
-        child: Row(
+        padding: const EdgeInsets.only(top: 17, bottom: 8),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.only(top: 1),
-              child: Icon(Icons.location_on_outlined, size: 23),
-            ),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
                     section.title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    section.subtitle,
-                    style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${section.items.length}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
-                ],
-              ),
+                  semanticsLabel: 'Liczba komunikatów: ${section.items.length}',
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(999),
+            if (section.subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                section.subtitle!,
+                style: Theme.of(context).textTheme.bodySmall,
               ),
-              child: Text(
-                '${section.items.length}',
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
-            ),
+            ],
           ],
         ),
       ),
@@ -265,6 +273,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
           event: item.event,
           groupedCount: item.groupedCount,
           areaOverride: item.areas,
+          newsLabel: item.news?.label,
           onTap: () => widget.onOpenEvent(item.event),
         ),
       );
@@ -273,167 +282,121 @@ class _AlertsScreenState extends State<AlertsScreen> {
     return entries;
   }
 
-  Future<void> _openSearch() async {
-    final controller = TextEditingController(text: query);
-    final value = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Szukaj w alertach'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textInputAction: TextInputAction.search,
-          decoration: const InputDecoration(
-            hintText: 'Tytuł, opis, źródło albo województwo',
-            prefixIcon: Icon(Icons.search),
-            border: OutlineInputBorder(),
-          ),
-          onSubmitted: (text) => Navigator.pop(dialogContext, text),
+  Widget _filters(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        key: const PageStorageKey('alert-filters'),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+        leading: const Icon(Icons.tune_rounded),
+        title: const Text('Filtry i wyszukiwanie'),
+        subtitle: Text(
+          [
+            lifecycle,
+            if (category != 'Wszystkie') category,
+            if (query.trim().isNotEmpty) '„${query.trim()}”',
+          ].join(' · '),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Anuluj'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Szukaj'),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                key: const PageStorageKey('alerts-search'),
+                controller: _search,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  labelText: 'Szukaj w alertach',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Wyczyść wyszukiwanie',
+                          onPressed: () => setState(_search.clear),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 7,
+                children: [
+                  for (final value in const [
+                    'Aktywne',
+                    'Wszystkie',
+                    'Zakończone',
+                  ])
+                    ChoiceChip(
+                      label: Text(value),
+                      selected: lifecycle == value,
+                      showCheckmark: false,
+                      selectedColor: theme.colorScheme.primaryContainer,
+                      onSelected: (_) => setState(() => lifecycle = value),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Divider(),
+              const SizedBox(height: 8),
+              Text('Kategoria', style: theme.textTheme.labelLarge),
+              Wrap(
+                spacing: 7,
+                children: [
+                  for (final value in const [
+                    'Wszystkie',
+                    'Pogoda',
+                    'Bezpieczeństwo',
+                    'Cyber',
+                    'Granica',
+                    'Inne',
+                  ])
+                    FilterChip(
+                      label: Text(value),
+                      selected: category == value,
+                      onSelected: (_) => setState(() => category = value),
+                    ),
+                ],
+              ),
+            ],
           ),
         ],
       ),
     );
-    controller.dispose();
-    if (value != null && mounted) {
-      setState(() => query = value.trim());
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final items = _displayItems();
     final sections = _regionSections(items);
-    final affectedProvinces = <String>{};
-    for (final item in items) {
-      affectedProvinces.addAll(
-        item.areas.where((code) => code != 'PL' && regions.containsKey(code)),
-      );
-    }
-    final affectedProvinceCount = affectedProvinces.length;
+    final theme = Theme.of(context);
+    final affectedProvinces = {
+      for (final item in items)
+        ...item.areas.where(
+          (code) => code != 'PL' && regions.containsKey(code),
+        ),
+    };
 
     final entries = <WidgetBuilder>[
-      (context) => Row(
-        children: [
-          Expanded(
-            child: Text(
-              'Alerty',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-            ),
-          ),
-          IconButton(
-            tooltip: 'Szukaj w alertach',
-            onPressed: _openSearch,
-            icon: const Icon(Icons.search_rounded),
-          ),
-        ],
-      ),
-      (context) => Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Text(
-          'Komunikaty są uporządkowane według województw, a nie według sztucznego rankingu ważności.',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-      ),
-      (context) => Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: Card(
-          elevation: 0,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Filtry i wyszukiwanie',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 9),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: ['Aktywne', 'Wszystkie', 'Zakończone']
-                      .map(
-                        (value) => ChoiceChip(
-                          label: Text(value),
-                          selected: lifecycle == value,
-                          onSelected: (_) => setState(() => lifecycle = value),
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 9),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children:
-                      [
-                            'Wszystkie',
-                            'Pogoda',
-                            'Bezpieczeństwo',
-                            'Cyber',
-                            'Granica',
-                            'Inne',
-                          ]
-                          .map(
-                            (value) => FilterChip(
-                              label: Text(value),
-                              selected: category == value,
-                              onSelected: (_) =>
-                                  setState(() => category = value),
-                            ),
-                          )
-                          .toList(),
-                ),
-                if (query.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.search, size: 18),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'Szukasz: $query',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Wyczyść wyszukiwanie',
-                        onPressed: () => setState(() => query = ''),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
+      _filters,
+      if (items.isNotEmpty)
+        (context) => Padding(
+          padding: const EdgeInsets.only(top: 16, bottom: 12),
+          child: Text(
+            'Komunikaty: ${items.length}'
+            '${affectedProvinces.isEmpty ? '' : ' · Województwa: ${affectedProvinces.length}'}',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ),
-      ),
-      (context) => Padding(
-        padding: const EdgeInsets.only(top: 10),
-        child: Text(
-          items.isEmpty
-              ? 'Brak komunikatów w wybranym widoku'
-              : '${items.length} komunikatów • $affectedProvinceCount województw',
-          style: Theme.of(
-            context,
-          ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-        ),
-      ),
     ];
 
     if (items.isEmpty) {
@@ -441,8 +404,10 @@ class _AlertsScreenState extends State<AlertsScreen> {
         (context) => const Padding(
           padding: EdgeInsets.only(top: 14),
           child: Card(
+            margin: EdgeInsets.zero,
             child: ListTile(
-              leading: Icon(Icons.notifications_none_outlined),
+              contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              leading: Icon(Icons.notifications_none_rounded),
               title: Text('Brak alertów dla wybranego widoku'),
               subtitle: Text('Zmień filtry albo wyszukiwane hasło.'),
             ),
@@ -455,13 +420,20 @@ class _AlertsScreenState extends State<AlertsScreen> {
       }
     }
 
-    return RefreshIndicator(
-      onRefresh: widget.onRefresh,
-      child: ListView.builder(
-        key: const PageStorageKey('alerts-by-region'),
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 26),
-        itemCount: entries.length,
-        itemBuilder: (context, index) => entries[index](context),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: RefreshIndicator(
+          onRefresh: widget.onRefresh,
+          child: ListView.builder(
+            key: const PageStorageKey('alerts-by-region'),
+            physics: const AlwaysScrollableScrollPhysics(),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+            itemCount: entries.length,
+            itemBuilder: (context, index) => entries[index](context),
+          ),
+        ),
       ),
     );
   }

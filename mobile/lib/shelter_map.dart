@@ -15,6 +15,7 @@ import 'map_render_queue.dart';
 import 'model.dart';
 import 'shelters.dart';
 import 'shelter_markers.dart';
+import 'ui/safety_event_card.dart';
 
 class _MapLegend extends StatelessWidget {
   final bool showAlerts;
@@ -1336,8 +1337,6 @@ class _ShelterMapState extends State<ShelterMap> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title, style: Theme.of(sheetContext).textTheme.titleLarge),
-              const SizedBox(height: 4),
-              const Text('Wybierz konkretną pozycję do otwarcia.'),
               const SizedBox(height: 12),
               for (final event in events)
                 ListTile(
@@ -1352,11 +1351,18 @@ class _ShelterMapState extends State<ShelterMap> {
                   ),
                   title: Text(event.title),
                   subtitle: Text(
-                    mapEventIsImgw(event)
-                        ? 'Ostrzeżenie IMGW'
-                        : event.isRcb
-                        ? 'Alert RCB'
-                        : 'Alert lub komunikat',
+                    [
+                      safetySourceLabel(event),
+                      if (event.data['locationText'] case final String area
+                          when area.trim().isNotEmpty &&
+                              mapEventTerytCodes(event).isEmpty)
+                        area.trim()
+                      else if (event.areas.isNotEmpty)
+                        event.areas
+                            .map((code) => regions[code] ?? code)
+                            .join(', '),
+                      safetyEventTimeLabel(event),
+                    ].join('\n'),
                   ),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
@@ -1450,7 +1456,7 @@ class _ShelterMapState extends State<ShelterMap> {
         'watched-points',
       ], null);
       if (contextHits.isNotEmpty && mounted) {
-        final hitEventIds = <String>{};
+        final renderedEventIds = <String>{};
         final hitEventPoints = <String>{};
         String? locationId;
         for (final rawHit in contextHits) {
@@ -1460,37 +1466,40 @@ class _ShelterMapState extends State<ShelterMap> {
           );
           final eventId = properties['eventId']?.toString();
           if (eventId != null && eventId.isNotEmpty) {
-            hitEventIds.add(eventId);
+            renderedEventIds.add(eventId);
             final pointKey = featurePointKey(rawHit);
             if (pointKey != null) hitEventPoints.add(pointKey);
           }
           locationId ??= properties['locationId']?.toString();
         }
 
-        // Red and blue collision markers are intentionally shifted on screen,
-        // but still represent the same underlying map coordinate. If the user
-        // taps either one, include every event anchored at that coordinate so
-        // the first choice is always ALERT vs IMGW, never whichever circle
-        // happened to win MapLibre hit-testing.
-        if (hitEventPoints.isNotEmpty) {
-          for (final feature in contextEventFeatures(DateTime.now())) {
-            final pointKey = featurePointKey(feature);
-            if (pointKey == null || !hitEventPoints.contains(pointKey)) {
-              continue;
-            }
-            final properties = feature['properties'];
-            if (properties is! Map) continue;
-            final eventId = properties['eventId']?.toString();
-            if (eventId != null && eventId.isNotEmpty) {
+        final now = DateTime.now();
+        final hitEventIds = <String>{};
+        // Include both color layers at each tapped coordinate and use only
+        // current features, which may have changed since MapLibre drew them.
+        if (renderedEventIds.isNotEmpty) {
+          for (final feature in contextEventFeatures(now)) {
+            final eventId = feature['properties']['eventId'] as String;
+            if (renderedEventIds.contains(eventId) ||
+                hitEventPoints.contains(featurePointKey(feature))) {
               hitEventIds.add(eventId);
             }
           }
         }
 
-        final hitEvents = <SafetyEvent>[
-          for (final event in contextEvents)
-            if (hitEventIds.contains(event.id)) event,
-        ];
+        final hitEvents =
+            [
+              for (final event in contextEvents)
+                if (hitEventIds.remove(event.id)) event,
+            ]..sort((a, b) {
+              final priority = safetyEventPriority(
+                a,
+                now,
+              ).compareTo(safetyEventPriority(b, now));
+              return priority != 0
+                  ? priority
+                  : safetyEventTime(b).compareTo(safetyEventTime(a));
+            });
         if (hitEvents.length == 1) {
           widget.openEvent(hitEvents.single);
           return;
@@ -1730,6 +1739,7 @@ class _ShelterMapState extends State<ShelterMap> {
   }
 
   Widget layerBar() {
+    final scheme = Theme.of(context).colorScheme;
     Widget chip(
       String label,
       Color color,
@@ -1740,10 +1750,10 @@ class _ShelterMapState extends State<ShelterMap> {
       selected: selected,
       showCheckmark: true,
       selectedColor: color.withValues(alpha: 0.22),
-      checkmarkColor: Theme.of(context).colorScheme.onSurface,
-      side: BorderSide(
-        color: selected ? color : Theme.of(context).colorScheme.outlineVariant,
-      ),
+      checkmarkColor: scheme.onSurface,
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+      side: BorderSide(color: selected ? color : scheme.outlineVariant),
       onSelected: onSelected,
     );
     return Row(
@@ -1753,7 +1763,7 @@ class _ShelterMapState extends State<ShelterMap> {
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              spacing: 8,
+              spacing: 6,
               children: [
                 chip('Alerty', const Color(0xffb3261e), showEvents, (value) {
                   setState(() => showEvents = value);
@@ -1780,7 +1790,7 @@ class _ShelterMapState extends State<ShelterMap> {
           ),
         ),
         const SizedBox(width: 8),
-        IconButton.filledTonal(
+        IconButton.outlined(
           tooltip: 'Opcje mapy',
           icon: const Icon(Icons.tune),
           onPressed: showLayers,
@@ -1881,6 +1891,17 @@ class _ShelterMapState extends State<ShelterMap> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    Widget mapControl(Widget child) => Material(
+      color: scheme.surfaceContainerLowest,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+
     final fresh = online && viewport?.freshAt(DateTime.now()) == true;
     final showMapLegend =
         legendAlertsVisible ||
@@ -1908,8 +1929,13 @@ class _ShelterMapState extends State<ShelterMap> {
           height: (MediaQuery.sizeOf(context).height * 0.62)
               .clamp(430.0, 620.0)
               .toDouble(),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
+          child: Material(
+            color: scheme.surfaceContainerLow,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: scheme.outlineVariant),
+            ),
+            clipBehavior: Clip.antiAlias,
             child: Stack(
               children: [
                 MapLibreMap(
@@ -1948,51 +1974,61 @@ class _ShelterMapState extends State<ShelterMap> {
                   featureTapsTriggersMapClick: true,
                 ),
                 Positioned(
-                  right: 8,
-                  top: 8,
+                  right: 10,
+                  top: 10,
                   child: Column(
                     children: [
-                      IconButton.filledTonal(
-                        tooltip: 'Przybliż',
-                        onPressed: () => zoom(1),
-                        icon: const Icon(Icons.add),
+                      mapControl(
+                        Column(
+                          children: [
+                            IconButton(
+                              tooltip: 'Przybliż',
+                              onPressed: () => zoom(1),
+                              icon: const Icon(Icons.add),
+                            ),
+                            SizedBox(
+                              width: 44,
+                              child: Divider(color: scheme.outlineVariant),
+                            ),
+                            IconButton(
+                              tooltip: 'Oddal',
+                              onPressed: () => zoom(-1),
+                              icon: const Icon(Icons.remove),
+                            ),
+                          ],
+                        ),
                       ),
-                      IconButton.filledTonal(
-                        tooltip: 'Oddal',
-                        onPressed: () => zoom(-1),
-                        icon: const Icon(Icons.remove),
-                      ),
+                      if (!widget.ukraine) ...[
+                        const SizedBox(height: 8),
+                        mapControl(
+                          IconButton(
+                            tooltip: 'Pokaż moją lokalizację',
+                            onPressed: locating ? null : locateUser,
+                            icon: locating
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.my_location),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
                 if (!widget.ukraine)
                   Positioned(
-                    right: 8,
-                    top: 112,
-                    child: IconButton.filledTonal(
-                      tooltip: 'Pokaż moją lokalizację',
-                      onPressed: locating ? null : locateUser,
-                      icon: locating
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.my_location),
-                    ),
-                  ),
-                if (!widget.ukraine)
-                  Positioned(
-                    left: 8,
-                    top: 8,
-                    child: Column(
-                      children: [
-                        IconButton.filledTonal(
-                          tooltip: 'Wróć do wybranej miejscowości',
-                          onPressed: goHome,
-                          icon: const Icon(Icons.home_outlined),
-                        ),
-                      ],
+                    left: 10,
+                    top: 10,
+                    child: mapControl(
+                      IconButton(
+                        tooltip: 'Wróć do wybranej miejscowości',
+                        onPressed: goHome,
+                        icon: const Icon(Icons.home_outlined),
+                      ),
                     ),
                   ),
                 if (loading)
@@ -2032,107 +2068,86 @@ class _ShelterMapState extends State<ShelterMap> {
         ],
         if (!widget.ukraine) ...[
           const SizedBox(height: 10),
-          if (!showGpsInterference)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilterChip(
-                avatar: const Icon(Icons.satellite_alt_outlined),
-                label: const Text('Zakłócenia GPS/GNSS'),
-                selected: false,
-                onSelected: (value) =>
-                    unawaited(setGpsInterferenceVisible(value)),
-              ),
-            )
-          else
-            Card(
-              elevation: 0,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+          Card(
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SwitchListTile.adaptive(
+                  secondary: const Icon(Icons.satellite_alt_outlined),
+                  title: const Text('Zakłócenia GPS/GNSS'),
+                  subtitle: const Text('Dane dobowe GPSJAM'),
+                  value: showGpsInterference,
+                  onChanged: (value) =>
+                      unawaited(setGpsInterferenceVisible(value)),
+                ),
+                if (showGpsInterference) ...[
+                  const Divider(),
+                  if (gpsInterferenceLoading) const LinearProgressIndicator(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: FilterChip(
-                            avatar: const Icon(Icons.satellite_alt_outlined),
-                            label: Text(
-                              showGpsInterference
-                                  ? 'Zakłócenia GPS/GNSS — włączone'
-                                  : 'Zakłócenia GPS/GNSS',
-                            ),
-                            selected: showGpsInterference,
-                            onSelected: (value) {
-                              unawaited(setGpsInterferenceVisible(value));
-                            },
-                          ),
+                        Text(
+                          gpsInterference == null
+                              ? gpsInterferenceLoading
+                                    ? 'Ładowanie dobowej mapy zakłóceń…'
+                                    : 'Brak dobowych danych zakłóceń.'
+                              : 'Dane dobowe: ${gpsInterference!.dataDate} UTC',
+                          style: Theme.of(context).textTheme.labelLarge,
                         ),
-                        if (gpsInterferenceLoading)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 10),
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 6,
+                          children: [
+                            gpsLegend(const Color(0xff43a047), 'Niskie 0–2%'),
+                            gpsLegend(
+                              const Color(0xfffdd835),
+                              'Średnie >2–10%',
+                            ),
+                            gpsLegend(const Color(0xffe53935), 'Wysokie >10%'),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Mapa pokazuje obniżoną dokładność nawigacji zgłoszoną przez samoloty w ciągu doby. Przyczyna zakłóceń pozostaje nieustalona.',
+                        ),
+                        if (gpsInterferenceError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              'Warstwa chwilowo niedostępna: $gpsInterferenceError',
                             ),
                           ),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            TextButton.icon(
+                              onPressed: gpsInterferenceLoading
+                                  ? null
+                                  : () => unawaited(
+                                      refreshGpsInterferenceForCurrentViewport(),
+                                    ),
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Odśwież'),
+                            ),
+                            TextButton(
+                              onPressed: () =>
+                                  widget.openLink('https://gpsjam.org/faq'),
+                              child: const Text('GPSJAM'),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                    if (showGpsInterference) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        gpsInterference == null
-                            ? 'Ładowanie dobowej mapy zakłóceń…'
-                            : 'Dane dobowe: ${gpsInterference!.dataDate} UTC',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 7),
-                      Wrap(
-                        spacing: 14,
-                        runSpacing: 6,
-                        children: [
-                          gpsLegend(const Color(0xff43a047), 'Niskie 0–2%'),
-                          gpsLegend(const Color(0xfffdd835), 'Średnie >2–10%'),
-                          gpsLegend(const Color(0xffe53935), 'Wysokie >10%'),
-                        ],
-                      ),
-                      const SizedBox(height: 7),
-                      const Text(
-                        'Kolorowe heksy pokazują obszary, w których samoloty raportowały obniżoną dokładność nawigacji. Dane są agregowane dobowo i nie dowodzą celowego zagłuszania.',
-                      ),
-                      if (gpsInterferenceError != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            'Warstwa chwilowo niedostępna: $gpsInterferenceError',
-                          ),
-                        ),
-                      Row(
-                        children: [
-                          TextButton.icon(
-                            onPressed: gpsInterferenceLoading
-                                ? null
-                                : () => unawaited(
-                                    refreshGpsInterferenceForCurrentViewport(),
-                                  ),
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Odśwież'),
-                          ),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () =>
-                                widget.openLink('https://gpsjam.org/faq'),
-                            child: const Text('GPSJAM'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+                  ),
+                ],
+              ],
             ),
+          ),
         ],
         if (!widget.ukraine && showRadiation) ...[
           Text(
@@ -2143,7 +2158,7 @@ class _ShelterMapState extends State<ShelterMap> {
                   ).measurementText(DateTime.now(), currentRadiationOnline),
           ),
           const Text(
-            'Komunikaty PAA są dostępne w Statusie i Alert Center. Brak punktów na mapie nie oznacza braku zagrożenia.',
+            'Komunikaty PAA znajdziesz w zakładce Alerty. Brak punktów na mapie nie pozwala ocenić sytuacji radiacyjnej.',
           ),
           TextButton(
             onPressed: () =>
