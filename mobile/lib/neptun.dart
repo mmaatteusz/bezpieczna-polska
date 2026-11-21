@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'dart:math' show Point;
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import 'map_interaction.dart';
 import 'model.dart';
+import 'neptun_aviation.dart';
 import 'neptun_markers.dart';
 
 export 'neptun_markers.dart' show neptunIconPng, neptunMapIconId;
@@ -588,7 +590,12 @@ class _NeptunScreenState extends State<NeptunScreen> {
             if (loading) const LinearProgressIndicator(),
             if (error != null) Text(error!),
             if (widget.showMap && snapshot != null)
-              NeptunMap(data: snapshot!, animateLive: isLive),
+              NeptunMap(
+                data: snapshot!,
+                animateLive: isLive,
+                client: widget.repository.client,
+                openSource: widget.openSource,
+              ),
             const SizedBox(height: 8),
             TextButton.icon(
               onPressed: () => widget.openSource('https://neptun.in.ua/'),
@@ -637,8 +644,16 @@ class _NeptunScreenState extends State<NeptunScreen> {
 class NeptunMap extends StatefulWidget {
   final NeptunData data;
   final bool animateLive;
+  final http.Client? client;
+  final void Function(String)? openSource;
 
-  const NeptunMap({super.key, required this.data, this.animateLive = true});
+  const NeptunMap({
+    super.key,
+    required this.data,
+    this.animateLive = true,
+    this.client,
+    this.openSource,
+  });
 
   @override
   State<NeptunMap> createState() => _NeptunMapState();
@@ -659,6 +674,12 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
   bool _pulseVisible = false;
   Timer? _pulseTimer;
   final _pulseClock = Stopwatch();
+  final _visibleAviation = <NeptunAviationLayer>{};
+  final _aviationUpdates = <NeptunAviationLayer>{};
+  NeptunAviationData? _aviation;
+  NeptunTrafficReport? _traffic;
+  bool _trafficRequested = false;
+  bool _aviationUnavailable = false;
 
   @override
   void initState() {
@@ -886,6 +907,157 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
     _ => 'nieokreślona',
   };
 
+  Future<void> _toggleAviation(NeptunAviationLayer layer, bool visible) async {
+    final c = controller;
+    final aviation = _aviation;
+    final traffic = _traffic;
+    if (c == null ||
+        aviation == null ||
+        traffic == null ||
+        _aviationUpdates.contains(layer)) {
+      return;
+    }
+    setState(() => _aviationUpdates.add(layer));
+    try {
+      await c.setGeoJsonSource(
+        layer.sourceId,
+        visible ? aviation.features(layer, traffic) : neptunEmptyFeatures,
+      );
+      if (!mounted || controller != c || _aviation != aviation) return;
+      setState(() {
+        if (visible) {
+          _visibleAviation.add(layer);
+        } else {
+          _visibleAviation.remove(layer);
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Warstwa chwilowo niedostępna.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _aviationUpdates.remove(layer));
+    }
+    if (visible &&
+        layer == NeptunAviationLayer.traffic &&
+        _visibleAviation.contains(layer)) {
+      unawaited(_refreshTraffic(c, aviation));
+    }
+  }
+
+  Future<void> _refreshTraffic(
+    MapLibreMapController c,
+    NeptunAviationData aviation,
+  ) async {
+    final client = widget.client;
+    const layer = NeptunAviationLayer.traffic;
+    if (_trafficRequested || client == null) return;
+    _trafficRequested = true;
+    try {
+      final airports = (aviation.airports['features'] as List).cast<Map>();
+      final report = await NeptunTrafficReport.fetch(client, {
+        for (final airport in airports) airport['properties']['icao'] as String,
+      });
+      if (!mounted ||
+          controller != c ||
+          _aviation != aviation ||
+          report == null ||
+          report.period.compareTo(_traffic!.period) < 0 ||
+          _aviationUpdates.contains(layer)) {
+        return;
+      }
+      setState(() => _aviationUpdates.add(layer));
+      try {
+        if (_visibleAviation.contains(layer)) {
+          await c.setGeoJsonSource(
+            layer.sourceId,
+            aviation.features(layer, report),
+          );
+        }
+        if (mounted && controller == c && _aviation == aviation) {
+          setState(() => _traffic = report);
+        }
+      } finally {
+        if (mounted) setState(() => _aviationUpdates.remove(layer));
+      }
+    } catch (_) {
+      // The dated statistics bundled with the app are available offline.
+    }
+  }
+
+  Future<void> _showAviationDetails(
+    MapLibreMapController c,
+    Point<double> point,
+  ) async {
+    const hitOrder = [
+      NeptunAviationLayer.airports,
+      NeptunAviationLayer.traffic,
+      NeptunAviationLayer.airspace,
+    ];
+    final aviation = _aviation;
+    if (_visibleAviation.isEmpty || aviation == null) return;
+    Map<String, dynamic>? selected;
+    NeptunAviationLayer? selectedLayer;
+    for (final layer in hitOrder) {
+      if (!_visibleAviation.contains(layer)) continue;
+      final hits = await c.queryRenderedFeatures(point, [
+        layer.hitLayerId,
+      ], null);
+      if (!mounted || controller != c) return;
+      if (hits.isEmpty || hits.first['properties'] is! Map) continue;
+      selected = Map<String, dynamic>.from(hits.first['properties'] as Map);
+      selectedLayer = layer;
+      break;
+    }
+    if (!mounted || selected == null) return;
+    final info = selected;
+    final zone = selectedLayer == NeptunAviationLayer.airspace;
+    final traffic = _traffic;
+    final operations = traffic?.operations[info['icao']];
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                info['name'] as String,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                zone
+                    ? 'Strefa kontrolowana lotniska • podgląd ${aviation.airspaceDate}'
+                    : 'Lotnisko cywilne • ${info['iata']} / ${info['icao']}',
+              ),
+              if (_visibleAviation.contains(NeptunAviationLayer.traffic) &&
+                  operations != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    '${traffic!.period} • $operations lotów komercyjnych (Eurostat / EUROCONTROL)',
+                  ),
+                ),
+              if (zone && widget.openSource != null)
+                TextButton.icon(
+                  onPressed: () =>
+                      widget.openSource!('https://airspace.pansa.pl/map'),
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  label: const Text('Bieżąca mapa PAŻP'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> handleMapTap(Point<double> point, LatLng _) async {
     final c = controller;
     if (!ready || c == null || !mounted) return;
@@ -894,7 +1066,11 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
       final features = await c.queryRenderedFeatures(point, const [
         'neptun-live-hit-points',
       ], null);
-      if (!mounted || features.isEmpty) return;
+      if (!mounted) return;
+      if (features.isEmpty) {
+        await _showAviationDetails(c, point);
+        return;
+      }
       final candidates = <String, Map<String, dynamic>>{};
       for (final feature in features.whereType<Map>()) {
         final item = neptunThreatForFeature(widget.data, feature);
@@ -1012,6 +1188,27 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
     _hasPulseMarkers = false;
     lastSymbolSignature = null;
     try {
+      final aviation = await NeptunAviationData.load();
+      if (!mounted || controller != c) return;
+      final traffic = _traffic ?? aviation.bundledTraffic;
+      await addNeptunAviationLayers(c, aviation, _visibleAviation, traffic);
+      if (mounted && controller == c) {
+        setState(() {
+          _aviation = aviation;
+          _traffic = traffic;
+          _aviationUnavailable = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && controller == c) {
+        setState(() {
+          _aviation = null;
+          _aviationUnavailable = true;
+        });
+      }
+    }
+    if (!mounted || controller != c) return;
+    try {
       await c.addSource(
         'neptun-history',
         GeojsonSourceProperties(data: widget.data.data['map']),
@@ -1075,6 +1272,23 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
+      Wrap(
+        spacing: 6,
+        runSpacing: 2,
+        children: [
+          for (final layer in NeptunAviationLayer.values)
+            FilterChip(
+              label: Text(layer.label),
+              selected: _visibleAviation.contains(layer),
+              showCheckmark: false,
+              visualDensity: VisualDensity.compact,
+              onSelected: _aviation == null || _aviationUpdates.contains(layer)
+                  ? null
+                  : (visible) => unawaited(_toggleAviation(layer, visible)),
+            ),
+        ],
+      ),
+      const SizedBox(height: 6),
       SizedBox(
         height: 380,
         child: ClipRRect(
@@ -1083,7 +1297,7 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
             gestureRecognizers: mapGestureRecognizers(),
             styleString: const String.fromEnvironment(
               'MAP_STYLE_URL',
-              defaultValue: 'https://tiles.openfreemap.org/styles/liberty',
+              defaultValue: 'https://tiles.openfreemap.org/styles/fiord',
             ),
             initialCameraPosition: const CameraPosition(
               target: LatLng(49, 31),
@@ -1107,6 +1321,25 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
           ),
         ),
       ),
+      Align(
+        alignment: Alignment.centerRight,
+        child: TextButton.icon(
+          icon: const Icon(Icons.center_focus_strong, size: 18),
+          label: const Text('Pogranicze PL'),
+          onPressed: _aviation == null
+              ? null
+              : () => controller?.animateCamera(
+                  CameraUpdate.newLatLngZoom(const LatLng(51.4, 22.1), 5.35),
+                ),
+        ),
+      ),
+      if (_aviationUnavailable) const Text('Warstwy lotnicze są niedostępne.'),
+      if (_aviation != null &&
+          _visibleAviation.contains(NeptunAviationLayer.airspace))
+        Text('Strefy CTR • podgląd ${_aviation!.airspaceDate}'),
+      if (_visibleAviation.contains(NeptunAviationLayer.traffic) &&
+          _traffic != null)
+        Text('Ruch cywilny • ${_traffic!.period} • liczba lotów komercyjnych'),
       ExpansionTile(
         title: const Text('Legenda mapy'),
         subtitle: const Text('Pozycje przybliżone'),
@@ -1132,6 +1365,42 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
           const Text(
             'Puls oznacza bieżący wpis. Fioletowa linia oznacza ślad historyczny.',
           ),
+          const SizedBox(height: 8),
+          const Text(
+            'Kolor tła oznacza państwo. Większe turkusowe koło oznacza więcej lotów w danym miesiącu.',
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Obrysy CTR pokazują zasięg orientacyjny z podanego wydania. Dane OpenAIP / AirspaceConverter, CC BY-NC-SA 4.0.',
+          ),
+          if (widget.openSource != null)
+            Wrap(
+              children: [
+                TextButton(
+                  onPressed: () =>
+                      widget.openSource!('https://ourairports.com/data/'),
+                  child: const Text('OurAirports'),
+                ),
+                TextButton(
+                  onPressed: () => widget.openSource!(
+                    'https://alus.it/AirspaceConverter/countries/pl.php',
+                  ),
+                  child: const Text('OpenAIP / AirspaceConverter'),
+                ),
+                TextButton(
+                  onPressed: () => widget.openSource!(
+                    'https://creativecommons.org/licenses/by-nc-sa/4.0/',
+                  ),
+                  child: const Text('Licencja danych CTR'),
+                ),
+                TextButton(
+                  onPressed: () => widget.openSource!(
+                    'https://ec.europa.eu/eurostat/databrowser/view/avia_tf_airpm/default/table',
+                  ),
+                  child: const Text('Eurostat / EUROCONTROL'),
+                ),
+              ],
+            ),
         ],
       ),
       if (error != null) Text(error!),

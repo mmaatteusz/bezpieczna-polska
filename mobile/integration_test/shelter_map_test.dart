@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:bezpieczna_polska/map_layers.dart';
 import 'package:bezpieczna_polska/model.dart';
 import 'package:bezpieczna_polska/neptun.dart';
+import 'package:bezpieczna_polska/neptun_aviation.dart';
 import 'package:bezpieczna_polska/shelter_map.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -614,6 +615,60 @@ void main() {
     await tester.tap(find.text('Rakieta').first);
     await tester.pumpAndSettle();
     expect(find.text('Typ: Rakieta'), findsOneWidget);
+    Navigator.of(neptunKey.currentContext!).pop();
+    await tester.pumpAndSettle();
+
+    final aviation = await NeptunAviationData.load();
+    final lublin = (aviation.airports['features'] as List).firstWhere(
+      (airport) => airport['properties']['icao'] == 'EPLB',
+    );
+    final airportCoordinates = (lublin['geometry']['coordinates'] as List)
+        .cast<num>();
+    final airportLocation = LatLng(
+      airportCoordinates[1].toDouble(),
+      airportCoordinates[0].toDouble(),
+    );
+    await neptunController.moveCamera(
+      CameraUpdate.newLatLngZoom(airportLocation, 7.5),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    final airportScreen = await neptunController.toScreenLocation(
+      airportLocation,
+    );
+    final airportPoint = math.Point<double>(
+      airportScreen.x.toDouble(),
+      airportScreen.y.toDouble(),
+    );
+    expect(
+      await neptunController.getLayerIds(),
+      contains('neptun-country-colors'),
+    );
+
+    for (final layer in NeptunAviationLayer.values) {
+      Future<List<dynamic>> hits() => neptunController.queryRenderedFeatures(
+        airportPoint,
+        [layer.hitLayerId],
+        null,
+      );
+      expect(await hits(), isEmpty);
+      final chip = find.widgetWithText(FilterChip, layer.label);
+      await tester.tap(chip);
+      await tester.pump(const Duration(milliseconds: 500));
+      final entries = await hits();
+      expect(
+        entries.map((entry) => entry['properties']['icao']),
+        contains('EPLB'),
+      );
+      if (layer == NeptunAviationLayer.traffic) {
+        expect(
+          entries.first['properties']['operations'],
+          aviation.bundledTraffic.operations['EPLB'],
+        );
+      }
+      await tester.tap(chip);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(await hits(), isEmpty);
+    }
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }
