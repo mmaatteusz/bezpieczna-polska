@@ -16,6 +16,8 @@ import 'package:integration_test/integration_test.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../test/model_test.dart' as snapshot_fixture;
+import '../test/national_map_alerts_test.dart' show eventFixture;
 import '../test/neptun_test.dart' as neptun_fixture;
 
 void main() {
@@ -28,11 +30,30 @@ void main() {
     final openedLinks = <String>[];
     final key = GlobalKey();
     var dense = false;
+    var nationalRequests = 0;
+    final oldSnapshot = snapshot_fixture.data(region: 'PL');
     final repo = DataRepository(
       await SharedPreferences.getInstance(),
       buildApi: 'https://map-test.invalid',
       client: MockClient((request) async {
         final q = request.url.queryParameters;
+        if (request.url.path == '/v1/snapshot') {
+          nationalRequests++;
+          expect(q, {'regionId': 'PL', 'mode': 'compact'});
+          final now = DateTime.now().toUtc();
+          return snapshot_fixture.response({
+            ...oldSnapshot,
+            'serverTime': now.toIso8601String(),
+            'events': [
+              eventFixture(
+                id: 'imgw-hydro-native',
+                sourceId: 'IMGW_HYDRO',
+                regions: ['28'],
+                validTo: now.add(const Duration(hours: 2)),
+              ).data,
+            ],
+          });
+        }
         final bbox = q['bbox']!.split(',').map(double.parse).toList();
         final zoom = double.parse(q['zoom']!);
         final lon = (bbox[0] + bbox[2]) / 2;
@@ -129,6 +150,7 @@ void main() {
           body: SingleChildScrollView(
             child: ShelterMap(
               key: key,
+              snapshot: Snapshot.parse(jsonEncode(oldSnapshot)),
               repository: repo,
               region: 'PL',
               ukraine: false,
@@ -154,6 +176,23 @@ void main() {
 
     await waitFor(() => state.ready == true && state.loading == false);
     final controller = state.controller as MapLibreMapController;
+    await waitFor(() => state.legendImgwVisible == true);
+    expect(nationalRequests, 1);
+    final warning = LatLng(53.7784, 20.4801);
+    final warningPoint = await controller.toScreenLocation(warning);
+    await tester.pump(const Duration(seconds: 1));
+    expect(
+      await controller.queryRenderedFeatures(
+        math.Point<double>(
+          warningPoint.x.toDouble(),
+          warningPoint.y.toDouble(),
+        ),
+        ['event-imgw-points'],
+        null,
+      ),
+      isNotEmpty,
+      reason: 'The ordinary map restores an IMGW marker from the national API',
+    );
     controller.onCircleTapped.add(
       (circle) => debugPrint('Native circle tap: ${circle.data}'),
     );
@@ -174,6 +213,22 @@ void main() {
                 : controller.circles.length == 1 && controller.symbols.isEmpty),
       );
     }
+
+    await move(const LatLng(52.0, 30.0), 5.8);
+    final focusWarning = find.text('Pokaż ostrzeżenia na mapie');
+    expect(focusWarning, findsOneWidget);
+    await tester.ensureVisible(focusWarning);
+    await tester.tap(focusWarning);
+    await waitFor(() => state.legendImgwVisible == true);
+    final focusShelters = find.text('Przybliż do schronień');
+    await tester.ensureVisible(focusShelters);
+    await tester.tap(focusShelters);
+    await waitFor(() => controller.symbols.isNotEmpty);
+    expect(
+      controller.cameraPosition!.zoom,
+      greaterThanOrEqualTo(shelterDetailZoom),
+    );
+    expect(state.legendImgwVisible, isTrue);
 
     Future<void> tapMarker({bool rim = false}) async {
       // Native GeoJSON parsing and drawing can finish after the channel reply.

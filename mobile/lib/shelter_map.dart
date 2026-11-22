@@ -107,6 +107,8 @@ class ShelterMap extends StatefulWidget {
   final DataRepository repository;
   final String region;
   final bool ukraine;
+  final bool active;
+  final Snapshot? snapshot;
   final Map<String, dynamic>? radiation;
   final bool radiationOnline;
   final List<SafetyEvent> events;
@@ -115,6 +117,8 @@ class ShelterMap extends StatefulWidget {
   final void Function(String) openLink;
   const ShelterMap({
     super.key,
+    this.active = true,
+    this.snapshot,
     this.radiation,
     this.radiationOnline = false,
     required this.events,
@@ -137,10 +141,11 @@ class _ShelterMapState extends State<ShelterMap> {
   bool showShelters = true;
   bool showGpsInterference = false, gpsInterferenceLoading = false;
   bool legendAlertsVisible = false, legendImgwVisible = false;
+  bool hasWarningMarkers = false;
   bool legendSheltersVisible = false, legendWatchedVisible = false;
   bool legendRadiationVisible = false;
   bool ready = false, loading = false, online = false, fallbackStyle = false;
-  bool overviewMode = false, nationalEventsLoading = false;
+  bool nationalEventsLoading = false, nationalEventsFailed = false;
   bool radiationRefreshRunning = false, radiationOverrideOnline = false;
   int ticket = 0, gpsInterferenceTicket = 0;
   final shelterRenderQueue = MapRenderQueue();
@@ -174,11 +179,21 @@ class _ShelterMapState extends State<ShelterMap> {
     }
   }
 
-  List<SafetyEvent> get contextEvents => overviewMode
-      ? (widget.region == 'PL'
-            ? widget.events
-            : nationalSnapshot?.alertEvents ?? widget.events)
-      : widget.events;
+  Snapshot? get currentNationalSnapshot {
+    final local = widget.snapshot;
+    final national = nationalSnapshot;
+    if (local == null || local.region != 'PL') return national;
+    if (national == null ||
+        DateTime.parse(
+          local.data['serverTime'] as String,
+        ).isAfter(DateTime.parse(national.data['serverTime'] as String))) {
+      return local;
+    }
+    return national;
+  }
+
+  List<SafetyEvent> get contextEvents =>
+      currentNationalSnapshot?.alertEvents ?? widget.events;
 
   List<double>? visibleLegendBbox;
 
@@ -458,6 +473,7 @@ class _ShelterMapState extends State<ShelterMap> {
     if (!mounted) return;
     if (legendAlertsVisible == nextAlerts &&
         legendImgwVisible == nextImgw &&
+        hasWarningMarkers == eventFeatures.isNotEmpty &&
         legendSheltersVisible == nextShelters &&
         legendWatchedVisible == watchedVisible &&
         legendRadiationVisible == nextRadiation) {
@@ -468,6 +484,7 @@ class _ShelterMapState extends State<ShelterMap> {
       visibleLegendBbox = nextBbox;
       legendAlertsVisible = nextAlerts;
       legendImgwVisible = nextImgw;
+      hasWarningMarkers = eventFeatures.isNotEmpty;
       legendSheltersVisible = nextShelters;
       legendWatchedVisible = watchedVisible;
       legendRadiationVisible = nextRadiation;
@@ -495,20 +512,15 @@ class _ShelterMapState extends State<ShelterMap> {
   @override
   void initState() {
     super.initState();
-    if (widget.region != 'PL') {
-      nationalSnapshot = widget.repository.cached('PL');
-    }
+    nationalSnapshot = widget.repository.cached('PL');
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (!mounted) return;
+      if (!mounted || !widget.active) return;
       setState(() {});
       if (showRadiation) {
         unawaited(refreshRadiationSnapshot());
       }
-      if (overviewMode) {
-        unawaited(refresh());
-      } else {
-        unawaited(syncContextLayers());
-      }
+      unawaited(syncContextLayers());
+      unawaited(refreshNationalEvents());
     });
   }
 
@@ -526,14 +538,17 @@ class _ShelterMapState extends State<ShelterMap> {
       idle();
     }
     if (oldWidget.events != widget.events ||
+        oldWidget.snapshot != widget.snapshot ||
         oldWidget.watchedLocations != widget.watchedLocations) {
       unawaited(syncContextLayers());
     }
+    if (!oldWidget.active && widget.active) {
+      unawaited(refreshNationalEvents());
+    }
     if (oldWidget.region != widget.region) {
-      nationalSnapshot = widget.region == 'PL'
-          ? null
-          : widget.repository.cached('PL');
+      nationalSnapshot = widget.repository.cached('PL');
       nationalEventsUpdatedAt = null;
+      nationalEventsFailed = false;
       idle();
     }
   }
@@ -965,25 +980,32 @@ class _ShelterMapState extends State<ShelterMap> {
   }
 
   Future<void> refreshNationalEvents() async {
-    if (widget.region == 'PL' ||
+    if (!ready ||
+        !widget.active ||
         widget.repository.api.isEmpty ||
         nationalEventsLoading) {
       return;
     }
     final now = DateTime.now();
-    if (nationalEventsUpdatedAt != null &&
-        now.difference(nationalEventsUpdatedAt!) < const Duration(minutes: 1)) {
+    if (currentNationalSnapshot?.freshAt(now) == true ||
+        (nationalEventsUpdatedAt != null &&
+            now.difference(nationalEventsUpdatedAt!) <
+                const Duration(minutes: 1))) {
       return;
     }
     nationalEventsLoading = true;
     try {
       nationalSnapshot = await widget.repository.refresh('PL');
+      nationalEventsFailed = false;
     } catch (_) {
-      nationalSnapshot ??= widget.repository.cached('PL');
+      nationalEventsFailed = true;
     } finally {
       nationalEventsUpdatedAt = DateTime.now();
       nationalEventsLoading = false;
     }
+    if (!mounted) return;
+    await syncContextLayers();
+    if (mounted) setState(() {});
   }
 
   Future<void> syncContextLayers() async {
@@ -1091,6 +1113,7 @@ class _ShelterMapState extends State<ShelterMap> {
     if (!ready || c == null || widget.ukraine) return;
     final current = ++ticket;
     setState(() => loading = true);
+    unawaited(refreshNationalEvents());
     MapRequest? request;
     try {
       final bounds = await c.getVisibleRegion();
@@ -1151,14 +1174,7 @@ class _ShelterMapState extends State<ShelterMap> {
       }
       if (!mounted || current != ticket) return;
       final zoom = (c.cameraPosition?.zoom ?? 5).clamp(0, 22).toDouble();
-      final shouldUseNationalOverview = zoom < 9;
-      if (overviewMode != shouldUseNationalOverview) {
-        setState(() => overviewMode = shouldUseNationalOverview);
-      }
-      if (shouldUseNationalOverview) {
-        await refreshNationalEvents();
-      }
-      if (!mounted || current != ticket) return;
+      shelterZoomVisible = mapShowsShelters(zoom);
       updateMapLegend(
         bbox,
         sheltersVisible:
@@ -1709,6 +1725,49 @@ class _ShelterMapState extends State<ShelterMap> {
     await c.animateCamera(CameraUpdate.newLatLngZoom(homeTarget, homeZoom));
   }
 
+  Future<void> focusWarningMarkers() async {
+    final c = controller;
+    if (c == null) return;
+    final points = contextEventFeatures(DateTime.now()).map((feature) {
+      final coordinates = feature['geometry']['coordinates'] as List;
+      return LatLng(
+        (coordinates[1] as num).toDouble(),
+        (coordinates[0] as num).toDouble(),
+      );
+    }).toList();
+    if (points.isEmpty) return;
+    var south = points.first.latitude, north = south;
+    var west = points.first.longitude, east = west;
+    for (final point in points.skip(1)) {
+      south = math.min(south, point.latitude);
+      north = math.max(north, point.latitude);
+      west = math.min(west, point.longitude);
+      east = math.max(east, point.longitude);
+    }
+    if (south == north && west == east) {
+      await c.animateCamera(CameraUpdate.newLatLngZoom(points.first, 7));
+      return;
+    }
+    await c.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(south, west),
+          northeast: LatLng(north, east),
+        ),
+        left: 50,
+        right: 58,
+        top: 50,
+        bottom: 40,
+      ),
+    );
+  }
+
+  Future<void> focusShelters() async {
+    final c = controller;
+    if (c == null) return;
+    await c.animateCamera(CameraUpdate.zoomTo(shelterDetailZoom + 0.5));
+  }
+
   void setRadiationVisible(bool value) {
     setState(() {
       showRadiation = value;
@@ -2054,30 +2113,54 @@ class _ShelterMapState extends State<ShelterMap> {
               visibleLegendBbox != null &&
               (showEvents || showImgw) &&
               !legendAlertsVisible &&
-              !legendImgwVisible)
+              !legendImgwVisible) ...[
             Text(
-              contextEvents.isEmpty
-                  ? 'Brak danych ostrzeżeń dla tego widoku.'
-                  : 'Brak znaczników ostrzeżeń w tym widoku.',
+              hasWarningMarkers
+                  ? 'Znaczniki ostrzeżeń są poza widocznym obszarem.'
+                  : nationalEventsLoading
+                  ? 'Pobieranie ostrzeżeń dla Polski…'
+                  : currentNationalSnapshot == null
+                  ? 'Brak danych ostrzeżeń dla całej Polski.'
+                  : nationalEventsFailed
+                  ? 'Odświeżenie nieudane. Brak znaczników w zapisanym odczycie.'
+                  : 'Brak znaczników aktywnych ostrzeżeń. Komunikaty znajdziesz w zakładce Alerty.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            if (hasWarningMarkers)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: focusWarningMarkers,
+                  icon: const Icon(Icons.warning_amber_rounded),
+                  label: const Text('Pokaż ostrzeżenia na mapie'),
+                ),
+              ),
+          ],
           const SizedBox(height: 6),
-          Text(
-            !showShelters
-                ? 'Schronienia: warstwa wyłączona'
-                : overviewMode
-                ? 'Zdarzenia dla całej Polski'
-                : !shelterZoomVisible
-                ? 'Przybliż mapę, aby zobaczyć schronienia.'
-                : viewport == null
-                ? 'Ładowanie danych schronień…'
-                : !online
-                ? 'Schronienia: zapisana kopia offline'
-                : fresh
-                ? 'Schronienia: dane źródła aktualne'
-                : 'Schronienia: aktualność danych niepotwierdzona',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          if (showShelters && !shelterZoomVisible)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: focusShelters,
+                icon: const Icon(Icons.zoom_in),
+                label: const Text('Przybliż do schronień'),
+              ),
+            )
+          else
+            Text(
+              !showShelters
+                  ? 'Schronienia: warstwa wyłączona'
+                  : loading && viewport == null
+                  ? 'Ładowanie danych schronień…'
+                  : viewport == null
+                  ? 'Brak danych schronień dla tego obszaru.'
+                  : !online
+                  ? 'Schronienia: zapisana kopia offline'
+                  : fresh
+                  ? 'Schronienia: dane źródła aktualne'
+                  : 'Schronienia: aktualność danych niepotwierdzona',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
         ],
         if (!widget.ukraine) ...[
           const SizedBox(height: 10),

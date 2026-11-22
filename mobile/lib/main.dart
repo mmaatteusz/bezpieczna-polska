@@ -813,6 +813,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           visitedPages.contains(1)
               ? SafetyMapScreen(
                   repository: widget.repository,
+                  active: page == 1,
                   snapshot: snapshot,
                   events: events,
                   online: online,

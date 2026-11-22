@@ -8,6 +8,7 @@ class SafetyMapScreen extends StatelessWidget {
   final Snapshot? snapshot;
   final List<SafetyEvent> events;
   final bool online;
+  final bool active;
   final String region;
   final void Function(SafetyEvent) onOpenEvent;
   final Future<void> Function(String) openLink;
@@ -18,6 +19,7 @@ class SafetyMapScreen extends StatelessWidget {
     required this.snapshot,
     required this.events,
     required this.online,
+    required this.active,
     required this.region,
     required this.onOpenEvent,
     required this.openLink,
@@ -29,6 +31,8 @@ class SafetyMapScreen extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(12, 10, 12, 18),
     children: [
       ShelterMap(
+        snapshot: snapshot,
+        active: active,
         radiation: snapshot?.data['radiation'],
         radiationOnline: online,
         events: events,
