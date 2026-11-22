@@ -271,7 +271,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   bool online = false, loading = false, backgroundSync = false;
   late String region;
   String? localityLabel;
-  Snapshot? snapshot;
+  Snapshot? snapshot, nationalSnapshot;
   AroundResult? localityAround;
   OfflineRegionPackage? offlinePackageData;
   String? error;
@@ -381,13 +381,16 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       loading = true;
       error = null;
     });
+    final nearby = refreshPrimaryLocation(target).then((result) {
+      if (mounted && ticket == generation) {
+        setState(() => localityAround = result);
+      }
+    });
     try {
       final s = await widget.repository.refresh(target);
-      final localResult = await refreshPrimaryLocation(target);
       if (mounted && ticket == generation) {
         setState(() {
           snapshot = s;
-          localityAround = localResult;
           online = true;
         });
         unawaited(_retryPendingPushOpen());
@@ -401,14 +404,22 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         await loadOffline();
       }
     } finally {
+      await nearby;
       if (mounted && ticket == generation) setState(() => loading = false);
     }
   }
 
   Future<void> startupSync() async {
-    if (backgroundSync || widget.repository.api.isEmpty) return;
+    final repository = widget.repository;
+    final api = repository.api, dataGeneration = repository.dataGeneration;
+    if (backgroundSync || api.isEmpty) return;
     final target = region;
     setState(() => backgroundSync = true);
+
+    bool sameConfiguration() =>
+        mounted &&
+        target == region &&
+        dataGeneration == repository.dataGeneration;
 
     Future<void> ignoreFailure(Future<dynamic> Function() action) async {
       try {
@@ -420,25 +431,34 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     }
 
     try {
-      await refresh();
-      if (!mounted || target != region || widget.repository.api.isEmpty) return;
+      await Future.wait([
+        refresh(),
+        if (target != 'PL')
+          ignoreFailure(() async {
+            final result = await repository.refresh('PL');
+            if (sameConfiguration()) {
+              setState(() => nationalSnapshot = result);
+            }
+          }),
+        ignoreFailure(repository.refreshNeptun),
+      ]);
+      if (!sameConfiguration()) return;
 
-      final existingPackage = await widget.repository.offlinePackage(target);
+      final existingPackage = await repository.offlinePackage(target);
       final shouldRefreshOffline =
           existingPackage == null ||
           DateTime.now().toUtc().difference(existingPackage.createdAt) >
               const Duration(hours: 6);
 
-      await Future.wait([
-        ignoreFailure(widget.repository.refreshNeptun),
-        if (shouldRefreshOffline)
-          ignoreFailure(() => widget.repository.downloadOfflinePackage(target)),
-      ]);
-      if (mounted && target == region) await loadOffline();
+      if (sameConfiguration() && shouldRefreshOffline) {
+        await ignoreFailure(() => repository.downloadOfflinePackage(target));
+      }
+      if (sameConfiguration()) await loadOffline();
     } finally {
       if (mounted) {
         setState(() => backgroundSync = false);
-        if (target != region && widget.repository.api.isNotEmpty) {
+        if ((target != region || api != repository.api) &&
+            repository.api.isNotEmpty) {
           unawaited(startupSync());
         }
       }
@@ -463,12 +483,16 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         regionId: target,
       );
     } catch (_) {
-      result = await widget.repository.offlineAround(
-        latitude,
-        longitude,
-        radiusKm: 20,
-        regionId: target,
-      );
+      try {
+        result = await widget.repository.offlineAround(
+          latitude,
+          longitude,
+          radiusKm: 20,
+          regionId: target,
+        );
+      } catch (_) {
+        return null;
+      }
     }
     return result;
   }
@@ -815,6 +839,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   repository: widget.repository,
                   active: page == 1,
                   snapshot: snapshot,
+                  nationalSnapshot: nationalSnapshot,
                   events: events,
                   online: online,
                   region: region,
@@ -1065,6 +1090,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       if (mounted) {
                         setState(() {
                           snapshot = null;
+                          nationalSnapshot = null;
                           online = false;
                           loading = false;
                           seen = {};
@@ -1207,11 +1233,12 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   if (mounted) {
                     setState(() {
                       snapshot = widget.repository.cached(region);
+                      nationalSnapshot = null;
                       online = false;
                       loading = false;
                       loadSeen();
                     });
-                    if (widget.repository.api.isNotEmpty) await refresh();
+                    if (widget.repository.api.isNotEmpty) await startupSync();
                   }
                 } catch (_) {
                   update(() => validation = 'Wymagany poprawny adres HTTPS.');
