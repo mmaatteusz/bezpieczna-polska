@@ -11,6 +11,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 
 import 'map_interaction.dart';
 import 'map_layers.dart';
+import 'official_map_warnings.dart';
 import 'map_render_queue.dart';
 import 'model.dart';
 import 'shelters.dart';
@@ -158,6 +159,7 @@ class _ShelterMapState extends State<ShelterMap> {
   GpsInterferenceViewport? gpsInterference;
   MapRequest? renderedRequest;
   Snapshot? nationalSnapshot;
+  List<OfficialWarningFeed> directFeeds = const [];
   DateTime? nationalEventsUpdatedAt, radiationLastFetch;
   Map<String, dynamic>? radiationOverride;
   Map<String, List<double>> administrativeAnchors = const {};
@@ -193,8 +195,42 @@ class _ShelterMapState extends State<ShelterMap> {
     return national;
   }
 
-  List<SafetyEvent> get contextEvents =>
-      currentNationalSnapshot?.alertEvents ?? widget.events;
+  List<OfficialWarningFeed> get newerDirectFeeds {
+    final snapshot = currentNationalSnapshot;
+    if (snapshot == null) return directFeeds;
+    final snapshotTime = DateTime.parse(snapshot.data['serverTime'] as String);
+    return directFeeds
+        .where((feed) => feed.checkedAt.isAfter(snapshotTime))
+        .toList();
+  }
+
+  List<SafetyEvent> get contextEvents {
+    final base = currentNationalSnapshot?.alertEvents ?? widget.events;
+    final feeds = newerDirectFeeds;
+    if (feeds.isEmpty) return base;
+    final replaced = feeds.map((feed) => feed.source).toSet();
+    final events = <String, SafetyEvent>{};
+    for (final event in base) {
+      final reports = event.reports;
+      if (reports.every(
+        (r) => r.sources.every((s) => !replaced.contains(s['id'])),
+      )) {
+        events[event.id] = event;
+      } else {
+        for (final report in reports) {
+          if (report.sources.any((s) => !replaced.contains(s['id']))) {
+            events[report.id] = report;
+          }
+        }
+      }
+    }
+    for (final feed in feeds) {
+      for (final event in feed.events) {
+        events[event.id] = event;
+      }
+    }
+    return events.values.toList();
+  }
 
   List<double>? visibleLegendBbox;
 
@@ -514,6 +550,7 @@ class _ShelterMapState extends State<ShelterMap> {
   void initState() {
     super.initState();
     nationalSnapshot = widget.repository.cached('PL');
+    directFeeds = widget.repository.officialMapWarnings.cached();
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (!mounted || !widget.active) return;
       setState(() {});
@@ -537,6 +574,9 @@ class _ShelterMapState extends State<ShelterMap> {
         (oldWidget.radiation != widget.radiation ||
             oldWidget.radiationOnline != widget.radiationOnline)) {
       idle();
+    }
+    if (widget.snapshot != null && oldWidget.snapshot != widget.snapshot) {
+      nationalEventsError = null;
     }
     if (oldWidget.events != widget.events ||
         oldWidget.snapshot != widget.snapshot ||
@@ -996,15 +1036,42 @@ class _ShelterMapState extends State<ShelterMap> {
       return;
     }
     setState(() => nationalEventsLoading = true);
+    var waitingForSnapshot = true;
+    Future<void>? directRead;
+    Future<void> readDirect() async {
+      final feeds = await widget.repository.officialMapWarnings.refresh(
+        force: force,
+      );
+      if (!mounted || !waitingForSnapshot) return;
+      setState(() => directFeeds = feeds);
+      await syncContextLayers();
+    }
+
+    // On a cold map let the small public feeds provide markers while the
+    // multi-megabyte national response is still in transit.
+    final slowSnapshot = currentNationalSnapshot == null
+        ? Timer(const Duration(seconds: 4), () {
+            if (mounted && widget.active) directRead ??= readDirect();
+          })
+        : null;
     try {
-      nationalSnapshot = await widget.repository.refresh('PL');
+      final snapshot = await widget.repository.refresh('PL');
+      if (!mounted) return;
+      nationalSnapshot = snapshot;
+      directFeeds = const [];
       nationalEventsError = null;
     } catch (error) {
-      nationalEventsError =
-          error is ApiFailure && error.kind == ApiFailureKind.timeout
-          ? 'Serwer nie odpowiedział na czas.'
-          : apiFailureMessage(error);
+      if (!mounted) return;
+      if (error is ApiFailure && error.kind != ApiFailureKind.notConfigured) {
+        await (directRead ??= readDirect());
+        if (!mounted) return;
+      }
+      nationalEventsError = error is ApiFailure && error.statusCode != null
+          ? 'Nie udało się pobrać pełnej listy ostrzeżeń (HTTP ${error.statusCode}).'
+          : 'Nie udało się pobrać pełnej listy ostrzeżeń dla Polski.';
     } finally {
+      waitingForSnapshot = false;
+      slowSnapshot?.cancel();
       nationalEventsUpdatedAt = DateTime.now();
       nationalEventsLoading = false;
     }
@@ -2114,22 +2181,48 @@ class _ShelterMapState extends State<ShelterMap> {
               showWatched: legendWatchedVisible,
               showRadiation: legendRadiationVisible,
             ),
+          if ((showEvents || showImgw) &&
+              (nationalEventsError != null || newerDirectFeeds.isNotEmpty)) ...[
+            if (nationalEventsError != null)
+              Text(
+                nationalEventsError!,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            if (newerDirectFeeds.isNotEmpty)
+              Text(
+                'Ostatni odczyt bezpośredni: ${newerDirectFeeds.map((f) => "${f.label} · ${stamp(f.checkedAt.toIso8601String())}").join(", ")}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            if (nationalEventsError != null && !nationalEventsLoading)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => refreshNationalEvents(force: true),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Odśwież ostrzeżenia'),
+                ),
+              ),
+          ],
           if (ready &&
               visibleLegendBbox != null &&
               (showEvents || showImgw) &&
               !legendAlertsVisible &&
               !legendImgwVisible) ...[
-            Text(
-              hasWarningMarkers
-                  ? 'Znaczniki ostrzeżeń są poza widocznym obszarem.'
-                  : nationalEventsLoading
-                  ? 'Pobieranie ostrzeżeń dla Polski…'
-                  : nationalEventsError ??
-                        (currentNationalSnapshot == null
-                            ? 'Brak danych ostrzeżeń dla całej Polski.'
-                            : 'Brak znaczników dla włączonych warstw.'),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            if (hasWarningMarkers ||
+                nationalEventsLoading ||
+                nationalEventsError == null ||
+                newerDirectFeeds.isNotEmpty)
+              Text(
+                hasWarningMarkers
+                    ? 'Znaczniki ostrzeżeń są poza widocznym obszarem.'
+                    : nationalEventsLoading
+                    ? 'Pobieranie ostrzeżeń dla Polski…'
+                    : (currentNationalSnapshot == null &&
+                              newerDirectFeeds.isEmpty
+                          ? 'Brak danych ostrzeżeń dla całej Polski.'
+                          : 'Brak znaczników dla włączonych warstw.'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             if (hasWarningMarkers)
               Align(
                 alignment: Alignment.centerLeft,
@@ -2137,15 +2230,6 @@ class _ShelterMapState extends State<ShelterMap> {
                   onPressed: focusWarningMarkers,
                   icon: const Icon(Icons.warning_amber_rounded),
                   label: const Text('Pokaż ostrzeżenia na mapie'),
-                ),
-              ),
-            if (!nationalEventsLoading && nationalEventsError != null)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => refreshNationalEvents(force: true),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Odśwież ostrzeżenia'),
                 ),
               ),
           ],

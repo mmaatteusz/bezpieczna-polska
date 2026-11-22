@@ -84,9 +84,14 @@ const Map<String, List<double>> mapRegionAnchors = {
   '32': [14.5528, 53.4285],
 };
 
+final _rsoTraining = RegExp(
+  r'ćwicz|cwicz|trening|\btest(?:ow|(?:em|u|y)?\b)|prób[aęny]+ syren',
+  caseSensitive: false,
+);
+
 bool mapEventIsLive(SafetyEvent event, DateTime now) {
   if (event.data['lifecycle'] != 'ACTIVE' ||
-      event.data['messageContext'] != 'ACTUAL' ||
+      event.data['isDemo'] == true ||
       event.data['verification'] == 'REFUTED' ||
       event.isRcbCancellationFromRso) {
     return false;
@@ -95,6 +100,16 @@ bool mapEventIsLive(SafetyEvent event, DateTime now) {
     event.data['validFrom']?.toString() ?? '',
   );
   final validTo = DateTime.tryParse(event.data['validTo']?.toString() ?? '');
+  if (event.data['messageContext'] != 'ACTUAL') {
+    // RSO publications have no ACTUAL flag. Display dated notices without
+    // promoting them to confirmed warnings or changing national hazard status.
+    if (event.data['messageContext'] != 'UNKNOWN' ||
+        !(event.data['sources'] as List).any((s) => s['id'] == 'RSO') ||
+        validTo == null ||
+        _rsoTraining.hasMatch('${event.title} ${event.description}')) {
+      return false;
+    }
+  }
   return (validFrom == null || !validFrom.isAfter(now)) &&
       (validTo == null || validTo.isAfter(now));
 }

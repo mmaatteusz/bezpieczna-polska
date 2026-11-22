@@ -1,4 +1,5 @@
 import 'ukraine.dart';
+import 'official_map_warnings.dart';
 import 'neptun.dart';
 import 'radiation.dart';
 
@@ -548,6 +549,7 @@ bool shouldPersistNeptunCache(NeptunData? previous, NeptunData next) {
 }
 
 class DataRepository {
+  late final officialMapWarnings = OfficialMapWarnings(this);
   final SharedPreferences prefs;
   final http.Client client;
   int _generation = 0;

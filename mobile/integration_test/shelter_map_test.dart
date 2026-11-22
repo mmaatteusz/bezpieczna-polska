@@ -19,6 +19,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../test/model_test.dart' as snapshot_fixture;
 import '../test/national_map_alerts_test.dart' show eventFixture;
 import '../test/neptun_test.dart' as neptun_fixture;
+import '../test/official_map_warnings_test.dart'
+    as public_feed
+    show notice, reply;
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -67,6 +70,17 @@ void main() {
               ).data,
             ],
           });
+        }
+        if (request.url.host == 'komunikaty.tvp.pl') {
+          return public_feed.reply(
+            public_feed.notice.replaceFirst(
+              '<provinces>',
+              '<latitude>52.1</latitude><longitude>19.4</longitude><provinces>',
+            ),
+          );
+        }
+        if (request.url.host == 'danepubliczne.imgw.pl') {
+          return http.Response('', 502);
         }
         final bbox = q['bbox']!.split(',').map(double.parse).toList();
         final zoom = double.parse(q['zoom']!);
@@ -194,6 +208,19 @@ void main() {
       () => nationalRequests.isNotEmpty && state.nationalEventsLoading == false,
     );
     expect(state.nationalEventsError, isNotNull);
+    await waitFor(() => state.legendAlertsVisible == true);
+    final directPoint = await controller.toScreenLocation(warning);
+    await tester.pump(const Duration(seconds: 1));
+    expect(
+      await controller.queryRenderedFeatures(
+        math.Point<double>(directPoint.x.toDouble(), directPoint.y.toDouble()),
+        ['event-alert-points'],
+        null,
+      ),
+      isNotEmpty,
+      reason:
+          'A national HTTP 503 still renders a tappable official RSO marker',
+    );
     final retryWarnings = find.text('Odśwież ostrzeżenia');
     await tester.ensureVisible(retryWarnings);
     await tester.tap(retryWarnings);
@@ -205,6 +232,10 @@ void main() {
       expect(request.queryParameters, {'regionId': 'PL', 'mode': 'compact'});
     }
     expect(state.nationalEventsError, isNull);
+    expect(
+      (state.contextEvents as List<SafetyEvent>).any((e) => e.id == 'RSO-123'),
+      isFalse,
+    );
     await tester.ensureVisible(find.byType(MapLibreMap));
     expect(
       (state.contextEvents as List<SafetyEvent>).map((event) => event.id),

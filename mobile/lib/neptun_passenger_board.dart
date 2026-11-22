@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'warsaw_time.dart';
+
 import 'package:html/parser.dart' as html;
 import 'package:http/http.dart' as http;
 
@@ -25,14 +27,7 @@ class NeptunPassengerBoard {
       _warsawDate(now) == _warsawDate(checkedAt);
 
   static String _warsawDate(DateTime time) {
-    final utc = time.toUtc();
-    DateTime lastSunday(int month) {
-      final last = DateTime.utc(utc.year, month + 1, 0, 1);
-      return last.subtract(Duration(days: last.weekday % 7));
-    }
-
-    final summer = !utc.isBefore(lastSunday(3)) && utc.isBefore(lastSunday(10));
-    final shifted = utc.add(Duration(hours: summer ? 2 : 1));
+    final shifted = warsawWallClock(time);
     return '${shifted.day.toString().padLeft(2, '0')}/${shifted.month.toString().padLeft(2, '0')}/${shifted.year}';
   }
 

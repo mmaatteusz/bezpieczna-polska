@@ -436,6 +436,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           online = false;
           error = apiFailureMessage(failure);
         });
+        if (target == 'PL' &&
+            failure is ApiFailure &&
+            failure.kind != ApiFailureKind.notConfigured) {
+          unawaited(widget.repository.officialMapWarnings.refresh());
+        }
         await loadOffline();
         if (mounted && ticket == generation) widget.onLaunchReady?.call();
       }
@@ -471,7 +476,15 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         refresh(),
         if (target != 'PL')
           ignoreFailure(() async {
-            final result = await repository.refresh('PL');
+            Snapshot result;
+            try {
+              result = await repository.refresh('PL');
+            } on ApiFailure {
+              if (sameConfiguration()) {
+                await repository.officialMapWarnings.refresh();
+              }
+              return;
+            }
             if (sameConfiguration()) {
               setState(() => nationalSnapshot = result);
             }
