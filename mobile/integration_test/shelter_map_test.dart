@@ -49,6 +49,9 @@ void main() {
         final q = request.url.queryParameters;
         if (request.url.path == '/v1/snapshot') {
           nationalRequests.add(request.url);
+          if (nationalRequests.length == 1) {
+            return http.Response('{}', 503);
+          }
           final now = DateTime.now().toUtc();
           return snapshot_fixture.response({
             ...oldSnapshot,
@@ -190,15 +193,19 @@ void main() {
     await waitFor(
       () => nationalRequests.isNotEmpty && state.nationalEventsLoading == false,
     );
-    expect(nationalRequests.single.queryParameters, {
-      'regionId': 'PL',
-      'mode': 'compact',
-    });
-    expect(
-      state.nationalEventsFailed,
-      isFalse,
-      reason: 'Snapshot fetch failed',
+    expect(state.nationalEventsError, isNotNull);
+    final retryWarnings = find.text('Odśwież ostrzeżenia');
+    await tester.ensureVisible(retryWarnings);
+    await tester.tap(retryWarnings);
+    await waitFor(
+      () =>
+          nationalRequests.length == 2 && state.nationalEventsLoading == false,
     );
+    for (final request in nationalRequests) {
+      expect(request.queryParameters, {'regionId': 'PL', 'mode': 'compact'});
+    }
+    expect(state.nationalEventsError, isNull);
+    await tester.ensureVisible(find.byType(MapLibreMap));
     expect(
       (state.contextEvents as List<SafetyEvent>).map((event) => event.id),
       contains('imgw-hydro-native'),

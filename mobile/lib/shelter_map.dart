@@ -145,7 +145,8 @@ class _ShelterMapState extends State<ShelterMap> {
   bool legendSheltersVisible = false, legendWatchedVisible = false;
   bool legendRadiationVisible = false;
   bool ready = false, loading = false, online = false, fallbackStyle = false;
-  bool nationalEventsLoading = false, nationalEventsFailed = false;
+  bool nationalEventsLoading = false;
+  String? nationalEventsError;
   bool radiationRefreshRunning = false, radiationOverrideOnline = false;
   int ticket = 0, gpsInterferenceTicket = 0;
   final shelterRenderQueue = MapRenderQueue();
@@ -548,7 +549,7 @@ class _ShelterMapState extends State<ShelterMap> {
     if (oldWidget.region != widget.region) {
       nationalSnapshot = widget.repository.cached('PL');
       nationalEventsUpdatedAt = null;
-      nationalEventsFailed = false;
+      nationalEventsError = null;
       idle();
     }
   }
@@ -979,7 +980,7 @@ class _ShelterMapState extends State<ShelterMap> {
     });
   }
 
-  Future<void> refreshNationalEvents() async {
+  Future<void> refreshNationalEvents({bool force = false}) async {
     if (!ready ||
         !widget.active ||
         widget.repository.api.isEmpty ||
@@ -987,18 +988,22 @@ class _ShelterMapState extends State<ShelterMap> {
       return;
     }
     final now = DateTime.now();
-    if (currentNationalSnapshot?.freshAt(now) == true ||
-        (nationalEventsUpdatedAt != null &&
-            now.difference(nationalEventsUpdatedAt!) <
-                const Duration(minutes: 1))) {
+    if (!force &&
+        (currentNationalSnapshot?.freshAt(now) == true ||
+            (nationalEventsUpdatedAt != null &&
+                now.difference(nationalEventsUpdatedAt!) <
+                    const Duration(minutes: 1)))) {
       return;
     }
-    nationalEventsLoading = true;
+    setState(() => nationalEventsLoading = true);
     try {
       nationalSnapshot = await widget.repository.refresh('PL');
-      nationalEventsFailed = false;
-    } catch (_) {
-      nationalEventsFailed = true;
+      nationalEventsError = null;
+    } catch (error) {
+      nationalEventsError =
+          error is ApiFailure && error.kind == ApiFailureKind.timeout
+          ? 'Serwer nie odpowiedział na czas.'
+          : apiFailureMessage(error);
     } finally {
       nationalEventsUpdatedAt = DateTime.now();
       nationalEventsLoading = false;
@@ -2119,11 +2124,10 @@ class _ShelterMapState extends State<ShelterMap> {
                   ? 'Znaczniki ostrzeżeń są poza widocznym obszarem.'
                   : nationalEventsLoading
                   ? 'Pobieranie ostrzeżeń dla Polski…'
-                  : currentNationalSnapshot == null
-                  ? 'Brak danych ostrzeżeń dla całej Polski.'
-                  : nationalEventsFailed
-                  ? 'Odświeżenie nieudane. Brak znaczników w zapisanym odczycie.'
-                  : 'Brak znaczników aktywnych ostrzeżeń. Komunikaty znajdziesz w zakładce Alerty.',
+                  : nationalEventsError ??
+                        (currentNationalSnapshot == null
+                            ? 'Brak danych ostrzeżeń dla całej Polski.'
+                            : 'Brak znaczników dla włączonych warstw.'),
               style: Theme.of(context).textTheme.bodySmall,
             ),
             if (hasWarningMarkers)
@@ -2133,6 +2137,15 @@ class _ShelterMapState extends State<ShelterMap> {
                   onPressed: focusWarningMarkers,
                   icon: const Icon(Icons.warning_amber_rounded),
                   label: const Text('Pokaż ostrzeżenia na mapie'),
+                ),
+              ),
+            if (!nationalEventsLoading && nationalEventsError != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => refreshNationalEvents(force: true),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Odśwież ostrzeżenia'),
                 ),
               ),
           ],

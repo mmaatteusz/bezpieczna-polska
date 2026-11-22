@@ -551,6 +551,7 @@ class DataRepository {
   final SharedPreferences prefs;
   final http.Client client;
   int _generation = 0;
+  final _snapshotRequests = <(String, int), Future<Snapshot>>{};
   final String buildApi;
   final bool developerSettingsEnabled;
   DataRepository(
@@ -830,8 +831,18 @@ class DataRepository {
     }
   }
 
-  Future<Snapshot> refresh(String r) async {
-    final ticket = _generation, key = cacheKey(r);
+  Future<Snapshot> refresh(String region) {
+    final requestKey = (region, _generation);
+    return _snapshotRequests.putIfAbsent(
+      requestKey,
+      () => _refreshSnapshot(region, requestKey.$2).whenComplete(() {
+        _snapshotRequests.remove(requestKey);
+      }),
+    );
+  }
+
+  Future<Snapshot> _refreshSnapshot(String r, int ticket) async {
+    final key = cacheKey(r);
     final u = _apiUri();
     const maxSnapshotBytes = 4 * 1024 * 1024;
     Future<http.Response> fetch({required bool compact}) => _get(
@@ -839,6 +850,7 @@ class DataRepository {
         path: '${u.path}/v1/snapshot',
         queryParameters: {'regionId': r, if (compact) 'mode': 'compact'},
       ),
+      timeout: const Duration(seconds: 45),
     );
     final national = r == 'PL';
     var response = await fetch(compact: national);
