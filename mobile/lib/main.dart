@@ -58,37 +58,55 @@ class BootstrapApp extends StatefulWidget {
 }
 
 class _BootstrapAppState extends State<BootstrapApp> {
-  late final Future<_BootstrapResult> _bootstrap = _initialize();
+  late Future<_BootstrapResult> _bootstrap = _initialize();
+  bool _ready = false;
 
   Future<_BootstrapResult> _initialize() async {
-    final minimumSplash = Future<void>.delayed(
-      const Duration(milliseconds: 850),
-    );
     final repository = DataRepository(await SharedPreferences.getInstance());
     final pushAdapter = await safePushPlatformAdapter(
       FirebasePushPlatformAdapter.fromBuildConfiguration,
     );
-    await minimumSplash;
     return _BootstrapResult(repository, PushManager(repository, pushAdapter));
+  }
+
+  void _markReady() {
+    if (mounted && !_ready) setState(() => _ready = true);
   }
 
   @override
   Widget build(BuildContext context) => FutureBuilder<_BootstrapResult>(
     future: _bootstrap,
     builder: (context, snapshot) {
+      Widget? app;
       if (snapshot.hasData) {
         final result = snapshot.requireData;
-        return SafetyApp(
+        app = SafetyApp(
           repository: result.repository,
           pushManager: result.pushManager,
           firstLaunchOnboarding: true,
+          onLaunchReady: _markReady,
+        );
+      } else if (snapshot.hasError) {
+        app = MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () => setState(() {
+                  _ready = false;
+                  _bootstrap = _initialize();
+                }),
+                child: const Text('Spróbuj ponownie uruchomić aplikację'),
+              ),
+            ),
+          ),
         );
       }
 
-      return const MaterialApp(
-        title: 'Bezpieczna Polska',
-        debugShowCheckedModeBanner: false,
-        home: BrandLoadingScreen(),
+      return BrandStartupCover(
+        key: ObjectKey(_bootstrap),
+        ready: _ready || snapshot.hasError,
+        child: app,
       );
     },
   );
@@ -98,12 +116,14 @@ class SafetyApp extends StatefulWidget {
   final DataRepository repository;
   final PushManager? pushManager;
   final bool firstLaunchOnboarding;
+  final VoidCallback? onLaunchReady;
 
   const SafetyApp({
     super.key,
     required this.repository,
     this.pushManager,
     this.firstLaunchOnboarding = false,
+    this.onLaunchReady,
   });
 
   @override
@@ -129,6 +149,12 @@ class _SafetyAppState extends State<SafetyApp> {
 
     _showFirstLaunchOnboarding =
         widget.firstLaunchOnboarding && !completed && !legacyHandled;
+
+    if (_showFirstLaunchOnboarding && widget.onLaunchReady != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onLaunchReady?.call();
+      });
+    }
 
     if (legacyHandled && !completed) {
       unawaited(prefs.setBool(_firstLaunchOnboardingKey, true));
@@ -247,6 +273,7 @@ class _SafetyAppState extends State<SafetyApp> {
             repository: widget.repository,
             pushManager: widget.pushManager,
             onTheme: () => setState(() {}),
+            onLaunchReady: widget.onLaunchReady,
           ),
   );
 }
@@ -255,11 +282,13 @@ class Home extends StatefulWidget {
   final DataRepository repository;
   final PushManager? pushManager;
   final VoidCallback onTheme;
+  final VoidCallback? onLaunchReady;
   const Home({
     super.key,
     required this.repository,
     this.pushManager,
     required this.onTheme,
+    this.onLaunchReady,
   });
   @override
   State<Home> createState() => _HomeState();
@@ -310,6 +339,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (snapshot != null || widget.repository.api.isEmpty) {
+        widget.onLaunchReady?.call();
+      }
       unawaited(_consumeInitialPushOpen());
     });
   }
@@ -373,6 +406,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       offlinePackageData = package;
       if (!online && fallback != null) snapshot = fallback;
     });
+    if (snapshot != null) widget.onLaunchReady?.call();
   }
 
   Future<void> refresh() async {
@@ -393,6 +427,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           snapshot = s;
           online = true;
         });
+        widget.onLaunchReady?.call();
         unawaited(_retryPendingPushOpen());
       }
     } catch (failure) {
@@ -402,6 +437,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           error = apiFailureMessage(failure);
         });
         await loadOffline();
+        if (mounted && ticket == generation) widget.onLaunchReady?.call();
       }
     } finally {
       await nearby;
