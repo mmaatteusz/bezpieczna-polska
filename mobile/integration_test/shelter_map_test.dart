@@ -31,7 +31,17 @@ void main() {
     final key = GlobalKey();
     var dense = false;
     var nationalRequests = 0;
-    final oldSnapshot = snapshot_fixture.data(region: 'PL');
+    const warning = LatLng(52.1, 19.4);
+    final staleAt = DateTime.now().toUtc().subtract(const Duration(hours: 1));
+    final oldSnapshot = {
+      ...snapshot_fixture.data(region: 'PL'),
+      'serverTime': staleAt.toIso8601String(),
+      'status': {
+        'displayText': 'Stary odczyt',
+        'hazardLevel': 'NO_ACTIVE_WARNINGS',
+        'validUntil': staleAt.add(const Duration(minutes: 1)).toIso8601String(),
+      },
+    };
     final repo = DataRepository(
       await SharedPreferences.getInstance(),
       buildApi: 'https://map-test.invalid',
@@ -49,6 +59,8 @@ void main() {
                 id: 'imgw-hydro-native',
                 sourceId: 'IMGW_HYDRO',
                 regions: ['28'],
+                latitude: warning.latitude,
+                longitude: warning.longitude,
                 validTo: now.add(const Duration(hours: 2)),
               ).data,
             ],
@@ -176,9 +188,24 @@ void main() {
 
     await waitFor(() => state.ready == true && state.loading == false);
     final controller = state.controller as MapLibreMapController;
-    await waitFor(() => state.legendImgwVisible == true);
+    await waitFor(
+      () => nationalRequests > 0 && state.nationalEventsLoading == false,
+    );
     expect(nationalRequests, 1);
-    final warning = LatLng(53.7784, 20.4801);
+    expect(
+      state.nationalEventsFailed,
+      isFalse,
+      reason: 'Snapshot fetch failed',
+    );
+    expect(
+      (state.contextEvents as List<SafetyEvent>).map((event) => event.id),
+      contains('imgw-hydro-native'),
+      reason: 'The map must replace its stale home snapshot',
+    );
+    final bounds = await controller.getVisibleRegion();
+    expect(bounds.southwest.latitude, lessThan(warning.latitude));
+    expect(bounds.northeast.latitude, greaterThan(warning.latitude));
+    await waitFor(() => state.legendImgwVisible == true);
     final warningPoint = await controller.toScreenLocation(warning);
     await tester.pump(const Duration(seconds: 1));
     expect(
@@ -229,6 +256,7 @@ void main() {
       greaterThanOrEqualTo(shelterDetailZoom),
     );
     expect(state.legendImgwVisible, isTrue);
+    await tester.ensureVisible(find.byType(MapLibreMap));
 
     Future<void> tapMarker({bool rim = false}) async {
       // Native GeoJSON parsing and drawing can finish after the channel reply.
