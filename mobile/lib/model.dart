@@ -194,18 +194,29 @@ class Snapshot {
   Snapshot._(this.data, this.events);
   late final List<SafetyEvent> alertEvents = _buildAlertEvents();
 
+  static List<SafetyEvent> _incidentReports(
+    Map incident,
+    Map<String, SafetyEvent> eventsById,
+  ) {
+    final reports = incident['reports'];
+    if (reports is List) return reports.map(SafetyEvent.parse).toList();
+    return [
+      for (final id in (incident['relatedEventIds'] as List).cast<String>())
+        if (eventsById[id] case final SafetyEvent report) report,
+    ];
+  }
+
   List<SafetyEvent> _buildAlertEvents() {
     final byId = {for (final e in events) e.id: e};
     final grouped = <String>{};
     final cards = <SafetyEvent>[];
     for (final raw in data['incidents'] as List? ?? []) {
       final incident = Map<String, dynamic>.from(raw as Map);
-      final reports = (incident['reports'] as List)
-          .map(SafetyEvent.parse)
-          .toList();
+      final reports = _incidentReports(incident, byId);
       if (!reports.any((e) => byId.containsKey(e.id))) continue;
       final primary = reports.firstWhere(
         (e) => e.id == incident['primaryEventId'],
+        orElse: () => reports.first,
       );
       grouped.addAll(reports.map((e) => e.id));
       cards.add(
@@ -227,30 +238,45 @@ class Snapshot {
         m['events'] is! List) {
       throw const FormatException('Nieobsługiwany format');
     }
+    final events = (m['events'] as List).map(SafetyEvent.parse).toList();
+    final compact =
+        m['snapshotMode'] == 'compact' &&
+        (m['omittedSections'] as List?)?.contains('incidentReports') == true;
     final incidents = m['incidents'];
     if (incidents != null) {
       if (incidents is! List) {
         throw const FormatException('Niepoprawne incydenty');
       }
       final assigned = <String>{};
+      final byId = {for (final event in events) event.id: event};
       for (final i in incidents) {
         if (i is! Map ||
             i['id'] is! String ||
             i['revision'] is! int ||
-            i['reports'] is! List ||
-            (i['reports'] as List).isEmpty ||
             i['primaryEventId'] is! String ||
             i['relatedEventIds'] is! List ||
             i['hasConflictingReports'] is! bool) {
           throw const FormatException('Niepoprawny incydent');
         }
-        final reports = (i['reports'] as List).map(SafetyEvent.parse).toList();
+        final related = i['relatedEventIds'] as List;
+        final relatedIds = related.whereType<String>().toSet();
+        if (relatedIds.length != related.length ||
+            !relatedIds.contains(i['primaryEventId']) ||
+            relatedIds.any(assigned.contains)) {
+          throw const FormatException('Niespójne powiązania komunikatów');
+        }
+        if (compact && !i.containsKey('reports')) {
+          assigned.addAll(relatedIds);
+          continue;
+        }
+        if (i['reports'] is! List) {
+          throw const FormatException('Brak komunikatów incydentu');
+        }
+        final reports = _incidentReports(i, byId);
         final ids = reports.map((e) => e.id).toSet();
         if (ids.length != reports.length ||
-            !ids.contains(i['primaryEventId']) ||
-            ids.length != (i['relatedEventIds'] as List).length ||
-            !(i['relatedEventIds'] as List).every(ids.contains) ||
-            ids.any(assigned.contains)) {
+            ids.length != relatedIds.length ||
+            !relatedIds.every(ids.contains)) {
           throw const FormatException('Niespójne powiązania komunikatów');
         }
         assigned.addAll(ids);
@@ -298,7 +324,7 @@ class Snapshot {
         throw const FormatException('Błędny region punktów');
       }
     }
-    return Snapshot._(m, (m['events'] as List).map(SafetyEvent.parse).toList());
+    return Snapshot._(m, events);
   }
   ShelterPage? get shelters => data['shelterPage'] == null
       ? null
@@ -807,14 +833,22 @@ class DataRepository {
   Future<Snapshot> refresh(String r) async {
     final ticket = _generation, key = cacheKey(r);
     final u = _apiUri();
-    final response = await _get(
+    const maxSnapshotBytes = 4 * 1024 * 1024;
+    Future<http.Response> fetch({required bool compact}) => _get(
       u.replace(
         path: '${u.path}/v1/snapshot',
-        queryParameters: {'regionId': r},
+        queryParameters: {'regionId': r, if (compact) 'mode': 'compact'},
       ),
     );
+    final national = r == 'PL';
+    var response = await fetch(compact: national);
+    if (!national &&
+        response.statusCode == 200 &&
+        response.bodyBytes.length > maxSnapshotBytes) {
+      response = await fetch(compact: true);
+    }
     if (response.statusCode != 200) _responseFailure(response);
-    if (response.bodyBytes.length > 4 * 1024 * 1024) {
+    if (response.bodyBytes.length > maxSnapshotBytes) {
       throw const ApiFailure(ApiFailureKind.invalidResponse);
     }
     Snapshot s;

@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:maplibre_gl/maplibre_gl.dart';
 
+import 'neptun_passenger_board.dart';
+
 const neptunEmptyFeatures = {
   'type': 'FeatureCollection',
   'features': <Object>[],
@@ -12,7 +14,8 @@ const neptunEmptyFeatures = {
 enum NeptunAviationLayer {
   airports('Lotniska', 'neptun-airports', 'neptun-airport-points'),
   airspace('Strefy CTR', 'neptun-ctr', 'neptun-ctr-fill'),
-  traffic('Ruch cywilny', 'neptun-traffic', 'neptun-traffic-circles');
+  board('Tablica lotów', 'neptun-board', 'neptun-board-points'),
+  traffic('Statystyki lotów', 'neptun-traffic', 'neptun-traffic-circles');
 
   final String label;
   final String sourceId;
@@ -151,13 +154,25 @@ class NeptunAviationData {
 
   Map<String, dynamic> features(
     NeptunAviationLayer layer,
-    NeptunTrafficReport traffic,
-  ) {
+    NeptunTrafficReport traffic, {
+    NeptunPassengerBoard? board,
+  }) {
     switch (layer) {
       case NeptunAviationLayer.airports:
         return airports;
       case NeptunAviationLayer.airspace:
         return airspace;
+      case NeptunAviationLayer.board:
+        return {
+          'type': 'FeatureCollection',
+          'features': [
+            if (board != null && board.isCurrent(DateTime.now()))
+              for (final airport in (airports['features'] as List).cast<Map>())
+                if (airport['properties']['icao'] ==
+                    NeptunPassengerBoard.airport)
+                  airport,
+          ],
+        };
       case NeptunAviationLayer.traffic:
         return {
           'type': 'FeatureCollection',
@@ -182,8 +197,9 @@ Future<void> addNeptunAviationLayers(
   MapLibreMapController controller,
   NeptunAviationData data,
   Set<NeptunAviationLayer> enabled,
-  NeptunTrafficReport traffic,
-) async {
+  NeptunTrafficReport traffic, {
+  NeptunPassengerBoard? board,
+}) async {
   final baseLayers = await controller.getLayerIds();
   final underLabels = baseLayers.contains('water_name') ? 'water_name' : null;
   const countries = 'neptun-countries';
@@ -218,7 +234,7 @@ Future<void> addNeptunAviationLayers(
       layer.sourceId,
       GeojsonSourceProperties(
         data: enabled.contains(layer)
-            ? data.features(layer, traffic)
+            ? data.features(layer, traffic, board: board)
             : neptunEmptyFeatures,
       ),
     );
@@ -265,6 +281,19 @@ Future<void> addNeptunAviationLayers(
       circleStrokeColor: '#75ecdb',
       circleStrokeOpacity: 0.75,
       circleStrokeWidth: 1.15,
+    ),
+  );
+
+  const liveBoard = NeptunAviationLayer.board;
+  await controller.addCircleLayer(
+    liveBoard.sourceId,
+    liveBoard.hitLayerId,
+    const CircleLayerProperties(
+      circleRadius: 17,
+      circleColor: '#247d86',
+      circleStrokeColor: '#a0fff0',
+      circleStrokeWidth: 2,
+      circleOpacity: 0.64,
     ),
   );
 

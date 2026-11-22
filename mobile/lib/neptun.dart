@@ -10,6 +10,7 @@ import 'map_interaction.dart';
 import 'model.dart';
 import 'neptun_aviation.dart';
 import 'neptun_markers.dart';
+import 'neptun_passenger_board.dart';
 
 export 'neptun_markers.dart' show neptunIconPng, neptunMapIconId;
 
@@ -680,6 +681,9 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
   NeptunTrafficReport? _traffic;
   bool _trafficRequested = false;
   bool _aviationUnavailable = false;
+  NeptunPassengerBoard? _board;
+  Timer? _boardTimer;
+  bool _boardLoading = false;
 
   @override
   void initState() {
@@ -703,6 +707,7 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pulseTimer?.cancel();
+    _boardTimer?.cancel();
     _pulseClock.stop();
     ready = false;
     controller?.removeListener(_updatePulse);
@@ -921,7 +926,9 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
     try {
       await c.setGeoJsonSource(
         layer.sourceId,
-        visible ? aviation.features(layer, traffic) : neptunEmptyFeatures,
+        visible
+            ? aviation.features(layer, traffic, board: _board)
+            : neptunEmptyFeatures,
       );
       if (!mounted || controller != c || _aviation != aviation) return;
       setState(() {
@@ -945,7 +952,62 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
         _visibleAviation.contains(layer)) {
       unawaited(_refreshTraffic(c, aviation));
     }
+    if (layer == NeptunAviationLayer.board) {
+      _boardTimer?.cancel();
+      if (mounted &&
+          _visibleAviation.contains(layer) &&
+          widget.client != null) {
+        unawaited(_refreshBoard());
+        _boardTimer = Timer.periodic(
+          const Duration(minutes: 2),
+          (_) => unawaited(_refreshBoard()),
+        );
+      }
+    }
   }
+
+  Future<void> _refreshBoard() async {
+    final c = controller, client = widget.client;
+    final aviation = _aviation, traffic = _traffic;
+    const layer = NeptunAviationLayer.board;
+    if (c == null ||
+        client == null ||
+        aviation == null ||
+        traffic == null ||
+        _boardLoading ||
+        !_visibleAviation.contains(layer) ||
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    setState(() => _boardLoading = true);
+    try {
+      NeptunPassengerBoard? report;
+      try {
+        report = await NeptunPassengerBoard.fetch(client);
+      } catch (_) {
+        // An unreachable board is shown as missing rather than as zero flights.
+      }
+      if (!mounted ||
+          c != controller ||
+          !_visibleAviation.contains(layer) ||
+          _aviation != aviation) {
+        return;
+      }
+      await c.setGeoJsonSource(
+        layer.sourceId,
+        aviation.features(layer, traffic, board: report),
+      );
+      if (mounted && c == controller) setState(() => _board = report);
+    } catch (_) {
+      if (mounted) setState(() => _board = null);
+    } finally {
+      if (mounted) setState(() => _boardLoading = false);
+    }
+  }
+
+  String _boardStatus(NeptunPassengerBoard board) =>
+      'Dziś: ${board.arrivals} przylotów i ${board.departures} odlotów w tablicy. '
+      'Potwierdzone: ${board.landed} lądowań, ${board.departed} startów.';
 
   Future<void> _refreshTraffic(
     MapLibreMapController c,
@@ -992,6 +1054,7 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
     Point<double> point,
   ) async {
     const hitOrder = [
+      NeptunAviationLayer.board,
       NeptunAviationLayer.airports,
       NeptunAviationLayer.traffic,
       NeptunAviationLayer.airspace,
@@ -1016,6 +1079,11 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
     final zone = selectedLayer == NeptunAviationLayer.airspace;
     final traffic = _traffic;
     final operations = traffic?.operations[info['icao']];
+    final board = _board;
+    final showBoard =
+        !zone &&
+        info['icao'] == NeptunPassengerBoard.airport &&
+        _visibleAviation.contains(NeptunAviationLayer.board);
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -1043,6 +1111,17 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
                   child: Text(
                     '${traffic!.period} • $operations lotów komercyjnych (Eurostat / EUROCONTROL)',
                   ),
+                ),
+              if (showBoard && board != null && board.isCurrent(DateTime.now()))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(_boardStatus(board)),
+                ),
+              if (showBoard && widget.openSource != null)
+                TextButton.icon(
+                  onPressed: () => widget.openSource!(lublinPassengerBoardUrl),
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  label: const Text('Tablica Portu Lotniczego Lublin'),
                 ),
               if (zone && widget.openSource != null)
                 TextButton.icon(
@@ -1191,7 +1270,13 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
       final aviation = await NeptunAviationData.load();
       if (!mounted || controller != c) return;
       final traffic = _traffic ?? aviation.bundledTraffic;
-      await addNeptunAviationLayers(c, aviation, _visibleAviation, traffic);
+      await addNeptunAviationLayers(
+        c,
+        aviation,
+        _visibleAviation,
+        traffic,
+        board: _board,
+      );
       if (mounted && controller == c) {
         setState(() {
           _aviation = aviation;
@@ -1339,7 +1424,28 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
         Text('Strefy CTR • podgląd ${_aviation!.airspaceDate}'),
       if (_visibleAviation.contains(NeptunAviationLayer.traffic) &&
           _traffic != null)
-        Text('Ruch cywilny • ${_traffic!.period} • liczba lotów komercyjnych'),
+        Text(
+          'Statystyki lotów • ${_traffic!.period} • liczba lotów komercyjnych',
+        ),
+      if (_visibleAviation.contains(NeptunAviationLayer.board))
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Tablica pasażerska · Lublin'),
+          subtitle: Text(switch (_board) {
+            final NeptunPassengerBoard board
+                when board.isCurrent(DateTime.now()) =>
+              '${_boardStatus(board)}\nOdczyt: ${stamp(board.checkedAt.toIso8601String())}',
+            _ when _boardLoading => 'Pobieranie tablicy lotów…',
+            _ => 'Brak bieżących danych z tablicy.',
+          }),
+          trailing: widget.openSource == null
+              ? null
+              : IconButton(
+                  tooltip: 'Otwórz tablicę lotniska',
+                  onPressed: () => widget.openSource!(lublinPassengerBoardUrl),
+                  icon: const Icon(Icons.open_in_new),
+                ),
+        ),
       ExpansionTile(
         title: const Text('Legenda mapy'),
         subtitle: const Text('Pozycje przybliżone'),

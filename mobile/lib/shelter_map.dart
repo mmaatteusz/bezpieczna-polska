@@ -2050,12 +2050,25 @@ class _ShelterMapState extends State<ShelterMap> {
               showWatched: legendWatchedVisible,
               showRadiation: legendRadiationVisible,
             ),
+          if (ready &&
+              visibleLegendBbox != null &&
+              (showEvents || showImgw) &&
+              !legendAlertsVisible &&
+              !legendImgwVisible)
+            Text(
+              contextEvents.isEmpty
+                  ? 'Brak danych ostrzeżeń dla tego widoku.'
+                  : 'Brak znaczników ostrzeżeń w tym widoku.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           const SizedBox(height: 6),
           Text(
             !showShelters
                 ? 'Schronienia: warstwa wyłączona'
                 : overviewMode
                 ? 'Zdarzenia dla całej Polski'
+                : !shelterZoomVisible
+                ? 'Przybliż mapę, aby zobaczyć schronienia.'
                 : viewport == null
                 ? 'Ładowanie danych schronień…'
                 : !online

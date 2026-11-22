@@ -648,6 +648,7 @@ void main() {
     );
 
     for (final layer in NeptunAviationLayer.values) {
+      if (layer == NeptunAviationLayer.board) continue;
       Future<List<dynamic>> hits() => neptunController.queryRenderedFeatures(
         airportPoint,
         [layer.hitLayerId],

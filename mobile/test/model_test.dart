@@ -6,6 +6,9 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bezpieczna_polska/model.dart';
+import 'package:bezpieczna_polska/map_layers.dart';
+
+import 'national_map_alerts_test.dart' show eventFixture;
 
 Map<String, dynamic> data({String region = '04'}) {
   final status = {
@@ -47,6 +50,57 @@ void main() {
     final snapshot = Snapshot.parse(jsonEncode(data()));
     expect(identical(snapshot.alertEvents, snapshot.alertEvents), isTrue);
   });
+  test(
+    'national compact snapshot restores an incident and its map marker',
+    () async {
+      final now = DateTime.utc(2026, 11, 22, 1);
+      final event = eventFixture(
+        id: 'imgw-1',
+        regions: ['22'],
+        sourceId: 'IMGW_METEO',
+        validTo: now.add(const Duration(hours: 2)),
+      );
+      final compact = {
+        ...data(region: 'PL'),
+        'snapshotMode': 'compact',
+        'omittedSections': ['incidentReports', 'shelterItems'],
+        'events': [event.data],
+        'incidents': [
+          {
+            'id': 'incident-1',
+            'revision': 2,
+            'primaryEventId': 'imgw-1',
+            'relatedEventIds': ['imgw-1'],
+            'hasConflictingReports': false,
+          },
+        ],
+      };
+      final repo = DataRepository(
+        await SharedPreferences.getInstance(),
+        buildApi: 'https://api.example.org',
+        client: MockClient((request) async {
+          expect(request.url.queryParameters, {
+            'regionId': 'PL',
+            'mode': 'compact',
+          });
+          return response(compact);
+        }),
+      );
+      final snapshot = await repo.refresh('PL');
+      final alert = snapshot.alertEvents.single;
+      expect(alert.incidentId, 'incident-1');
+      expect(alert.reports.single.id, 'imgw-1');
+      expect(
+        mapEventFeatures(alert, now).single['properties']['regionId'],
+        '22',
+      );
+      expect(repo.cached('PL')!.alertEvents.single.id, 'imgw-1');
+      expect(
+        () => Snapshot.parse(jsonEncode({...compact, 'snapshotMode': 'full'})),
+        throwsFormatException,
+      );
+    },
+  );
   test(
     'stale data never presents current green',
     () => expect(
