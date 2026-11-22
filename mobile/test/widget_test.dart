@@ -106,7 +106,7 @@ void main() {
 
     final loadedAt = DateTime.now().toUtc().toIso8601String();
     local.complete(response({...data(), 'serverTime': loadedAt}));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(start().snapshot?.data['serverTime'], loadedAt);
     expect(start().online, isTrue);
     expect(nearby.isCompleted, isFalse);
