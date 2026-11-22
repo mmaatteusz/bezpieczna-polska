@@ -30,7 +30,7 @@ void main() {
     final openedLinks = <String>[];
     final key = GlobalKey();
     var dense = false;
-    var nationalRequests = 0;
+    final nationalRequests = <Uri>[];
     const warning = LatLng(52.1, 19.4);
     final staleAt = DateTime.now().toUtc().subtract(const Duration(hours: 1));
     final oldSnapshot = {
@@ -48,8 +48,7 @@ void main() {
       client: MockClient((request) async {
         final q = request.url.queryParameters;
         if (request.url.path == '/v1/snapshot') {
-          nationalRequests++;
-          expect(q, {'regionId': 'PL', 'mode': 'compact'});
+          nationalRequests.add(request.url);
           final now = DateTime.now().toUtc();
           return snapshot_fixture.response({
             ...oldSnapshot,
@@ -189,9 +188,12 @@ void main() {
     await waitFor(() => state.ready == true && state.loading == false);
     final controller = state.controller as MapLibreMapController;
     await waitFor(
-      () => nationalRequests > 0 && state.nationalEventsLoading == false,
+      () => nationalRequests.isNotEmpty && state.nationalEventsLoading == false,
     );
-    expect(nationalRequests, 1);
+    expect(nationalRequests.single.queryParameters, {
+      'regionId': 'PL',
+      'mode': 'compact',
+    });
     expect(
       state.nationalEventsFailed,
       isFalse,
