@@ -1,6 +1,7 @@
 import {operationalMetrics} from './operations.js';
 import {ukraineSnapshot,isUa} from './ukraine.js';
 import {neptunSnapshot,neptunTrackSchema} from './neptun.js';
+import {createFlightradar24} from './flightradar24.js';
 import {bearerSecret,pushDeviceIdSchema,pushPreferencesSchema,pushRegisterSchema,pushUpdateSchema,type PushService} from './push.js';
 import {aroundLocation,aroundQuerySchema} from './around.js';
 import {radiationStatus} from './radiation.js';
@@ -11,7 +12,7 @@ import Fastify from 'fastify';import rateLimit from '@fastify/rate-limit';import
 import {APP_VERSION,type AppEnv} from './config.js';
 import {assertSchema} from './migrate.js';
 import {computeStatus,eventSchema,REGIONS,sourceHealth,publicSourceHealth} from './domain.js';import {Store} from './store.js';import {initializeSources,ingest,ingestUkraineLive,fetchPublic} from './adapters.js';import {prepareOperatorShelterSnapshot,parseShelterResource,SHELTER_RESOURCE} from './shelter-adapter.js';
-export async function buildApp(store:Store,adminToken?:string,push?:PushService,config:{stage?:AppEnv;buildSha?:string;trustProxy?:boolean}={}){
+export async function buildApp(store:Store,adminToken?:string,push?:PushService,config:{stage?:AppEnv;buildSha?:string;trustProxy?:boolean;liveFlights?:ReturnType<typeof createFlightradar24>}={}){
  const production=config.stage==='production';
  const app=Fastify({logger:production?{redact:{paths:['req.headers.authorization','req.headers.cookie','*.token','*.secret'],censor:'[redacted]'}}:false,disableRequestLogging:true,trustProxy:config.trustProxy??false,bodyLimit:128*1024,requestTimeout:30000,connectionTimeout:10000,keepAliveTimeout:5000});
  await app.register(rateLimit,{max:600,timeWindow:'1 minute'});
@@ -38,6 +39,8 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
  app.get('/v1/ukraine',async()=>ukraineSnapshot(store));
  app.get('/v1/layers/ukraine.geojson',async()=>{const s=await ukraineSnapshot(store);return {...s.map,metadata:{coverage:s.coverage,sourceHealth:s.sourceHealth,validUntil:s.validUntil}};});
  app.get('/v1/neptun',async()=>neptunSnapshot(store));
+ const liveFlights=config.liveFlights??createFlightradar24();
+ app.get('/v1/neptun/live-flights',{config:{rateLimit:{max:15,timeWindow:'1 minute'}}},liveFlights);
  app.get('/v1/layers/neptun.geojson',async()=>{const s=await neptunSnapshot(store);return {type:'FeatureCollection',features:[...s.live.map.features,...s.map.features],metadata:{mode:s.mode,liveState:s.live.state,coverage:s.coverage,safetyDelayHours:s.safetyDelayHours,minimumPublishedPrecisionKm:s.minimumPublishedPrecisionKm,sourceHealth:s.sourceHealth,attribution:s.live.attribution}};});
  app.get('/v1/neptun/:id/timeline',async req=>store.neptunTimeline(z.object({id:z.string().regex(/^NEPTUN-[A-Za-z0-9._:-]{1,120}$/)}).parse(req.params).id));
  app.get('/v1/sources',async()=>({sourceHealth:publicSourceHealth(await store.health()).filter(s=>s.enabled)}));
