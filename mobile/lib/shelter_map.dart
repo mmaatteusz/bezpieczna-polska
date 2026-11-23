@@ -11,10 +11,12 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 
 import 'map_interaction.dart';
 import 'map_layers.dart';
+import 'official_map_warnings.dart';
 import 'map_render_queue.dart';
 import 'model.dart';
 import 'shelters.dart';
 import 'shelter_markers.dart';
+import 'ui/safety_event_card.dart';
 
 class _MapLegend extends StatelessWidget {
   final bool showAlerts;
@@ -106,6 +108,8 @@ class ShelterMap extends StatefulWidget {
   final DataRepository repository;
   final String region;
   final bool ukraine;
+  final bool active;
+  final Snapshot? snapshot;
   final Map<String, dynamic>? radiation;
   final bool radiationOnline;
   final List<SafetyEvent> events;
@@ -114,6 +118,8 @@ class ShelterMap extends StatefulWidget {
   final void Function(String) openLink;
   const ShelterMap({
     super.key,
+    this.active = true,
+    this.snapshot,
     this.radiation,
     this.radiationOnline = false,
     required this.events,
@@ -136,10 +142,12 @@ class _ShelterMapState extends State<ShelterMap> {
   bool showShelters = true;
   bool showGpsInterference = false, gpsInterferenceLoading = false;
   bool legendAlertsVisible = false, legendImgwVisible = false;
+  bool hasWarningMarkers = false;
   bool legendSheltersVisible = false, legendWatchedVisible = false;
   bool legendRadiationVisible = false;
   bool ready = false, loading = false, online = false, fallbackStyle = false;
-  bool overviewMode = false, nationalEventsLoading = false;
+  bool nationalEventsLoading = false;
+  String? nationalEventsError;
   bool radiationRefreshRunning = false, radiationOverrideOnline = false;
   int ticket = 0, gpsInterferenceTicket = 0;
   final shelterRenderQueue = MapRenderQueue();
@@ -151,6 +159,7 @@ class _ShelterMapState extends State<ShelterMap> {
   GpsInterferenceViewport? gpsInterference;
   MapRequest? renderedRequest;
   Snapshot? nationalSnapshot;
+  List<OfficialWarningFeed> directFeeds = const [];
   DateTime? nationalEventsUpdatedAt, radiationLastFetch;
   Map<String, dynamic>? radiationOverride;
   Map<String, List<double>> administrativeAnchors = const {};
@@ -173,11 +182,58 @@ class _ShelterMapState extends State<ShelterMap> {
     }
   }
 
-  List<SafetyEvent> get contextEvents => overviewMode
-      ? (widget.region == 'PL'
-            ? widget.events
-            : nationalSnapshot?.alertEvents ?? widget.events)
-      : widget.events;
+  Snapshot? get currentNationalSnapshot {
+    final local = widget.snapshot;
+    final national = nationalSnapshot;
+    if (local == null || local.region != 'PL') return national;
+    if (national == null ||
+        DateTime.parse(
+          local.data['serverTime'] as String,
+        ).isAfter(DateTime.parse(national.data['serverTime'] as String))) {
+      return local;
+    }
+    return national;
+  }
+
+  List<OfficialWarningFeed> get newerDirectFeeds {
+    final snapshot = currentNationalSnapshot;
+    if (snapshot == null) return directFeeds;
+    if (nationalEventsError == null && snapshot.freshAt(DateTime.now())) {
+      return const [];
+    }
+    final snapshotTime = DateTime.parse(snapshot.data['serverTime'] as String);
+    return directFeeds
+        .where((feed) => feed.checkedAt.isAfter(snapshotTime))
+        .toList();
+  }
+
+  List<SafetyEvent> get contextEvents {
+    final base = currentNationalSnapshot?.alertEvents ?? widget.events;
+    final feeds = newerDirectFeeds;
+    if (feeds.isEmpty) return base;
+    final replaced = feeds.map((feed) => feed.source).toSet();
+    final events = <String, SafetyEvent>{};
+    for (final event in base) {
+      final reports = event.reports;
+      if (reports.every(
+        (r) => r.sources.every((s) => !replaced.contains(s['id'])),
+      )) {
+        events[event.id] = event;
+      } else {
+        for (final report in reports) {
+          if (report.sources.any((s) => !replaced.contains(s['id']))) {
+            events[report.id] = report;
+          }
+        }
+      }
+    }
+    for (final feed in feeds) {
+      for (final event in feed.events) {
+        events[event.id] = event;
+      }
+    }
+    return events.values.toList();
+  }
 
   List<double>? visibleLegendBbox;
 
@@ -457,6 +513,7 @@ class _ShelterMapState extends State<ShelterMap> {
     if (!mounted) return;
     if (legendAlertsVisible == nextAlerts &&
         legendImgwVisible == nextImgw &&
+        hasWarningMarkers == eventFeatures.isNotEmpty &&
         legendSheltersVisible == nextShelters &&
         legendWatchedVisible == watchedVisible &&
         legendRadiationVisible == nextRadiation) {
@@ -467,6 +524,7 @@ class _ShelterMapState extends State<ShelterMap> {
       visibleLegendBbox = nextBbox;
       legendAlertsVisible = nextAlerts;
       legendImgwVisible = nextImgw;
+      hasWarningMarkers = eventFeatures.isNotEmpty;
       legendSheltersVisible = nextShelters;
       legendWatchedVisible = watchedVisible;
       legendRadiationVisible = nextRadiation;
@@ -494,26 +552,37 @@ class _ShelterMapState extends State<ShelterMap> {
   @override
   void initState() {
     super.initState();
-    if (widget.region != 'PL') {
-      nationalSnapshot = widget.repository.cached('PL');
-    }
+    nationalSnapshot = widget.repository.cached('PL');
+    directFeeds = widget.repository.officialMapWarnings.cached();
+    widget.repository.officialMapWarnings.addListener(updateDirectWarnings);
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (!mounted) return;
+      if (!mounted || !widget.active) return;
       setState(() {});
       if (showRadiation) {
         unawaited(refreshRadiationSnapshot());
       }
-      if (overviewMode) {
-        unawaited(refresh());
-      } else {
-        unawaited(syncContextLayers());
-      }
+      unawaited(syncContextLayers());
+      unawaited(refreshNationalEvents());
     });
+  }
+
+  void updateDirectWarnings() {
+    setState(
+      () => directFeeds = widget.repository.officialMapWarnings.cached(),
+    );
+    if (widget.active) unawaited(syncContextLayers());
   }
 
   @override
   void didUpdateWidget(covariant ShelterMap oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.repository != widget.repository) {
+      oldWidget.repository.officialMapWarnings.removeListener(
+        updateDirectWarnings,
+      );
+      widget.repository.officialMapWarnings.addListener(updateDirectWarnings);
+      directFeeds = widget.repository.officialMapWarnings.cached();
+    }
     if (oldWidget.radiation != widget.radiation) {
       radiationOverride = null;
       radiationOverrideOnline = false;
@@ -524,15 +593,22 @@ class _ShelterMapState extends State<ShelterMap> {
             oldWidget.radiationOnline != widget.radiationOnline)) {
       idle();
     }
+    if (widget.snapshot != null && oldWidget.snapshot != widget.snapshot) {
+      nationalEventsError = null;
+    }
     if (oldWidget.events != widget.events ||
+        oldWidget.snapshot != widget.snapshot ||
         oldWidget.watchedLocations != widget.watchedLocations) {
       unawaited(syncContextLayers());
     }
+    if (!oldWidget.active && widget.active) {
+      unawaited(syncContextLayers());
+      unawaited(refreshNationalEvents());
+    }
     if (oldWidget.region != widget.region) {
-      nationalSnapshot = widget.region == 'PL'
-          ? null
-          : widget.repository.cached('PL');
+      nationalSnapshot = widget.repository.cached('PL');
       nationalEventsUpdatedAt = null;
+      nationalEventsError = null;
       idle();
     }
   }
@@ -573,6 +649,7 @@ class _ShelterMapState extends State<ShelterMap> {
 
   @override
   void dispose() {
+    widget.repository.officialMapWarnings.removeListener(updateDirectWarnings);
     ticket++;
     ready = false;
     controller = null;
@@ -963,26 +1040,57 @@ class _ShelterMapState extends State<ShelterMap> {
     });
   }
 
-  Future<void> refreshNationalEvents() async {
-    if (widget.region == 'PL' ||
+  Future<void> refreshNationalEvents({bool force = false}) async {
+    if (!ready ||
+        !widget.active ||
         widget.repository.api.isEmpty ||
         nationalEventsLoading) {
       return;
     }
     final now = DateTime.now();
-    if (nationalEventsUpdatedAt != null &&
-        now.difference(nationalEventsUpdatedAt!) < const Duration(minutes: 1)) {
+    if (!force &&
+        (currentNationalSnapshot?.freshAt(now) == true ||
+            (nationalEventsUpdatedAt != null &&
+                now.difference(nationalEventsUpdatedAt!) <
+                    const Duration(minutes: 1)))) {
       return;
     }
-    nationalEventsLoading = true;
+    setState(() => nationalEventsLoading = true);
+    final repository = widget.repository;
+    var directStarted = false;
+    void readDirect() {
+      if (directStarted || !mounted || !widget.active) return;
+      directStarted = true;
+      unawaited(repository.officialMapWarnings.refresh(force: force));
+    }
+
+    Timer? slowSnapshot;
+    if (force || currentNationalSnapshot == null) {
+      readDirect();
+    } else {
+      slowSnapshot = Timer(const Duration(seconds: 4), readDirect);
+    }
     try {
-      nationalSnapshot = await widget.repository.refresh('PL');
-    } catch (_) {
-      nationalSnapshot ??= widget.repository.cached('PL');
+      final snapshot = await repository.refresh('PL');
+      if (!mounted) return;
+      nationalSnapshot = snapshot;
+      nationalEventsError = null;
+    } catch (error) {
+      if (!mounted) return;
+      if (error is ApiFailure && error.kind != ApiFailureKind.notConfigured) {
+        readDirect();
+      }
+      nationalEventsError = error is ApiFailure && error.statusCode != null
+          ? 'Nie udało się pobrać pełnej listy ostrzeżeń (HTTP ${error.statusCode}).'
+          : 'Nie udało się pobrać pełnej listy ostrzeżeń dla Polski.';
     } finally {
+      slowSnapshot?.cancel();
       nationalEventsUpdatedAt = DateTime.now();
       nationalEventsLoading = false;
     }
+    if (!mounted) return;
+    await syncContextLayers();
+    if (mounted) setState(() {});
   }
 
   Future<void> syncContextLayers() async {
@@ -1090,6 +1198,7 @@ class _ShelterMapState extends State<ShelterMap> {
     if (!ready || c == null || widget.ukraine) return;
     final current = ++ticket;
     setState(() => loading = true);
+    unawaited(refreshNationalEvents());
     MapRequest? request;
     try {
       final bounds = await c.getVisibleRegion();
@@ -1150,14 +1259,7 @@ class _ShelterMapState extends State<ShelterMap> {
       }
       if (!mounted || current != ticket) return;
       final zoom = (c.cameraPosition?.zoom ?? 5).clamp(0, 22).toDouble();
-      final shouldUseNationalOverview = zoom < 9;
-      if (overviewMode != shouldUseNationalOverview) {
-        setState(() => overviewMode = shouldUseNationalOverview);
-      }
-      if (shouldUseNationalOverview) {
-        await refreshNationalEvents();
-      }
-      if (!mounted || current != ticket) return;
+      shelterZoomVisible = mapShowsShelters(zoom);
       updateMapLegend(
         bbox,
         sheltersVisible:
@@ -1336,8 +1438,6 @@ class _ShelterMapState extends State<ShelterMap> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title, style: Theme.of(sheetContext).textTheme.titleLarge),
-              const SizedBox(height: 4),
-              const Text('Wybierz konkretną pozycję do otwarcia.'),
               const SizedBox(height: 12),
               for (final event in events)
                 ListTile(
@@ -1352,11 +1452,18 @@ class _ShelterMapState extends State<ShelterMap> {
                   ),
                   title: Text(event.title),
                   subtitle: Text(
-                    mapEventIsImgw(event)
-                        ? 'Ostrzeżenie IMGW'
-                        : event.isRcb
-                        ? 'Alert RCB'
-                        : 'Alert lub komunikat',
+                    [
+                      safetySourceLabel(event),
+                      if (event.data['locationText'] case final String area
+                          when area.trim().isNotEmpty &&
+                              mapEventTerytCodes(event).isEmpty)
+                        area.trim()
+                      else if (event.areas.isNotEmpty)
+                        event.areas
+                            .map((code) => regions[code] ?? code)
+                            .join(', '),
+                      safetyEventTimeLabel(event),
+                    ].join('\n'),
                   ),
                   onTap: () {
                     Navigator.of(sheetContext).pop();
@@ -1450,7 +1557,7 @@ class _ShelterMapState extends State<ShelterMap> {
         'watched-points',
       ], null);
       if (contextHits.isNotEmpty && mounted) {
-        final hitEventIds = <String>{};
+        final renderedEventIds = <String>{};
         final hitEventPoints = <String>{};
         String? locationId;
         for (final rawHit in contextHits) {
@@ -1460,37 +1567,40 @@ class _ShelterMapState extends State<ShelterMap> {
           );
           final eventId = properties['eventId']?.toString();
           if (eventId != null && eventId.isNotEmpty) {
-            hitEventIds.add(eventId);
+            renderedEventIds.add(eventId);
             final pointKey = featurePointKey(rawHit);
             if (pointKey != null) hitEventPoints.add(pointKey);
           }
           locationId ??= properties['locationId']?.toString();
         }
 
-        // Red and blue collision markers are intentionally shifted on screen,
-        // but still represent the same underlying map coordinate. If the user
-        // taps either one, include every event anchored at that coordinate so
-        // the first choice is always ALERT vs IMGW, never whichever circle
-        // happened to win MapLibre hit-testing.
-        if (hitEventPoints.isNotEmpty) {
-          for (final feature in contextEventFeatures(DateTime.now())) {
-            final pointKey = featurePointKey(feature);
-            if (pointKey == null || !hitEventPoints.contains(pointKey)) {
-              continue;
-            }
-            final properties = feature['properties'];
-            if (properties is! Map) continue;
-            final eventId = properties['eventId']?.toString();
-            if (eventId != null && eventId.isNotEmpty) {
+        final now = DateTime.now();
+        final hitEventIds = <String>{};
+        // Include both color layers at each tapped coordinate and use only
+        // current features, which may have changed since MapLibre drew them.
+        if (renderedEventIds.isNotEmpty) {
+          for (final feature in contextEventFeatures(now)) {
+            final eventId = feature['properties']['eventId'] as String;
+            if (renderedEventIds.contains(eventId) ||
+                hitEventPoints.contains(featurePointKey(feature))) {
               hitEventIds.add(eventId);
             }
           }
         }
 
-        final hitEvents = <SafetyEvent>[
-          for (final event in contextEvents)
-            if (hitEventIds.contains(event.id)) event,
-        ];
+        final hitEvents =
+            [
+              for (final event in contextEvents)
+                if (hitEventIds.remove(event.id)) event,
+            ]..sort((a, b) {
+              final priority = safetyEventPriority(
+                a,
+                now,
+              ).compareTo(safetyEventPriority(b, now));
+              return priority != 0
+                  ? priority
+                  : safetyEventTime(b).compareTo(safetyEventTime(a));
+            });
         if (hitEvents.length == 1) {
           widget.openEvent(hitEvents.single);
           return;
@@ -1700,6 +1810,49 @@ class _ShelterMapState extends State<ShelterMap> {
     await c.animateCamera(CameraUpdate.newLatLngZoom(homeTarget, homeZoom));
   }
 
+  Future<void> focusWarningMarkers() async {
+    final c = controller;
+    if (c == null) return;
+    final points = contextEventFeatures(DateTime.now()).map((feature) {
+      final coordinates = feature['geometry']['coordinates'] as List;
+      return LatLng(
+        (coordinates[1] as num).toDouble(),
+        (coordinates[0] as num).toDouble(),
+      );
+    }).toList();
+    if (points.isEmpty) return;
+    var south = points.first.latitude, north = south;
+    var west = points.first.longitude, east = west;
+    for (final point in points.skip(1)) {
+      south = math.min(south, point.latitude);
+      north = math.max(north, point.latitude);
+      west = math.min(west, point.longitude);
+      east = math.max(east, point.longitude);
+    }
+    if (south == north && west == east) {
+      await c.animateCamera(CameraUpdate.newLatLngZoom(points.first, 7));
+      return;
+    }
+    await c.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(south, west),
+          northeast: LatLng(north, east),
+        ),
+        left: 50,
+        right: 58,
+        top: 50,
+        bottom: 40,
+      ),
+    );
+  }
+
+  Future<void> focusShelters() async {
+    final c = controller;
+    if (c == null) return;
+    await c.animateCamera(CameraUpdate.zoomTo(shelterDetailZoom + 0.5));
+  }
+
   void setRadiationVisible(bool value) {
     setState(() {
       showRadiation = value;
@@ -1730,6 +1883,7 @@ class _ShelterMapState extends State<ShelterMap> {
   }
 
   Widget layerBar() {
+    final scheme = Theme.of(context).colorScheme;
     Widget chip(
       String label,
       Color color,
@@ -1740,10 +1894,10 @@ class _ShelterMapState extends State<ShelterMap> {
       selected: selected,
       showCheckmark: true,
       selectedColor: color.withValues(alpha: 0.22),
-      checkmarkColor: Theme.of(context).colorScheme.onSurface,
-      side: BorderSide(
-        color: selected ? color : Theme.of(context).colorScheme.outlineVariant,
-      ),
+      checkmarkColor: scheme.onSurface,
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+      side: BorderSide(color: selected ? color : scheme.outlineVariant),
       onSelected: onSelected,
     );
     return Row(
@@ -1753,7 +1907,7 @@ class _ShelterMapState extends State<ShelterMap> {
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              spacing: 8,
+              spacing: 6,
               children: [
                 chip('Alerty', const Color(0xffb3261e), showEvents, (value) {
                   setState(() => showEvents = value);
@@ -1780,7 +1934,7 @@ class _ShelterMapState extends State<ShelterMap> {
           ),
         ),
         const SizedBox(width: 8),
-        IconButton.filledTonal(
+        IconButton.outlined(
           tooltip: 'Opcje mapy',
           icon: const Icon(Icons.tune),
           onPressed: showLayers,
@@ -1881,6 +2035,17 @@ class _ShelterMapState extends State<ShelterMap> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    Widget mapControl(Widget child) => Material(
+      color: scheme.surfaceContainerLowest,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+
     final fresh = online && viewport?.freshAt(DateTime.now()) == true;
     final showMapLegend =
         legendAlertsVisible ||
@@ -1908,8 +2073,13 @@ class _ShelterMapState extends State<ShelterMap> {
           height: (MediaQuery.sizeOf(context).height * 0.62)
               .clamp(430.0, 620.0)
               .toDouble(),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
+          child: Material(
+            color: scheme.surfaceContainerLow,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: scheme.outlineVariant),
+            ),
+            clipBehavior: Clip.antiAlias,
             child: Stack(
               children: [
                 MapLibreMap(
@@ -1948,51 +2118,61 @@ class _ShelterMapState extends State<ShelterMap> {
                   featureTapsTriggersMapClick: true,
                 ),
                 Positioned(
-                  right: 8,
-                  top: 8,
+                  right: 10,
+                  top: 10,
                   child: Column(
                     children: [
-                      IconButton.filledTonal(
-                        tooltip: 'Przybliż',
-                        onPressed: () => zoom(1),
-                        icon: const Icon(Icons.add),
+                      mapControl(
+                        Column(
+                          children: [
+                            IconButton(
+                              tooltip: 'Przybliż',
+                              onPressed: () => zoom(1),
+                              icon: const Icon(Icons.add),
+                            ),
+                            SizedBox(
+                              width: 44,
+                              child: Divider(color: scheme.outlineVariant),
+                            ),
+                            IconButton(
+                              tooltip: 'Oddal',
+                              onPressed: () => zoom(-1),
+                              icon: const Icon(Icons.remove),
+                            ),
+                          ],
+                        ),
                       ),
-                      IconButton.filledTonal(
-                        tooltip: 'Oddal',
-                        onPressed: () => zoom(-1),
-                        icon: const Icon(Icons.remove),
-                      ),
+                      if (!widget.ukraine) ...[
+                        const SizedBox(height: 8),
+                        mapControl(
+                          IconButton(
+                            tooltip: 'Pokaż moją lokalizację',
+                            onPressed: locating ? null : locateUser,
+                            icon: locating
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.my_location),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
                 if (!widget.ukraine)
                   Positioned(
-                    right: 8,
-                    top: 112,
-                    child: IconButton.filledTonal(
-                      tooltip: 'Pokaż moją lokalizację',
-                      onPressed: locating ? null : locateUser,
-                      icon: locating
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.my_location),
-                    ),
-                  ),
-                if (!widget.ukraine)
-                  Positioned(
-                    left: 8,
-                    top: 8,
-                    child: Column(
-                      children: [
-                        IconButton.filledTonal(
-                          tooltip: 'Wróć do wybranej miejscowości',
-                          onPressed: goHome,
-                          icon: const Icon(Icons.home_outlined),
-                        ),
-                      ],
+                    left: 10,
+                    top: 10,
+                    child: mapControl(
+                      IconButton(
+                        tooltip: 'Wróć do wybranej miejscowości',
+                        onPressed: goHome,
+                        icon: const Icon(Icons.home_outlined),
+                      ),
                     ),
                   ),
                 if (loading)
@@ -2014,125 +2194,166 @@ class _ShelterMapState extends State<ShelterMap> {
               showWatched: legendWatchedVisible,
               showRadiation: legendRadiationVisible,
             ),
+          if ((showEvents || showImgw) &&
+              (nationalEventsError != null || newerDirectFeeds.isNotEmpty)) ...[
+            if (nationalEventsError != null)
+              Text(
+                nationalEventsError!,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            if (newerDirectFeeds.isNotEmpty)
+              Text(
+                'Ostatni odczyt bezpośredni: ${newerDirectFeeds.map((f) => "${f.label} · ${stamp(f.checkedAt.toIso8601String())}").join(", ")}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            if (nationalEventsError != null && !nationalEventsLoading)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => refreshNationalEvents(force: true),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Odśwież ostrzeżenia'),
+                ),
+              ),
+          ],
+          if (ready &&
+              visibleLegendBbox != null &&
+              (showEvents || showImgw) &&
+              !legendAlertsVisible &&
+              !legendImgwVisible) ...[
+            if (hasWarningMarkers ||
+                nationalEventsLoading ||
+                nationalEventsError == null ||
+                newerDirectFeeds.isNotEmpty)
+              Text(
+                hasWarningMarkers
+                    ? 'Znaczniki ostrzeżeń są poza widocznym obszarem.'
+                    : nationalEventsLoading
+                    ? 'Pobieranie ostrzeżeń dla Polski…'
+                    : (currentNationalSnapshot == null &&
+                              newerDirectFeeds.isEmpty
+                          ? 'Brak danych ostrzeżeń dla całej Polski.'
+                          : 'Brak znaczników dla włączonych warstw.'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            if (hasWarningMarkers)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: focusWarningMarkers,
+                  icon: const Icon(Icons.warning_amber_rounded),
+                  label: const Text('Pokaż ostrzeżenia na mapie'),
+                ),
+              ),
+          ],
           const SizedBox(height: 6),
-          Text(
-            !showShelters
-                ? 'Schronienia: warstwa wyłączona'
-                : overviewMode
-                ? 'Zdarzenia dla całej Polski'
-                : viewport == null
-                ? 'Ładowanie danych schronień…'
-                : !online
-                ? 'Schronienia: zapisana kopia offline'
-                : fresh
-                ? 'Schronienia: dane źródła aktualne'
-                : 'Schronienia: aktualność danych niepotwierdzona',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-        if (!widget.ukraine) ...[
-          const SizedBox(height: 10),
-          if (!showGpsInterference)
+          if (showShelters && !shelterZoomVisible)
             Align(
               alignment: Alignment.centerLeft,
-              child: FilterChip(
-                avatar: const Icon(Icons.satellite_alt_outlined),
-                label: const Text('Zakłócenia GPS/GNSS'),
-                selected: false,
-                onSelected: (value) =>
-                    unawaited(setGpsInterferenceVisible(value)),
+              child: TextButton.icon(
+                onPressed: focusShelters,
+                icon: const Icon(Icons.zoom_in),
+                label: const Text('Przybliż do schronień'),
               ),
             )
           else
-            Card(
-              elevation: 0,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+            Text(
+              !showShelters
+                  ? 'Schronienia: warstwa wyłączona'
+                  : loading && viewport == null
+                  ? 'Ładowanie danych schronień…'
+                  : viewport == null
+                  ? 'Brak danych schronień dla tego obszaru.'
+                  : !online
+                  ? 'Schronienia: zapisana kopia offline'
+                  : fresh
+                  ? 'Schronienia: dane źródła aktualne'
+                  : 'Schronienia: aktualność danych niepotwierdzona',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+        ],
+        if (!widget.ukraine) ...[
+          const SizedBox(height: 10),
+          Card(
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SwitchListTile.adaptive(
+                  secondary: const Icon(Icons.satellite_alt_outlined),
+                  title: const Text('Zakłócenia GPS/GNSS'),
+                  subtitle: const Text('Dane dobowe GPSJAM'),
+                  value: showGpsInterference,
+                  onChanged: (value) =>
+                      unawaited(setGpsInterferenceVisible(value)),
+                ),
+                if (showGpsInterference) ...[
+                  const Divider(),
+                  if (gpsInterferenceLoading) const LinearProgressIndicator(),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: FilterChip(
-                            avatar: const Icon(Icons.satellite_alt_outlined),
-                            label: Text(
-                              showGpsInterference
-                                  ? 'Zakłócenia GPS/GNSS — włączone'
-                                  : 'Zakłócenia GPS/GNSS',
-                            ),
-                            selected: showGpsInterference,
-                            onSelected: (value) {
-                              unawaited(setGpsInterferenceVisible(value));
-                            },
-                          ),
+                        Text(
+                          gpsInterference == null
+                              ? gpsInterferenceLoading
+                                    ? 'Ładowanie dobowej mapy zakłóceń…'
+                                    : 'Brak dobowych danych zakłóceń.'
+                              : 'Dane dobowe: ${gpsInterference!.dataDate} UTC',
+                          style: Theme.of(context).textTheme.labelLarge,
                         ),
-                        if (gpsInterferenceLoading)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 10),
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 6,
+                          children: [
+                            gpsLegend(const Color(0xff43a047), 'Niskie 0–2%'),
+                            gpsLegend(
+                              const Color(0xfffdd835),
+                              'Średnie >2–10%',
+                            ),
+                            gpsLegend(const Color(0xffe53935), 'Wysokie >10%'),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Mapa pokazuje obniżoną dokładność nawigacji zgłoszoną przez samoloty w ciągu doby. Przyczyna zakłóceń pozostaje nieustalona.',
+                        ),
+                        if (gpsInterferenceError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              'Warstwa chwilowo niedostępna: $gpsInterferenceError',
                             ),
                           ),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            TextButton.icon(
+                              onPressed: gpsInterferenceLoading
+                                  ? null
+                                  : () => unawaited(
+                                      refreshGpsInterferenceForCurrentViewport(),
+                                    ),
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Odśwież'),
+                            ),
+                            TextButton(
+                              onPressed: () =>
+                                  widget.openLink('https://gpsjam.org/faq'),
+                              child: const Text('GPSJAM'),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                    if (showGpsInterference) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        gpsInterference == null
-                            ? 'Ładowanie dobowej mapy zakłóceń…'
-                            : 'Dane dobowe: ${gpsInterference!.dataDate} UTC',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 7),
-                      Wrap(
-                        spacing: 14,
-                        runSpacing: 6,
-                        children: [
-                          gpsLegend(const Color(0xff43a047), 'Niskie 0–2%'),
-                          gpsLegend(const Color(0xfffdd835), 'Średnie >2–10%'),
-                          gpsLegend(const Color(0xffe53935), 'Wysokie >10%'),
-                        ],
-                      ),
-                      const SizedBox(height: 7),
-                      const Text(
-                        'Kolorowe heksy pokazują obszary, w których samoloty raportowały obniżoną dokładność nawigacji. Dane są agregowane dobowo i nie dowodzą celowego zagłuszania.',
-                      ),
-                      if (gpsInterferenceError != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            'Warstwa chwilowo niedostępna: $gpsInterferenceError',
-                          ),
-                        ),
-                      Row(
-                        children: [
-                          TextButton.icon(
-                            onPressed: gpsInterferenceLoading
-                                ? null
-                                : () => unawaited(
-                                    refreshGpsInterferenceForCurrentViewport(),
-                                  ),
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Odśwież'),
-                          ),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () =>
-                                widget.openLink('https://gpsjam.org/faq'),
-                            child: const Text('GPSJAM'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+                  ),
+                ],
+              ],
             ),
+          ),
         ],
         if (!widget.ukraine && showRadiation) ...[
           Text(
@@ -2143,7 +2364,7 @@ class _ShelterMapState extends State<ShelterMap> {
                   ).measurementText(DateTime.now(), currentRadiationOnline),
           ),
           const Text(
-            'Komunikaty PAA są dostępne w Statusie i Alert Center. Brak punktów na mapie nie oznacza braku zagrożenia.',
+            'Komunikaty PAA znajdziesz w zakładce Alerty. Brak punktów na mapie nie pozwala ocenić sytuacji radiacyjnej.',
           ),
           TextButton(
             onPressed: () =>

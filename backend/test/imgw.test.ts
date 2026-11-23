@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {ingest} from '../src/adapters.js';
 import {computeStatus} from '../src/domain.js';
 import {imgwHydroAdapter,imgwMeteoAdapter,parseImgwHydro,parseImgwMeteo} from '../src/imgw-adapter.js';
+import {openDb,Store} from '../src/store.js';
 
 const now=new Date('2026-09-23T10:00:00Z');
 const hydro=JSON.stringify([{opublikowano:'2026-05-17 08:45:07','stopień':'-1',data_od:'2026-05-17 08:45:56',data_do:'9999-12-31 23:59:59',prawdopodobienstwo:'90',numer:'31',biuro:'Biuro Prognoz Hydrologicznych we Wrocławiu',zdarzenie:'Susza hydrologiczna',przebieg:'Utrzymywanie się przepływów poniżej SNQ.',komentarz:'Ostrzeżenie hydrologiczne.',obszary:[{wojewodztwo:'wielkopolskie',opis:'wielkopolskie, Kanał Mosiński, susza hydrologiczna',kod_zlewni:['Z_P_WP_1856']}]}]);
@@ -14,3 +16,38 @@ test('IMGW current Polish empty-warning messages are safe empty sets',()=>{asser
 test('IMGW parser fails closed on unknown TERYT and unsupported warning degree',()=>{const badRegion=JSON.parse(meteo);badRegion[0].teryt=['9901'];assert.throws(()=>parseImgwMeteo(JSON.stringify(badRegion),now),/IMGW_UNKNOWN_REGION/);const badLevel=JSON.parse(hydro);badLevel[0]['stopień']='7';assert.throws(()=>parseImgwHydro(JSON.stringify(badLevel),now),/IMGW_WARNING_LEVEL_INVALID/);});
 test('IMGW adapters expose complete active-warning coverage independently',async()=>{const a=await imgwMeteoAdapter.sync({now,fetchText:async()=>meteo});const b=await imgwHydroAdapter.sync({now,fetchText:async()=>hydro});assert.equal(a.complete,true);assert.equal(b.complete,true);assert.equal(a.coverage,'ACTIVE_WARNINGS');assert.equal(b.coverage,'ACTIVE_WARNINGS');});
 test('active tier-1 IMGW warning participates in regional status',()=>{const [event]=parseImgwMeteo(meteo,new Date('2026-09-23T12:00:00Z'));const health={id:'IMGW_METEO',name:'IMGW',url:'https://danepubliczne.imgw.pl/api/data/warningsmeteo',state:'HEALTHY' as const,lastSuccess:'2026-09-23T12:00:00Z',lastFailure:null,lastItemTime:event.publishedAt,failureCount:0,responseTime:20,maxAgeSeconds:900,complete:true,enabled:true,coverage:'ACTIVE_WARNINGS' as const,pagesFetched:1};const status=computeStatus([event],[health],'04',new Date('2026-09-23T12:30:00Z'));assert.equal(status.hazardLevel,'CAUTION');assert.deepEqual(status.supportingEventIds,[event.id]);});
+
+test('complete IMGW feed retires omitted warnings and retains their history',async()=>{
+ const db=openDb(undefined,':memory:'),store=new Store(db);
+ await store.init();
+ const [upstream]=JSON.parse(hydro);
+ const both=JSON.stringify([upstream,{...upstream,numer:'32',przebieg:'Susza w innej zlewni.'}]);
+ const [current,omitted]=parseImgwHydro(both,now);
+ const adapter={...imgwHydroAdapter,minSyncIntervalSeconds:0};
+ const sync=(payload:string)=>ingest(store,[adapter],async()=>payload);
+ try{
+  const rso={...omitted,id:'RSO-drought',sources:[{id:'RSO',name:'RSO',tier:1,url:'https://komunikaty.tvp.pl/'}]};
+  await store.put(rso);
+  await sync(both);
+  assert.equal((await store.get(omitted.id))?.lifecycle,'ACTIVE');
+
+  await sync('{"error":"unavailable"}');
+  assert.equal((await store.health()).find(source=>source.id===adapter.id)?.state,'BROKEN');
+  assert.equal((await store.get(omitted.id))?.lifecycle,'ACTIVE');
+
+  await sync(hydro);
+  assert.equal((await store.get(current.id))?.lifecycle,'ACTIVE');
+  assert.equal((await store.get(rso.id))?.lifecycle,'ACTIVE');
+  const history=await store.timeline(omitted.id);
+  assert.deepEqual(history.map(revision=>revision.payload.lifecycle),['ACTIVE','ENDED']);
+  assert.equal(history[0].payload.validTo,omitted.validTo);
+  assert.equal(history[1].payload.validTo,null);
+
+  await sync(hydro);
+  assert.equal((await store.timeline(omitted.id)).length,2);
+  await sync('{"status":false,"message":"No products were found"}');
+  assert.equal((await store.get(current.id))?.lifecycle,'ENDED');
+  await sync(hydro);
+  assert.equal((await store.get(current.id))?.lifecycle,'ACTIVE');
+ }finally{await db.close();}
+});

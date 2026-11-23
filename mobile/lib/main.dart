@@ -22,8 +22,8 @@ import 'screens/dashboard_screen.dart';
 import 'screens/alerts_screen.dart';
 import 'screens/map_screen.dart';
 import 'screens/more_screen.dart';
+import 'ui/app_chrome.dart';
 import 'ui/app_theme.dart';
-import 'ui/brand.dart';
 import 'ui/brand_splash.dart';
 import 'ui/first_launch_onboarding.dart';
 
@@ -58,37 +58,55 @@ class BootstrapApp extends StatefulWidget {
 }
 
 class _BootstrapAppState extends State<BootstrapApp> {
-  late final Future<_BootstrapResult> _bootstrap = _initialize();
+  late Future<_BootstrapResult> _bootstrap = _initialize();
+  bool _ready = false;
 
   Future<_BootstrapResult> _initialize() async {
-    final minimumSplash = Future<void>.delayed(
-      const Duration(milliseconds: 850),
-    );
     final repository = DataRepository(await SharedPreferences.getInstance());
     final pushAdapter = await safePushPlatformAdapter(
       FirebasePushPlatformAdapter.fromBuildConfiguration,
     );
-    await minimumSplash;
     return _BootstrapResult(repository, PushManager(repository, pushAdapter));
+  }
+
+  void _markReady() {
+    if (mounted && !_ready) setState(() => _ready = true);
   }
 
   @override
   Widget build(BuildContext context) => FutureBuilder<_BootstrapResult>(
     future: _bootstrap,
     builder: (context, snapshot) {
+      Widget? app;
       if (snapshot.hasData) {
         final result = snapshot.requireData;
-        return SafetyApp(
+        app = SafetyApp(
           repository: result.repository,
           pushManager: result.pushManager,
           firstLaunchOnboarding: true,
+          onLaunchReady: _markReady,
+        );
+      } else if (snapshot.hasError) {
+        app = MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () => setState(() {
+                  _ready = false;
+                  _bootstrap = _initialize();
+                }),
+                child: const Text('Spróbuj ponownie uruchomić aplikację'),
+              ),
+            ),
+          ),
         );
       }
 
-      return const MaterialApp(
-        title: 'Bezpieczna Polska',
-        debugShowCheckedModeBanner: false,
-        home: BrandLoadingScreen(),
+      return BrandStartupCover(
+        key: ObjectKey(_bootstrap),
+        ready: _ready || snapshot.hasError,
+        child: app,
       );
     },
   );
@@ -98,12 +116,14 @@ class SafetyApp extends StatefulWidget {
   final DataRepository repository;
   final PushManager? pushManager;
   final bool firstLaunchOnboarding;
+  final VoidCallback? onLaunchReady;
 
   const SafetyApp({
     super.key,
     required this.repository,
     this.pushManager,
     this.firstLaunchOnboarding = false,
+    this.onLaunchReady,
   });
 
   @override
@@ -129,6 +149,12 @@ class _SafetyAppState extends State<SafetyApp> {
 
     _showFirstLaunchOnboarding =
         widget.firstLaunchOnboarding && !completed && !legacyHandled;
+
+    if (_showFirstLaunchOnboarding && widget.onLaunchReady != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onLaunchReady?.call();
+      });
+    }
 
     if (legacyHandled && !completed) {
       unawaited(prefs.setBool(_firstLaunchOnboardingKey, true));
@@ -247,6 +273,7 @@ class _SafetyAppState extends State<SafetyApp> {
             repository: widget.repository,
             pushManager: widget.pushManager,
             onTheme: () => setState(() {}),
+            onLaunchReady: widget.onLaunchReady,
           ),
   );
 }
@@ -255,11 +282,13 @@ class Home extends StatefulWidget {
   final DataRepository repository;
   final PushManager? pushManager;
   final VoidCallback onTheme;
+  final VoidCallback? onLaunchReady;
   const Home({
     super.key,
     required this.repository,
     this.pushManager,
     required this.onTheme,
+    this.onLaunchReady,
   });
   @override
   State<Home> createState() => _HomeState();
@@ -271,7 +300,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   bool online = false, loading = false, backgroundSync = false;
   late String region;
   String? localityLabel;
-  Snapshot? snapshot;
+  Snapshot? snapshot, nationalSnapshot;
   AroundResult? localityAround;
   OfflineRegionPackage? offlinePackageData;
   String? error;
@@ -310,23 +339,35 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (snapshot != null || widget.repository.api.isEmpty) {
+        widget.onLaunchReady?.call();
+      }
       unawaited(_consumeInitialPushOpen());
     });
   }
 
-  void loadSeen() {
+  String get _seenKey => 'seen:${widget.repository.api}';
+
+  Map<String, int> _readSeen(String key) {
     try {
-      seen = Map<String, int>.from(
-        jsonDecode(
-              widget.repository.prefs.getString(
-                    'seen:${widget.repository.api}:$region',
-                  ) ??
-                  '{}',
-            )
-            as Map,
+      return Map<String, int>.from(
+        jsonDecode(widget.repository.prefs.getString(key) ?? '{}') as Map,
       );
     } catch (_) {
-      seen = {};
+      return {};
+    }
+  }
+
+  void loadSeen() {
+    seen = {..._readSeen('$_seenKey:$region'), ..._readSeen(_seenKey)};
+  }
+
+  Future<void> _saveSeen() async {
+    try {
+      await widget.repository.prefs.setString(_seenKey, jsonEncode(seen));
+    } catch (_) {
+      debugPrint('Nie udało się zapisać przeczytanych alertów.');
     }
   }
 
@@ -365,6 +406,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       offlinePackageData = package;
       if (!online && fallback != null) snapshot = fallback;
     });
+    if (snapshot != null) widget.onLaunchReady?.call();
   }
 
   Future<void> refresh() async {
@@ -373,15 +415,19 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       loading = true;
       error = null;
     });
+    final nearby = refreshPrimaryLocation(target).then((result) {
+      if (mounted && ticket == generation) {
+        setState(() => localityAround = result);
+      }
+    });
     try {
       final s = await widget.repository.refresh(target);
-      final localResult = await refreshPrimaryLocation(target);
       if (mounted && ticket == generation) {
         setState(() {
           snapshot = s;
-          localityAround = localResult;
           online = true;
         });
+        widget.onLaunchReady?.call();
         unawaited(_retryPendingPushOpen());
       }
     } catch (failure) {
@@ -391,16 +437,29 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           error = apiFailureMessage(failure);
         });
         await loadOffline();
+        if (mounted && ticket == generation) widget.onLaunchReady?.call();
       }
     } finally {
+      await nearby;
       if (mounted && ticket == generation) setState(() => loading = false);
     }
   }
 
   Future<void> startupSync() async {
-    if (backgroundSync || widget.repository.api.isEmpty) return;
+    final repository = widget.repository;
+    final api = repository.api, dataGeneration = repository.dataGeneration;
+    if (backgroundSync || api.isEmpty) return;
     final target = region;
     setState(() => backgroundSync = true);
+    final cachedNational = repository.cached('PL');
+    if (cachedNational?.freshAt(DateTime.now()) != true) {
+      unawaited(repository.officialMapWarnings.refresh());
+    }
+
+    bool sameConfiguration() =>
+        mounted &&
+        target == region &&
+        dataGeneration == repository.dataGeneration;
 
     Future<void> ignoreFailure(Future<dynamic> Function() action) async {
       try {
@@ -412,25 +471,34 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     }
 
     try {
-      await refresh();
-      if (!mounted || target != region || widget.repository.api.isEmpty) return;
+      await Future.wait([
+        refresh(),
+        if (target != 'PL')
+          ignoreFailure(() async {
+            final result = await repository.refresh('PL');
+            if (sameConfiguration()) {
+              setState(() => nationalSnapshot = result);
+            }
+          }),
+        ignoreFailure(repository.refreshNeptun),
+      ]);
+      if (!sameConfiguration()) return;
 
-      final existingPackage = await widget.repository.offlinePackage(target);
+      final existingPackage = await repository.offlinePackage(target);
       final shouldRefreshOffline =
           existingPackage == null ||
           DateTime.now().toUtc().difference(existingPackage.createdAt) >
               const Duration(hours: 6);
 
-      await Future.wait([
-        ignoreFailure(widget.repository.refreshNeptun),
-        if (shouldRefreshOffline)
-          ignoreFailure(() => widget.repository.downloadOfflinePackage(target)),
-      ]);
-      if (mounted && target == region) await loadOffline();
+      if (sameConfiguration() && shouldRefreshOffline) {
+        await ignoreFailure(() => repository.downloadOfflinePackage(target));
+      }
+      if (sameConfiguration()) await loadOffline();
     } finally {
       if (mounted) {
         setState(() => backgroundSync = false);
-        if (target != region && widget.repository.api.isNotEmpty) {
+        if ((target != region || api != repository.api) &&
+            repository.api.isNotEmpty) {
           unawaited(startupSync());
         }
       }
@@ -455,12 +523,16 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         regionId: target,
       );
     } catch (_) {
-      result = await widget.repository.offlineAround(
-        latitude,
-        longitude,
-        radiusKm: 20,
-        regionId: target,
-      );
+      try {
+        result = await widget.repository.offlineAround(
+          latitude,
+          longitude,
+          radiusKm: 20,
+          regionId: target,
+        );
+      } catch (_) {
+        return null;
+      }
     }
     return result;
   }
@@ -778,28 +850,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: page == 0
-          ? const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                BrandMark(size: 36),
-                SizedBox(width: 10),
-                Text('Bezpieczna Polska'),
-              ],
-            )
-          : Text(['Bezpieczna Polska', 'Mapa', 'Alerty', 'Więcej'][page]),
-      actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: IconButton.filledTonal(
-            tooltip: 'Ustawienia',
-            onPressed: settings,
-            icon: const Icon(Icons.settings_outlined),
-          ),
-        ),
-      ],
-    ),
+    appBar: SafetyAppBar(page: page, onSettings: settings),
     body: SafeArea(
       child: IndexedStack(
         index: page,
@@ -821,11 +872,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             onOpenAlerts: () => _selectPage(2),
             onOpenSecurityLevels: openSecurityLevels,
             onOpenEvent: details,
+            readRevisions: seen,
           ),
           visitedPages.contains(1)
               ? SafetyMapScreen(
                   repository: widget.repository,
+                  active: page == 1,
                   snapshot: snapshot,
+                  nationalSnapshot: nationalSnapshot,
                   events: events,
                   online: online,
                   region: region,
@@ -838,6 +892,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   events: events,
                   onOpenEvent: details,
                   onRefresh: startupSync,
+                  readRevisions: seen,
                 )
               : const SizedBox.shrink(),
           visitedPages.contains(3)
@@ -855,31 +910,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ],
       ),
     ),
-    bottomNavigationBar: NavigationBar(
+    bottomNavigationBar: SafetyTabBar(
       selectedIndex: page,
       onDestinationSelected: _selectPage,
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.shield_outlined),
-          selectedIcon: Icon(Icons.shield),
-          label: 'Start',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.map_outlined),
-          selectedIcon: Icon(Icons.map),
-          label: 'Mapa',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.campaign_outlined),
-          selectedIcon: Icon(Icons.campaign),
-          label: 'Alerty',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.more_horiz),
-          selectedIcon: Icon(Icons.more),
-          label: 'Więcej',
-        ),
-      ],
     ),
   );
 
@@ -1043,6 +1076,15 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   }
 
   void details(SafetyEvent e) {
+    final opened = {
+      for (final report in e.reports)
+        if (report.revision > (seen[report.id] ?? 0))
+          report.id: report.revision,
+    };
+    if (opened.isNotEmpty) {
+      setState(() => seen.addAll(opened));
+      unawaited(_saveSeen());
+    }
     Navigator.push(
       context,
       MaterialPageRoute<void>(
@@ -1088,6 +1130,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       if (mounted) {
                         setState(() {
                           snapshot = null;
+                          nationalSnapshot = null;
                           online = false;
                           loading = false;
                           seen = {};
@@ -1230,11 +1273,12 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   if (mounted) {
                     setState(() {
                       snapshot = widget.repository.cached(region);
+                      nationalSnapshot = null;
                       online = false;
                       loading = false;
                       loadSeen();
                     });
-                    if (widget.repository.api.isNotEmpty) await refresh();
+                    if (widget.repository.api.isNotEmpty) await startupSync();
                   }
                 } catch (_) {
                   update(() => validation = 'Wymagany poprawny adres HTTPS.');

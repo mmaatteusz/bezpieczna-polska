@@ -16,6 +16,19 @@ test('RSO keeps feed available when alarm marker changes',()=>{
  assert.equal(parseRso(rso('ALARM'),now)[0].severity,'HIGH');
 });
 
+test('RSO treats an explicit Alert RCB cancellation as historical within the display window',()=>{
+ const time=new Date('2026-09-24T10:30:00Z');
+ const closure=rso('1')
+  .replace('Komunikat RSO','ALERT RCB / SPO-13')
+  .replace('Oficjalny komunikat testowy.','UWAGA! Odwołano zagrożenie atakiem z powietrza.');
+ assert.equal(parseRso(closure,time)[0].lifecycle,'CANCELLED');
+ assert.equal(parseRso(closure,time)[0].severity,'INFORMATIONAL');
+ const warning=rso('1')
+  .replace('Komunikat RSO','ALERT RCB')
+  .replace('Oficjalny komunikat testowy.','UWAGA! Oczekuj informacji o odwołaniu zagrożenia.');
+ assert.equal(parseRso(warning,time)[0].lifecycle,'ACTIVE');
+});
+
 test('source quality contracts distinguish authoritative state from publication feeds',()=>{
  const byId=new Map(SOURCES.map(s=>[s.id,s]));
  assert.equal(byId.get('IMGW_METEO')?.sourceClass,'STATUS');

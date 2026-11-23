@@ -5,7 +5,7 @@ import {eventSchema, type Event} from './domain.js';
 import type {SourceAdapter} from './source-adapter.js';
 
 export const RCB_INDEX = 'https://www.gov.pl/web/rcb/komunikaty';
-const VERSION = 'rcb-html/1.1.0';
+const VERSION = 'rcb-html/1.2.0';
 const clean = (text:string) => text.replace(/\s+/g,' ').trim();
 function sourceUrl(href:string, base=RCB_INDEX):URL {
   const u=new URL(href,base);
@@ -56,16 +56,18 @@ export function parseRcbArticle(html:string,url:string,now=new Date()):Event{
     .filter(([,stem])=>new RegExp(`(?<![\\p{L}-])${stem}\\p{L}*`,'iu').test(provinceText)).map(([id])=>id).sort();
   const text=title+' '+description;
   const context=/ćwicz|cwicz|trening system|exercise/i.test(text)?'EXERCISE':/test syren|test systemu/i.test(text)?'TEST':'ACTUAL';
-  const bodyText=clean(body.text());
-  const updateMarker=/aktualizacj|uaktualnieni/i.test(bodyText);
-  const endedStatement=paragraphs.find(p=>
+  // Gov.pl puts newer updates above older ones. An earlier cancellation in
+  // the same article must not close a warning that was issued again later.
+  const updates=paragraphs.flatMap((p,index)=>/^\s*[„"]?\s*(?:aktualizacj[ae]|uaktualnienie)(?=[\s!:.–—-]|$)/iu.test(p)?[index]:[]);
+  const latestUpdate=updates.length?paragraphs.slice(updates[0],updates[1]):[];
+  const endedStatement=latestUpdate.find(p=>
     /(?:zakończył się|zakończono|ustało|odwołan|odwolan|brak zagrożenia (?:na|dla) (?:terenie|terytorium) (?:Polski|RP))/iu.test(p)
   )??null;
   // RCB often keeps the original warning title and inserts an explicit
   // "Aktualizacja" into the body. Treat that authoritative update as the
   // lifecycle change instead of leaving a stale UNKNOWN warning forever.
   const cancelled=/odwołan|odwolano|zakaz przestał obowiązywać/i.test(title)||
-    (updateMarker&&endedStatement!==null);
+    endedStatement!==null;
   const eventType=/powietrz|powietrza/i.test(title)?'AIR':/burz|wiatr|opad|upał|śnieg|mróz|powodz/i.test(title)?'WEATHER':/ewakuac/i.test(title)?'EVACUATION':/pożar/i.test(title)?'FIRE':'OTHER';
   return eventSchema.parse({
     id:'RCB-'+createHash('sha256').update(canonical.href).digest('hex').slice(0,24),

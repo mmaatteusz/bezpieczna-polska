@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -6,6 +7,7 @@ import 'dart:ui' as ui;
 import 'package:bezpieczna_polska/map_layers.dart';
 import 'package:bezpieczna_polska/model.dart';
 import 'package:bezpieczna_polska/neptun.dart';
+import 'package:bezpieczna_polska/neptun_aviation.dart';
 import 'package:bezpieczna_polska/shelter_map.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,7 +17,12 @@ import 'package:integration_test/integration_test.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../test/model_test.dart' as snapshot_fixture;
+import '../test/national_map_alerts_test.dart' show eventFixture;
 import '../test/neptun_test.dart' as neptun_fixture;
+import '../test/official_map_warnings_test.dart'
+    as public_feed
+    show notice, reply;
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -27,11 +34,62 @@ void main() {
     final openedLinks = <String>[];
     final key = GlobalKey();
     var dense = false;
+    final nationalRequests = <Uri>[];
+    final firstNationalResponse = Completer<http.Response>();
+    const warning = LatLng(52.1, 19.4);
+    final staleAt = DateTime.now().toUtc().subtract(const Duration(hours: 1));
+    final oldSnapshot = {
+      ...snapshot_fixture.data(region: 'PL'),
+      'serverTime': staleAt.toIso8601String(),
+      'status': {
+        'displayText': 'Stary odczyt',
+        'hazardLevel': 'NO_ACTIVE_WARNINGS',
+        'validUntil': staleAt.add(const Duration(minutes: 1)).toIso8601String(),
+      },
+    };
     final repo = DataRepository(
       await SharedPreferences.getInstance(),
       buildApi: 'https://map-test.invalid',
       client: MockClient((request) async {
         final q = request.url.queryParameters;
+        if (request.url.path == '/v1/snapshot') {
+          nationalRequests.add(request.url);
+          if (nationalRequests.length == 1) {
+            return firstNationalResponse.future;
+          }
+          final now = DateTime.now().toUtc();
+          return snapshot_fixture.response({
+            ...oldSnapshot,
+            'serverTime': now.toIso8601String(),
+            'status': {
+              ...oldSnapshot['status'] as Map,
+              'validUntil': now
+                  .add(const Duration(minutes: 1))
+                  .toIso8601String(),
+            },
+            'events': [
+              eventFixture(
+                id: 'imgw-hydro-native',
+                sourceId: 'IMGW_HYDRO',
+                regions: ['28'],
+                latitude: warning.latitude,
+                longitude: warning.longitude,
+                validTo: now.add(const Duration(hours: 2)),
+              ).data,
+            ],
+          });
+        }
+        if (request.url.host == 'komunikaty.tvp.pl') {
+          return public_feed.reply(
+            public_feed.notice.replaceFirst(
+              '<provinces>',
+              '<latitude>52.1</latitude><longitude>19.4</longitude><provinces>',
+            ),
+          );
+        }
+        if (request.url.host == 'danepubliczne.imgw.pl') {
+          return http.Response('', 502);
+        }
         final bbox = q['bbox']!.split(',').map(double.parse).toList();
         final zoom = double.parse(q['zoom']!);
         final lon = (bbox[0] + bbox[2]) / 2;
@@ -128,6 +186,7 @@ void main() {
           body: SingleChildScrollView(
             child: ShelterMap(
               key: key,
+              snapshot: Snapshot.parse(jsonEncode(oldSnapshot)),
               repository: repo,
               region: 'PL',
               ukraine: false,
@@ -153,6 +212,62 @@ void main() {
 
     await waitFor(() => state.ready == true && state.loading == false);
     final controller = state.controller as MapLibreMapController;
+    await waitFor(() => state.legendAlertsVisible == true);
+    expect(state.nationalEventsLoading, isTrue);
+    final directPoint = await controller.toScreenLocation(warning);
+    await tester.pump(const Duration(seconds: 1));
+    expect(
+      await controller.queryRenderedFeatures(
+        math.Point<double>(directPoint.x.toDouble(), directPoint.y.toDouble()),
+        ['event-alert-points'],
+        null,
+      ),
+      isNotEmpty,
+      reason: 'Official RSO markers render while the national API is pending',
+    );
+    firstNationalResponse.complete(http.Response('{}', 503));
+    await waitFor(() => state.nationalEventsLoading == false);
+    expect(state.nationalEventsError, contains('HTTP 503'));
+    expect(state.legendAlertsVisible, isTrue);
+    final retryWarnings = find.text('Odśwież ostrzeżenia');
+    await tester.ensureVisible(retryWarnings);
+    await tester.tap(retryWarnings);
+    await waitFor(
+      () =>
+          nationalRequests.length == 2 && state.nationalEventsLoading == false,
+    );
+    for (final request in nationalRequests) {
+      expect(request.queryParameters, {'regionId': 'PL', 'mode': 'compact'});
+    }
+    expect(state.nationalEventsError, isNull);
+    expect(
+      (state.contextEvents as List<SafetyEvent>).any((e) => e.id == 'RSO-123'),
+      isFalse,
+    );
+    await tester.ensureVisible(find.byType(MapLibreMap));
+    expect(
+      (state.contextEvents as List<SafetyEvent>).map((event) => event.id),
+      contains('imgw-hydro-native'),
+      reason: 'The map must replace its stale home snapshot',
+    );
+    final bounds = await controller.getVisibleRegion();
+    expect(bounds.southwest.latitude, lessThan(warning.latitude));
+    expect(bounds.northeast.latitude, greaterThan(warning.latitude));
+    await waitFor(() => state.legendImgwVisible == true);
+    final warningPoint = await controller.toScreenLocation(warning);
+    await tester.pump(const Duration(seconds: 1));
+    expect(
+      await controller.queryRenderedFeatures(
+        math.Point<double>(
+          warningPoint.x.toDouble(),
+          warningPoint.y.toDouble(),
+        ),
+        ['event-imgw-points'],
+        null,
+      ),
+      isNotEmpty,
+      reason: 'The ordinary map restores an IMGW marker from the national API',
+    );
     controller.onCircleTapped.add(
       (circle) => debugPrint('Native circle tap: ${circle.data}'),
     );
@@ -173,6 +288,23 @@ void main() {
                 : controller.circles.length == 1 && controller.symbols.isEmpty),
       );
     }
+
+    await move(const LatLng(52.0, 30.0), 5.8);
+    final focusWarning = find.text('Pokaż ostrzeżenia na mapie');
+    expect(focusWarning, findsOneWidget);
+    await tester.ensureVisible(focusWarning);
+    await tester.tap(focusWarning);
+    await waitFor(() => state.legendImgwVisible == true);
+    final focusShelters = find.text('Przybliż do schronień');
+    await tester.ensureVisible(focusShelters);
+    await tester.tap(focusShelters);
+    await waitFor(() => controller.symbols.isNotEmpty);
+    expect(
+      controller.cameraPosition!.zoom,
+      greaterThanOrEqualTo(shelterDetailZoom),
+    );
+    expect(state.legendImgwVisible, isTrue);
+    await tester.ensureVisible(find.byType(MapLibreMap));
 
     Future<void> tapMarker({bool rim = false}) async {
       // Native GeoJSON parsing and drawing can finish after the channel reply.
@@ -383,13 +515,24 @@ void main() {
     neptunInput['tracks'] = [];
     neptunInput['map']['features'] = [];
     final neptunKey = GlobalKey();
+    final neptunData = NeptunData.parse(neptunInput);
+    final reduceMotion = ValueNotifier(true);
+    addTearDown(reduceMotion.dispose);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SingleChildScrollView(
-            child: NeptunMap(
-              key: neptunKey,
-              data: NeptunData.parse(neptunInput),
+          appBar: AppBar(title: const Text('NEPTUN')),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              child: ValueListenableBuilder(
+                valueListenable: reduceMotion,
+                builder: (context, disabled, _) => MediaQuery(
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(disableAnimations: disabled),
+                  child: NeptunMap(key: neptunKey, data: neptunData),
+                ),
+              ),
             ),
           ),
         ),
@@ -442,10 +585,11 @@ void main() {
       'neptun-live-hit-points',
     ], null);
     expect(entries, hasLength(3));
-    expect(
-      entries.map((entry) => entry['properties']['type']).toSet(),
-      {'uav', 'fpv', 'missile'},
-    );
+    expect(entries.map((entry) => entry['properties']['type']).toSet(), {
+      'uav',
+      'fpv',
+      'missile',
+    });
     for (var i = 0; i < 150 && neptunController.symbols.length != 8; i++) {
       await tester.pump(const Duration(milliseconds: 200));
     }
@@ -459,33 +603,100 @@ void main() {
     final dpr = tester.view.devicePixelRatio;
     final origin = tester.getTopLeft(find.byType(MapLibreMap));
     final target = origin + Offset(point.x / dpr, point.y / dpr);
-    final socket = await Socket.connect('127.0.0.1', 18443);
-    socket.writeln(
-      jsonEncode({
-        'verifySymbols': true,
-        'x': (target.dx * dpr).round(),
-        'y': (target.dy * dpr).round(),
-        'paddingTop': tester.view.padding.top,
-        'width': tester.view.physicalSize.width,
-        'height': tester.view.physicalSize.height,
-      }),
+    Future<({ui.Image image, int x, int y})> capture(
+      Offset target, {
+      bool tap = false,
+    }) async {
+      final socket = await Socket.connect('127.0.0.1', 18443);
+      socket.writeln(
+        jsonEncode({
+          'verifySymbols': true,
+          'captureOnly': !tap,
+          'x': (target.dx * dpr).round(),
+          'y': (target.dy * dpr).round(),
+          'paddingTop': tester.view.padding.top,
+          'width': tester.view.physicalSize.width,
+          'height': tester.view.physicalSize.height,
+        }),
+      );
+      await socket.flush();
+      final reply = await utf8.decoder
+          .bind(socket)
+          .transform(const LineSplitter())
+          .first;
+      socket.destroy();
+      final response = jsonDecode(reply) as Map<String, dynamic>;
+      expect(response['ok'], isTrue);
+      final codec = await ui.instantiateImageCodec(
+        base64Decode(response['screenshot'] as String),
+      );
+      final image = (await codec.getNextFrame()).image;
+      codec.dispose();
+      return (
+        image: image,
+        x: response['screenX'] as int,
+        y: response['screenY'] as int,
+      );
+    }
+
+    // Sample the upper arc above a standalone marker. The test style has a
+    // flat background and the camera stays still for all three captures.
+    final recon = await neptunController.toScreenLocation(
+      const LatLng(49.3, 30.5),
     );
-    await socket.flush();
-    final reply = await utf8.decoder
-        .bind(socket)
-        .transform(const LineSplitter())
-        .first;
-    socket.destroy();
-    final response = jsonDecode(reply) as Map<String, dynamic>;
-    expect(response['ok'], isTrue);
-    final codec = await ui.instantiateImageCodec(
-      base64Decode(response['screenshot'] as String),
+    final reconTarget = origin + Offset(recon.x / dpr, recon.y / dpr);
+    final before = await capture(reconTarget);
+    final beforePixels = (await before.image.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    ))!;
+    final screenWidth = before.image.width;
+    before.image.dispose();
+
+    Future<int> changedArcPixels() async {
+      final frame = await capture(reconTarget);
+      final current = (await frame.image.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      ))!;
+      frame.image.dispose();
+      var changed = 0;
+      final halfWidth = (7 * dpr).round();
+      for (var dy = (16 * dpr).round(); dy <= (27 * dpr).round(); dy++) {
+        for (var dx = -halfWidth; dx <= halfWidth; dx++) {
+          final offset = ((frame.y - dy) * screenWidth + frame.x + dx) * 4;
+          if ((beforePixels.getUint8(offset) - current.getUint8(offset)).abs() >
+              12) {
+            changed++;
+          }
+        }
+      }
+      return changed;
+    }
+
+    reduceMotion.value = false;
+    await tester.pump();
+    final minimumPulsePixels = 8 * dpr * dpr;
+    var pulsePixels = 0;
+    for (var i = 0; i < 8 && pulsePixels < minimumPulsePixels; i++) {
+      await tester.pump(const Duration(milliseconds: 280));
+      pulsePixels = await changedArcPixels();
+    }
+    expect(
+      pulsePixels,
+      greaterThanOrEqualTo(minimumPulsePixels),
+      reason: 'No visible ring above the live marker',
     );
-    final screenshot = (await codec.getNextFrame()).image;
+
+    reduceMotion.value = true;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(await changedArcPixels(), lessThan(minimumPulsePixels));
+
+    final tapped = await capture(target, tap: true);
+    final screenshot = tapped.image;
     final pixels = (await screenshot.toByteData(
       format: ui.ImageByteFormat.rawRgba,
     ))!.buffer.asUint8List();
-    final top = (response['screenY'] as int) - (target.dy * dpr).round();
+    final top = tapped.y - (target.dy * dpr).round();
     // Native feature queries also find invisible symbol buckets. Assert pixels
     // from Android's actual screen, excluding each badge's white border.
     for (final location in [
@@ -523,7 +734,6 @@ void main() {
       );
     }
     screenshot.dispose();
-    codec.dispose();
     for (
       var i = 0;
       i < 150 && find.text('3 wpisów w tym obszarze').evaluate().isEmpty;
@@ -539,6 +749,80 @@ void main() {
     await tester.tap(find.text('Rakieta').first);
     await tester.pumpAndSettle();
     expect(find.text('Typ: Rakieta'), findsOneWidget);
+    Navigator.of(neptunKey.currentContext!).pop();
+    await tester.pumpAndSettle();
+
+    final aviation = await NeptunAviationData.load();
+    final lublin = (aviation.airports['features'] as List).firstWhere(
+      (airport) => airport['properties']['icao'] == 'EPLB',
+    );
+    final airportCoordinates = (lublin['geometry']['coordinates'] as List)
+        .cast<num>();
+    final airportLocation = LatLng(
+      airportCoordinates[1].toDouble(),
+      airportCoordinates[0].toDouble(),
+    );
+    await neptunController.moveCamera(
+      CameraUpdate.newLatLngZoom(airportLocation, 7.5),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    final airportScreen = await neptunController.toScreenLocation(
+      airportLocation,
+    );
+    final airportPoint = math.Point<double>(
+      airportScreen.x.toDouble(),
+      airportScreen.y.toDouble(),
+    );
+    expect(
+      await neptunController.getLayerIds(),
+      contains('neptun-country-colors'),
+    );
+
+    for (final layer in NeptunAviationLayer.values) {
+      if (layer == NeptunAviationLayer.board) continue;
+      Future<List<dynamic>> hits() => neptunController.queryRenderedFeatures(
+        airportPoint,
+        [layer.hitLayerId],
+        null,
+      );
+      expect(await hits(), isEmpty);
+      final chip = find.widgetWithText(FilterChip, layer.label);
+      expect(
+        tester.widget<FilterChip>(chip).onSelected,
+        isNotNull,
+        reason: '${layer.label} is available',
+      );
+      await tester.tap(chip);
+      var entries = <dynamic>[];
+      for (var attempt = 0; attempt < 15 && entries.isEmpty; attempt++) {
+        await tester.pump(const Duration(milliseconds: 150));
+        entries = await hits();
+      }
+      expect(
+        tester.widget<FilterChip>(chip).selected,
+        isTrue,
+        reason: layer.label,
+      );
+      expect(
+        entries.map((entry) => entry['properties']['icao']),
+        contains('EPLB'),
+        reason: layer.label,
+      );
+      if (layer == NeptunAviationLayer.traffic) {
+        expect(
+          entries.first['properties']['operations'],
+          aviation.bundledTraffic.operations['EPLB'],
+        );
+      }
+      await tester.tap(chip);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(
+        tester.widget<FilterChip>(chip).selected,
+        isFalse,
+        reason: layer.label,
+      );
+      expect(await hits(), isEmpty);
+    }
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

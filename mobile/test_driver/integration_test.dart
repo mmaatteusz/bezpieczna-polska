@@ -48,7 +48,9 @@ Future<void> main() async {
         await file.parent.create(recursive: true);
         await file.writeAsBytes(capture.stdout as List<int>);
       }
-      final result = await adb(['shell', 'input', 'tap', '$x', '${y + top}']);
+      final result = request['captureOnly'] == true
+          ? capture
+          : await adb(['shell', 'input', 'tap', '$x', '${y + top}']);
       socket.writeln(
         jsonEncode({
           'ok': result.exitCode == 0,

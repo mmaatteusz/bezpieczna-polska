@@ -84,15 +84,40 @@ const Map<String, List<double>> mapRegionAnchors = {
   '32': [14.5528, 53.4285],
 };
 
+final _rsoTraining = RegExp(
+  r'ćwicz|cwicz|trening|\btest(?:ow|(?:em|u|y)?\b)|prób[aęny]+ syren',
+  caseSensitive: false,
+);
+
 bool mapEventIsLive(SafetyEvent event, DateTime now) {
   if (event.data['lifecycle'] != 'ACTIVE' ||
-      event.data['messageContext'] != 'ACTUAL' ||
-      event.data['verification'] == 'REFUTED') {
+      event.data['isDemo'] == true ||
+      event.data['verification'] == 'REFUTED' ||
+      event.isRcbCancellationFromRso) {
     return false;
   }
+  final validFrom = DateTime.tryParse(
+    event.data['validFrom']?.toString() ?? '',
+  );
   final validTo = DateTime.tryParse(event.data['validTo']?.toString() ?? '');
-  return validTo == null || validTo.isAfter(now);
+  if (event.data['messageContext'] != 'ACTUAL') {
+    // RSO publications have no ACTUAL flag. Display dated notices without
+    // promoting them to confirmed warnings or changing national hazard status.
+    if (event.data['messageContext'] != 'UNKNOWN' ||
+        !(event.data['sources'] as List).any((s) => s['id'] == 'RSO') ||
+        validTo == null ||
+        _rsoTraining.hasMatch('${event.title} ${event.description}')) {
+      return false;
+    }
+  }
+  return (validFrom == null || !validFrom.isAfter(now)) &&
+      (validTo == null || validTo.isAfter(now));
 }
+
+final _hydrologicalDroughtTitle = RegExp(
+  r'\bsusza\s+hydrologiczna\b',
+  caseSensitive: false,
+);
 
 bool mapEventIsImgw(SafetyEvent event) => event.sources.any((source) {
   final id = source['id']?.toString();
@@ -175,6 +200,9 @@ List<Map<String, dynamic>> mapEventFeatures(
       },
     ];
   }
+
+  // Without a point from the source, a province pin would misplace the basin.
+  if (_hydrologicalDroughtTitle.hasMatch(event.title)) return const [];
 
   final terytCodes = mapEventTerytCodes(event);
   if (terytCodes.isNotEmpty) {

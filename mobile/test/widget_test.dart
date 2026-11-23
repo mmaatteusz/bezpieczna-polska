@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 
@@ -12,6 +13,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bezpieczna_polska/main.dart';
 import 'package:bezpieczna_polska/model.dart';
+import 'package:bezpieczna_polska/screens/dashboard_screen.dart';
+import 'package:bezpieczna_polska/shelter_map.dart';
+
+import 'model_test.dart' show data, response;
+import 'official_map_warnings_test.dart' show notice, reply;
 
 // Only the native surface is substituted. Data parsing/cache have independent tests.
 class TestMapPlatform extends MapLibrePlatform {
@@ -51,6 +57,82 @@ void main() {
       );
       await loader.load();
     }
+  });
+  testWidgets('startup preloads warnings before national data', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final local = Completer<http.Response>();
+    final national = Completer<http.Response>();
+    final nearby = Completer<http.Response>();
+    final requests = <String>[];
+    final repo = DataRepository(
+      prefs,
+      buildApi: 'https://test.example',
+      client: MockClient((request) async {
+        final path = request.url.path;
+        if (request.url.host == 'komunikaty.tvp.pl') {
+          requests.add('RSO');
+          return reply(notice);
+        }
+        if (path == '/v1/snapshot') {
+          final scope = request.url.queryParameters['regionId'];
+          requests.add('$path:$scope');
+          return scope == 'PL' ? national.future : local.future;
+        }
+        requests.add(path);
+        if (path == '/v1/around') return nearby.future;
+        return http.Response('{}', 503);
+      }),
+    );
+    await repo.setPrimaryLocation(
+      label: 'Bydgoszcz',
+      latitude: 53.1,
+      longitude: 18,
+      regionId: '04',
+    );
+    await prefs.setString(repo.cacheKey('04'), jsonEncode(data()));
+
+    await tester.pumpWidget(SafetyApp(repository: repo));
+    await tester.pump();
+    expect(
+      requests,
+      containsAll([
+        '/v1/snapshot:04',
+        '/v1/snapshot:PL',
+        '/v1/around',
+        '/v1/neptun',
+        'RSO',
+      ]),
+    );
+    DashboardScreen start() => tester.widget(find.byType(DashboardScreen));
+    expect(start().snapshot?.data['serverTime'], data()['serverTime']);
+    expect(start().online, isFalse);
+    expect(national.isCompleted, isFalse);
+    expect(
+      repo.officialMapWarnings.cached().single.events.single.id,
+      'RSO-123',
+    );
+
+    final loadedAt = DateTime.now().toUtc().toIso8601String();
+    local.complete(response({...data(), 'serverTime': loadedAt}));
+    await tester.pumpAndSettle();
+    expect(start().snapshot?.data['serverTime'], loadedAt);
+    expect(start().online, isTrue);
+    expect(nearby.isCompleted, isFalse);
+
+    await tester.tap(find.text('Mapa').last);
+    await tester.pump();
+    national.complete(
+      response({...data(region: 'PL'), 'serverTime': loadedAt}),
+    );
+    nearby.complete(http.Response('{}', 503));
+    await tester.pumpAndSettle();
+    final map = tester.widget<ShelterMap>(find.byType(ShelterMap));
+    expect(map.snapshot?.region, 'PL');
+    expect(map.snapshot?.data['serverTime'], loadedAt);
+    expect(requests.where((path) => path == '/v1/snapshot:PL'), hasLength(1));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
   });
   testWidgets('four-tab phone layout, focused home, map and deliberate SOS', (
     tester,

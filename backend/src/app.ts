@@ -120,9 +120,21 @@ export async function buildApp(store:Store,adminToken?:string,push?:PushService,
   const {regionId}=regionQuery.parse(req.query),{events,health,incidents,radiationMeasurements}=await store.snapshot(),now=new Date();
   const sources=publicSourceHealth(health,now).filter(s=>s.enabled&&s.id!=='UA');
   const shelterPage=await sheltersResponse(shelterQuery.parse({regionId}));
-  const result={schemaVersion:1,serverTime:now.toISOString(),releaseStage:'ALPHA',regionId,radiation:radiationStatus(events,health,regionId,now,radiationMeasurements),incidents:incidents.filter(i=>i.relatedEventIds.some(id=>events.some(e=>e.id===id&&(regionId==='PL'||e.regions.includes(regionId))))).map(i=>({...i,reports:events.filter(e=>i.relatedEventIds.includes(e.id))})),status:computeStatus(events,health,regionId,now,incidents),nationalStatus:computeStatus(events,health,'PL',now,incidents),events:events.filter(e=>!isUa(e)&&!e.securityLevel&&(regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId))),sources,sourceHealth:sources,shelters:shelterPage.items,shelterPage,...securityLevelStatus(events,health,regionId,now),nationalSecurityLevels:securityLevelStatus(events,health,'PL',now).securityLevels,ukraineAlerts:[],capabilities:{push:!!push&&push.providerReadyAny,pushProviders:{android:push?.providerReady('ANDROID')??false,ios:push?.providerReady('IOS')??false},shelters:shelterPage.version!==null,ukraine:false,neptun:true,liveMap:store.db.kind==='postgres',rcb:true,rso:true,wczk:true,imgwMeteo:true,imgwHydro:true,correlation:true,paa:true,paaMeasurements:true,cert:true,csirtGov:false,sg:true,police:true,pspIncidents:true,around:true,watchedLocations:true}};
+  const byId=new Map(events.map((event,index)=>[event.id,{event,index}]));
+  const visibleIncidents=incidents.filter(incident=>incident.relatedEventIds.some(id=>{
+   const entry=byId.get(id);
+   return entry&&(regionId==='PL'||entry.event.regions.includes(regionId));
+  }));
+  const snapshotIncidents=mode==='compact'?visibleIncidents:visibleIncidents.map(incident=>{
+   // Keep the original snapshot order, including reports from other regions.
+   const reports=[...new Set(incident.relatedEventIds)].flatMap(id=>byId.get(id)??[])
+    .sort((a,b)=>a.index-b.index).map(entry=>entry.event);
+   return {...incident,reports};
+  });
+  const status=computeStatus(events,health,regionId,now,incidents);
+  const result={schemaVersion:1,serverTime:now.toISOString(),releaseStage:'ALPHA',regionId,radiation:radiationStatus(events,health,regionId,now,radiationMeasurements),incidents:snapshotIncidents,status,nationalStatus:regionId==='PL'?status:computeStatus(events,health,'PL',now,incidents),events:events.filter(e=>!isUa(e)&&!e.securityLevel&&(regionId==='PL'||!e.regions.length||e.regions.includes('PL')||e.regions.includes(regionId))),sources,sourceHealth:sources,shelters:shelterPage.items,shelterPage,...securityLevelStatus(events,health,regionId,now),nationalSecurityLevels:securityLevelStatus(events,health,'PL',now).securityLevels,ukraineAlerts:[],capabilities:{push:!!push&&push.providerReadyAny,pushProviders:{android:push?.providerReady('ANDROID')??false,ios:push?.providerReady('IOS')??false},shelters:shelterPage.version!==null,ukraine:false,neptun:true,liveMap:store.db.kind==='postgres',rcb:true,rso:true,wczk:true,imgwMeteo:true,imgwHydro:true,correlation:true,paa:true,paaMeasurements:true,cert:true,csirtGov:false,sg:true,police:true,pspIncidents:true,around:true,watchedLocations:true}};
   if(mode==='full')return result;
-  return {...result,snapshotMode:'compact',omittedSections:['incidentReports','shelterItems'],incidents:result.incidents.map(({reports,...incident})=>incident),shelters:[],shelterPage:{...shelterPage,items:[]}};
+  return {...result,snapshotMode:'compact',omittedSections:['incidentReports','shelterItems'],shelters:[],shelterPage:{...shelterPage,items:[]}};
  });
  app.get('/v1/layers/events.geojson',async(req,reply)=>{
   const {regionId}=regionQuery.parse(req.query);

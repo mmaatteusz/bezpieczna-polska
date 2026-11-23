@@ -59,13 +59,20 @@ export function parseRso(xml:string,now=new Date()):Event[]{
    // of dropping the entire feed; unknown non-empty alarm markers fail safe high.
    e.severity='HIGH';
   }
+  const rcb=/^alert\s+rcb\b/iu.test(e.title);
+  const cancellationTitle=/^alert\s+rcb[\s\-–—:/]*(?:zakończenie|odwołanie)(?=[\s.!:]|$)/iu.test(e.title);
+  const cancellationLead=/^[\s„"“]*(?:uwaga[!.]\s*)*(?:odwołano zagrożenie|zakończył się atak powietrzny)\b/iu.test(e.description);
+  if(rcb&&(cancellationTitle||cancellationLead)){
+   e.lifecycle='CANCELLED';
+   e.severity='INFORMATIONAL';
+  }
   for(const k of ['latitude','longitude'] as const){if(text(k))e[k]=Number(text(k));}
   return eventSchema.parse(e);
  }).get();
 }
 const RSO_XML='https://komunikaty.tvp.pl/komunikatyxml/wszystkie/wszystkie/0?_format=xml';
 export const rsoAdapter:SourceAdapter={
- id:'RSO',version:'1.0.1',minSyncIntervalSeconds:300,
+ id:'RSO',version:'1.0.2',minSyncIntervalSeconds:300,
  async sync({now,fetchText}){
   const xml=await fetchText(RSO_XML),events=parseRso(xml,now);
   // The public endpoint is a complete list of RSO communications, not a
