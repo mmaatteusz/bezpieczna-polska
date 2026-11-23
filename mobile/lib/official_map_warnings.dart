@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:xml/xml.dart';
 
 import 'model.dart';
@@ -27,7 +28,7 @@ class OfficialWarningFeed {
   };
 }
 
-class OfficialMapWarnings {
+class OfficialMapWarnings extends ChangeNotifier {
   final DataRepository repository;
   OfficialMapWarnings(this.repository);
   final _running = <int, Future<List<OfficialWarningFeed>>>{};
@@ -102,13 +103,16 @@ class OfficialMapWarnings {
           ? _rsoEvents(text, now)
           : _imgwEvents(text, now, source.key);
       if (generation != repository.dataGeneration) return;
-      await repository.prefs.setString(
+      final saved = await repository.prefs.setString(
         _key(source.key),
         jsonEncode({
           'checkedAt': now.toIso8601String(),
           'events': events.map((e) => e.data).toList(),
         }),
       );
+      if (saved && generation == repository.dataGeneration) {
+        notifyListeners();
+      }
     } catch (_) {
       // Keep this source's last successful read, including on a malformed feed.
     }

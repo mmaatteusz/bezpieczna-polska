@@ -198,6 +198,9 @@ class _ShelterMapState extends State<ShelterMap> {
   List<OfficialWarningFeed> get newerDirectFeeds {
     final snapshot = currentNationalSnapshot;
     if (snapshot == null) return directFeeds;
+    if (nationalEventsError == null && snapshot.freshAt(DateTime.now())) {
+      return const [];
+    }
     final snapshotTime = DateTime.parse(snapshot.data['serverTime'] as String);
     return directFeeds
         .where((feed) => feed.checkedAt.isAfter(snapshotTime))
@@ -551,6 +554,7 @@ class _ShelterMapState extends State<ShelterMap> {
     super.initState();
     nationalSnapshot = widget.repository.cached('PL');
     directFeeds = widget.repository.officialMapWarnings.cached();
+    widget.repository.officialMapWarnings.addListener(updateDirectWarnings);
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (!mounted || !widget.active) return;
       setState(() {});
@@ -562,9 +566,23 @@ class _ShelterMapState extends State<ShelterMap> {
     });
   }
 
+  void updateDirectWarnings() {
+    setState(
+      () => directFeeds = widget.repository.officialMapWarnings.cached(),
+    );
+    if (widget.active) unawaited(syncContextLayers());
+  }
+
   @override
   void didUpdateWidget(covariant ShelterMap oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.repository != widget.repository) {
+      oldWidget.repository.officialMapWarnings.removeListener(
+        updateDirectWarnings,
+      );
+      widget.repository.officialMapWarnings.addListener(updateDirectWarnings);
+      directFeeds = widget.repository.officialMapWarnings.cached();
+    }
     if (oldWidget.radiation != widget.radiation) {
       radiationOverride = null;
       radiationOverrideOnline = false;
@@ -584,6 +602,7 @@ class _ShelterMapState extends State<ShelterMap> {
       unawaited(syncContextLayers());
     }
     if (!oldWidget.active && widget.active) {
+      unawaited(syncContextLayers());
       unawaited(refreshNationalEvents());
     }
     if (oldWidget.region != widget.region) {
@@ -630,6 +649,7 @@ class _ShelterMapState extends State<ShelterMap> {
 
   @override
   void dispose() {
+    widget.repository.officialMapWarnings.removeListener(updateDirectWarnings);
     ticket++;
     ready = false;
     controller = null;
@@ -1036,41 +1056,34 @@ class _ShelterMapState extends State<ShelterMap> {
       return;
     }
     setState(() => nationalEventsLoading = true);
-    var waitingForSnapshot = true;
-    Future<void>? directRead;
-    Future<void> readDirect() async {
-      final feeds = await widget.repository.officialMapWarnings.refresh(
-        force: force,
-      );
-      if (!mounted || !waitingForSnapshot) return;
-      setState(() => directFeeds = feeds);
-      await syncContextLayers();
+    final repository = widget.repository;
+    var directStarted = false;
+    void readDirect() {
+      if (directStarted || !mounted || !widget.active) return;
+      directStarted = true;
+      unawaited(repository.officialMapWarnings.refresh(force: force));
     }
 
-    // On a cold map let the small public feeds provide markers while the
-    // multi-megabyte national response is still in transit.
-    final slowSnapshot = currentNationalSnapshot == null
-        ? Timer(const Duration(seconds: 4), () {
-            if (mounted && widget.active) directRead ??= readDirect();
-          })
-        : null;
+    Timer? slowSnapshot;
+    if (force || currentNationalSnapshot == null) {
+      readDirect();
+    } else {
+      slowSnapshot = Timer(const Duration(seconds: 4), readDirect);
+    }
     try {
-      final snapshot = await widget.repository.refresh('PL');
+      final snapshot = await repository.refresh('PL');
       if (!mounted) return;
       nationalSnapshot = snapshot;
-      directFeeds = const [];
       nationalEventsError = null;
     } catch (error) {
       if (!mounted) return;
       if (error is ApiFailure && error.kind != ApiFailureKind.notConfigured) {
-        await (directRead ??= readDirect());
-        if (!mounted) return;
+        readDirect();
       }
       nationalEventsError = error is ApiFailure && error.statusCode != null
           ? 'Nie udało się pobrać pełnej listy ostrzeżeń (HTTP ${error.statusCode}).'
           : 'Nie udało się pobrać pełnej listy ostrzeżeń dla Polski.';
     } finally {
-      waitingForSnapshot = false;
       slowSnapshot?.cancel();
       nationalEventsUpdatedAt = DateTime.now();
       nationalEventsLoading = false;

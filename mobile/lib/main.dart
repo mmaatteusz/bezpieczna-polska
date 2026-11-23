@@ -436,11 +436,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           online = false;
           error = apiFailureMessage(failure);
         });
-        if (target == 'PL' &&
-            failure is ApiFailure &&
-            failure.kind != ApiFailureKind.notConfigured) {
-          unawaited(widget.repository.officialMapWarnings.refresh());
-        }
         await loadOffline();
         if (mounted && ticket == generation) widget.onLaunchReady?.call();
       }
@@ -456,6 +451,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     if (backgroundSync || api.isEmpty) return;
     final target = region;
     setState(() => backgroundSync = true);
+    final cachedNational = repository.cached('PL');
+    if (cachedNational?.freshAt(DateTime.now()) != true) {
+      unawaited(repository.officialMapWarnings.refresh());
+    }
 
     bool sameConfiguration() =>
         mounted &&
@@ -476,15 +475,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         refresh(),
         if (target != 'PL')
           ignoreFailure(() async {
-            Snapshot result;
-            try {
-              result = await repository.refresh('PL');
-            } on ApiFailure {
-              if (sameConfiguration()) {
-                await repository.officialMapWarnings.refresh();
-              }
-              return;
-            }
+            final result = await repository.refresh('PL');
             if (sameConfiguration()) {
               setState(() => nationalSnapshot = result);
             }

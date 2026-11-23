@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -34,6 +35,7 @@ void main() {
     final key = GlobalKey();
     var dense = false;
     final nationalRequests = <Uri>[];
+    final firstNationalResponse = Completer<http.Response>();
     const warning = LatLng(52.1, 19.4);
     final staleAt = DateTime.now().toUtc().subtract(const Duration(hours: 1));
     final oldSnapshot = {
@@ -53,12 +55,18 @@ void main() {
         if (request.url.path == '/v1/snapshot') {
           nationalRequests.add(request.url);
           if (nationalRequests.length == 1) {
-            return http.Response('{}', 503);
+            return firstNationalResponse.future;
           }
           final now = DateTime.now().toUtc();
           return snapshot_fixture.response({
             ...oldSnapshot,
             'serverTime': now.toIso8601String(),
+            'status': {
+              ...oldSnapshot['status'] as Map,
+              'validUntil': now
+                  .add(const Duration(minutes: 1))
+                  .toIso8601String(),
+            },
             'events': [
               eventFixture(
                 id: 'imgw-hydro-native',
@@ -204,11 +212,8 @@ void main() {
 
     await waitFor(() => state.ready == true && state.loading == false);
     final controller = state.controller as MapLibreMapController;
-    await waitFor(
-      () => nationalRequests.isNotEmpty && state.nationalEventsLoading == false,
-    );
-    expect(state.nationalEventsError, isNotNull);
     await waitFor(() => state.legendAlertsVisible == true);
+    expect(state.nationalEventsLoading, isTrue);
     final directPoint = await controller.toScreenLocation(warning);
     await tester.pump(const Duration(seconds: 1));
     expect(
@@ -218,9 +223,12 @@ void main() {
         null,
       ),
       isNotEmpty,
-      reason:
-          'A national HTTP 503 still renders a tappable official RSO marker',
+      reason: 'Official RSO markers render while the national API is pending',
     );
+    firstNationalResponse.complete(http.Response('{}', 503));
+    await waitFor(() => state.nationalEventsLoading == false);
+    expect(state.nationalEventsError, contains('HTTP 503'));
+    expect(state.legendAlertsVisible, isTrue);
     final retryWarnings = find.text('Odśwież ostrzeżenia');
     await tester.ensureVisible(retryWarnings);
     await tester.tap(retryWarnings);

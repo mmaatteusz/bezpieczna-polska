@@ -31,11 +31,12 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
   test(
-    'on a cold start a failed national request can still yield both map layers',
+    'an available source publishes its markers while another is still loading',
     () async {
       var calls = 0;
       var rso = notice;
       var weather = jsonEncode([meteo]);
+      final firstWeather = Completer<http.Response>();
       final repo = DataRepository(
         await SharedPreferences.getInstance(),
         buildApi: 'https://example.org',
@@ -43,7 +44,11 @@ void main() {
           calls++;
           if (req.url.host == 'example.org') return http.Response('', 503);
           if (req.url.host == 'komunikaty.tvp.pl') return reply(rso);
-          if (req.url.path.endsWith('warningsmeteo')) return reply(weather);
+          if (req.url.path.endsWith('warningsmeteo')) {
+            return firstWeather.isCompleted
+                ? reply(weather)
+                : firstWeather.future;
+          }
           return http.Response('', 502);
         }),
       );
@@ -51,8 +56,22 @@ void main() {
         repo.refresh('PL'),
         throwsA(isA<ApiFailure>().having((f) => f.statusCode, 'HTTP', 503)),
       );
+      final firstFeed = Completer<List<String>>();
+      repo.officialMapWarnings.addListener(() {
+        if (!firstFeed.isCompleted) {
+          firstFeed.complete(
+            repo.officialMapWarnings
+                .cached()
+                .map((feed) => feed.source)
+                .toList(),
+          );
+        }
+      });
       final startup = repo.officialMapWarnings.refresh();
       final map = repo.officialMapWarnings.refresh();
+      expect(await firstFeed.future, ['RSO']);
+      expect(firstWeather.isCompleted, isFalse);
+      firstWeather.complete(reply(weather));
       final feeds = await startup;
       expect(await map, same(feeds));
       expect(calls, 4);

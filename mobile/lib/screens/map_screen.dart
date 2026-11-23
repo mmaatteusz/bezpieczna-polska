@@ -40,7 +40,9 @@ class SafetyMapScreen extends StatelessWidget {
         events: events,
         watchedLocations: repository.watchedLocations,
         openEvent: onOpenEvent,
-        key: ValueKey('map:${repository.api}:$region'),
+        key: ValueKey(
+          'map:${repository.api}:${repository.dataGeneration}:$region',
+        ),
         repository: repository,
         region: region,
         ukraine: false,

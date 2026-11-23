@@ -17,6 +17,7 @@ import 'package:bezpieczna_polska/screens/dashboard_screen.dart';
 import 'package:bezpieczna_polska/shelter_map.dart';
 
 import 'model_test.dart' show data, response;
+import 'official_map_warnings_test.dart' show notice, reply;
 
 // Only the native surface is substituted. Data parsing/cache have independent tests.
 class TestMapPlatform extends MapLibrePlatform {
@@ -57,9 +58,7 @@ void main() {
       await loader.load();
     }
   });
-  testWidgets('startup preloads national data while cached Start is usable', (
-    tester,
-  ) async {
+  testWidgets('startup preloads warnings before national data', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final local = Completer<http.Response>();
@@ -71,6 +70,10 @@ void main() {
       buildApi: 'https://test.example',
       client: MockClient((request) async {
         final path = request.url.path;
+        if (request.url.host == 'komunikaty.tvp.pl') {
+          requests.add('RSO');
+          return reply(notice);
+        }
         if (path == '/v1/snapshot') {
           final scope = request.url.queryParameters['regionId'];
           requests.add('$path:$scope');
@@ -98,11 +101,17 @@ void main() {
         '/v1/snapshot:PL',
         '/v1/around',
         '/v1/neptun',
+        'RSO',
       ]),
     );
     DashboardScreen start() => tester.widget(find.byType(DashboardScreen));
     expect(start().snapshot?.data['serverTime'], data()['serverTime']);
     expect(start().online, isFalse);
+    expect(national.isCompleted, isFalse);
+    expect(
+      repo.officialMapWarnings.cached().single.events.single.id,
+      'RSO-123',
+    );
 
     final loadedAt = DateTime.now().toUtc().toIso8601String();
     local.complete(response({...data(), 'serverTime': loadedAt}));
