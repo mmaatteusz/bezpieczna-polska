@@ -1,6 +1,7 @@
 import 'ukraine.dart';
 import 'official_map_warnings.dart';
 import 'neptun.dart';
+import 'neptun_live_flights.dart';
 import 'radiation.dart';
 
 import 'dart:async';
@@ -821,6 +822,27 @@ class DataRepository {
       await prefs.setString(key, jsonEncode(result.data));
     }
     return result;
+  }
+
+  Future<NeptunLiveFlights> refreshNeptunLiveFlights() async {
+    final u = _apiUri();
+    final response = await _get(
+      u.replace(path: '${u.path}/v1/neptun/live-flights'),
+    );
+    if (response.statusCode == 404) {
+      return const NeptunLiveFlights(NeptunLiveFlightsState.notConfigured);
+    }
+    if (response.statusCode != 200) _responseFailure(response);
+    if (response.bodyBytes.length > 256 * 1024) {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
+    try {
+      return NeptunLiveFlights.parse(
+        jsonDecode(utf8.decode(response.bodyBytes)),
+      );
+    } on FormatException {
+      throw const ApiFailure(ApiFailureKind.invalidResponse);
+    }
   }
 
   String cacheKey(String r) => 'snapshot:$api:$r';

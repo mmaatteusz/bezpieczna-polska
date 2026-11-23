@@ -35,6 +35,7 @@ services:
     environment:
       <<: *api-env
       ENABLE_INGESTION: 'true'
+      FLIGHTRADAR24_API_TOKEN: ${FLIGHTRADAR24_API_TOKEN:-}
     restart: unless-stopped
   backup:
     image: postgis/postgis:17-3.5

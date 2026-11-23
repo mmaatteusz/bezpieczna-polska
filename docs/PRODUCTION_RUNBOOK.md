@@ -108,6 +108,29 @@ Interpretacja:
 
 `/ready=200` nie oznacza, że wszystkie źródła zewnętrzne są HEALTHY.
 
+## Loty na żywo w NEPTUN
+
+`/v1/neptun/live-flights` zasila opcjonalną warstwę samolotów pasażerskich
+Flightradar24. Zakres to Polska, Słowacja, Węgry, Rumunia, Mołdawia,
+Białoruś i zachodnia część Rosji w obrębie mapy (14–42°E, 43,5–56°N).
+Do filtrowania pozycji używamy [granic Natural Earth 1:10m, wariant
+ukraiński](https://github.com/nvkelso/natural-earth-vector/blob/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_admin_0_countries_ukr.geojson)
+z domeny publicznej, uproszczonych i przyciętych do zasięgu warstwy.
+
+Aktywacja wymaga danych z oficjalnego [Flightradar24 API](https://fr24api.flightradar24.com/)
+i uprawnień do ich wyświetlania w aplikacji. Produkcyjny token umieść
+w `FLIGHTRADAR24_API_TOKEN` w `/etc/bezpieczna-polska/backend.env` przed
+wdrożeniem wersji z warstwą. Pusta wartość daje stan `NOT_CONFIGURED`.
+Po wdrożeniu sprawdź `state`, `checkedAt` i `flights` w odpowiedzi API
+oraz znaczniki po kliknięciu „Loty na żywo”.
+
+Backend współdzieli odczyt w pamięci i odpytuje FR24 po żądaniu klienta,
+co najwyżej raz na minutę na proces. Pełny odczyt ma limit 300 pozycji.
+FR24 nalicza 8 kredytów za zwróconą pozycję, także jeśli zostanie odfiltrowana
+po stronie aplikacji. Przed włączeniem ustal limit wydatków w koncie dostawcy.
+Po błędzie autoryzacji, kredytów lub limitu zapytań backend wstrzymuje
+odpytywanie na pięć minut.
+
 ## Minimalny runtime gate przed wydaniem APK
 
 Release powinien zostać zablokowany, jeżeli:

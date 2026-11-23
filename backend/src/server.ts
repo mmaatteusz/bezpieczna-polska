@@ -1,6 +1,7 @@
 import {workerStarted,workerFinished} from './operations.js';
 import {openDb,Store} from './store.js';import {buildApp} from './app.js';import {ingest,ingestNeptunLive,ingestUkraineLive} from './adapters.js';import {createPushServiceFromEnv} from './push.js';
 import {serverConfig} from './config.js';import {assertSchema,migrate} from './migrate.js';import {tryAcquireWorkerLease,releaseWorkerLease} from './worker-lease.js';import {randomUUID} from 'node:crypto';
+import {createFlightradar24} from './flightradar24.js';
 const config=serverConfig();
 const db=openDb(process.env.DATABASE_URL,process.env.SQLITE_PATH);
 let app:Awaited<ReturnType<typeof buildApp>>|undefined;
@@ -9,7 +10,7 @@ try{
  const store=new Store(db);
  if(config.production)await assertSchema(db);else await migrate(db);
  const push=createPushServiceFromEnv(db);
- app=await buildApp(store,process.env.ADMIN_TOKEN,push??undefined,{stage:config.stage,buildSha:config.buildSha,trustProxy:config.production});
+ app=await buildApp(store,process.env.ADMIN_TOKEN,push??undefined,{stage:config.stage,buildSha:config.buildSha,trustProxy:config.production,liveFlights:createFlightradar24(process.env.FLIGHTRADAR24_API_TOKEN)});
  const workerOwner=`${process.pid}:${randomUUID()}`;
  const ingestLeaseTtlMs=180000,ingestLeaseRenewMs=60000;
  let running=false,neptunRunning=false,ukraineRunning=false;

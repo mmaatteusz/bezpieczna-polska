@@ -9,6 +9,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'map_interaction.dart';
 import 'model.dart';
 import 'neptun_aviation.dart';
+import 'neptun_live_flights.dart';
 import 'neptun_markers.dart';
 import 'neptun_passenger_board.dart';
 
@@ -590,11 +591,12 @@ class _NeptunScreenState extends State<NeptunScreen> {
             ),
             if (loading) const LinearProgressIndicator(),
             if (error != null) Text(error!),
-            if (widget.showMap && snapshot != null)
+            if (widget.showMap)
               NeptunMap(
-                data: snapshot!,
+                data: snapshot,
                 animateLive: isLive,
                 client: widget.repository.client,
+                fetchLiveFlights: widget.repository.refreshNeptunLiveFlights,
                 openSource: widget.openSource,
               ),
             const SizedBox(height: 8),
@@ -604,7 +606,7 @@ class _NeptunScreenState extends State<NeptunScreen> {
               label: const Text('Dane live: NEPTUN • neptun.in.ua'),
             ),
             const Text(
-              'NEPTUN jest agregatorem informacyjnym, nie oficjalnym systemem alarmowym. Pozycje w tej aplikacji są celowo zgrubne; nie pokazujemy kursu, prędkości ani predykcji ruchu.',
+              'NEPTUN to agregator informacyjny. Pozycje zagrożeń są przybliżone. W sytuacji zagrożenia kieruj się oficjalnymi alarmami.',
             ),
             const SizedBox(height: 12),
             Text(
@@ -643,9 +645,10 @@ class _NeptunScreenState extends State<NeptunScreen> {
 }
 
 class NeptunMap extends StatefulWidget {
-  final NeptunData data;
+  final NeptunData? data;
   final bool animateLive;
   final http.Client? client;
+  final Future<NeptunLiveFlights> Function()? fetchLiveFlights;
   final void Function(String)? openSource;
 
   const NeptunMap({
@@ -653,6 +656,7 @@ class NeptunMap extends StatefulWidget {
     required this.data,
     this.animateLive = true,
     this.client,
+    this.fetchLiveFlights,
     this.openSource,
   });
 
@@ -684,6 +688,11 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
   NeptunPassengerBoard? _board;
   Timer? _boardTimer;
   bool _boardLoading = false;
+  NeptunLiveFlights? _liveFlights;
+  bool _liveFlightsVisible = false;
+  bool _liveFlightsLayerReady = false;
+  int _liveFlightsGeneration = 0;
+  Timer? _liveFlightsTimer;
 
   @override
   void initState() {
@@ -701,13 +710,23 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) => _updatePulse();
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _updatePulse();
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshLiveFlights());
+    } else if (_liveFlightsVisible) {
+      _stopLiveFlightsRefresh();
+      setState(() => _liveFlights = null);
+      unawaited(_clearLiveFlightMarkers());
+    }
+  }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pulseTimer?.cancel();
     _boardTimer?.cancel();
+    _stopLiveFlightsRefresh();
     _pulseClock.stop();
     ready = false;
     controller?.removeListener(_updatePulse);
@@ -718,7 +737,7 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(covariant NeptunMap oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (ready && oldWidget.data.data != widget.data.data) {
+    if (ready && oldWidget.data?.data != widget.data?.data) {
       if (cameraMoving || syncInProgress) {
         syncPending = true;
       } else {
@@ -746,7 +765,7 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
         _hasPulseMarkers &&
         widget.animateLive &&
         (state == null || state == AppLifecycleState.resumed) &&
-        widget.data.isFreshLive(DateTime.now().toUtc());
+        widget.data?.isFreshLive(DateTime.now().toUtc()) == true;
   }
 
   void _updatePulse() {
@@ -808,7 +827,9 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
     syncInProgress = true;
     final data = widget.data;
     try {
-      final markers = neptunLiveMarkerFeatures(data);
+      final markers = data == null
+          ? const <Map<String, dynamic>>[]
+          : neptunLiveMarkerFeatures(data);
       final liveSignature = jsonEncode(markers);
       if (_liveLayerSignature != liveSignature) {
         await c.setGeoJsonSource('neptun-live', {
@@ -822,7 +843,8 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
         _updatePulse();
         await refreshSymbols();
       }
-      final history = data.data['map'] as Map<String, dynamic>;
+      final history =
+          data?.data['map'] as Map<String, dynamic>? ?? neptunEmptyFeatures;
       final historySignature = jsonEncode(history);
       if (_historyLayerSignature != historySignature &&
           mounted &&
@@ -911,6 +933,145 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
     'low' => 'niska',
     _ => 'nieokreślona',
   };
+
+  void _stopLiveFlightsRefresh() {
+    _liveFlightsTimer?.cancel();
+    _liveFlightsGeneration++;
+  }
+
+  void _toggleLiveFlights(bool enabled) {
+    _stopLiveFlightsRefresh();
+    setState(() {
+      _liveFlightsVisible = enabled;
+      _liveFlights = null;
+    });
+    if (enabled) {
+      unawaited(_focusLiveFlightsRegion());
+      unawaited(_refreshLiveFlights());
+    } else {
+      unawaited(_clearLiveFlightMarkers());
+    }
+  }
+
+  Future<void> _focusLiveFlightsRegion() async {
+    try {
+      await controller?.animateCamera(
+        CameraUpdate.newLatLngBounds(
+          LatLngBounds(
+            southwest: const LatLng(43.5, 14),
+            northeast: const LatLng(56, 42),
+          ),
+          left: 12,
+          right: 12,
+          top: 12,
+          bottom: 12,
+        ),
+      );
+    } catch (_) {
+      // The style may reload before the camera update reaches the map.
+    }
+  }
+
+  Future<void> _clearLiveFlightMarkers() async {
+    if (!_liveFlightsLayerReady) return;
+    try {
+      await controller?.setGeoJsonSource(
+        neptunLiveFlightsSource,
+        neptunEmptyFeatures,
+      );
+    } catch (_) {
+      // A reloaded style starts with an empty source.
+    }
+  }
+
+  Future<void> _refreshLiveFlights() async {
+    final c = controller, fetch = widget.fetchLiveFlights;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (!mounted ||
+        !_liveFlightsVisible ||
+        !_liveFlightsLayerReady ||
+        c == null ||
+        fetch == null ||
+        (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
+      return;
+    }
+    _stopLiveFlightsRefresh();
+    final generation = _liveFlightsGeneration;
+    bool current() =>
+        mounted && controller == c && generation == _liveFlightsGeneration;
+
+    const unavailable = NeptunLiveFlights(NeptunLiveFlightsState.unavailable);
+    NeptunLiveFlights result;
+    try {
+      result = await fetch();
+    } catch (_) {
+      result = unavailable;
+    }
+    if (!current()) return;
+    try {
+      await c.setGeoJsonSource(neptunLiveFlightsSource, result.map);
+    } catch (_) {
+      result = unavailable;
+      if (current()) await _clearLiveFlightMarkers();
+    }
+    if (!current()) return;
+    setState(() => _liveFlights = result);
+    if (result.state != NeptunLiveFlightsState.notConfigured) {
+      _liveFlightsTimer = Timer(
+        const Duration(minutes: 1),
+        () => unawaited(_refreshLiveFlights()),
+      );
+    }
+  }
+
+  String get _liveFlightsStatus => switch (_liveFlights) {
+    null => 'Pobieranie pozycji lotów pasażerskich…',
+    NeptunLiveFlights(state: NeptunLiveFlightsState.notConfigured) =>
+      'Źródło Flightradar24 nie jest podłączone w tej wersji.',
+    NeptunLiveFlights(state: NeptunLiveFlightsState.unavailable) =>
+      'Pozycje lotów chwilowo niedostępne.',
+    final NeptunLiveFlights data =>
+      '${data.flights.isEmpty ? 'Brak bieżących pozycji w tym obszarze.' : 'Bieżące pozycje lotów: ${data.flights.length}'}'
+          '\nOdczyt: ${stamp(data.checkedAt?.toIso8601String())} • odświeżanie co minutę'
+          '${data.limitReached ? '\nLimit odczytu • mapa może pokazywać część lotów.' : ''}',
+  };
+
+  Future<bool> _showLiveFlightDetails(
+    MapLibreMapController c,
+    Point<double> point,
+  ) async {
+    if (_liveFlights?.flights.isNotEmpty != true) return false;
+    final hits = await c.queryRenderedFeatures(point, [
+      neptunLiveFlightsLayer,
+    ], null);
+    if (!mounted || controller != c || hits.isEmpty) return false;
+    final id = hits.first['properties']?['flightId'];
+    final flight = _liveFlights?.flights[id];
+    if (flight == null) return false;
+    final country = neptunFlightCountries[flight.country];
+    final route = '${flight.from ?? '—'} → ${flight.to ?? '—'}';
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.flight),
+            title: Text('${flight.number} · $route'),
+            subtitle: Text(
+              'Lot pasażerski • $country\n'
+              '${flight.altitudeFt} ft • ${(flight.speedKt * 1.852).round()} km/h\n'
+              'Pozycja: ${stamp(flight.observedAt.toIso8601String())}\n'
+              'Źródło: Flightradar24',
+            ),
+          ),
+        ),
+      ),
+    );
+    return true;
+  }
 
   Future<void> _toggleAviation(NeptunAviationLayer layer, bool visible) async {
     final c = controller;
@@ -1145,17 +1306,20 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
       final features = await c.queryRenderedFeatures(point, const [
         'neptun-live-hit-points',
       ], null);
-      if (!mounted) return;
-      if (features.isEmpty) {
-        await _showAviationDetails(c, point);
+      if (!mounted || controller != c) return;
+      final candidates = <String, Map<String, dynamic>>{};
+      final data = widget.data;
+      if (data != null) {
+        for (final feature in features.whereType<Map>()) {
+          final item = neptunThreatForFeature(data, feature);
+          if (item != null) candidates[item['id'] as String] = item;
+        }
+      }
+      if (candidates.isEmpty) {
+        if (await _showLiveFlightDetails(c, point)) return;
+        if (mounted && controller == c) await _showAviationDetails(c, point);
         return;
       }
-      final candidates = <String, Map<String, dynamic>>{};
-      for (final feature in features.whereType<Map>()) {
-        final item = neptunThreatForFeature(widget.data, feature);
-        if (item != null) candidates[item['id'] as String] = item;
-      }
-      if (!mounted || candidates.isEmpty) return;
       debugPrint('NEPTUN selected entries: ${candidates.length}');
       Map<String, dynamic>? threat;
       if (candidates.length == 1) {
@@ -1259,6 +1423,8 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
     if (c == null) return;
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
     ready = false;
+    _liveFlightsLayerReady = false;
+    _stopLiveFlightsRefresh();
     _pulseVisible = false;
     _updatePulse();
     _liveLayerSignature = null;
@@ -1293,10 +1459,30 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
       }
     }
     if (!mounted || controller != c) return;
+    if (widget.fetchLiveFlights != null) {
+      try {
+        await addNeptunLiveFlightsLayer(c);
+        if (!mounted || controller != c) return;
+        setState(() {
+          _liveFlightsLayerReady = true;
+          _liveFlights = null;
+        });
+        unawaited(_refreshLiveFlights());
+      } catch (_) {
+        if (!mounted || controller != c) return;
+        setState(() {
+          _liveFlights = const NeptunLiveFlights(
+            NeptunLiveFlightsState.unavailable,
+          );
+        });
+      }
+    }
     try {
       await c.addSource(
         'neptun-history',
-        GeojsonSourceProperties(data: widget.data.data['map']),
+        GeojsonSourceProperties(
+          data: widget.data?.data['map'] ?? neptunEmptyFeatures,
+        ),
       );
       await c.addLineLayer(
         'neptun-history',
@@ -1371,6 +1557,15 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
                   ? null
                   : (visible) => unawaited(_toggleAviation(layer, visible)),
             ),
+          if (widget.fetchLiveFlights != null)
+            FilterChip(
+              avatar: const Icon(Icons.flight, size: 16),
+              label: const Text('Loty na żywo'),
+              selected: _liveFlightsVisible,
+              showCheckmark: false,
+              visualDensity: VisualDensity.compact,
+              onSelected: _liveFlightsLayerReady ? _toggleLiveFlights : null,
+            ),
         ],
       ),
       const SizedBox(height: 6),
@@ -1418,6 +1613,20 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
                 ),
         ),
       ),
+      if (_liveFlightsVisible)
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.flight, color: Color(0xffd4fa86)),
+          title: const Text('Loty pasażerskie · Flightradar24'),
+          subtitle: Text(_liveFlightsStatus),
+          trailing: widget.openSource == null
+              ? null
+              : IconButton(
+                  tooltip: 'Otwórz mapę Flightradar24',
+                  onPressed: () => widget.openSource!(neptunLiveFlightsUrl),
+                  icon: const Icon(Icons.open_in_new),
+                ),
+        ),
       if (_aviationUnavailable) const Text('Warstwy lotnicze są niedostępne.'),
       if (_aviation != null &&
           _visibleAviation.contains(NeptunAviationLayer.airspace))
@@ -1448,7 +1657,7 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
         ),
       ExpansionTile(
         title: const Text('Legenda mapy'),
-        subtitle: const Text('Pozycje przybliżone'),
+        subtitle: const Text('Pozycje zagrożeń są przybliżone'),
         tilePadding: const EdgeInsets.symmetric(horizontal: 4),
         childrenPadding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
@@ -1471,6 +1680,13 @@ class _NeptunMapState extends State<NeptunMap> with WidgetsBindingObserver {
           const Text(
             'Puls oznacza bieżący wpis. Fioletowa linia oznacza ślad historyczny.',
           ),
+          if (_liveFlightsVisible)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Jasnozielone samoloty to bieżące loty pasażerskie w Polsce, na Słowacji, na Węgrzech, w Rumunii, Mołdawii, Białorusi i zachodniej części Rosji.',
+              ),
+            ),
           const SizedBox(height: 8),
           const Text(
             'Kolor tła oznacza państwo. Większe turkusowe koło oznacza więcej lotów w danym miesiącu.',
